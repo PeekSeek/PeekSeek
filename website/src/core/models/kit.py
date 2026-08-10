@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, DateTime, JSON, text
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, JSON, text
 from sqlmodel import Field, Relationship, SQLModel
 
 from src.core.settings import settings
@@ -16,7 +16,9 @@ class Kit(SQLModel, table=True):
     __tablename__ = "Kits"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    steam64: int = Field(foreign_key="Users.steam64", nullable=False)
+    steam64: int = Field(
+        sa_column=Column(BigInteger, ForeignKey("Users.steam64"), nullable=False)
+    )
     category: str = Field(nullable=False)
     data: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     created_at: Optional[datetime] = Field(

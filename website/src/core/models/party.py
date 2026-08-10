@@ -13,7 +13,9 @@ class Party(SQLModel, table=True):
     __tablename__ = "Parties"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    steam64: int = Field(foreign_key="Users.steam64", nullable=False)
+    steam64: int = Field(
+        sa_column=Column(BigInteger, ForeignKey("Users.steam64"), nullable=False)
+    )
     data: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
 
     user: User = Relationship(back_populates="parties")
