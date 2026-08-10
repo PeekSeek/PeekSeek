@@ -1,0 +1,17 @@
+# Normalise to LF everywhere. plugins/peekseek/.editorconfig sets end_of_line = lf,
+# so CRLF blobs make `dotnet format --verify-no-changes` fail on the Windows runners.
+* text=auto eol=lf
+
+# Assets git should never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp3 binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.dll binary
+*.pdb binary
+*.zip binary
