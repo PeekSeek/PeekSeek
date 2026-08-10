@@ -9,6 +9,7 @@ on:
     paths: ["website/**", ".github/workflows/website.yml"]
   schedule:
     - cron: "0 6 * * 1" # weekly, for the audit job
+  workflow_dispatch: # path filters mean a shared change may not trigger this on its own
 
 defaults:
   run:

@@ -7,6 +7,7 @@ on:
   pull_request:
     branches: [main]
     paths: ["plugins/peekseek/**", ".github/workflows/peekseek-plugin.yml"]
+  workflow_dispatch: # path filters mean a shared change may not trigger this on its own
 
 defaults:
   run:
