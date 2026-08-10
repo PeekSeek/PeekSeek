@@ -20,9 +20,10 @@ class Settings:
         self.public = self.root.parent / "public"
         toml = tomllib.loads((self.root / "config.toml").read_text("utf-8"))
 
-        self.domain: str = toml["app"]["domain"]
-        self.protocol: str = toml["app"]["protocol"]
-        self.build: str = toml["app"]["build"]
+        # One image serves every environment, so the deploy picks the hostname.
+        self.domain: str = os.environ.get("DOMAIN") or toml["app"]["domain"]
+        self.protocol: str = os.environ.get("PROTOCOL") or toml["app"]["protocol"]
+        self.build: str = os.environ.get("BUILD") or toml["app"]["build"]
 
         self.permissions: list[str] = list(toml["permissions"]["list"])
         self.region_names: dict[str, str] = dict(toml["regions"]["names"])

@@ -59,8 +59,13 @@ Interactive API docs: http://localhost:8000/docs
 | `SECRET_KEY` | | Session-cookie signing key (defaults to the domain) |
 | `LOG_WEBHOOK` | | Discord webhook for logging |
 | `QUEUE_LOG_CHANNEL` | | Discord channel ID for queue logs |
+| `DOMAIN` | | Overrides `[app].domain`; set per deployed environment |
+| `PROTOCOL` | | Overrides `[app].protocol` |
+| `BUILD` | | Overrides `[app].build` |
 
-Non-secret config lives in [`src/config.toml`](src/config.toml).
+Non-secret config lives in [`src/config.toml`](src/config.toml). The three `[app]`
+values are env-overridable so one image can serve both dev and production; everything
+else in the file is the same everywhere.
 
 ## Docker
 
