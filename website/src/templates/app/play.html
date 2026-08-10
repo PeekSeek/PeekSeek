@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+
+{% block script %}<script src="/static/assets/playupdated.js" defer></script>{% endblock %}
+
+{% block currentPage %}play{% endblock %}
+
+{% block content %}
+
+<div class="mainElement warning" id="pingWarning">
+  Your ping is so high that you might not be able to play in game. You are able to queue, but PeekSeek will not count any damage when having over >200ms.
+</div>
+
+{% if match %}
+<a class="mainElement warning clickable" href="/match/">
+  <span>You currently have a <b>match ongoing</b>. Click here to return.</span>
+</a>
+{% endif %}
+
+<div class="mainElement queue">
+  <h1>Match Making</h1>
+  Select your gamemodes below and queue online Unturned matches.
+
+  <div class="qbackground">
+    <div class="qgrid">
+
+      {% for x in mmconfig["gamemodes"] %}
+        <div class="qgridoption">
+          <h1>{% if x["usesElo"] %}<b>Ranked</b>{% endif %}{{x["name"]}}</h1>
+          <span>{{(", ".join(x["kitsAllowed"])).upper()}}</span>
+          <span>{{("{}v".format(x["playersPerTeam"]) * x["teams"]).rstrip("v")}}</span>
+        </div>
+      {% endfor %}
+
+    </div>
+
+    <div class="controls">
+      <select name="game" id="game">
+        <option value="matchmaking">Matchmaking</option>
+        {% for event in events %}
+        <option value="{{event['event'].id}}">{{event["event"].name[0].upper() + event["event"].name[1:]}}</option>
+        {% endfor %}
+      </select>
+      <button type="button" name="button" id="q" onclick="queue()">FIND MATCH</button>
+      <select name="region" id="region">
+        <option value="paris">EU-West</option>
+        <option value="singapore">AS-South</option>
+        <option value="utah">US-West</option>
+        <option value="brazil">SA-East</option>
+      </select>
+    </div>
+  </div>
+  <span style="color:#333">Please note that by closing this tab you will stop queue'ing.</span>
+</div>
+
+<script type="text/javascript">
+  let eventPlayers = JSON.parse('{{ eventPlayers | tojson | safe }}');
+  let maxTeammates = JSON.parse('{{ maxTeam | tojson | safe }}')
+</script>
+
+{% endblock %}

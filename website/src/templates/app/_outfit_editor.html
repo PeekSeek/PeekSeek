@@ -1,0 +1,28 @@
+{#
+  Outfit editor. Same HTMX pattern as the kit editor: any change re-POSTs the whole
+  outfit and swaps this element with the server's re-rendered response.
+#}
+<form id="outfitEditor" class="mainElement queue"
+      hx-post="/me/outfit"
+      hx-trigger="change"
+      hx-target="#outfitEditor"
+      hx-swap="outerHTML">
+
+  <h1>Editing <b style="text-transform: uppercase; color: #f66;">OUTFIT</b></h1>
+
+  <div class="outfitselectorgrid">
+    {% for slot, options in outfits.items() %}
+      <div class="row">
+        {% for itemId in options %}
+          <label class="option{% if itemId == selection[slot] %} optionselected{% endif %}">
+            <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
+                   {% if itemId == selection[slot] %}checked{% endif %}>
+            <img src="/static/unturned/{{itemId}}.png"
+                 alt="{{ slot }} {{ itemId }}">
+          </label>
+        {% endfor %}
+      </div>
+    {% endfor %}
+    <span style="color:#333">This outfit will be used in every match.</span>
+  </div>
+</form>

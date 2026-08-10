@@ -1,0 +1,75 @@
+{% extends "layout.html" %}
+
+{% block title %}Esports{% endblock %}
+{% block titleEmbed %}PeekSeek Esports{% endblock %}
+{% block author %}Team PeekSeek{% endblock %}
+{% block description %}See who's on top of the leaderboard and sign up for events.{% endblock %}
+{% block color %}#3333ff{% endblock %}
+
+{% block currentPage %}esports{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/assets/esports2.css" />
+{% endblock %}
+
+{% block content %}
+
+<div class="mainElement fullstats">
+    <section class="aboutyou">
+        {% if user %}
+        <a href="/u/{{user.steam64}}">
+            <img src="{{user.avatar}}">
+            <h1>{{user.name}}</h1>
+            <span>{{elo}}ELO</span>
+            <i>*You</i>
+        </a>
+        {% else %}
+        <a>
+            <img src="/static/img/logo.png" alt="PeekSeek">
+        </a>
+        {% endif %}
+    </section>
+    <div class="top3">
+        {% for n, place in ((1, "t2"), (0, "t1"), (2, "t3")) %}
+        {% if top10|length > n %}
+        <div><a class="{{place}}" href="/u/{{top10[n].u.steam64}}">
+            <img src="{{top10[n].u.avatar}}"><h1>{{top10[n].u.name}}</h1><span>{{top10[n].elo}}ELO</span></a></div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    <div class="top10container">
+        <div class="top10">
+            {% for entry in top10[3:] %}
+            <div><span>#{{loop.index + 3}}</span><a class="top10u" href="/u/{{entry.u.steam64}}"><img src="{{entry.u.avatar}}" alt="{{entry.u.name}}"><h1>{{entry.u.name}}</h1>{{entry.elo}}ELO</a></div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="mainElement events">
+    <h1>Events</h1>
+    {% for event in events %}
+    <a href="/esports/{{event.name or ''}}" class="event">
+        <h3 class="eventTitle">{{ event.data.get("title", "No name") }}</h3>
+        <span>{{event.continent}}</span>
+        <span class="date" data-epoch="{{ event.data['meta']['queueTimes'][0][0] }}"></span>
+	</a>
+    {% endfor %}
+</div>
+
+<script>
+document.querySelectorAll('.date').forEach(el => {
+  const epoch = parseInt(el.dataset.epoch, 10);
+  const date = new Date(epoch * 1000);
+
+  const formatted = date.toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric'
+  });
+
+  el.textContent = formatted.replace(',', '').replace(' PM', 'PM').replace(' AM', 'AM');
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,379 @@
+.mainElement {
+    background-color: #0a0a0a;
+    border-radius: 8px;
+    padding: 20px;
+    width: auto;
+    min-height: 00px;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.queue {
+  min-height: 400px;
+}
+
+.warning, .error, .gdpr {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  flex-direction: unset;
+} .warning span b {
+  color: #ffa34e;
+} .gdpr span b {
+  color: #00ccff;
+} .gdpr button {
+  background-color: #fff;
+  color: #006680;
+  font-weight: bolder;
+  padding: 5px 20px;
+  border: 0;
+  outline: 0;
+  border-radius: 5px;
+  cursor: pointer;
+} .gdpr button:hover {
+  background-color: #ddd;
+}
+
+.warning {
+  /* border: 2px solid #FFA500A0; */
+  background-color: #643c177f;
+} .error {
+  /* border: 2px solid #f04444d7; */
+  background-color: #4411117f;
+} .gdpr {
+  background-color: #2270757f;
+  gap: 20px;
+  height: 20px;
+  display: none;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    background: #47bbe9;
+    box-shadow: 0 0 10px #112c36;
+  }
+  20%, 80% {
+    background: #47bbe9;
+    box-shadow: 0 0 35px #1f5266;
+  }
+  50% {
+    background: #47bbe9;
+    box-shadow: 0 0 40px #296c86;
+  }
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.queue {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 400px;
+  gap: 20px;
+} .queue button {
+  padding: 10px 20px;
+  font-size: 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  background: #0000;
+  border: 0;
+  /* border: 2px solid #fff; */
+  background: #47bbe9;
+  /* animation: pulse 3s infinite cubic-bezier(0,.5,.5,1); */
+  box-shadow: 0 0 20px 0px #000000;
+  min-width: 200px;
+  font-weight: bolder;
+  min-height: 55px;
+} .isQueing {
+  animation: pulse 4s infinite cubic-bezier(0,.1,.9,1);
+}
+
+.qgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  width: auto;
+  grid-gap: 20px;
+  padding: 25px 20px;
+  padding-top: 18px;
+  background-color: #1a1a1a;
+  border-radius: 10px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.qbackground {
+  display: flex;
+  gap: 2px;
+  flex-direction: column;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  width: auto;
+  grid-gap: 30px;
+  background-color: #121212;
+  padding: 30px 20px;
+  border-radius: 10px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.controls select {
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 5px;
+  margin: 5px 0;
+  padding: 5px 10px;
+  text-align: center;
+}
+
+.qgridoption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding: 10px;
+  border-radius: 10px;
+  min-height: 80px;
+  cursor: pointer;
+  border: 3px solid #121212;
+  color: #aaa;
+
+  -webkit-user-select: none; /* Safari */        
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE10+/Edge */
+  user-select: none; /* Standard */
+} .qgridoption h1 {
+  font-size: 16px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+} .qgridoption h1 b {
+  color: #ff9d9db6;
+  /* font-weight: 200; */
+} .qgridoption h1 b::before {
+  color: #fff;
+} .qgridoption * {
+  color: inherit;
+}.isSelected {
+  background-color: #121212;
+} .isSelected::before {
+  content: "Selected";
+  font-size: 12px;
+  margin: 0;
+  color: #aae0ff;
+}
+
+.selector {
+  padding: 10px 20px;
+  background: #111;
+  border-radius: 10px;
+}
+
+.outfitselectorgrid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+}
+
+
+
+.outfitselectorgrid .row {
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
+}
+
+.outfitselectorgrid .option, .kitSelector .option {
+  background-color: #0000;
+  padding: 15px;
+  border-radius: 10px;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+} .outfitselectorgrid .option:hover, .kitSelector .option:hover {
+  outline: 3px solid #3334;
+} .outfitselectorgrid .optionselected, .kitSelector .optionselected {
+  background-color: #3334;
+  cursor: default;
+}
+
+.outfitselectorgrid img, .kitSelector .option img {
+  max-width: 64px;
+  max-height: 64px;
+}
+
+.centerflex {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 20px 10%;
+  text-align: center;
+}
+
+.spaced {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 10px;
+
+  max-width: 1000px;
+}
+
+.sections {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.sections .section {
+  background-color: #121212;
+  display: flex;
+  flex-direction: column;
+  border-radius: 5px;
+  padding: 10px 15px;
+  justify-content: center;
+  font-weight: 800;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 0;
+}
+
+#customgrid, #customTeamsList {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+} #customgrid select {
+  background-color: #121212;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid #333;
+
+} #customTeamsList input {
+  background-color: #121212;
+  border: 1px solid #333;
+  margin: 5px 0;
+  outline: 0;
+  padding: 10px 15px;
+  border-radius: 5px;
+} #customgrid div {
+  width: 100%;
+} #customgrid {
+  gap: 5px;
+} #customTeamsCreate {
+  margin-bottom: 10px;
+} .customTeam {
+  display: flex;
+  gap: 10px;
+} .delbuttoncustom {
+  background: none;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.textleft {
+  text-align: left;
+  white-space: 50px;
+  padding: 20px min(500px, 30%);
+}
+
+.bigger {
+  font-size: 12px;
+  color: #333;
+  font-weight: bold;
+}
+
+.serverGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+} .serverCard {
+  max-width: 200px;
+  background-color: #ffffff05;
+  padding: 15px 15px;
+  border-radius: 10px;
+
+  display: flex;
+  flex-direction: column;
+} .serverCard h1 {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  text-overflow: ellipsis;
+  max-height: 20px;
+  overflow:hidden;
+  font-size: 16px;
+}
+
+#pingWarning {
+  display: none;
+}
+
+.settingsButton {
+  background-color: #fff;
+  color: #000;
+  height: 35px;
+  border-radius: 5px;
+  outline: 0;
+  border: 0;
+
+  display: grid;
+  grid-template-columns: 25px auto;
+  padding: 5px 10px;
+  align-items: center;
+  font-size: 16px;
+
+  width:auto;
+  min-width:100px;
+  text-wrap:nowrap;
+  gap:10px;
+
+  cursor: pointer;
+}
+
+.matchGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 10px;
+} .matchGridElement {
+  background-color: #aaa1;
+  padding: 15px;
+  border-radius: 10px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  min-width: 250px;
+  height: auto;
+  justify-content: space-between;
+} .matchGridElement hr {
+  border: 1px solid #aaa1;
+} .matchGridInner {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.userList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}

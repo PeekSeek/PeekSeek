@@ -1,0 +1,32 @@
+name: peekseek-plugin
+
+on:
+  push:
+    branches: [main]
+    paths: ["plugins/peekseek/**", ".github/workflows/peekseek-plugin.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["plugins/peekseek/**", ".github/workflows/peekseek-plugin.yml"]
+
+defaults:
+  run:
+    working-directory: plugins/peekseek
+
+jobs:
+  lint:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet format PeekSeek.sln --verify-no-changes
+
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test PeekSeek.sln --configuration Release

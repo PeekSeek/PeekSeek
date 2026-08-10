@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+
+{% block head %}
+    <script src="https://embed.twitch.tv/embed/v1.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<div class="mainElement centerflex">
+  <h1><img src="/static/img/cmr.png" alt="" height="24px"> UCL Winter Cup</h1> 
+  <span style="width:100%;gap:15px;display: flex;flex-wrap: wrap;">
+    <div id="twitch1" style="border-radius:15px;overflow:hidden;padding-bottom:-15px;height:480px;"></div>
+    <div id="twitch2" style="border-radius:15px;overflow:hidden;padding-bottom:-15px;height:480px;"></div>
+    <iframe title="YouTube live stream" width="560" height="349" src="https://www.youtube.com/embed/live_stream?channel=UCmJr4xp4xkX5XG4FUUxZPfQ" allowfullscreen></iframe>
+  </span>
+</div>
+
+<script type="text/javascript">
+    ( [["twitch1","liamdozgame"], ["twitch2", "weslieg"]] ).forEach((x) => {
+        new Twitch.Embed(x[0], {
+        width: "min(100%, 5000px)",
+        height: 480,
+        channel: x[1],
+        // Only needed if this page is going to be embedded on other websites
+        parent: ["{{config.domain}}"]
+        });
+    });
+  </script>
+
+{% endblock %}

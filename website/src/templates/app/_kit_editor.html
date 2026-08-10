@@ -1,0 +1,42 @@
+{#
+  Weapon kit editor. Self-contained HTMX island: changing any option re-POSTs the
+  whole selection and swaps this element with the server's re-rendered response.
+#}
+<form id="kitEditor" class="mainElement queue"
+      hx-post="/me/kit/{{category}}"
+      hx-trigger="change"
+      hx-target="#kitEditor"
+      hx-swap="outerHTML">
+
+  <h1>Editing kit <b style="text-transform: uppercase; color: #f66;">{{ category }}</b></h1>
+
+  <div class="kitSelector" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+    {% for gunId in guns %}
+      <label class="option{% if gunId | int == selection.gun %} optionselected{% endif %}">
+        <input type="radio" name="gun" value="{{ gunId }}" hidden
+               {% if gunId | int == selection.gun %}checked{% endif %}>
+        <img src="/static/unturned/{{gunId}}.png"
+             alt="Gun {{ gunId }}" style="max-width: 200px;">
+      </label>
+    {% endfor %}
+  </div>
+
+  <img src="/static/unturned/{{selection.gun}}.png"
+       width="30%" alt="Selected gun">
+
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); width: min(90%, 315px);">
+    {% for slot in ["sight", "tactical", "grip", "barrel"] %}
+      <div class="kitSelector" style="padding: 0 8px;">
+        {% for itemId in guns[selection.gun | string][slot] %}
+          <label class="option{% if itemId == selection[slot] %} optionselected{% endif %}"
+                 style="margin-bottom: 20px;">
+            <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
+                   {% if itemId == selection[slot] %}checked{% endif %}>
+            <img src="/static/unturned/{{itemId}}.png"
+                 alt="{{ slot }} {{ itemId }}" style="max-height: 14px; max-width: 14px;">
+          </label>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+</form>

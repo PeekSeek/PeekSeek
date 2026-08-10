@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PeekSeek | Unturned Matchmaking</title>
+    <link rel="stylesheet" href="/static/assets/index.css">
+
+    <meta name="author" content="PeekSeek.net">
+    <meta property="og:title" content="PeekSeek.net" />
+    <meta property="og:description" content="The only online queue platform for Unturned. Officially partnered with Unturned's developer." />
+    <meta property="og:image" content="/static/img/logo.png" />
+    <meta name="theme-color" content="#ff0000" data-react-helmet="true" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="{{request.url}}" />
+
+
+    <link rel="icon" href="/static/img/logo-dark.ico">
+    <link rel="icon" href="/static/img/logo.ico" media="(prefers-color-scheme:dark)">
+
+    {# ads #}
+
+    <meta name="google-adsense-account" content="ca-pub-6572143162249859">
+
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6572143162249859"
+     crossorigin="anonymous"></script>
+
+    {# /ads #}
+
+    {# analytics #}
+    
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-17N801FQ1E"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-17N801FQ1E');
+    </script>
+
+    {# analytics #}
+</head>
+<body>
+    <header>
+        <nav>
+        <div class="logo"> <img src="/static/img/cmw.png" height="40px"> </div>
+        <ul class="nav-links">
+            <li><a href="#how-it-works">About</a></li>
+            <li><a href="/discord">Discord</a></li>
+            <li><a href="/auth/steam">Login</a></li>
+        </ul>
+        </nav>
+        <div class="hero">
+            <h1>Competitive matchmaking for <a>Unturned</a></h1>
+            <p>A non-profit ELO-based queue system built to level up the Unturned competitive scene—fair, fast, and community-driven.</p>
+            <a href="/auth/steam" class="cta-button"> <img src="/static/img/steam.png" alt="" height="25px"> Join the Queue</a>
+        </div>
+    </header>
+
+    <section id="how-it-works">
+        <div class="steps">
+        <div class="step">
+            <h3>Personalize</h3>
+            <p>Whether you use a Maplestrike with adaptive chambering or a Nightraider with a tactical laser, the choice is yours and our online kit editor will make everything easy for you.</p> 
+            <p>We have 3 standard kit categories: Meta, Sniper and your Outfit. You can customize each however you like and you'll be able to choose if you want to use the Meta or Sniper kit depending on the gamemode.</p>
+        </div>
+        <div class="step">
+            <h3>Queue</h3>
+            <p>Select your gamemode(s) and press queue, it's as simple as that. You'll be redirected once a match is found to select your kit and choose any decisions based on movement and or bullet drop. You will only be matched with people in your skill group.</p>
+            <p>Your match will then be given to a server where you can play on until it's done.</p>
+        </div>
+        <div class="step">
+            <h3>Compete</h3>
+            <p>PeekSeek is more than a queue system, we host the biggest Unturned tournaments every season. We fund the UCL (Unturned Competitive League) which hosts tournaments like never before.</p>
+            <p>Think you can compete? <a href="/discord">Join our Discord</a> to learn more.</p>
+        </div>
+        </div>
+    </section>
+
+    <section id="join" class="join-section">
+        <h2>Ready to Compete?</h2>
+        <p>Sign in, queue up, and show us what you’ve got.</p>
+        <a href="/auth/steam" class="cta-button"> <img src="/static/img/steam.png" alt="" height="25px"> Start Playing</a>
+    </section>
+
+    <section id="mission">
+        <h2>Our Mission</h2>
+        <p style="max-width: 800px; margin: 0 auto; text-align: center;">
+            PeekSeek exists to strengthen the <a>Unturned competitive scene</a> by offering fair, accessible matchmaking to everyone—free from paywalls, bias, or toxicity.
+            We're built by players, for players. Everything we do is to improve competition, empower communities, and grow the game we love.
+            PeekSeek is a non-profit, 100% of our earnings go towards tournament prize money.
+        </p>
+    </section>
+
+    <footer style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+        <p>Made with ❤️ by Homeless.</p>
+
+        <span style="display:flex;flex-direction:row;align-items:flex-end;justify-content:center;gap:10px;color:#333;">
+            <a href="/discord">Join Discord</a>
+            •
+            <a href="/gdpr">How we handle your Data</a>
+        </span>
+    </footer>
+</body>
+</html>

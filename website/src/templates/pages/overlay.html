@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    
+    <meta charset="utf-8">
+    <title>PeekSeek Overlay</title>
+
+    <meta http-equiv="Content-Security-Policy" content="script-src * 'unsafe-inline' 'unsafe-eval';">
+
+    <script type="text/javascript" defer>
+      let matchid = {{matchid | safe}};
+      let createdby = {{createdBy | safe}};
+    </script>
+
+    <script src="/static/assets/api.js" crossorigin="anonymous"></script>
+    <script src="/static/assets/overlayUpdated.js" crossorigin="anonymous"></script>
+
+    <link rel="stylesheet" href="/static/assets/overlay.css" crossorigin="anonymous"></link>
+  </head>
+  <body>
+    <div id="notStarted">
+      <img src="/static/img/cmw.png" style="height:10vh;">
+
+      <h1 style="font-size:20vh;">Starting soon</h1>
+
+      <span id="notStartedText" style="font-size:8vh;">Loading teams...</span>
+    </div>
+
+    <div id = "full">
+      <div id="left"></div>
+
+      <div id="right"></div>
+    </div>
+</body>
+</html>

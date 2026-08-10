@@ -1,0 +1,186 @@
+{% extends "layout.html" %}
+
+{% block title %}Match{% endblock %}
+{% block titleEmbed %}Your match{% endblock %}
+{% block author %}Team PeekSeek{% endblock %}
+{% block description %}Get ready for real PvP.{% endblock %}
+{% block color %}#ff0000{% endblock %}
+
+{% block currentPage %}play{% endblock %}
+
+{% block script %}<script src="/static/assets/matchServerCode.js" defer></script>{% endblock %}
+
+{% block addheader %}
+<style>
+  .uprof {
+    padding-right: 10px;
+    background-color: #0001;
+    border-radius: 15px;
+    border: 3px solid #000;
+    overflow: hidden;
+  }
+
+  .uprof img {
+    border-radius: 0px;
+  }
+
+  .mbutton {
+    color:#000;
+    font-size:20px;
+    padding:5px 15px;
+    border-radius:5px;
+    border:0;
+    cursor:pointer;
+    margin-bottom: 5px;
+  }
+
+  #match {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+  }
+
+  #match .teams {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+  } #match .teams div {
+    background-color: #0001;
+    border-radius: 15px;
+    border: 3px solid #000;
+    padding: 10px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  } #match .teams div .name {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 20px;
+  } #match .teams div img {
+    height: 20px;
+    width: 20px;
+    border-radius: 5px;
+  }
+
+  #message {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .botmargin {
+    margin-bottom: 10px;
+  }
+
+  .choicegrid {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .choiceButton {
+    min-width: 60px;
+    min-height: 20px;
+    display: flex;
+    height: fit-content;
+  } .choiceButton span {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+  }
+  .selectedChoice {
+    background-color: #121212;
+  } .selectedChoice::before {
+    content: "Selected";
+    font-size: 12px;
+    margin: 0;
+    color: #aae0ff;
+    font-weight: 200;
+  }
+
+  .kitbutton {
+    padding: 3px 5px;
+    min-height: 40px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="mainElement centerflex">
+  <span id="message">Waiting for</span>
+
+  <a id="turn" class="userProfile uprof">Loading...</a>
+  
+  <span id="type">Loading...</span>
+
+  <div style="display: flex;flex-direction: row;gap:15px;">
+    <button class="mbutton" id="b1" onclick="decide('0')">
+      Yes
+    </button>
+    <button class="mbutton" id="b2"  onclick="decide('1')">
+      No
+    </button>
+  </div>
+
+  <audio id="welcome-sound" src="/static/assets/trumpet.mp3" preload="auto"></audio>
+
+  <script>
+  window.addEventListener('DOMContentLoaded', () => {
+    const audio = document.getElementById('welcome-sound');
+
+    audio.play().catch(error => {
+      console.log('Autoplay prevented:', error);
+    });
+  });
+</script>
+
+  <div id = "kits">
+    {% if len(dataAsDict["config"]["kitsAllowed"]) > 1 %}
+    <h1 class="botmargin">Kit</h1>
+
+    <div class="choicegrid">
+      {% for kit in dataAsDict["config"]["kitsAllowed"] %}
+      <div class="kitbutton choiceButton qgridoption" data-kit="{{kit}}" onclick="setKit('{{kit}}')">
+        {{kit.upper()}}
+      </div>
+      {% endfor %}
+    </div>
+
+
+    {% endif %}
+
+    {% if len(dataAsDict["config"]["powerups"]) > 1 %}
+    <h1 class="botmargin">Powerup</h1>
+
+    <div class="choicegrid">
+      {% for powerup in dataAsDict["config"]["powerups"] %}
+        <div class="powerupbutton choiceButton qgridoption" data-powerup="{{powerup["name"]}}" onclick="setPowerup('{{powerup["name"]}}')">
+          <b>{{powerup["name"]}}</b>
+          {% for item in powerup["items"] %}
+            <span>{{item[1]}}x <img src="/static/unturned/{{item[0]}}.png" height="16px"></span>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+
+    {% endif %}
+  </div>
+
+  <div id="match"></div>
+
+  <span style="color:#333">Matchid: {{ dataAsDict["id"] }}</span>
+</div>
+
+<script>
+  let data = {{data | safe}}
+  let steam64 = "{{user.steam64 | safe}}"
+</script>
+
+{% endblock %}

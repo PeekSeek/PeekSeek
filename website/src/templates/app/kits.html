@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+
+{% block title %}Edit kit {{ category }}{% endblock %}
+{% block titleEmbed %}Edit kit {{ category }}{% endblock %}
+{% block description %}Edit kit {{ category }} however you like with our built-in configurator.{% endblock %}
+
+{% block currentPage %}{{ category }}{% endblock %}
+
+{% block content %}
+{% include "app/_kit_editor.html" %}
+{% endblock %}

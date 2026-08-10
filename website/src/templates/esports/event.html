@@ -1,0 +1,132 @@
+{% extends "layout.html" %}
+
+{% block currentPage %}esports{% endblock %}
+
+{% block title %}{{event.data.get("title", "PeekSeek Event")}}{% endblock %}
+{% block titleEmbed %}{{event.data.get("title", "PeekSeek Event")}}{% endblock %}
+{% block author %}Team PeekSeek{% endblock %}
+{% block description %}{{event.data.get("descriptionLong", "No description available.")}}{% endblock %}
+{% block color %}#3333ff{% endblock %}
+
+{% block script %}<script src="/static/assets/eventSignups.js" defer></script>{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/assets/esports.css" />
+
+<script>
+  const eventId = "{{event.id}}";
+</script>
+{% endblock %}
+
+{% block content %}
+
+<div class="mainElement">
+  <div class="event" style="max-width: 700px;flex-direction:column;align-items:flex-start;">
+    <h1 class="eventTitle">{{event.data.get("fullTitle", "No name")}}</h1>
+
+    <span>
+      <b class="date" data-epoch="{{ event.data['meta']['queueTimes'][0][0] }}"></b>
+       until 
+      <b class="date" data-epoch="{{ event.data['meta']['queueTimes'][-1][1] }}"></b>
+    </span>
+
+    <span>
+      <b>{{event.data["meta"]["region"].capitalize()}}</b> region
+    </span>
+  </div>
+
+  <div class="invisible"></div>
+
+  {% for line in rendermd(event.data.get("descriptionLong", "No description available.")).split("\n") %}
+    {% if line.startswith("<h1>") %}
+      <div class="invisible"></div>
+    {% endif %}
+    {{line | safe}}
+  {% endfor %}
+</div>
+
+<div class="mainElement" style="gap: 10px;">
+  {% if user and signup == None %}
+    <h2>Join the action</h2>
+    
+    {% if discord %}
+      Sign-up for this event by making your own team or join an existing one.
+      <div class="signup">
+        <input type="text" name="name" id="teamName" placeholder="Team name..." style="width:15%;">
+        <button id="createTeam" class="eventButton">Create team</button>
+      </div>
+
+      <div class="signup">
+        <input type="text" name="name" id="joinCode" placeholder="Join code..." style="width:15%;">
+        <button id="joinTeam" class="eventButton">Join team</button>
+      </div>
+
+    {% else %}
+
+      To sign up for an event you must first link your Discord.
+      <a href="/auth/discord" style="text-decoration: none;"><button type="button" class="settingsButton"> <img src="/static/img/discord.png" alt="" width="25px" style="filter: invert(1);"> Link Discord</button></a>
+
+    {% endif %}
+  {% elif user == None %}
+    <h2>Sign up to join the action</h2>
+    <p>You need to be logged in to join an event.</p>
+  {% else %}
+    <div class="teamInfo">
+      <h2><span style="color:#ccc; font-weight:200;">Team </span>{{signup.teamname}}</h2>
+        <span>
+          Score of <b style="color:#5a73ff">{{signup.score}}</b>/<b style="color:#5a73ff">{{event.data["meta"]["maxMatchesPerTeam"]}}</b> with <b style="color:#5a73ff">{{signup.matchesplayed}}</b> matches played.
+        </span>
+      
+        <div class="usercontainer">
+          {% for u in users %}
+            <a class="userProfile esuser" href="/u/{{u.steam64}}"><img src="{{u.avatar}}"><span>{{u.name}}</span></a>
+          {% endfor %}
+        </div>
+        {% if ownsTeam and signup.users %}
+          <i style="color:#333">*We intentionally do not allow team owners to kick members. If you wish to re-organize your team before the event starts please delete it and create a new one, otherwise contact the event staff to get your issue resolved.</i>        
+        {% endif %}
+
+      {% if ownsTeam %}
+        <div style="display: flex;gap:15px;">
+          <button onclick="navigator.clipboard.writeText('{{signup.joincode}}')" class="eventSingleButton"><img height="16px" src="/static/copy.png"> Copy join code</button>
+          <button id="resetJoin" class="eventSingleButton"><img height="16px" src="/static/reload.png"> Reset join code</button>
+          <button id="leaveTeam" class="eventSingleButton red"><img height="16px" src="/static/stop.png"> Delete team</button>
+        </div>
+        <i style="color:#333">Owner: You - Signup id: {{signup.id}}</i>
+      {% else %}
+        <div><button id="leaveTeam" class="eventSingleButton red"><img height="16px" src="/static/logout.png"> Leave team</button></div>
+        <i style="color:#333">Owner: {{signup.ownerSteam64}} - Signup id: {{signup.id}}</i>
+      {% endif %}
+    </div>
+
+  {% endif %}
+</div>
+
+{% if event.data.get("settingsTextLong") %}
+<div class="mainElement">
+  <h1>Settings</h1>
+  {% for line in rendermd(event.data.get("settingsTextLong")).split("\n") %}
+    {% if line.startswith("<h1>") %}
+      <div class="invisible"></div>
+    {% endif %}
+    {{line | safe}}
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+document.querySelectorAll('.date').forEach(el => {
+  const epoch = parseInt(el.dataset.epoch, 10);
+  const date = new Date(epoch * 1000);
+
+  const formatted = date.toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric'
+  });
+
+  el.textContent = formatted.replace(',', '').replace(' PM', 'PM').replace(' AM', 'AM');
+});
+</script>
+
+{% endblock %}

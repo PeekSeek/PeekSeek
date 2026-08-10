@@ -1,0 +1,19 @@
+# Python
+*.pyc
+__pycache__/
+**/.pytest_cache
+data.sql
+**/.db
+
+# .NET
+**/obj/
+**/bin/
+**/.vs/
+
+# Secrets
+.env
+
+# Editors
+.vscode
+.claude
+**/*.code-workspace

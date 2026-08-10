@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>{% block title %}PeekSeek{% endblock %}</title>
+
+    <meta name="author" content="{% block author %}Team PeekSeek{% endblock %}">
+    <meta property="og:title" content="{% block titleEmbed %}PeekSeek.net{% endblock %}" />
+    <meta property="og:description" content="{% block description %}The only online queue platform for Unturned. Officially partnered with Unturned's developer.{% endblock %}" />
+    <meta property="og:image" content="{% block image %}{{config.base_url}}/static/img/logo.png{% endblock %}" />
+    <meta name="theme-color" content="{% block color %}#ff0000{% endblock %}" data-react-helmet="true" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="{{request.url}}" />
+
+    {# ads #}
+
+    <meta name="google-adsense-account" content="ca-pub-6572143162249859">
+
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6572143162249859"
+     crossorigin="anonymous"></script>
+
+    {# /ads #}
+
+    {# analytics #}
+    
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-17N801FQ1E"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-17N801FQ1E');
+    </script>
+
+    {# analytics #}
+
+    <meta http-equiv="Content-Security-Policy" content="script-src * 'unsafe-inline' 'unsafe-eval';">
+
+    <link rel="icon" href="/static/img/logo-dark.ico">
+    <link rel="icon" href="/static/img/logo.ico" media="(prefers-color-scheme:dark)">
+
+    <link rel="stylesheet" href="/static/assets/elements.css" />
+    <link rel="stylesheet" href="/static/assets/default.css" />
+    
+    {% block addheader %}{% endblock %}
+
+    {% block head %}{% endblock %}
+
+    <script src="/static/assets/htmx.min.js" defer></script>
+    <script src="/static/assets/api.js" defer></script>
+    <script src="/static/assets/cookies.js" defer></script>
+    {% block script %}{% endblock %}
+  </head>
+  <body>
+
+    <content>
+      <div class="inner">
+        <div class="info">
+          <div class="flexrow">
+            {% if user %}
+              <a href="/u/{{user.steam64}}" class="userProfile"> <img src="{{user.avatar}}" height="40px"> <span>{{user.name}}</span></a>
+              <a href="/auth/logout"> <img src="/static/img/logout.png" alt="" height="20px"> </a>
+            {% else %}
+              <a href="/auth/steam"><button type="button" class="steamlogin" style="width:250px;padding:10px 15px;height:45px;border-radius:10px;margin-bottom:15px;"> <img src="/static/img/steam.png" alt="" height="25px"> Login</button></a>
+            {% endif %}
+          </div>
+
+          <div class="infoli">
+            <a href="/"> <img src="/static/img/play.png" alt="">Play</a>
+            <a href="/discord/" target="_blank"> <img src="/static/img/discord.png" alt="">Discord</a>
+            <a href="https://patreon.com/PeekSeek" target="_blank"> <img src="/static/img/heart.png" alt="">Support us</a>
+            <a href="/esports/" id="esports"> <img src="/static/img/esports.png" alt="">Esports</a>
+          </div>
+
+          <div class="infoli">
+            <h1><div></div> Kits <div></div></h1>
+            <a href="/me/kit/meta/"> <img src="/static/img/meta.png" alt="">Meta</a>
+            <a href="/me/kit/sniper/"> <img src="/static/img/sniper.png" alt="">Sniper</a>
+            <a href="/me/outfit/"> <img src="/static/img/outfit.png" alt="">Outfit</a>
+          </div>
+
+          <div class="infoli">
+            <h1><div></div> User <div></div></h1>
+            {% if rawUser and getPermission("premium") %}
+            <a href="/me/custom/"> <img src="/static/img/custom.png" alt="">Custom Match</a>
+            {% endif %}
+            {% if rawUser and getPermission("admin") %}
+            <a href="/admin/"> <img src="/static/img/admin.png" alt="">Admin</a>
+            {% endif %}
+            <a href="/me/settings/"> <img src="/static/img/settings.png" alt="">Settings</a>
+            <a href="/spectate/"> <img src="/static/img/spectate.png" alt="">Spectate</a>
+          </div>
+
+        </div>
+
+        <div class="mainContainer">
+          <div class="main">
+            
+            <div class="mainElement error" style="{% if lastError == None %}display: none;{% endif %}" id="lastError">
+              Error: {{lastError}}
+            </div>
+
+            <div class="mainElement gdpr" id="gdprheader">
+              <span><a href="/gdpr/">See how PeekSeek uses your <b>Cookies</b> and <b>other Data</b>.</a></span>
+              <button onclick="acceptCookies()">Accept</button>
+            </div>
+
+            {% block content %}{% endblock %}
+          </div>
+        </div>
+
+      </div>
+    </content>
+
+    <footer>
+      <div class="inner">
+        <a href="/"><img src="/static/img/cmw.png"></a>
+      </div>
+    </footer>
+
+    <script>
+      var currentPage = "{% block currentPage %}None{% endblock %}"
+
+      Array.from(document.getElementsByClassName("infoli")).forEach((element) => {
+        Array.from(element.children).forEach((child) => {
+          if (child.innerText.toLowerCase() == currentPage) {
+
+            if (child.id == "esports") {
+              child.style.backgroundColor = "#002e43"
+            } else {
+              child.style.backgroundColor = "#411"
+            }
+            
+            child.style.cursor = "default"
+
+            child.children[0].style.filter = "brightness(1)"
+          }
+        })
+      })
+    </script>
+  </body>
+</html>

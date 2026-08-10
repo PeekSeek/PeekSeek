@@ -1,0 +1,81 @@
+{% extends "layout.html" %}
+
+{% block currentPage %}custom match{% endblock %}
+
+{% block title %}Custom Match{% endblock %}
+{% block titleEmbed %}Custom Match{% endblock %}
+{% block author %}Team PeekSeek{% endblock %}
+{% block description %}Create a custom match.{% endblock %}
+{% block color %}#ff0000{% endblock %}
+
+{% block script %}<script src="/static/assets/custommatch.js" defer></script>{% endblock %}
+
+{% block content %}
+
+<div class="mainElement spaced">
+    <h1>Create a Match</h1>
+
+    <div id="customgrid">
+        <div class="sections">
+            <div class="section">
+                <span>Map</span>
+                <select id="customOption1">
+                    <option value="Alpha Valley">Alpha Valley</option>
+                </select>
+            </div>
+
+            <div class="section">
+                <span>Movement</span>
+                <select id="customOption2">
+                    <option value="2">Player's Decide</option>
+                    <option value="1">Old</option>
+                    <option value="0">New</option>
+                </select>
+            </div>
+
+            <div class="section">
+                <span>Bulletdrop</span>
+                <select id="customOption3">
+                    <option value="2">Player's Decide</option>
+                    <option value="1">Enabled</option>
+                    <option value="0">Disabled</option>
+                </select>
+            </div>
+
+            <div class="section">
+                <span>Region</span>
+                <select id="region">
+                    <option value="paris">Europe</option>
+                    <option value="singapore">Asia</option>
+                    <option value="utah">America</option>
+                    <option value="brazil">South America</option>
+                    <option value="debug">Test Bench</option>
+                </select>
+            </div>
+
+            <div class="section">
+                <span>Gamemode</span>
+                <select id="gamemode">
+                    {% for index, gamemode in gamemodes %}
+                    <option value="{{index}}">{{gamemode}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div>
+            <button onclick="createTeam()" id="customTeamsCreate" class="settingsButton">Create team</button>
+
+            <div id="customTeamsList">
+            
+            </div>
+        </div>
+
+    </div>
+
+    <div>
+        <button id="customStart" class="settingsButton"><img src="/static/img/play.png" alt="" width="15px" style="filter: invert(1);"> Start</button>
+    </div>
+</div>
+
+{% endblock %}

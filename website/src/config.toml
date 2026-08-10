@@ -1,0 +1,30 @@
+# Non-secret configuration. Secrets (DB, tokens, keys) live in the environment.
+
+[app]
+domain = "127.0.0.1"        # public hostname, no scheme
+protocol = "http"
+build = "develop"
+
+[matchmaking]
+queue_timeout = 60   # seconds without a heartbeat before a player drops from queue
+claim_timeout = 300  # seconds an unclaimed match waits for a server before cancelling
+
+[data_files]
+# Big machine-shaped datasets stay JSON; these paths are relative to this file.
+mmconfig = "mmconfig.json"
+kits = "kits.json"
+
+[permissions]
+# Bit order matters — a permission's index is its bit in Users.permissions.
+list = ["admin", "canWriteBlog", "premium"]
+
+[discord]
+client_id = "1317158396629094451"
+invite_url = "https://discord.gg/NKgTe6RnvH"
+
+[regions.names]
+# Region id -> display name used in Discord queue pings.
+paris = "EU-West"
+utah = "US-West"
+singapore = "AS-South"
+brazil = "SA-East"

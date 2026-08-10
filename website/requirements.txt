@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+itsdangerous
+requests
+sqlmodel
+sqlalchemy
+psycopg2-binary
+cachetools
+markdown-it-py
+httpx
+python-dotenv

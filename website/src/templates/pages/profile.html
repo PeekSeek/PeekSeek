@@ -1,0 +1,156 @@
+{% extends "layout.html" %}
+
+{% block title %}{{steamData.name}}'s profile{% endblock %}
+{% block titleEmbed %}{{steamData.name}}'s profile{% endblock %}
+{% block author %}Team PeekSeek{% endblock %}
+{% block description %}View this player's profile, see their stats and loadouts.{% endblock %}
+{% block image %}{{steamData.avatar}}{% endblock %}
+{% block color %}#ff0000{% endblock %}
+
+{% block content %}
+
+<div class="mainElement">
+  <div class="container profileContainer">
+    <div class="currentProfile userProfile"> <img src="{{steamData.avatar}}"> <span><b>{{steamData.name}}</b></span></div>
+
+    <br>
+
+    <span>
+      {% if userData %}
+        {% if userData.getPermission("admin") %}
+          Admin
+        {% elif userData.getPermission("premium") %}
+          Supporter
+        {% elif userData.discord %}
+          Discord Linked
+        {% else %}
+          Regular
+        {% endif %}
+      {% else %}
+        No user data.
+      {% endif %} - <button style="all:unset;cursor:pointer;" onclick="navigator.clipboard.writeText('{{steamData.steam64}}');alert('Copied!')">Copy Steam64</button>
+    </span>
+
+    <br>
+
+    <h2>Player Statistics</h2>
+    {% if not statsData %}
+      <span>User has no statistics.</span>
+    {% else %}
+      <table class="statTable">
+        <tr><th>Elo</th><th>Win%</th><th>Kills</th><th>Deaths</th><th>K/D</th><th>Wins</th><th>Losses</th></tr>
+      {% for stat in statsData %}
+        <tr>
+          <td>{{stat.elo}}</td>
+          <td>{{round(stat.wins / max(stat.losses + stat.wins, 1) * 100, 1)}}</td>
+          <td>{{stat.kills}}</td>
+          <td>{{stat.deaths}}</td>
+          <td>{{round(stat.kills / max(stat.deaths, 1), 2)}}</td>
+          <td>{{stat.wins}}</td>
+          <td>{{stat.losses}}</td>
+        </tr>
+      {% endfor %}
+      </table>
+    {% endif %}
+
+    <h2>Kits</h2>
+    {% if not kitData %}
+      <span>User has no kit data.</span>
+    {% else %}
+      <table class="kitTable">
+        <tr>
+          <th>Kit</th>
+          <th>Items</th>
+          {% if user %}
+          <th></th>
+          {% endif %}
+        </tr>
+      {% for kit in kitData %}
+        <tr>
+          <td>{{kit.category.upper()}}</td>
+          <td>{% for _, item in kit.data.items() %}
+            <img src="/public/unturned/{{item}}.png" alt="" height="20px">
+          {% endfor %}</td>
+          
+          {% if user %}
+          <td><button class="copyButton" onclick="copyApi({% if kit.category == "outfit" %}'outfit'{% else %}'kit/{{kit.category}}'{% endif %}, '{% for n, v in kit.data.items() %}&{{n}}={{v}}{% endfor %}')">Copy</button></td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </table>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  {% if user %}
+  let steam64 = "{{user.steam64 | safe}}";
+
+  function copyApi(link, extra) {
+    fetch(`/me/${link}?${extra.slice(1)}`, { method: "POST" }).then(r => {
+      if (r.ok) {
+        alert("Successfully copied.")
+      } else {
+        alert("Something went wrong, please try again later.")
+      }
+    });
+  }
+  {% endif %}
+</script>
+
+{% endblock %}
+
+{% block addheader %}
+<style>
+  .profileContainer {
+    width: 100%;
+  }
+
+  .statTable, .kitTable {
+    width: 100%;
+    background-color: #333;
+    border: 0;
+    border-spacing: 2px;
+    border-radius: 5px;
+    border: solid 2px #333;
+    margin: 5px 0;
+  } .statTable th, .kitTable th {
+    text-align: left;
+    background-color: #0a0a0a;
+    padding: 5px 10px;
+  } .statTable td, .kitTable td {
+    text-align: left;
+    background-color: #0a0a0a;
+    padding: 5px 10px;
+    color: #fff9;
+  }
+
+  .currentProfile {
+    font-size: 50px;
+  } .currentProfile img {
+    width: 100px;
+    height: 100px;
+    margin-right: 20px;
+  } .currentProfile span {
+    max-width: none;
+    display: flex;
+    align-items: flex-start;
+  } .currentProfile span span {
+    font-size: 20px;
+    margin-top: 15px;
+  }
+
+  .copyButton {
+    background-color: #333;
+    border: 0;
+    outline: 0;
+    padding: 5px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  h2 {
+    margin-top: 20px;
+  }
+</style>
+{% endblock %}

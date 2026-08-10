@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+
+{% block title %}PeekSeek - EULA{% endblock %}
+{% block author %}PeekSeek's EULA{% endblock %}
+{% block titleEmbed %}PeekSeek.net{% endblock %}
+{% block description %}See what we do with your data and how it affects you.{% endblock %}
+{% block color %}#ff0000{% endblock %}
+
+{% block content %}
+
+<div class="mainElement spaced">
+    <h1>Introduction</h1>
+    <span>
+        PeekSeek is a non-profit organization of volunteers. We seek no exploitation of data and thus only collect and use what is absolutely neccessary.
+    </span>
+
+    <h2>Cookies</h2>
+    <span>
+        We use 3 Cookies for storing your UUID (account token associated with your steam64), your local gamemode preferences and if you accepted the cookies or not. 
+        These cookies are aboslutely neccessarry for PeekSeek to function, thus you're unable to opt out. To emphasize, your cookies are not used for: marketing, analytics or selling personal data.
+    </span>
+
+    <h2>Your data</h2>
+    <span>
+        PeekSeek may track your pageviews, user sessions, device information, browser details, traffic sources (like search engines or ads), and even user demographics. 
+        We use Google Analytics purely to tweak our own marketing strategies, your data is generalized (we cannot see exactly who did what, we see what group of people did what on average) we do not sell this data, we exclusively use it to make PeekSeek better.
+        PeekSeek stores your only your own selected preferences such as kits, PeekSeek may also log your IPs to associate them with steam accounts. This is to make sure banned people cannot use the website.
+        Also refered to as an "ip ban". This data is stored securely on an encrypted SQL server on our private server (hosted by Kinsta) which is again protected by a username and password.
+        If you wish to get all the data stored, please contact us in <a href="/discord">our Discord</a> or mail us at <b>contact@peekseek.net</b>.
+    </span>
+</div>
+
+{% endblock %}
