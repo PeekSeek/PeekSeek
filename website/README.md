@@ -79,3 +79,8 @@ docker run --env-file .env -p 8000:8000 peekseek
 ```
 pytest -v
 ```
+
+## Deployments
+
+Pushing to `main` redeploys [dev.peekseek.net](https://dev.peekseek.net) automatically
+from this directory. See the deployment table in the [root README](../README.md).
