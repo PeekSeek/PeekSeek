@@ -15,7 +15,6 @@ def test_steam64_columns_are_bigint():
         f"{table}.{column.name}"
         for table, definition in SQLModel.metadata.tables.items()
         for column in definition.columns
-        if "steam64" in column.name.lower()
-        and column.type.compile(dialect) != "BIGINT"
+        if "steam64" in column.name.lower() and column.type.compile(dialect) != "BIGINT"
     ]
     assert not undersized, f"steam64 columns too small for a Steam64: {undersized}"
