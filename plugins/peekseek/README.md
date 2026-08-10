@@ -22,6 +22,26 @@ The output assembly lands in [plugin/bin/Release/net48/](plugin/bin/Release/net4
 
 `ExcludeAssets="runtime"` is set on the RocketRedist reference in the plugin project so the Rocket/Unturned DLLs are used only for compilation and are not copied next to the plugin output — the server already ships them.
 
+## Not yet deployed
+
+The live servers still run **`Blaze.PeekSeek.Main` 1.0.0.0**, not this project. Verified on
+EU7 on 2026-08-10: this build loads cleanly (`PeekSeek 2.0.0.0 is now loaded`), reads its
+config and drives its request loop against the backend, so the swap itself works.
+
+What blocks the cutover is that the deployed 1.0 config sets four fields this project has
+no equivalent for, so they would silently stop taking effect:
+
+| Field in the live config | Status here |
+| --- | --- |
+| `LobbyTimeoutSeconds` (210) | closest match is `sJoinTimeout`, which is declared but never read anywhere |
+| `DelayKickAfterWin` (5) | not implemented |
+| `LobbyServerRelaySGSSteamID` (0) | not implemented |
+| `LobbyTimeoutBroadcastSecondsRemaining` (5/10/30/60/90) | not implemented |
+
+`XmlSerializer` drops unknown elements without complaining, so a straight DLL swap loses
+these quietly rather than failing loudly. Port the behaviour, or confirm it is genuinely
+dead, before replacing the DLL on a server that runs real matches.
+
 ## Configuration
 
 On first load, Rocket generates `PeekSeek.configuration.xml` next to the plugin DLL. Root element is `<Config>`.
