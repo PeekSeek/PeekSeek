@@ -63,7 +63,12 @@ The website deploys from this repo on [Dokploy](https://hosting.kcvdh.com) (proj
 | Environment | Domain | Source | Database |
 | --- | --- | --- | --- |
 | production | peekseek.net (+ esports, api, admin) | `PeekSeek/website@main` | production Postgres |
-| develop | [dev.peekseek.net](https://dev.peekseek.net) | this repo, `main`, build path `/website` | its own Postgres, seeded from a production dump |
+| develop | [dev.peekseek.net](https://dev.peekseek.net) | this repo, `main`, Dockerfile `website/Dockerfile` | its own Postgres, empty |
 
 Both auto-deploy on push. Production still builds from the old single-purpose
 `PeekSeek/website` repo until it is cut over to this one.
+
+The dev database is empty, with the schema SQLModel creates on startup; pages backed by
+data render blank until it is seeded. Dev also runs with `BOT_TOKEN`, `LOG_WEBHOOK` and
+`QUEUE_LOG_CHANNEL` deliberately unset, so it can never DM real players or post into
+production Discord channels — every caller no-ops on an empty value.
