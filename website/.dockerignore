@@ -1,0 +1,6 @@
+# The Dockerfile copies src/ and public/ wholesale, so exclusions belong here.
+__pycache__/
+*.pyc
+.pytest_cache/
+src/tests/
+.env
