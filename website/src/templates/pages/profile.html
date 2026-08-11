@@ -37,21 +37,43 @@
     {% if not statsData %}
       <span>User has no statistics.</span>
     {% else %}
-      <table class="statTable">
-        <tr><th>Elo</th><th>Win%</th><th>Kills</th><th>Deaths</th><th>K/D</th><th>HS%</th><th>Wins</th><th>Losses</th></tr>
       {% for stat in statsData %}
-        <tr>
-          <td>{{stat.elo}}</td>
-          <td>{{round(stat.wins / max(stat.losses + stat.wins, 1) * 100, 1)}}</td>
-          <td>{{stat.kills}}</td>
-          <td>{{stat.deaths}}</td>
-          <td>{{round(stat.kills / max(stat.deaths, 1), 2)}}</td>
-          <td>{{round(stat.headshots / max(stat.kills, 1) * 100, 1)}}</td>
-          <td>{{stat.wins}}</td>
-          <td>{{stat.losses}}</td>
-        </tr>
+      <div class="statcards">
+        <div class="statcard"><span class="label">Elo</span><span class="value">{{stat.elo}}</span></div>
+        <div class="statcard"><span class="label">Win %</span><span class="value">{{round(stat.wins / max(stat.losses + stat.wins, 1) * 100, 1)}}</span></div>
+        <div class="statcard"><span class="label">K / D</span><span class="value">{{round(stat.kills / max(stat.deaths, 1), 2)}}</span></div>
+        <div class="statcard"><span class="label">HS %</span><span class="value">{{round(stat.headshots / max(stat.kills, 1) * 100, 1)}}</span></div>
+        <div class="statcard"><span class="label">Dmg / match</span><span class="value">{{round(stat.damageDealt / max(stat.wins + stat.losses, 1))}}</span></div>
+      </div>
       {% endfor %}
-      </table>
+    {% endif %}
+
+    <h2>Recent Matches</h2>
+    {% if not matches %}
+      <span>No matches played yet.</span>
+    {% else %}
+      <div class="matchlist">
+        {% for match in matches %}
+        {% set r = match.data.get("results", {}).get(steam64Str, {}) %}
+        {% set won = r.get("Won") %}
+        {% set kills = r.get("Kills", 0) %}
+        <a class="matchrow {{ 'win' if won else 'loss' }}" href="/match/{{match.matchId}}">
+          <span class="stripe"></span>
+          <span class="map">
+            <span class="name">{{match.data.get("map") or "Unknown map"}}</span>
+            <span class="when">{{match.endTime.strftime("%d/%m %H:%M")}}</span>
+          </span>
+          <span class="kd"><b>{{kills}}</b>K <b>{{r.get("Deaths", 0)}}</b>D</span>
+          <span class="hs">{{round(r.get("Headshots", 0) / max(kills, 1) * 100, 1)}}% HS</span>
+          {% if "Elo Change" in r %}
+          <span class="elo {{ 'pos' if r.get('Elo Change', 0) >= 0 else 'neg' }}">{{ "+" if r.get("Elo Change", 0) >= 0 else "" }}{{r.get("Elo Change")}}</span>
+          {% else %}
+          <span class="elo"></span>
+          {% endif %}
+          <span class="result">{{ "Win" if won else "Loss" }}</span>
+        </a>
+        {% endfor %}
+      </div>
     {% endif %}
 
     <h2>Kits</h2>
@@ -152,6 +174,89 @@
 
   h2 {
     margin-top: 20px;
+  }
+
+  /* ---- Match-first: a slim stat strip, matches take the visual weight ---- */
+  .statcards {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin: 5px 0;
+  } .statcard {
+    background-color: #121212;
+    border-radius: 6px;
+    padding: 9px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  } .statcard .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8a8a8a;
+  } .statcard .value {
+    font-size: 18px;
+    font-weight: 800;
+  }
+
+  .matchlist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 5px 0;
+  } .matchrow {
+    display: grid;
+    grid-template-columns: 4px 1fr auto auto auto auto;
+    align-items: center;
+    gap: 14px;
+    background-color: #0a0a0a;
+    border-radius: 6px;
+    padding: 10px 14px;
+    text-decoration: none;
+    transition: background-color 0.15s ease;
+  } .matchrow:hover {
+    background-color: #151515;
+  } .matchrow .stripe {
+    width: 3px;
+    height: 24px;
+    border-radius: 2px;
+    background-color: #ff4444;
+  } .matchrow.loss .stripe {
+    background-color: #444;
+  } .matchrow .map {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  } .matchrow .map .name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+  } .matchrow .map .when {
+    font-size: 11px;
+    color: #8a8a8a;
+  } .matchrow .kd, .matchrow .hs {
+    font-size: 12.5px;
+    color: #8a8a8a;
+    white-space: nowrap;
+  } .matchrow .kd b {
+    color: #fff;
+  } .matchrow .elo {
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 40px;
+    text-align: right;
+  } .matchrow .elo.pos {
+    color: #7ee08a;
+  } .matchrow .elo.neg {
+    color: #ff4444;
+  } .matchrow .result {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #ff4444;
+  } .matchrow.loss .result {
+    color: #8a8a8a;
   }
 </style>
 {% endblock %}

@@ -20,6 +20,46 @@ function getTeam(s64) {
     }
 }
 
+/// A gamemode with only one kit or one powerup has nothing to pick, so a player is never
+/// "still picking" on that axis — mirrors Match.allKitsLocked() on the backend.
+function isLocked(s64) {
+    const config = data.config;
+    const userData = (data.params.userData || {})[s64] || {};
+    const needsKit = (config.kitsAllowed || []).length > 1;
+    const needsPowerup = (config.powerups || []).length > 1;
+    return (!needsKit || userData.kit) && (!needsPowerup || userData.powerup);
+}
+
+function commitRow(name, locked) {
+    return `<div class="row"><span class="name">${name}</span>` +
+        `<span class="status ${locked ? "locked" : "picking"}">${locked ? "locked" : "picking…"}</span></div>`;
+}
+
+/// Your own team by name always; opponents collapse to a locked-count summary until
+/// `picksLocked`, then expand to the same per-player rows — same reveal moment the
+/// team panels below use, just presented as a quiet list instead of a roster grid.
+function commitListHtml(picksLocked, myTeamName) {
+    if (!data.config || !("users" in data)) return "";
+
+    const myTeam = data.teams.find(t => t.name === myTeamName);
+    const opponents = data.teams.filter(t => t.name !== myTeamName).flatMap(t => t.users);
+
+    const myRows = (myTeam ? myTeam.users : [])
+        .map(s64 => commitRow(data.users[s64] ? data.users[s64].name : s64, isLocked(s64)))
+        .join("");
+
+    const oppLockedCount = opponents.filter(isLocked).length;
+    const oppRows = opponents
+        .map(s64 => commitRow(picksLocked && data.users[s64] ? data.users[s64].name : "—", isLocked(s64)))
+        .join("");
+
+    return `${myRows}
+    <div class="opponents ${picksLocked ? "expanded" : ""}">
+      <div class="head"><span>Opponents</span><b>${picksLocked ? `${opponents.length}/${opponents.length} locked` : `hidden · ${oppLockedCount}/${opponents.length} locked`}</b></div>
+      ${oppRows}
+    </div>`;
+}
+
 function update() {
     if (!canInterval) {
         document.getElementById("b1").style.display = "none";
@@ -28,6 +68,13 @@ function update() {
     }
 
     document.getElementById("message").style.display = "none";
+
+    // Kits stop changing the instant the match is claimed (that's the snapshot the
+    // server pulls the loadout from), so that's also the moment there's nothing left
+    // to hide: reveal every roster together rather than opponents trickling in.
+    const picksLocked = data.claimed !== null;
+    const myTeam = getTeam(steam64);
+    document.getElementById("commitlist").innerHTML = commitListHtml(picksLocked, myTeam);
 
     api.get("/match/current").then(r => {
         if (r.status === 200) {
@@ -73,17 +120,20 @@ function update() {
         document.getElementById("b1").innerText = "Disabled";
         document.getElementById("b2").innerText = "Enabled";
         document.getElementById("kits").style.display = "block";
+        document.getElementById("commitlist").style.display = "flex";
     } else if (data.params.movement === null) {
         document.getElementById("type").innerText = "Picking: Movement";
         document.getElementById("b1").innerText = "New";
         document.getElementById("b2").innerText = "Old";
         document.getElementById("kits").style.display = "block";
+        document.getElementById("commitlist").style.display = "flex";
     } else if (Date.now() / 1000 < data.startsAfter) {
         document.getElementById("turn").style.display = "none";
         document.getElementById("type").style.display = "none";
         document.getElementById("b1").style.display = "none";
         document.getElementById("b2").style.display = "none";
         document.getElementById("kits").style.display = "block";
+        document.getElementById("commitlist").style.display = "flex";
         document.getElementById("message").innerHTML = `<h1>Almost there</h1>There's ${Math.round(data.startsAfter - Date.now() / 1000)} seconds left to choose your kit.`;
         document.getElementById("message").style.display = "block";
     } else {
@@ -93,6 +143,7 @@ function update() {
         document.getElementById("b1").style.display = "none";
         document.getElementById("b2").style.display = "none";
         document.getElementById("kits").style.display = "none";
+        document.getElementById("commitlist").style.display = "none";
         document.getElementById("message").innerHTML = "<h1>Waiting for server...</h1>Your match will start shortly.";
         document.getElementById("message").style.display = "flex";
 
@@ -113,12 +164,6 @@ function update() {
     const ballisticsText = data.params.ballistics === true ? "Enabled" : data.params.ballistics === false ? "Disabled" : "Undecided";
     const movementText = data.params.movement === true ? "Old" : data.params.movement === false ? "New" : "Undecided";
     let currentMatch = `<h1>Match data</h1><div><span>Bulletdrop: ${ballisticsText}</span><br><span>Movement: ${movementText}</span></div><div class="teams">`;
-
-    // Kits stop changing the instant the match is claimed (that's the snapshot the
-    // server pulls the loadout from), so that's also the moment there's nothing left
-    // to hide: reveal every roster together rather than opponents trickling in.
-    const picksLocked = data.claimed !== null;
-    const myTeam = getTeam(steam64);
 
     for (const t of data.teams) {
         currentMatch += `<div><span class="name">${t.name}</span>`;
