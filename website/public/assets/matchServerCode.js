@@ -114,13 +114,22 @@ function update() {
     const movementText = data.params.movement === true ? "Old" : data.params.movement === false ? "New" : "Undecided";
     let currentMatch = `<h1>Match data</h1><div><span>Bulletdrop: ${ballisticsText}</span><br><span>Movement: ${movementText}</span></div><div class="teams">`;
 
+    // Kits stop changing the instant the match is claimed (that's the snapshot the
+    // server pulls the loadout from), so that's also the moment there's nothing left
+    // to hide: reveal every roster together rather than opponents trickling in.
+    const picksLocked = data.claimed !== null;
+    const myTeam = getTeam(steam64);
+
     for (const t of data.teams) {
         currentMatch += `<div><span class="name">${t.name}</span>`;
         if ("users" in data) {
+            const reveal = picksLocked || t.name === myTeam;
             for (const s64 of t.users) {
-                const u = data.users[s64];
-                currentMatch += `<a class="userProfile"><img src="${u.avatar}"><span>${u.name}</span></a>`;
+                currentMatch += reveal
+                    ? `<a class="userProfile"><img src="${data.users[s64].avatar}"><span>${data.users[s64].name}</span></a>`
+                    : `<a class="userProfile hidden"><span class="hiddenAvatar"></span><span>???</span></a>`;
             }
+            if (!reveal) currentMatch += `<span class="hiddenNote">Hidden until kits lock</span>`;
         }
         currentMatch += "</div>";
     }

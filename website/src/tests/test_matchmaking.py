@@ -92,6 +92,59 @@ def test_elo_never_drops_below_floor(user_factory):
         assert stat.elo >= 100
 
 
+def test_match_cannot_be_claimed_early_with_picks_outstanding(user_factory):
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+            matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
+        )
+        db.add(match)
+
+    with Session(core_db.engine) as s:
+        loaded = s.query(data.Match).first()
+        assert loaded.allKitsLocked() is False
+        assert loaded.canBeClaimed() is False
+
+
+def test_match_starts_early_once_every_kit_and_powerup_is_locked(user_factory):
+    """Waiting out the full `selectKitsTime` timer is pointless once nobody has
+    anything left to decide — the match should be claimable immediately."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+            matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+        db.query(data.Match).where(data.Match.id == matchId).update(
+            {
+                "meta": match.meta
+                | {
+                    "userData": {
+                        str(first.steam64): {"kit": "meta", "powerup": "Ammo"},
+                        str(second.steam64): {"kit": "sniper", "powerup": "Doctor"},
+                    }
+                }
+            }
+        )
+
+    with Session(core_db.engine) as s:
+        loaded = s.query(data.Match).where(data.Match.id == matchId).first()
+        assert loaded.allKitsLocked() is True
+        assert loaded.canBeClaimed() is True
+
+
 def test_unclaimed_match_cancelled_after_timeout(user_factory):
     first, second = user_factory(), user_factory()
     with core_db.open() as db:

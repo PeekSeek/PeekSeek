@@ -132,7 +132,23 @@ class Match(SQLModel, table=True):
             and self.meta["ballistics"] is not None
             and self.meta["map"] is not None
             and self.meta["movement"] is not None
-            and time() >= (self.time + mmconfig["selectKitsTime"])
+            and (
+                time() >= (self.time + mmconfig["selectKitsTime"])
+                or self.allKitsLocked()
+            )
+        )
+
+    def allKitsLocked(self) -> bool:
+        """True once every player has made every pick the gamemode asks for them to
+        make, so the match can start the moment picking is actually done rather than
+        always waiting out the full selection timer."""
+        gm = mmconfig["gamemodes"][self.gamemode]
+        needsKit = len(gm["kitsAllowed"]) > 1
+        needsPowerup = len(gm["powerups"]) > 1
+        return all(
+            (not needsKit or user["kit"] is not None)
+            and (not needsPowerup or user["powerup"] is not None)
+            for user in self.meta["userData"].values()
         )
 
     def claim(self, code: str = "0") -> "Match":
