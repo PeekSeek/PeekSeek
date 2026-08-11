@@ -31,6 +31,9 @@ internal abstract class PSManager {
     private const float UpdateIntervalSeconds = 1f;
     private static float LastUpdateSent;
 
+    private const float VisibilityIntervalSeconds = 0.15f;
+    private static float LastVisibilityCheck;
+
     private static PSUpdateEvent LatestEvent;
     private static int EventsRecorded;
 
@@ -83,7 +86,12 @@ internal abstract class PSManager {
         // both reflect what the victim actually took rather than the pre-reduction number.
         CSteamID victimID = parameters.player.channel.owner.playerID.steamID;
         StatService.AddDamageTaken(victimID, parameters.damage);
-        if (attacker != null) StatService.AddDamageDealt(parameters.killer, parameters.damage);
+
+        float? reactionTime = null;
+        if (attacker != null) {
+            StatService.AddDamageDealt(parameters.killer, parameters.damage);
+            reactionTime = VisibilityTracker.ConsumeReactionTime(parameters.killer);
+        }
 
         FightTracker.RecordHit(
             victimID,
@@ -91,7 +99,8 @@ internal abstract class PSManager {
             parameters.damage,
             parameters.limb,
             attacker?.transform.position ?? default,
-            parameters.player.transform.position
+            parameters.player.transform.position,
+            reactionTime
         );
 
         RoundLog.RecordDamage(parameters.killer, victimID, parameters.damage);
@@ -99,9 +108,13 @@ internal abstract class PSManager {
 
     /// Only worth sampling in bullet-drop mode: instant-hit mode has no equivalent
     /// per-shot event, and Data is null outside a live match, so both are guarded here
-    /// rather than asking every caller to remember the condition.
+    /// rather than asking every caller to remember the condition. Third-person is also
+    /// excluded — PeekSeek is played first-person, but if a player ever ends up in
+    /// third-person the aim direction no longer matches where their reticle actually was,
+    /// so a spray-offset sample from that shot would be quietly wrong rather than missing.
     private static void OnBulletSpawned(UseableGun gun, BulletInfo bullet) {
         if (Data?.Settings?.Ballistics != true) return;
+        if (gun.player.look.perspective != EPlayerPerspective.FIRST) return;
 
         FightTracker.RecordShot(
             gun.player.channel.owner.playerID.steamID,
@@ -174,6 +187,7 @@ internal abstract class PSManager {
                 FightTracker.Clear();
                 RoundLog.Clear();
                 LastKilledBy.Clear();
+                VisibilityTracker.Clear();
                 KickAllClients("Match has been forcefully!");
                 Data = null;
                 GroupManager.knownGroups.Clear();
@@ -571,6 +585,7 @@ internal abstract class PSManager {
         FightTracker.Clear();
         RoundLog.Clear();
         LastKilledBy.Clear();
+        VisibilityTracker.Clear();
         GroupManager.knownGroups.Clear();
         RelayAllClients();
         UpdateStatus(EPSStatus.READY);
@@ -678,6 +693,9 @@ internal abstract class PSManager {
             KillerPosition = killer != null ? PSVector3.From(killer.Player.transform.position) : null,
             VictimPosition = PSVector3.From(victim.Player.transform.position),
             Hits = FightTracker.TakeFight(victim.CSteamID),
+            ReciprocalHits = murderer != CSteamID.Nil
+                ? FightTracker.TakeHitsFrom(murderer, victim.CSteamID)
+                : [],
             Shots = murderer != CSteamID.Nil && ballistics ? FightTracker.RecentShotsBy(murderer) : []
         });
     }
@@ -699,9 +717,17 @@ internal abstract class PSManager {
 
     /// Pushes a snapshot on a timer as well as on events, so health, held weapon and
     /// remaining powerup items move on the overlay between kills rather than freezing
-    /// until somebody dies.
+    /// until somebody dies. Also drives the visibility scan reaction time reads from, on
+    /// its own shorter interval — waiting a full second to notice someone came into view
+    /// would make the numbers meaningless.
     internal static void Tick() {
         if (Data == null) return;
+
+        if (Time.realtimeSinceStartup - LastVisibilityCheck >= VisibilityIntervalSeconds) {
+            LastVisibilityCheck = Time.realtimeSinceStartup;
+            VisibilityTracker.Tick(Data.Teams);
+        }
+
         if (Time.realtimeSinceStartup - LastUpdateSent < UpdateIntervalSeconds) return;
 
         SendUpdateState();

@@ -23,7 +23,7 @@ internal static class FightTracker {
     private static readonly Dictionary<ulong, List<PSFightHit>> HitsTaken = [];
     private static readonly Dictionary<ulong, List<PSShotSample>> RecentShots = [];
 
-    internal static void RecordHit(CSteamID victim, CSteamID attacker, float damage, ELimb limb, Vector3 attackerPosition, Vector3 victimPosition) {
+    internal static void RecordHit(CSteamID victim, CSteamID attacker, float damage, ELimb limb, Vector3 attackerPosition, Vector3 victimPosition, float? reactionTimeSeconds = null) {
         Trim(victim);
 
         if (!HitsTaken.TryGetValue(victim.m_SteamID, out List<PSFightHit> hits)) {
@@ -37,6 +37,7 @@ internal static class FightTracker {
             Attacker = attributed ? attacker.ToString() : null,
             Damage = damage,
             Limb = limb.ToString().ToLowerInvariant(),
+            ReactionTimeSeconds = reactionTimeSeconds,
             AttackerPosition = attributed ? PSVector3.From(attackerPosition) : null,
             VictimPosition = PSVector3.From(victimPosition)
         });
@@ -66,6 +67,21 @@ internal static class FightTracker {
 
         HitsTaken.Remove(victim.m_SteamID);
         return hits;
+    }
+
+    /// The reciprocal side of a fight: hits `player` took specifically from `attacker` —
+    /// what the eventual loser landed on the eventual winner before dying. Only those
+    /// entries are removed; unlike TakeFight, hits from anyone else stay buffered, since a
+    /// kill against one enemy shouldn't erase a still-ongoing fight with a different one.
+    internal static List<PSFightHit> TakeHitsFrom(CSteamID player, CSteamID attacker) {
+        Trim(player);
+
+        if (!HitsTaken.TryGetValue(player.m_SteamID, out List<PSFightHit> hits)) return [];
+
+        string attackerID = attacker.ToString();
+        List<PSFightHit> matching = [.. hits.Where(hit => hit.Attacker == attackerID)];
+        hits.RemoveAll(hit => hit.Attacker == attackerID);
+        return matching;
     }
 
     /// The killer's own shots inside the same recent window. Not cleared on read — unlike

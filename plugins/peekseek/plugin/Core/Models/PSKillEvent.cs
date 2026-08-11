@@ -44,6 +44,11 @@ internal class PSKillEvent {
     /// whoever, not only the eventual killer, so a multi-attacker fight is visible as one.
     [JsonProperty("hits")]
     public List<PSFightHit> Hits { get; set; }
+    /// The other side of the same fight: hits the killer took specifically from the
+    /// victim before winning it — what the loser managed to land back. Empty when the
+    /// victim never got a hit in, which is itself worth knowing.
+    [JsonProperty("reciprocalHits")]
+    public List<PSFightHit> ReciprocalHits { get; set; }
     /// The killer's own recent shots (origin + aim direction), oldest first. Only
     /// populated in bullet-drop mode (Settings.Ballistics) — instant-hit mode has no
     /// per-shot event to sample, so this is left empty rather than guessed at.
@@ -52,6 +57,7 @@ internal class PSKillEvent {
 
     public PSKillEvent() {
         Hits = [];
+        ReciprocalHits = [];
         Shots = [];
     }
 }
@@ -71,6 +77,11 @@ internal class PSFightHit {
     public PSVector3 AttackerPosition { get; set; }
     [JsonProperty("victimPos")]
     public PSVector3 VictimPosition { get; set; }
+    /// Seconds from the attacker first seeing an enemy to this hit — set only on the hit
+    /// that actually consumed an open visibility window (see VisibilityTracker), so most
+    /// hits leave this null rather than a stale or fabricated number.
+    [JsonProperty("reactionTime")]
+    public float? ReactionTimeSeconds { get; set; }
 }
 
 /// One bullet the killer fired, sampled from UseableGun.onBulletSpawned. Origin and aim

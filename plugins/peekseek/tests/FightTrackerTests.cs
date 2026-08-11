@@ -22,4 +22,12 @@ public class FightTrackerTests {
     public void RecentShotsBy_UnknownShooter_ReturnsEmpty() {
         Assert.Empty(FightTracker.RecentShotsBy(new CSteamID(76561198000000046UL)));
     }
+
+    [Fact]
+    public void TakeHitsFrom_UnknownPlayer_ReturnsEmpty() {
+        var player = new CSteamID(76561198000000047UL);
+        var attacker = new CSteamID(76561198000000048UL);
+
+        Assert.Empty(FightTracker.TakeHitsFrom(player, attacker));
+    }
 }

@@ -107,6 +107,11 @@ Tests live directly under [tests/](tests/) and cover logic that does not require
 - `ConfigurationManager` SDG gameplay-flag mutations
 - `SerializableVector3.ToVector3()` (constructs `UnityEngine.Vector3`)
 - `FightTracker.RecordHit`/`RecordShot` (also take a `UnityEngine.Vector3`)
+- `VisibilityTracker` entirely — every method touches a `UnityEngine.*` type
+  (`Physics`, `Vector3`, or just `Time.realtimeSinceStartup`), and this test host can't
+  load `UnityEngine.CoreModule` at all: even a method whose only reference to it sits in an
+  unreached branch fails, since the JIT resolves a method's full type references before
+  running any of it — not just the branch actually taken
 
 The ping damage multiplier resolution in `PSManager.OnDamageRequested` is the most interesting untested bit; testing it without a live server would need the pure selection logic extracted into a helper.
 
