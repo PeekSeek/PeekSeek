@@ -2,27 +2,37 @@
   Outfit editor. Same HTMX pattern as the kit editor: any change re-POSTs the whole
   outfit and swaps this element with the server's re-rendered response.
 #}
-<form id="outfitEditor" class="mainElement queue"
+<form id="outfitEditor" class="mainElement kitEditor"
       hx-post="/me/outfit"
       hx-trigger="change"
       hx-target="#outfitEditor"
       hx-swap="outerHTML">
 
-  <h1>Editing <b style="text-transform: uppercase; color: #f66;">OUTFIT</b></h1>
+  <header class="kitHeader">
+    <div class="kitHeaderText">
+      <p class="kitEyebrow">Loadout</p>
+      <h1>Editing <span class="kitCategory">outfit</span></h1>
+      <p class="kitHint">Choose gear for each slot. This outfit is used in every match and saves instantly.</p>
+    </div>
+  </header>
 
-  <div class="outfitselectorgrid">
-    {% for slot, options in outfits.items() %}
-      <div class="row">
-        {% for itemId in options %}
-          <label class="option{% if itemId == selection[slot] %} optionselected{% endif %}">
-            <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
-                   {% if itemId == selection[slot] %}checked{% endif %}>
-            <img src="/static/unturned/{{itemId}}.png"
-                 alt="{{ slot }} {{ itemId }}">
-          </label>
-        {% endfor %}
-      </div>
-    {% endfor %}
-    <span style="color:#333">This outfit will be used in every match.</span>
-  </div>
+  <section class="kitSection">
+    <div class="outfitselectorgrid">
+      {% for slot, options in outfits.items() %}
+        <div class="kitSlot outfitSlot">
+          <div class="kitSlotTitle">{{ slot }}</div>
+          <div class="row kitSelector">
+            {% for itemId in options %}
+              <label class="option kitGunOption{% if itemId == selection[slot] %} optionselected{% endif %}">
+                <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
+                       {% if itemId == selection[slot] %}checked{% endif %}>
+                <img src="/static/unturned/{{itemId}}.png"
+                     alt="{{ slot }} {{ itemId }}">
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
 </form>
