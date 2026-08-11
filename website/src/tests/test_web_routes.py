@@ -58,3 +58,121 @@ def test_404_renders_error_page(client):
     r = client.get("/this-route-does-not-exist", headers={"accept": "text/html"})
     assert r.status_code == 404
     assert "text/html" in r.headers["content-type"]
+
+
+def test_profile_page_renders_match_history(client, user_factory):
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player = user_factory()
+    with opendb() as db:
+        match = data.Match(
+            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+
+    data.MatchResult.appendKill(
+        matchId,
+        {
+            "round": 1,
+            "killerName": "kcvdh",
+            "victimName": "Ferret",
+            "weapon": 363,
+            "limb": "skull",
+        },
+    )
+    data.MatchResult.recordFinalResults(
+        matchId,
+        {
+            str(player.steam64): {
+                "Kills": 4,
+                "Deaths": 1,
+                "Headshots": 2,
+                "Won": True,
+                "Elo Change": 12,
+            }
+        },
+    )
+
+    r = client.get(f"/u/{player.steam64}")
+
+    assert r.status_code == 200
+    assert "statcards" in r.text
+    assert "matchlist" in r.text
+
+
+def test_profile_page_with_no_matches_renders(client, user_factory):
+    player = user_factory()
+    r = client.get(f"/u/{player.steam64}")
+    assert r.status_code == 200
+    assert "No matches played yet." in r.text
+
+
+def test_match_detail_page_renders_the_kill_log(client, user_factory):
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player = user_factory()
+    with opendb() as db:
+        match = data.Match(
+            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+
+    data.MatchResult.appendKill(
+        matchId,
+        {
+            "round": 1,
+            "killerName": "kcvdh",
+            "victimName": "Ferret",
+            "weapon": 363,
+            "limb": "skull",
+        },
+    )
+    data.MatchResult.recordFinalResults(
+        matchId,
+        {str(player.steam64): {"Kills": 1, "Deaths": 0, "Headshots": 1, "Won": True}},
+    )
+
+    r = client.get(f"/match/{matchId}")
+
+    assert r.status_code == 200
+    assert "Ferret" in r.text
+
+
+def test_match_detail_page_missing_match_404s(client):
+    r = client.get("/match/999999")
+    assert r.status_code == 404
+
+
+def test_match_page_renders_the_commit_list(client, login, user_factory):
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player, opponent = user_factory(), user_factory()
+    with opendb() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(player.steam64)]},
+                    {"name": "two", "users": [str(opponent.steam64)]},
+                ],
+                matchSettings={
+                    "ballistics": True,
+                    "map": "Alpha Valley",
+                    "movement": True,
+                },
+            )
+        )
+
+    login(client, player)
+    r = client.get("/match")
+
+    assert r.status_code == 200
+    assert 'id="commitlist"' in r.text
+    assert "selectedChoice::after" in r.text

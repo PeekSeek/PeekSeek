@@ -184,9 +184,46 @@ def profile(request: Request, steam64: int):
                 .where(data.Stat.steam64 == steam64)
                 .all(),
                 "kitData": db.query(data.Kit).where(data.Kit.steam64 == steam64).all(),
+                "matches": data.MatchResult.latestFor(steam64),
+                "steam64Str": str(steam64),
                 "steamData": data.User.getSteamData(steam64),
                 "max": max,
                 "round": round,
+            },
+        )
+
+
+@router.get("/match/{matchid}")
+def match_detail(request: Request, matchid: int):
+    """A finished match's result and kill log — public, same as /u/{steam64}. The
+    kill-by-kill map/graph view is still a concept; this is the plain data it will sit on
+    top of."""
+    with opendb() as db:
+        # Not `match` — page_context() already injects that key app-wide as the logged-in
+        # user's own active match id, and would silently overwrite this on every render.
+        result = (
+            db.query(data.MatchResult)
+            .where(data.MatchResult.matchId == matchid)
+            .first()
+        )
+        if not result:
+            raise HTTPException(
+                status_code=404, detail="No result found for this match."
+            )
+
+        results = result.data.get("results", {})
+        return templates.TemplateResponse(
+            request=request,
+            name="pages/match_detail.html",
+            context={
+                "result": result,
+                "players": [
+                    {"steam64": s64, "user": steam.User(int(s64)), **summary}
+                    for s64, summary in results.items()
+                ],
+                "kills": result.data.get("kills", []),
+                "round": round,
+                "max": max,
             },
         )
 

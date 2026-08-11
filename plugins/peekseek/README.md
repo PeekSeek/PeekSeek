@@ -94,6 +94,10 @@ Tests live directly under [tests/](tests/) and cover logic that does not require
 | [StatService](plugin/Core/StatService.cs) | `UpdateStatKills` called three times | `GetStatKills` returns `3` |
 | [StatService](plugin/Core/StatService.cs) | `GetStatDeaths` for unknown player | Returns `0` (null-safe path) |
 | [StatService](plugin/Core/StatService.cs) | Two players with 2 + 3 wins | `GetTotalPlayedRounds` returns `5` |
+| [StatsCommand.FormatStats](plugin/Commands/StatsCommand.cs) | 4 kills, 1 headshot | `"25% HS"`, no divide-by-zero at 0 kills |
+| [RoundLog](plugin/Core/RoundLog.cs) | Same attacker/victim pair hit twice | One entry, damage and hit count both accumulate |
+| [RoundLog](plugin/Core/RoundLog.cs) | Unattributed damage (`CSteamID.Nil`) | Ignored — never recorded against anyone |
+| [PSManager.DeathCauseTranslationKey](plugin/Core/PSManager.cs) | Every `EDeathCause` the whisper covers | Maps to the matching `death_*` translation key, unknown causes fall back to `death_generic` |
 
 ### Not covered (require running Unturned/Rocket host)
 
@@ -102,6 +106,12 @@ Tests live directly under [tests/](tests/) and cover logic that does not require
 - `LevelManagerPatch` Harmony patches
 - `ConfigurationManager` SDG gameplay-flag mutations
 - `SerializableVector3.ToVector3()` (constructs `UnityEngine.Vector3`)
+- `FightTracker.RecordHit`/`RecordShot` (also take a `UnityEngine.Vector3`)
+- `VisibilityTracker` entirely — every method touches a `UnityEngine.*` type
+  (`Physics`, `Vector3`, or just `Time.realtimeSinceStartup`), and this test host can't
+  load `UnityEngine.CoreModule` at all: even a method whose only reference to it sits in an
+  unreached branch fails, since the JIT resolves a method's full type references before
+  running any of it — not just the branch actually taken
 
 The ping damage multiplier resolution in `PSManager.OnDamageRequested` is the most interesting untested bit; testing it without a live server would need the pure selection logic extracted into a helper.
 

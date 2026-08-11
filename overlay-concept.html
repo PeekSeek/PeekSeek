@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PeekSeek overlay concept</title>
+
+<style>
+  :root {
+    --ground: #08080a;
+    --page-panel: #121212;
+    --page-panel-2: #171717;
+    --line: #232323;
+    --ink: #f2f2f2;
+    --muted: #8a8a8a;
+    --red: #ff4f4f;
+
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+    /* One size for every piece of text on a player card. */
+    --card-text: 0.82cqw;
+    /* Notch corner radius, reused by the two inverse fillets. */
+    --notch-r: 0.7cqw;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font);
+    line-height: 1.55;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wrap {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 34px;
+  }
+
+  header { display: flex; flex-direction: column; gap: 12px; }
+
+  .eyebrow {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--red);
+    font-weight: 600;
+  }
+
+  h1 { margin: 0; font-size: clamp(30px, 4.4vw, 44px); line-height: 1.05; letter-spacing: -0.025em; }
+  .lede { margin: 0; max-width: 70ch; color: #b0b0b0; }
+  .lede b { color: var(--ink); font-weight: 600; }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 6px;
+    align-items: center;
+    padding: 10px;
+    background: var(--page-panel);
+    border-radius: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+
+  .controls .label {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 8px 0 6px;
+  }
+
+  .controls .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 6px; }
+
+  .controls button {
+    font: inherit;
+    font-size: 13px;
+    padding: 7px 13px;
+    color: #c8c8c8;
+    background: var(--page-panel-2);
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .controls button:hover { color: var(--ink); background: #202020; }
+  .controls button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+  .controls button[aria-pressed="true"] { background: var(--red); color: #fff; }
+  .controls button.play { background: var(--red); color: #fff; font-weight: 600; }
+  .controls button.play:disabled { opacity: 0.4; cursor: default; }
+
+  .stage {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    container-type: inline-size;
+    border-radius: 10px;
+    background: linear-gradient(#5e7079 0%, #7b8a90 30%, #8b979a 41.4%, #4b5b38 41.6%,
+                                #3a4a2b 56%, #222b19 80%, #141a0f 100%);
+    font-family: var(--font);
+    color: #fff;
+  }
+
+  .stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(130% 80% at 50% 108%, rgba(0, 0, 0, 0.64), rgba(0, 0, 0, 0) 56%),
+      radial-gradient(100% 62% at 50% -8%, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0) 58%);
+    pointer-events: none;
+  }
+
+  /* ======================================================================
+     OVERLAY. Flat fills, no borders, no shadows, no gradients.
+     Greyscale plus one red. Red only ever means jeopardy.
+     ====================================================================== */
+  .hud { position: absolute; inset: 0; pointer-events: none; }
+  .hud * { font-family: var(--font); }
+
+  .flat { background: rgba(15, 15, 15, 0.9); }
+
+  /* ---- Notch ------------------------------------------------------------ */
+  .notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.55cqw;
+    height: 2.5cqw;
+    padding: 0 1.1cqw;
+    border-radius: 0 0 var(--notch-r) var(--notch-r);
+  }
+
+  /* The two inverse fillets. Each sits flush against the top edge just
+     outside the notch and is the notch colour minus a quarter disc whose
+     centre is on the OUTER TOP corner. Because the centre is level with
+     y = 0, the fill is full width at the very top and tapers to nothing at
+     depth r, so the notch flares outward and runs smoothly back into the
+     straight top line instead of bulging. */
+  .notch .flare {
+    position: absolute;
+    top: 0;
+    width: var(--notch-r);
+    height: var(--notch-r);
+    display: block;
+  }
+
+  .notch .flare.l { right: 100%; }
+  .notch .flare.r { left: 100%; }
+  .notch .flare path { fill: rgba(15, 15, 15, 0.9); }
+
+  .notch .tn {
+    font-size: 0.92cqw;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: #d8d8d8;
+    max-width: 9cqw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .notch .sc {
+    font-size: 1.45cqw;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.25, 1.4);
+  }
+
+  .notch .sc.bump { transform: scale(1.3); }
+
+  .notch .mid {
+    font-size: 0.72cqw;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding: 0 0.3cqw;
+    white-space: nowrap;
+  }
+
+  .notch .mid.hot { color: var(--red); }
+
+  /* ---- Columns ---------------------------------------------------------- */
+  .col {
+    position: absolute;
+    bottom: 1.2cqw;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9cqw;
+    width: 19.5cqw;
+  }
+
+  .col.l { left: 1.2cqw; }
+  .col.r { right: 1.2cqw; }
+
+  .group { display: flex; flex-direction: column; gap: 0.22cqw; }
+
+  .group .tname {
+    font-size: 0.6cqw;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    padding: 0 0.1cqw 0.1cqw;
+  }
+
+  .col.r .group .tname { text-align: right; }
+
+  /* ---- Card ------------------------------------------------------------- */
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.24cqw;
+    padding: 0.4cqw 0.55cqw;
+    border-radius: 0.3cqw;
+    overflow: hidden;
+    transition: opacity 0.4s ease;
+  }
+
+  .card.out { opacity: 0.3; }
+
+  .card .l1, .card .l2 { display: flex; align-items: center; gap: 0.5cqw; }
+  .col.r .card .l1, .col.r .card .l2 { flex-direction: row-reverse; }
+
+  /* Loadout on one side, powerup name pushed to the far edge. */
+  .card .l2 { justify-content: space-between; }
+
+  .card .nm {
+    font-size: var(--card-text);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Stats sit apart from the loadout because they answer a different question. */
+  .stats { display: flex; gap: 0.5cqw; align-items: baseline; margin-left: auto; }
+  .col.r .stats { margin-left: 0; margin-right: auto; }
+  .stats span { font-size: var(--card-text); color: var(--muted); font-weight: 600; letter-spacing: 0.02em; }
+  .stats b { font-size: var(--card-text); color: #fff; font-weight: 700; margin-right: 0.12cqw; }
+
+  /* Gun first, then everything they carry, powerup items included. */
+  .kit { display: flex; align-items: center; gap: 0.24cqw; }
+  .col.r .kit { flex-direction: row-reverse; }
+
+  /* Same colour and transparency as ROUND 3, and not bold. */
+  .pw {
+    font-size: var(--card-text);
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .slot { position: relative; display: grid; place-items: center; flex: none; width: 1.35cqw; height: 1.35cqw; }
+  .slot img { max-width: 1.35cqw; max-height: 1.35cqw; object-fit: contain; display: block; }
+  .slot.gun { width: 3.9cqw; }
+  .slot.gun img { max-width: 3.9cqw; max-height: 1.3cqw; }
+  .col.r .slot.gun img { transform: scaleX(-1); }
+
+  .slot .n {
+    position: absolute;
+    right: -0.06cqw;
+    bottom: -0.12cqw;
+    font-size: 0.56cqw;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .col.r .hp i { margin-left: auto; }
+
+  .card .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+  .card.hit .flash { animation: hitFlash 0.4s ease-out; }
+
+  @keyframes hitFlash {
+    0% { opacity: 0.22; }
+    100% { opacity: 0; }
+  }
+
+  /* ---- Health is the card's base line ----------------------------------- */
+  .card { padding-bottom: 0.5cqw; }
+
+  .hp {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0.18cqw;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .hp i {
+    display: block;
+    height: 100%;
+    background: #fff;
+    transition: width 0.5s cubic-bezier(0.3, 0.8, 0.3, 1), background 0.3s ease;
+  }
+
+  .hp i.low { background: var(--red); }
+
+  /* ---- Kill feed -------------------------------------------------------- */
+  .feed {
+    position: absolute;
+    top: 3.1cqw;
+    right: 1.2cqw;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.26cqw;
+  }
+
+  .feed .kill {
+    display: flex;
+    align-items: center;
+    gap: 0.5cqw;
+    padding: 0.24cqw 0.5cqw;
+    border-radius: 0.26cqw;
+    font-size: 0.76cqw;
+    font-weight: 400;
+    white-space: nowrap;
+    animation: killIn 0.35s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+
+  .feed .kill.leaving { animation: killOut 0.3s ease-in both; }
+
+  /* Two plain white labels. Neither name is emphasised over the other. */
+  .feed .kill .name { color: #fff; font-weight: 400; }
+
+  /* Force every weapon to solid white so the silhouette reads instantly. */
+  .feed .kill img {
+    width: 2.8cqw;
+    height: 1cqw;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+  }
+
+  /* Crosshair marks a headshot. */
+  .feed .kill .hs { width: 0.95cqw; height: 0.95cqw; flex: none; color: #fff; display: block; }
+
+  @keyframes killIn {
+    from { opacity: 0; transform: translateX(1.4cqw); }
+    to { opacity: 1; transform: none; }
+  }
+
+  @keyframes killOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  /* ---- Banner ----------------------------------------------------------- */
+  .banner {
+    position: absolute;
+    top: 26%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.7cqw 2.2cqw;
+    border-radius: 0.4cqw;
+    white-space: nowrap;
+    opacity: 0;
+  }
+
+  .banner.show { animation: bannerIn 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.1) both; }
+  .banner.hide { animation: bannerOut 0.35s ease-in both; }
+  .banner .what { font-size: 0.64cqw; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .banner .who { font-size: 1.75cqw; font-weight: 700; letter-spacing: -0.02em; }
+  .banner.final .who { color: var(--red); }
+
+  @keyframes bannerIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(0.6cqw); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  @keyframes bannerOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hud *, .hud *::before, .hud *::after {
+      animation-duration: 0.001s !important;
+      transition-duration: 0.001s !important;
+    }
+  }
+
+  /* ---- Notes ------------------------------------------------------------ */
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; }
+
+  .note {
+    background: var(--page-panel);
+    border-radius: 10px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .note h3 { margin: 0; font-size: 14px; }
+  .note p { margin: 0; font-size: 13.5px; color: #9d9d9d; }
+  .note ul { margin: 0; padding-left: 17px; font-size: 13.5px; color: #9d9d9d; }
+  .note li { margin-bottom: 5px; }
+  .note b { color: var(--ink); font-weight: 600; }
+  .note code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; color: #c4c4c4; }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">PeekSeek &middot; stream overlay</p>
+    <h1>Baseline, revised</h1>
+    <p class="lede">
+      Health stays the card's bottom edge, so the card is still exactly two lines tall. What
+      changed: the notch now <b>flares outward</b> into the top edge, the loadout is one
+      unbroken run with the <b>powerup pushed to the far edge</b>, headshots are a
+      <b>percentage</b>, and the kill feed marks a headshot with a <b>crosshair</b> on an
+      all-white weapon. Press <b>Play round</b> to judge the motion.
+    </p>
+  </header>
+
+  <div class="controls">
+    <button type="button" class="play" id="play">&#9654; Play round</button>
+    <span class="sep"></span>
+    <span class="label">Format</span>
+    <button type="button" data-format="duel" aria-pressed="true">1v1</button>
+    <button type="button" data-format="trio" aria-pressed="false">3v3</button>
+    <button type="button" data-format="ffa" aria-pressed="false">4-team FFA</button>
+    <span class="sep"></span>
+    <span class="label">State</span>
+    <button type="button" data-situation="live" aria-pressed="true">Live</button>
+    <button type="button" data-situation="lobby" aria-pressed="false">Between rounds</button>
+    <button type="button" data-situation="down" aria-pressed="false">Player down</button>
+    <button type="button" data-situation="match" aria-pressed="false">Match point</button>
+  </div>
+
+  <div class="stage"><div class="hud" id="hud"></div></div>
+
+  <div class="notes">
+    <div class="note">
+      <h3>The notch is one continuous shape</h3>
+      <p>
+        Two <code>&lt;svg&gt;</code> fillets sit just outside the notch, flush to
+        <code>y&nbsp;=&nbsp;0</code>. Each is the notch colour minus a quarter disc centred on
+        its outer top corner, so the fill is full width at the very top and tapers to nothing
+        at depth <code>r</code>. That is the inverse of a rounded corner: the notch widens as
+        it reaches the top edge and runs smoothly back into the straight line.
+      </p>
+    </div>
+    <div class="note">
+      <h3>One run of items, one label</h3>
+      <p>
+        The divider is gone. Gun, kit and powerup items are a single left-to-right run, and
+        the powerup name is pushed to the opposite edge by
+        <code>justify-content: space-between</code>. The right column mirrors it with
+        <code>row-reverse</code>, so the powerup always sits on the outside.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Nothing shouts</h3>
+      <ul>
+        <li>Powerup name uses the same <code>--muted</code> as <b>ROUND 3</b>, weight 400.</li>
+        <li>Name, K, D and HS% all share <code>--card-text</code>.</li>
+        <li>Headshots are <code>round(hs / kills)</code> as a percent, no <code>HS</code>.</li>
+        <li>Feed names are two plain white labels; weapons are forced white with
+          <code>brightness(0) invert(1)</code>.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+/// Real item icons out of the repo. Swap to "/static/unturned/" once this
+/// lands in website/public.
+const ICON_BASE = "website/public/unturned/";
+
+/// Straight from mmconfig.json, so the split between kit and powerup is the real one.
+const POWERUPS = {
+  Movement: [1838, 346, 1209],
+  Ammo: [17, 125, 1838],
+  Boom: [519, 1838],
+  Doctor: [95, 1838, 488],
+  Trapper: [1101, 1102, 254, 1408, 1838]
+};
+
+const ROSTERS = {
+  duel: [
+    { teamName: "Team Alpha", players: [
+      { name: "kcvdh", powerup: "Doctor", equipped: 363, items: [[17, 3], [1838, 2], [95, 1]] }] },
+    { teamName: "Team Bravo", players: [
+      { name: "Ferret", powerup: "Boom", equipped: 1382, items: [[125, 2], [519, 1], [1838, 2]] }] }
+  ],
+  trio: [
+    { teamName: "Team Alpha", players: [
+      { name: "kcvdh", powerup: "Doctor", equipped: 363, items: [[17, 3], [1838, 2], [95, 1]] },
+      { name: "Sopwith", powerup: "Ammo", equipped: 363, items: [[17, 4], [125, 1]] },
+      { name: "Brackwater", powerup: "Trapper", equipped: 1382, items: [[125, 2], [1101, 2], [254, 1]] }] },
+    { teamName: "Team Bravo", players: [
+      { name: "Ferret", powerup: "Boom", equipped: 1382, items: [[125, 2], [519, 1], [1838, 2]] },
+      { name: "Mallard", powerup: "Movement", equipped: 363, items: [[17, 4], [346, 1], [1209, 1]] },
+      { name: "Nine", powerup: "Doctor", equipped: 363, items: [[17, 2], [95, 1], [488, 1]] }] }
+  ],
+  ffa: [
+    { teamName: "kcvdh", players: [
+      { name: "kcvdh", powerup: "Doctor", equipped: 363, items: [[17, 3], [1838, 2]] }] },
+    { teamName: "Ferret", players: [
+      { name: "Ferret", powerup: "Boom", equipped: 1382, items: [[125, 2], [519, 1]] }] },
+    { teamName: "Sopwith", players: [
+      { name: "Sopwith", powerup: "Trapper", equipped: 363, items: [[17, 1], [1101, 2]] }] },
+    { teamName: "Mallard", players: [
+      { name: "Mallard", powerup: "Movement", equipped: 1382, items: [[125, 4], [346, 1]] }] }
+  ]
+};
+
+const SITUATIONS = {
+  live: {
+    round: 3, event: null, feed: [], wins: [1, 1, 0, 1],
+    health: [92, 74, 58, 0, 41, 88],
+    state: ["alive", "alive", "alive", "dead", "alive", "alive"]
+  },
+  lobby: {
+    round: 3, event: null, feed: [], wins: [1, 1, 0, 1],
+    health: [100, 100, 100, 100, 100, 100],
+    state: ["waiting", "waiting", "waiting", "waiting", "waiting", "waiting"]
+  },
+  down: {
+    round: 4, event: null, wins: [2, 1, 0, 1],
+    feed: [{ id: 1, killer: "kcvdh", victim: "Ferret", weapon: 363, limb: "skull" }],
+    health: [23, 0, 61, 0, 0, 77],
+    state: ["alive", "dead", "alive", "dead", "dead", "alive"]
+  },
+  match: {
+    round: 5, event: null, wins: [2, 2, 1, 1],
+    feed: [
+      { id: 1, killer: "Ferret", victim: "Sopwith", weapon: 1382, limb: "spine" },
+      { id: 2, killer: "kcvdh", victim: "Mallard", weapon: 363, limb: "skull" }
+    ],
+    health: [61, 88, 0, 0, 0, 34],
+    state: ["alive", "alive", "dead", "dead", "dead", "alive"]
+  }
+};
+
+/// Inverse fillets. Left: box minus a quarter disc centred at (0, 10).
+/// Right: the same mirrored, centred at (10, 10).
+const FLARE_L = `<svg class="flare l" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0 L10 0 L10 10 A10 10 0 0 0 0 0 Z"/></svg>`;
+const FLARE_R = `<svg class="flare r" viewBox="0 0 10 10" aria-hidden="true"><path d="M10 0 L0 0 L0 10 A10 10 0 0 1 10 0 Z"/></svg>`;
+
+/// Headshot marker for the kill feed.
+const CROSSHAIR = `<svg class="hs" viewBox="0 0 24 24" aria-label="headshot">
+  <circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+  <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+  <line x1="12" y1="0.5" x2="12" y2="5" stroke="currentColor" stroke-width="1.8"/>
+  <line x1="12" y1="19" x2="12" y2="23.5" stroke="currentColor" stroke-width="1.8"/>
+  <line x1="0.5" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="1.8"/>
+  <line x1="19" y1="12" x2="23.5" y2="12" stroke="currentColor" stroke-width="1.8"/>
+</svg>`;
+
+let format = "duel";
+let situation = "live";
+
+function buildState() {
+  const roster = ROSTERS[format];
+  const s = SITUATIONS[situation];
+  let seat = 0;
+
+  return {
+    round: s.round,
+    roundsToWin: 3,
+    event: s.event,
+    feed: s.feed.map(k => ({ ...k })),
+    teams: roster.map((entry, teamIndex) => ({
+      teamName: entry.teamName,
+      wins: s.wins[teamIndex],
+      users: Object.fromEntries(entry.players.map(p => {
+        const i = seat++;
+        return [`765611980000000${i}`, {
+          name: p.name,
+          powerup: p.powerup,
+          state: s.state[i],
+          health: s.health[i],
+          kills: [5, 4, 2, 3, 6, 1][i],
+          deaths: [4, 5, 3, 4, 2, 5][i],
+          headshots: [2, 1, 0, 1, 3, 0][i],
+          equipped: p.equipped,
+          inventory: p.items.map(([id, amount]) => ({ id, amount }))
+        }];
+      }))
+    }))
+  };
+}
+
+function icon(id) { return `${ICON_BASE}${id}.png`; }
+function inPlay(user) { return user.state === "alive"; }
+function isLow(health) { return health <= 30; }
+
+/// A bare percentage. The label is obvious from position, so it is dropped.
+function hsPercent(user) {
+  return user.kills > 0 ? Math.round((user.headshots / user.kills) * 100) : 0;
+}
+
+function seatsOf(state) {
+  return state.teams.flatMap(team => Object.values(team.users).map(user => ({ team, user })));
+}
+
+function roundLabel(state) {
+  if (state.teams.some(t => t.wins >= state.roundsToWin)) return { text: "FINAL", hot: true };
+  if (state.teams.some(t => t.wins === state.roundsToWin - 1)) return { text: "MATCH POINT", hot: true };
+  return { text: `ROUND ${state.round}`, hot: false };
+}
+
+/// Kit first, then whatever the powerup handed them, so the run reads
+/// gun -> owned -> granted without a divider.
+function loadout(user) {
+  const fromPowerup = POWERUPS[user.powerup] || [];
+  const rest = user.inventory.filter(item => item.id !== user.equipped);
+
+  return [
+    ...rest.filter(item => !fromPowerup.includes(item.id)),
+    ...rest.filter(item => fromPowerup.includes(item.id))
+  ];
+}
+
+function slotHtml(item, extra = "") {
+  return `<span class="slot ${extra}">
+    <img src="${icon(item.id)}" alt="">
+    ${item.amount > 1 ? `<span class="n">${item.amount}</span>` : ""}
+  </span>`;
+}
+
+// ---------------------------------------------------------------------------
+let view = null;
+
+function mount(state) {
+  const hud = document.getElementById("hud");
+  const duel = state.teams.length === 2;
+  const label = roundLabel(state);
+
+  hud.innerHTML = `
+    <div class="notch flat">
+      ${FLARE_L}
+      ${duel ? `<span class="tn">${state.teams[0].teamName}</span><span class="sc" data-sc="0"></span>` : ""}
+      <span class="mid ${label.hot ? "hot" : ""}">${label.text}</span>
+      ${duel ? `<span class="sc" data-sc="1"></span><span class="tn">${state.teams[1].teamName}</span>` : ""}
+      ${FLARE_R}
+    </div>
+    <div class="feed"></div>
+    <div class="banner flat"><span class="what"></span><span class="who"></span></div>
+    ${columnHtml(state, 0)}
+    ${columnHtml(state, 1)}`;
+
+  const cards = new Map();
+  seatsOf(state).forEach((_, i) => {
+    const el = hud.querySelector(`[data-seat="${i}"]`);
+    cards.set(i, {
+      root: el,
+      nm: el.querySelector(".nm"),
+      stats: el.querySelector(".stats"),
+      kit: el.querySelector(".kit"),
+      pw: el.querySelector(".pw"),
+      gauge: el.querySelector(".hp i")
+    });
+  });
+
+  view = {
+    hud,
+    cards,
+    scores: [hud.querySelector('[data-sc="0"]'), hud.querySelector('[data-sc="1"]')],
+    feed: hud.querySelector(".feed"),
+    banner: hud.querySelector(".banner"),
+    shownKills: new Set(),
+    shownEvent: null,
+    bannerTimer: null
+  };
+}
+
+function columnHtml(state, side) {
+  const groups = state.teams
+    .map((team, i) => ({ team, i }))
+    .filter(({ i }) => (state.teams.length === 2 ? i === side : i % 2 === side));
+
+  let seat = 0;
+  const seatOf = new Map();
+  state.teams.forEach(team => Object.values(team.users).forEach(user => seatOf.set(user, seat++)));
+
+  return `<div class="col ${side === 0 ? "l" : "r"}">
+    ${groups.map(({ team }) => `
+      <div class="group">
+        ${Object.keys(team.users).length > 1 ? `<span class="tname">${team.teamName}</span>` : ""}
+        ${Object.values(team.users).map(user => `
+          <div class="card flat" data-seat="${seatOf.get(user)}">
+            <span class="flash"></span>
+            <div class="l1">
+              <span class="nm"></span>
+              <span class="stats"></span>
+            </div>
+            <div class="l2">
+              <span class="kit"></span>
+              <span class="pw"></span>
+            </div>
+            <span class="hp"><i></i></span>
+          </div>`).join("")}
+      </div>`).join("")}
+  </div>`;
+}
+
+function apply(state, options = {}) {
+  if (!view) return;
+  const seats = seatsOf(state);
+
+  if (view.scores[0]) {
+    setScore(view.scores[0], state.teams[0].wins);
+    setScore(view.scores[1], state.teams[1].wins);
+  }
+
+  const label = roundLabel(state);
+  const mid = view.hud.querySelector(".mid");
+  mid.textContent = label.text;
+  mid.classList.toggle("hot", label.hot);
+
+  seats.forEach(({ user }, i) => {
+    const c = view.cards.get(i);
+    if (!c) return;
+
+    c.root.classList.toggle("out", !inPlay(user));
+    c.nm.textContent = user.name;
+    c.stats.innerHTML =
+      `<span><b>${user.kills}</b>K</span>` +
+      `<span><b>${user.deaths}</b>D</span>` +
+      `<span><b>${hsPercent(user)}</b>%</span>`;
+    c.kit.innerHTML = slotHtml({ id: user.equipped, amount: 1 }, "gun") +
+      loadout(user).map(item => slotHtml(item)).join("");
+    c.pw.textContent = user.powerup;
+
+    if (c.gauge) {
+      c.gauge.style.width = `${user.health}%`;
+      c.gauge.classList.toggle("low", isLow(user.health));
+    }
+
+    if (options.hit === i) {
+      c.root.classList.remove("hit");
+      void c.root.offsetWidth;
+      c.root.classList.add("hit");
+    }
+  });
+
+  syncFeed(view, state.feed);
+  if (state.event) showBanner(view, state.event);
+}
+
+function setScore(el, value) {
+  if (el.textContent === String(value)) return;
+  el.textContent = value;
+  el.classList.add("bump");
+  setTimeout(() => el.classList.remove("bump"), 400);
+}
+
+function syncFeed(view, feed) {
+  feed.filter(kill => !view.shownKills.has(kill.id)).forEach(kill => {
+    view.shownKills.add(kill.id);
+
+    const row = document.createElement("div");
+    row.className = "kill flat";
+    row.innerHTML =
+      (kill.killer ? `<span class="name">${kill.killer}</span>` : "") +
+      `<img src="${icon(kill.weapon)}" alt="">` +
+      (kill.limb === "skull" ? CROSSHAIR : "") +
+      `<span class="name">${kill.victim}</span>`;
+    view.feed.appendChild(row);
+
+    setTimeout(() => {
+      row.classList.add("leaving");
+      setTimeout(() => row.remove(), 320);
+    }, 6000);
+  });
+}
+
+function showBanner(view, event) {
+  if (event.id === view.shownEvent) return;
+  view.shownEvent = event.id;
+
+  view.banner.querySelector(".what").textContent =
+    event.kind === "matchWon" ? "Wins the match" : `Takes round ${event.round}`;
+  view.banner.querySelector(".who").textContent = event.team;
+  view.banner.classList.toggle("final", event.kind === "matchWon");
+
+  clearTimeout(view.bannerTimer);
+  view.banner.classList.remove("hide");
+  view.banner.classList.add("show");
+
+  view.bannerTimer = setTimeout(() => {
+    view.banner.classList.remove("show");
+    view.banner.classList.add("hide");
+  }, 3200);
+}
+
+function render() {
+  const state = buildState();
+  mount(state);
+  apply(state);
+}
+
+let timers = [];
+
+function playRound() {
+  timers.forEach(clearTimeout);
+  timers = [];
+  format = "duel";
+  situation = "live";
+  syncButtons();
+
+  const state = buildState();
+  state.round = 2;
+  state.teams[0].wins = 1;
+  state.teams[1].wins = 1;
+  const seats = seatsOf(state).map(s => s.user);
+  seats.forEach(u => { u.health = 100; u.state = "alive"; });
+
+  mount(state);
+  apply(state);
+
+  const button = document.getElementById("play");
+  button.disabled = true;
+  const step = (delay, action) => timers.push(setTimeout(action, delay));
+
+  step(900, () => { seats[1].health = 52; apply(state, { hit: 1 }); });
+  step(1900, () => { seats[0].health = 74; apply(state, { hit: 0 }); });
+  step(2800, () => { seats[1].health = 18; apply(state, { hit: 1 }); });
+  step(3700, () => {
+    seats[1].health = 0;
+    seats[1].state = "dead";
+    seats[0].kills += 1;
+    seats[0].headshots += 1;
+    seats[1].deaths += 1;
+    state.feed = [{ id: 101, killer: seats[0].name, victim: seats[1].name, weapon: seats[0].equipped, limb: "skull" }];
+    apply(state, { hit: 1 });
+  });
+  step(4700, () => {
+    state.teams[0].wins = 2;
+    state.event = { id: 201, kind: "roundWon", team: state.teams[0].teamName, round: 2 };
+    apply(state);
+  });
+  step(8800, () => {
+    state.round = 3;
+    state.event = null;
+    seats.forEach(u => { u.health = 100; u.state = "waiting"; });
+    apply(state);
+  });
+  step(10400, () => {
+    seats.forEach(u => { u.state = "alive"; });
+    apply(state);
+    button.disabled = false;
+  });
+}
+
+function syncButtons() {
+  document.querySelectorAll(".controls button[data-format]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.format === format)));
+  document.querySelectorAll(".controls button[data-situation]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.situation === situation)));
+}
+
+document.querySelectorAll(".controls button[data-format], .controls button[data-situation]")
+  .forEach(button => {
+    button.addEventListener("click", () => {
+      timers.forEach(clearTimeout);
+      document.getElementById("play").disabled = false;
+      if (button.dataset.format) format = button.dataset.format;
+      else situation = button.dataset.situation;
+      syncButtons();
+      render();
+    });
+  });
+
+document.getElementById("play").addEventListener("click", playRound);
+
+render();
+</script>
+
+</body>
+</html>

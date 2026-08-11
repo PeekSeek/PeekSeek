@@ -4,7 +4,7 @@ These paths are a frozen contract with the deployed C# plugin (RemoteAPI.cs) —
 rename them only alongside a plugin release.
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from src.core.settings import settings
@@ -12,7 +12,7 @@ from src.core.db import open as opendb
 from src.core import models as data
 from src.core import matchmaking
 from src.core.webhook import Webhook
-from src.dependencies import GameServer, JsonBody, authorized_server, client_ip
+from src.dependencies import GameServer, JsonBody, authorized_server
 
 router = APIRouter(prefix="/unt", dependencies=[Depends(authorized_server)])
 
@@ -20,14 +20,17 @@ mmconfig = settings.mmconfig
 
 
 @router.get("/eventwait")
-def event_wait(request: Request, server: GameServer, matchid: str = "0"):
-    """Server tick. matchid=0 → claim a pending match; else report liveness."""
+def event_wait(server: GameServer, matchid: str = "0", code: str = "0"):
+    """Server tick. matchid=0 → claim a pending match; else report liveness.
+
+    `code` is the claiming server's Unturned server code, which is what players
+    connect with (`steam://run/304930//+connect <code>`). A server too old to send
+    one claims as "0", and the site then offers no connect button for that match.
+    """
     region = server.region
 
     if matchid == "0":
-        return data.Match.claimMatchIfPossible(region, client_ip(request)) or {
-            "head": "idle"
-        }
+        return data.Match.claimMatchIfPossible(region, code) or {"head": "idle"}
 
     with opendb() as db:
         current = db.query(data.Match).where(data.Match.id == matchid).first()
@@ -69,6 +72,7 @@ def results(payload: JsonBody, matchid: int | None = None):
             if payload["played"]:
                 gamemode = mmconfig["gamemodes"][match.gamemode]
                 result, avgElo = matchmaking.matchResults(gamemode, *payload["data"])
+                data.MatchResult.recordFinalResults(matchid, result)
                 players = "\n\n".join(
                     f"{data.User.getSteamData(s).name} ({s})\n"
                     f"**[PeekSeek profile]({settings.profile_url(s)})** - "
@@ -95,6 +99,15 @@ def results(payload: JsonBody, matchid: int | None = None):
 def update(payload: JsonBody, matchid: int | None = None):
     """Live match data pushed during play (scoreboard, positions)."""
     data.Match.setLiveData(matchid, payload)
+    return PlainTextResponse("success")
+
+
+@router.post("/kills")
+def kills(payload: JsonBody, matchid: int | None = None):
+    """One durable kill record, sent as it happens rather than batched at match end so a
+    crashed server doesn't lose the whole match's kill log."""
+    if matchid is not None:
+        data.MatchResult.appendKill(matchid, payload)
     return PlainTextResponse("success")
 
 

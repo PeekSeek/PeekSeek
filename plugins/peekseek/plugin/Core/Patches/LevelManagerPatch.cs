@@ -159,6 +159,8 @@ internal class LevelManagerArenaSpawnPatch {
         List<HomelessSpawn> altSpawns = [.. PeekSeek.Config.Spawns];
         Dictionary<CSteamID, HomelessSpawn> assignedGroupSpawns = [];
 
+        StatService.BeginRound();
+
         var roundNumber = StatService.GetTotalPlayedRounds() + 1;
         var teamIndex = 0;
 

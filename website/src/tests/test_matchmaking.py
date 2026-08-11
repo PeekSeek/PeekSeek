@@ -79,6 +79,34 @@ def test_match_results_update_stats_and_elo(user_factory):
         assert lost.losses == 1 and lost.deaths == 5 and lost.elo < 300
 
 
+def test_match_results_record_headshots_and_damage(user_factory):
+    winner, loser = user_factory(), user_factory()
+
+    matchmaking.matchResults(
+        RANKED,
+        {
+            "steam64": winner.steam64,
+            "win": True,
+            "kills": 5,
+            "deaths": 2,
+            "headshots": 3,
+            "damageDealt": 620,
+            "damageTaken": 140,
+        },
+        {"steam64": loser.steam64, "win": False, "kills": 2, "deaths": 5},
+    )
+
+    with Session(core_db.engine) as s:
+        won = s.query(data.Stat).where(data.Stat.steam64 == winner.steam64).first()
+        lost = s.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first()
+        assert won.headshots == 3
+        assert won.damageDealt == 620
+        assert won.damageTaken == 140
+        # A payload without the newer fields (an older plugin build) must not error
+        # and must simply record zero rather than crash on a missing key.
+        assert lost.headshots == 0
+
+
 def test_elo_never_drops_below_floor(user_factory):
     loser = user_factory()
 
@@ -90,6 +118,140 @@ def test_elo_never_drops_below_floor(user_factory):
     with Session(core_db.engine) as s:
         stat = s.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first()
         assert stat.elo >= 100
+
+
+def test_match_cannot_be_claimed_early_with_picks_outstanding(user_factory):
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+            matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
+        )
+        db.add(match)
+
+    with Session(core_db.engine) as s:
+        loaded = s.query(data.Match).first()
+        assert loaded.allKitsLocked() is False
+        assert loaded.canBeClaimed() is False
+
+
+def test_match_starts_early_once_every_kit_and_powerup_is_locked(user_factory):
+    """Waiting out the full `selectKitsTime` timer is pointless once nobody has
+    anything left to decide — the match should be claimable immediately."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+            matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+        db.query(data.Match).where(data.Match.id == matchId).update(
+            {
+                "meta": match.meta
+                | {
+                    "userData": {
+                        str(first.steam64): {"kit": "meta", "powerup": "Ammo"},
+                        str(second.steam64): {"kit": "sniper", "powerup": "Doctor"},
+                    }
+                }
+            }
+        )
+
+    with Session(core_db.engine) as s:
+        loaded = s.query(data.Match).where(data.Match.id == matchId).first()
+        assert loaded.allKitsLocked() is True
+        assert loaded.canBeClaimed() is True
+
+
+def test_append_kill_creates_and_grows_the_match_result(user_factory):
+    killer, victim = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(killer.steam64)]},
+                {"name": "two", "users": [str(victim.steam64)]},
+            ],
+            matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+
+    data.MatchResult.appendKill(
+        matchId,
+        {"killer": str(killer.steam64), "victim": str(victim.steam64), "limb": "skull"},
+    )
+    data.MatchResult.appendKill(
+        matchId,
+        {"killer": str(killer.steam64), "victim": str(victim.steam64), "limb": "spine"},
+    )
+
+    with Session(core_db.engine) as s:
+        result = (
+            s.query(data.MatchResult).where(data.MatchResult.matchId == matchId).first()
+        )
+        assert result.data["map"] == "Alpha Valley"
+        assert len(result.data["kills"]) == 2
+        assert result.data["kills"][0]["limb"] == "skull"
+
+
+def test_record_final_results_merges_into_the_same_row_as_kills(user_factory):
+    killer, victim = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(killer.steam64)]},
+                {"name": "two", "users": [str(victim.steam64)]},
+            ],
+            matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+
+    data.MatchResult.appendKill(
+        matchId, {"killer": str(killer.steam64), "victim": str(victim.steam64)}
+    )
+    data.MatchResult.recordFinalResults(
+        matchId, {str(killer.steam64): {"Kills": 1, "Deaths": 0, "Won": True}}
+    )
+
+    with Session(core_db.engine) as s:
+        result = (
+            s.query(data.MatchResult).where(data.MatchResult.matchId == matchId).first()
+        )
+        assert len(result.data["kills"]) == 1
+        assert result.data["results"][str(killer.steam64)]["Won"] is True
+
+
+def test_latest_for_finds_matches_a_player_has_a_result_in(user_factory):
+    player, other = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+
+    data.MatchResult.recordFinalResults(matchId, {str(player.steam64): {"Kills": 3}})
+
+    found = data.MatchResult.latestFor(player.steam64)
+    assert len(found) == 1
+    assert found[0].matchId == matchId
+    assert data.MatchResult.latestFor(other.steam64) == []
 
 
 def test_unclaimed_match_cancelled_after_timeout(user_factory):

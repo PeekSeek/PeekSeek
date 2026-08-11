@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
 using HarmonyLib;
+using Newtonsoft.Json;
 using PeekSeek.Core.Models;
 using PeekSeek.Core.Models.Enums;
 using PeekSeek.Core.Web;
@@ -28,6 +28,22 @@ internal abstract class PSManager {
     internal static float MatchReady;
     private static List<GroupInfoEx> GroupInfos;
 
+    private const float UpdateIntervalSeconds = 1f;
+    private static float LastUpdateSent;
+
+    private const float VisibilityIntervalSeconds = 0.15f;
+    private static float LastVisibilityCheck;
+
+    private static PSUpdateEvent LatestEvent;
+    private static int EventsRecorded;
+
+    private const int FeedLength = 5;
+    private static readonly List<PSUpdateKill> RecentKills = [];
+
+    /// Separate from EventsRecorded: this ids the durable kill log sent to /unt/kills,
+    /// not the ephemeral overlay feed, and the two have no reason to share a sequence.
+    private static int KillEventsRecorded;
+
     private static CSteamID RelaySteamID => new(PeekSeek.Config.LobbyServerRelaySGSSteamID);
 
     private static Harmony Instrument;
@@ -48,23 +64,63 @@ internal abstract class PSManager {
         Level.onPostLevelLoaded += OnPostLevelLoaded;
 
         DamageTool.damagePlayerRequested += OnDamageRequested;
+        UseableGun.onBulletSpawned += OnBulletSpawned;
         RemoteAPI.Init();
     }
 
     private static void OnDamageRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
-        Player player = PlayerTool.getPlayer(parameters.killer);
+        Player attacker = PlayerTool.getPlayer(parameters.killer);
 
-        if (player == null) return;
-        float ping = player.channel.owner.ping * 1000f;
+        if (attacker != null && parameters.damage > 5) {
+            float ping = attacker.channel.owner.ping * 1000f;
 
-        if (!(parameters.damage > 5)) return;
-
-        foreach (var config in PeekSeek.Config.PingConfig.OrderByDescending(c => c.PingOrHigher)) {
-            Logger.Log($"Checking {config.PingOrHigher} >= {ping}");
-            if (!(ping >= config.PingOrHigher)) continue;
-            parameters.damage *= (config.Precentage / 100f);
-            break;
+            foreach (var config in PeekSeek.Config.PingConfig.OrderByDescending(c => c.PingOrHigher)) {
+                Logger.Log($"Checking {config.PingOrHigher} >= {ping}");
+                if (!(ping >= config.PingOrHigher)) continue;
+                parameters.damage *= (config.Precentage / 100f);
+                break;
+            }
         }
+
+        // Recorded after the ping scaling above, so damage stats and the fight history
+        // both reflect what the victim actually took rather than the pre-reduction number.
+        CSteamID victimID = parameters.player.channel.owner.playerID.steamID;
+        StatService.AddDamageTaken(victimID, parameters.damage);
+
+        float? reactionTime = null;
+        if (attacker != null) {
+            StatService.AddDamageDealt(parameters.killer, parameters.damage);
+            reactionTime = VisibilityTracker.ConsumeReactionTime(parameters.killer);
+        }
+
+        FightTracker.RecordHit(
+            victimID,
+            parameters.killer,
+            parameters.damage,
+            parameters.limb,
+            attacker?.transform.position ?? default,
+            parameters.player.transform.position,
+            reactionTime
+        );
+
+        RoundLog.RecordDamage(parameters.killer, victimID, parameters.damage);
+    }
+
+    /// Only worth sampling in bullet-drop mode: instant-hit mode has no equivalent
+    /// per-shot event, and Data is null outside a live match, so both are guarded here
+    /// rather than asking every caller to remember the condition. Third-person is also
+    /// excluded — PeekSeek is played first-person, but if a player ever ends up in
+    /// third-person the aim direction no longer matches where their reticle actually was,
+    /// so a spray-offset sample from that shot would be quietly wrong rather than missing.
+    private static void OnBulletSpawned(UseableGun gun, BulletInfo bullet) {
+        if (Data?.Settings?.Ballistics != true) return;
+        if (gun.player.look.perspective != EPlayerPerspective.FIRST) return;
+
+        FightTracker.RecordShot(
+            gun.player.channel.owner.playerID.steamID,
+            bullet.origin,
+            bullet.ApproximatePlayerAimDirection
+        );
     }
 
 
@@ -85,6 +141,9 @@ internal abstract class PSManager {
         Instrument.UnpatchAll("blaze.ps.main");
 
         Level.onPostLevelLoaded -= OnPostLevelLoaded;
+
+        DamageTool.damagePlayerRequested -= OnDamageRequested;
+        UseableGun.onBulletSpawned -= OnBulletSpawned;
 
         RemoteAPI.Shutdown();
     }
@@ -122,6 +181,13 @@ internal abstract class PSManager {
             case "stop":
                 UpdateStatus(EPSStatus.READY);
                 StatService.InstanceStats.Clear();
+                LatestEvent = null;
+                EventsRecorded = 0;
+                KillEventsRecorded = 0;
+                FightTracker.Clear();
+                RoundLog.Clear();
+                LastKilledBy.Clear();
+                VisibilityTracker.Clear();
                 KickAllClients("Match has been forcefully!");
                 Data = null;
                 GroupManager.knownGroups.Clear();
@@ -297,6 +363,20 @@ internal abstract class PSManager {
         );
     }
 
+    /// Same as Announce but to one player only — StatsCommand also uses this rather than
+    /// building its own ChatManager call.
+    internal static void Whisper(SteamPlayer to, string message) {
+        ChatManager.serverSendMessage(
+            message,
+            UnturnedChat.GetColorFromHex(PeekSeek.Config.szHexDefaultChatColor).Value,
+            null,
+            to,
+            EChatMode.SAY,
+            PeekSeek.Config.szChatIconURL,
+            true
+        );
+    }
+
     private static PSTeam GetPlayerTeam(ulong steamID) {
         return Data.Teams.First(
             x => x.Users.Contains(steamID)
@@ -369,15 +449,96 @@ internal abstract class PSManager {
         }
 
         Announce(PeekSeek.Instance.Translate("win", team.Name));
+        AnnounceAceIfAny(team);
+        WhisperCloseCalls();
+        WhisperRoundDamage();
 
         if (StatService.GetStatWins(new(playerID)) < Data.Meta.Rounds) {
+            RecordEvent("roundWon", team.Name);
             SendUpdateState();
+            RoundLog.Clear();
             return;
         }
 
         UpdateStatus(EPSStatus.DELAY);
         Announce(PeekSeek.Instance.Translate("match_won", team.Name));
+        AnnounceMvp();
+        RecordEvent("matchWon", team.Name);
+        SendUpdateState();
+        RoundLog.Clear();
         Task.Run(() => DelayEnd(PeekSeek.Config.DelayKickAfterWin, team.Name));
+    }
+
+    /// A solo ace only means something in a team format — a 1v1 win is just a win — and
+    /// only generalises cleanly to two teams, so FFA/multi-team matches skip it rather
+    /// than guessing at what "the opposing team" means there.
+    private static void AnnounceAceIfAny(PSTeam winningTeam) {
+        if (Data.Teams.Count != 2) return;
+
+        PSTeam losingTeam = Data.Teams.First(t => t.Name != winningTeam.Name);
+        if (losingTeam.Users.Count < 2) return;
+
+        foreach (ulong user in winningTeam.Users) {
+            if (RoundLog.KillsBy(new CSteamID(user)) < losingTeam.Users.Count) continue;
+
+            string name = UnturnedPlayer.FromCSteamID(new CSteamID(user))?.CharacterName ?? user.ToString();
+            Announce(PeekSeek.Instance.Translate("ace", name));
+            return;
+        }
+    }
+
+    private const byte CloseCallHealthThreshold = 15;
+
+    /// Private, not public — celebrates surviving the round to whoever actually did it,
+    /// without turning "I nearly died" into public information for everyone else.
+    private static void WhisperCloseCalls() {
+        foreach (PSTeam team in Data.Teams) {
+            foreach (ulong user in team.Users) {
+                Player p = PlayerTool.getPlayer(new CSteamID(user));
+                if (p == null || p.life.isDead || p.life.health > CloseCallHealthThreshold) continue;
+
+                Whisper(p.channel.owner, PeekSeek.Instance.Translate("close_call", p.life.health));
+            }
+        }
+    }
+
+    /// One whisper per player who dealt damage this round, broken down by who they were
+    /// fighting — built from RoundLog rather than FightTracker, since this covers the
+    /// whole round rather than only the fight that ended in a kill.
+    private static void WhisperRoundDamage() {
+        foreach (PSTeam team in Data.Teams) {
+            foreach (ulong user in team.Users) {
+                List<RoundDamageEntry> entries = RoundLog.DamageBy(new CSteamID(user));
+                if (entries.Count == 0) continue;
+
+                Player p = PlayerTool.getPlayer(new CSteamID(user));
+                if (p == null) continue;
+
+                string breakdown = string.Join(" · ", entries.Select(entry => {
+                    string name = UnturnedPlayer.FromCSteamID(new CSteamID(entry.Victim))?.CharacterName
+                        ?? entry.Victim.ToString();
+                    return $"{name}: {Mathf.Round(entry.Damage)} dmg ({entry.Hits} hits)";
+                }));
+
+                Whisper(p.channel.owner, PeekSeek.Instance.Translate("round_damage", breakdown));
+            }
+        }
+    }
+
+    /// Most kills, headshots as the tiebreak. Says nothing for a round that ended without
+    /// a single kill rather than naming an arbitrary "MVP" who did nothing.
+    private static void AnnounceMvp() {
+        if (StatService.InstanceStats.Count == 0) return;
+
+        PSPlayerStat mvp = StatService.InstanceStats
+            .OrderByDescending(s => s.Kills)
+            .ThenByDescending(s => s.Headshots)
+            .First();
+        if (mvp.Kills == 0) return;
+
+        string name = UnturnedPlayer.FromCSteamID(new CSteamID(mvp.SteamID))?.CharacterName ?? mvp.SteamID.ToString();
+        int hsPercent = mvp.Headshots * 100 / mvp.Kills;
+        Announce(PeekSeek.Instance.Translate("mvp", name, mvp.Kills, hsPercent));
     }
 
     /// Awards the whole match to the only team that showed up before the lobby timed out.
@@ -417,6 +578,14 @@ internal abstract class PSManager {
 
     private static void ClearMatch() {
         StatService.InstanceStats.Clear();
+        LatestEvent = null;
+        EventsRecorded = 0;
+        KillEventsRecorded = 0;
+        RecentKills.Clear();
+        FightTracker.Clear();
+        RoundLog.Clear();
+        LastKilledBy.Clear();
+        VisibilityTracker.Clear();
         GroupManager.knownGroups.Clear();
         RelayAllClients();
         UpdateStatus(EPSStatus.READY);
@@ -424,45 +593,111 @@ internal abstract class PSManager {
     }
 
     internal static void SendResults(string winningTeam, bool isPlayed = true) {
-        var jsonBuilder = new StringBuilder("{\"status\":\"finished\",\"data\":[");
-
         List<PSPlayerStat> stats = isPlayed ? StatService.InstanceStats : [];
 
-        bool first = true;
-        foreach (var stat in stats) {
-            if (!first) jsonBuilder.Append(",");
-            first = false;
-
-            jsonBuilder.AppendFormat("{{\"steam64\":\"{0}\",\"win\":{1},\"kills\":{2},\"deaths\":{3}}}",
-                stat.SteamID, (GetPlayerTeam(stat.SteamID).Name == winningTeam).ToString().ToLower(), stat.Kills, stat.Deaths);
-        }
-
-        jsonBuilder.AppendFormat("],\"played\":{0}}}", isPlayed.ToString().ToLower());
+        var payload = new {
+            status = "finished",
+            played = isPlayed,
+            data = stats.Select(stat => new {
+                steam64 = stat.SteamID.ToString(),
+                win = GetPlayerTeam(stat.SteamID).Name == winningTeam,
+                kills = stat.Kills,
+                deaths = stat.Deaths,
+                headshots = stat.Headshots,
+                damageDealt = (int)Math.Round(stat.DamageDealt),
+                damageTaken = (int)Math.Round(stat.DamageTaken)
+            })
+        };
 
         RemoteAPI.SendResults(
-            jsonBuilder.ToString(),
+            JsonConvert.SerializeObject(payload),
             Data.MatchID
         );
     }
 
+    /// Who last killed each player this match, for the revenge whisper. Steam64 to steam64,
+    /// cleared with the rest of the match's state.
+    private static readonly Dictionary<ulong, ulong> LastKilledBy = [];
+
+    /// Ordinary kills say nothing publicly — the stream overlay already carries the kill
+    /// feed for spectators, and the round/match win announcements below still mark the
+    /// moments that actually matter. Two things replace the old public line: a revenge
+    /// whisper to the killer, and a flavoured private line to anyone who died without a
+    /// killer at all, so silence isn't the only thing an ordinary run of the mill death
+    /// produces for the person on the wrong end of it.
     private static void OnPlayerDead(UnturnedPlayer player, EDeathCause cause, ELimb limb, CSteamID murderer) {
         if (cause == EDeathCause.ARENA) return;
 
         StatService.UpdateStatDeaths(player.CSteamID);
+        StatService.MarkDeadThisRound(player.CSteamID);
 
+        UnturnedPlayer unturnedInstigator = null;
         if (murderer != CSteamID.Nil && murderer != SteamGameServer.GetSteamID()) {
-            UnturnedPlayer unturnedInstigator = UnturnedPlayer.FromCSteamID(murderer);
+            unturnedInstigator = UnturnedPlayer.FromCSteamID(murderer);
             StatService.UpdateStatKills(murderer);
-            Announce(PeekSeek.Instance.Translate(
-                "kill",
-                player.CharacterName,
-                unturnedInstigator.CharacterName,
-                limb.ToString().ToLower().Replace("_", " ")
-            ));
+            if (limb == ELimb.SKULL) StatService.UpdateStatHeadshots(murderer);
+            RoundLog.RecordKill(murderer);
+
+            if (LastKilledBy.TryGetValue(murderer.m_SteamID, out ulong murderersLastKiller)
+                    && murderersLastKiller == player.CSteamID.m_SteamID) {
+                Whisper(unturnedInstigator.Player.channel.owner,
+                    PeekSeek.Instance.Translate("revenge", player.CharacterName));
+            }
+
+            LastKilledBy[player.CSteamID.m_SteamID] = murderer.m_SteamID;
+        } else {
+            string key = DeathCauseTranslationKey(cause);
+            if (key != null) Whisper(player.Player.channel.owner, PeekSeek.Instance.Translate(key));
         }
+
+        RecordKill(player, unturnedInstigator, limb);
+        SendKillEvent(player, unturnedInstigator, cause, limb, murderer);
 
         player.Player.life.ServerRespawn(false);
         SendUpdateState();
+    }
+
+    /// Only the causes realistic in an arena match get a line — the rest (zombies,
+    /// animals, infection, ...) can't happen here, so they fall back to the generic one
+    /// rather than growing this list for causes that will never fire.
+    internal static string DeathCauseTranslationKey(EDeathCause cause) {
+        return cause switch {
+            EDeathCause.BONES => "death_fall",
+            EDeathCause.WATER => "death_drown",
+            EDeathCause.BURNING => "death_burn",
+            EDeathCause.FREEZING => "death_freeze",
+            EDeathCause.BLEEDING => "death_bleed",
+            EDeathCause.SUICIDE => "death_suicide",
+            EDeathCause.GRENADE or EDeathCause.LANDMINE or EDeathCause.MISSILE or EDeathCause.CHARGE => "death_explosive",
+            _ => "death_generic"
+        };
+    }
+
+    /// Builds the durable kill record for /unt/kills from whatever FightTracker buffered,
+    /// separate from RecordKill's ephemeral overlay feed entry above.
+    private static void SendKillEvent(UnturnedPlayer victim, UnturnedPlayer killer, EDeathCause cause, ELimb limb, CSteamID murderer) {
+        bool ballistics = Data.Settings.Ballistics;
+
+        RemoteAPI.SendKillEvent(new PSKillEvent {
+            Id = ++KillEventsRecorded,
+            Time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Map = Data.Settings.Map,
+            Round = StatService.GetTotalPlayedRounds() + 1,
+            Killer = killer?.CSteamID.ToString(),
+            KillerName = killer?.CharacterName,
+            Victim = victim.CSteamID.ToString(),
+            VictimName = victim.CharacterName,
+            Cause = cause.ToString().ToLowerInvariant(),
+            Limb = limb.ToString().ToLowerInvariant(),
+            Weapon = killer?.Player.equipment.itemID ?? 0,
+            KillerPosition = killer != null ? PSVector3.From(killer.Player.transform.position) : null,
+            VictimPosition = PSVector3.From(victim.Player.transform.position),
+            Hits = FightTracker.TakeFight(victim.CSteamID),
+            ReciprocalHits = murderer != CSteamID.Nil
+                ? FightTracker.TakeHitsFrom(murderer, victim.CSteamID)
+                : [],
+            Shots = murderer != CSteamID.Nil && ballistics ? FightTracker.RecentShotsBy(murderer) : []
+        });
     }
 
     private static void OnPlayerRevive(UnturnedPlayer player, Vector3 position, byte angle) {
@@ -480,44 +715,57 @@ internal abstract class PSManager {
         if (player.life.isDead) player.life.ServerRespawn(false);
     }
 
+    /// Pushes a snapshot on a timer as well as on events, so health, held weapon and
+    /// remaining powerup items move on the overlay between kills rather than freezing
+    /// until somebody dies. Also drives the visibility scan reaction time reads from, on
+    /// its own shorter interval — waiting a full second to notice someone came into view
+    /// would make the numbers meaningless.
+    internal static void Tick() {
+        if (Data == null) return;
+
+        if (Time.realtimeSinceStartup - LastVisibilityCheck >= VisibilityIntervalSeconds) {
+            LastVisibilityCheck = Time.realtimeSinceStartup;
+            VisibilityTracker.Tick(Data.Teams);
+        }
+
+        if (Time.realtimeSinceStartup - LastUpdateSent < UpdateIntervalSeconds) return;
+
+        SendUpdateState();
+    }
+
+    /// Appends to the rolling kill feed, keeping only what the overlay draws. The killer
+    /// is null for a death nobody caused, which the overlay renders without an attacker.
+    private static void RecordKill(UnturnedPlayer victim, UnturnedPlayer killer, ELimb limb) {
+        RecentKills.Add(new PSUpdateKill {
+            Id = ++EventsRecorded,
+            Killer = killer?.CharacterName,
+            Victim = victim.CharacterName,
+            Weapon = killer?.Player.equipment.itemID ?? 0,
+            Limb = limb.ToString().ToLowerInvariant()
+        });
+
+        if (RecentKills.Count > FeedLength) RecentKills.RemoveAt(0);
+    }
+
+    /// Records a result for the overlay to announce. The id increases so the overlay can
+    /// tell a new result from the same one being repeated by every later tick.
+    private static void RecordEvent(string kind, string teamName) {
+        LatestEvent = new PSUpdateEvent {
+            Id = ++EventsRecorded,
+            Kind = kind,
+            Team = teamName,
+            Round = StatService.GetTotalPlayedRounds()
+        };
+    }
+
     private static void SendUpdateState() {
-        PSUpdateState state = new();
-        byte totalRoundsPlayed = (byte)Data.Teams
-                                 .SelectMany(team => team.Users)
-                                 .Sum(user => StatService.GetStatWins(new CSteamID(user)));
-        if (Data.Teams == null) {
-            Logger.LogError("SendUpdateState() Teams is null!");
+        if (Data?.Teams == null) {
+            Logger.LogError("SendUpdateState() has no match data to report!");
             return;
         }
 
-        foreach (var _team in Data.Teams) {
-            byte wins = StatService.GetStatWins(new(_team.Users.First()));
-            state.Teams.Add(new() {
-                TeamName = _team.Name,
-                Wins = wins,
-                Losses = totalRoundsPlayed - wins
-            });
-
-            foreach (ulong user in _team.Users) {
-                Player player = PlayerTool.getPlayer(new CSteamID(user));
-                if (player == null) {
-                    state.Teams.Last().Users.Add(user.ToString(), new() {
-                        Kills = 0,
-                        Deaths = 0,
-                        IsAlive = false
-                    }); continue;
-                }
-
-
-                state.Teams.Last().Users.Add(user.ToString(), new() {
-                    Kills = StatService.GetStatKills(new(user)),
-                    Deaths = StatService.GetStatDeaths(new(user)),
-                    IsAlive = player != null && !(player.life.isDead || player.movement.isSafe)
-                });
-            }
-        }
-
-        RemoteAPI.NotifyServerUpdate(state);
+        LastUpdateSent = Time.realtimeSinceStartup;
+        RemoteAPI.NotifyServerUpdate(LiveState.Build(Data, LatestEvent, RecentKills));
     }
 
     public static bool IsSpectator(ulong steamID) {

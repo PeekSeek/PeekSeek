@@ -8,71 +8,92 @@ namespace PeekSeek.Core;
 internal static class StatService {
     internal static List<PSPlayerStat> InstanceStats = [];
 
-    internal static void UpdateStatWins(CSteamID player) {
-        PSPlayerStat stat = InstanceStats.FirstOrDefault(
+    private static PSPlayerStat Find(CSteamID player) {
+        return InstanceStats.FirstOrDefault(
             x => x.SteamID == player.m_SteamID
         );
+    }
+
+    private static PSPlayerStat GetOrCreate(CSteamID player) {
+        PSPlayerStat stat = Find(player);
 
         if (stat == null) {
             stat = new PSPlayerStat {
-                SteamID = player.m_SteamID,
-                Wins = 0,
+                SteamID = player.m_SteamID
             };
 
             InstanceStats.Add(stat);
         }
 
-        stat.Wins++;
+        return stat;
+    }
+
+    internal static void UpdateStatWins(CSteamID player) {
+        GetOrCreate(player).Wins++;
     }
 
     internal static void UpdateStatKills(CSteamID player) {
-        PSPlayerStat stat = InstanceStats.FirstOrDefault(
-            x => x.SteamID == player.m_SteamID
-        );
-        if (stat == null) {
-            stat = new PSPlayerStat {
-                SteamID = player.m_SteamID,
-                Kills = 0,
-            };
-            InstanceStats.Add(stat);
-        }
-        stat.Kills++;
+        GetOrCreate(player).Kills++;
     }
 
     internal static void UpdateStatDeaths(CSteamID player) {
-        PSPlayerStat stat = InstanceStats.FirstOrDefault(
-            x => x.SteamID == player.m_SteamID
-        );
-        if (stat == null) {
-            stat = new PSPlayerStat {
-                SteamID = player.m_SteamID,
-                Deaths = 0,
-            };
-            InstanceStats.Add(stat);
-        }
-        stat.Deaths++;
+        GetOrCreate(player).Deaths++;
+    }
+
+    internal static void UpdateStatHeadshots(CSteamID player) {
+        GetOrCreate(player).Headshots++;
+    }
+
+    internal static void AddDamageDealt(CSteamID player, float damage) {
+        GetOrCreate(player).DamageDealt += damage;
+    }
+
+    internal static void AddDamageTaken(CSteamID player, float damage) {
+        GetOrCreate(player).DamageTaken += damage;
     }
 
     internal static byte GetStatWins(CSteamID player) {
-        PSPlayerStat stat = InstanceStats.FirstOrDefault(
-            x => x.SteamID == player.m_SteamID
-        );
-
-        return stat?.Wins ?? (byte)0;
+        return Find(player)?.Wins ?? 0;
     }
 
     internal static byte GetStatKills(CSteamID player) {
-        PSPlayerStat stat = InstanceStats.FirstOrDefault(
-            x => x.SteamID == player.m_SteamID
-        );
-        return stat?.Kills ?? (byte)0;
+        return Find(player)?.Kills ?? 0;
     }
 
     internal static byte GetStatDeaths(CSteamID player) {
-        PSPlayerStat stat = InstanceStats.FirstOrDefault(
-            x => x.SteamID == player.m_SteamID
-        );
-        return stat?.Deaths ?? (byte)0;
+        return Find(player)?.Deaths ?? 0;
+    }
+
+    internal static byte GetStatHeadshots(CSteamID player) {
+        return Find(player)?.Headshots ?? 0;
+    }
+
+    internal static bool HasStats(CSteamID player) {
+        return Find(player) != null;
+    }
+
+    internal static float GetStatDamageDealt(CSteamID player) {
+        return Find(player)?.DamageDealt ?? 0;
+    }
+
+    internal static float GetStatDamageTaken(CSteamID player) {
+        return Find(player)?.DamageTaken ?? 0;
+    }
+
+    internal static void MarkDeadThisRound(CSteamID player) {
+        GetOrCreate(player).IsDeadThisRound = true;
+    }
+
+    internal static bool IsAliveThisRound(CSteamID player) {
+        return !(Find(player)?.IsDeadThisRound ?? false);
+    }
+
+    /// Puts everyone back in play. Called when a round spawns, so the overlay stops
+    /// showing last round's casualties.
+    internal static void BeginRound() {
+        foreach (PSPlayerStat stat in InstanceStats) {
+            stat.IsDeadThisRound = false;
+        }
     }
 
     internal static int GetTotalPlayedRounds() {
