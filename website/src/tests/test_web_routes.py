@@ -175,4 +175,6 @@ def test_match_page_renders_the_commit_list(client, login, user_factory):
 
     assert r.status_code == 200
     assert 'id="commitlist"' in r.text
-    assert "selectedChoice::after" in r.text
+    assert 'id="commitcount"' in r.text
+    assert 'id="connectprogress"' in r.text
+    assert 'class="checkmark"' in r.text

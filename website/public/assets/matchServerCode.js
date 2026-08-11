@@ -35,6 +35,10 @@ function commitRow(name, locked) {
         `<span class="status ${locked ? "locked" : "picking"}">${locked ? "locked" : "picking…"}</span></div>`;
 }
 
+function allSteam64s() {
+    return data.teams.flatMap(t => t.users);
+}
+
 /// Your own team by name always; opponents collapse to a locked-count summary until
 /// `picksLocked`, then expand to the same per-player rows — same reveal moment the
 /// team panels below use, just presented as a quiet list instead of a roster grid.
@@ -75,6 +79,24 @@ function update() {
     const picksLocked = data.claimed !== null;
     const myTeam = getTeam(steam64);
     document.getElementById("commitlist").innerHTML = commitListHtml(picksLocked, myTeam);
+
+    const everyone = data.config ? allSteam64s() : [];
+    const lockedCount = everyone.filter(isLocked).length;
+    document.getElementById("commitcount").innerHTML =
+        everyone.length ? `<b>${lockedCount}</b>/${everyone.length} locked` : "";
+
+    // Locking in is immediate client-side feedback; the server only claims the match on
+    // its own poll cycle, so there's a real gap between "everyone's locked" and a code
+    // showing up — that gap is what the progress line is for.
+    const allLocked = everyone.length > 0 && lockedCount === everyone.length;
+    const connectProgress = document.getElementById("connectprogress");
+    if (allLocked && data.claimed === null) {
+        connectProgress.style.display = "flex";
+        document.getElementById("connectcaption").innerHTML =
+            `<b>Connecting…</b> ${data.params.map || ""}`;
+    } else {
+        connectProgress.style.display = "none";
+    }
 
     api.get("/match/current").then(r => {
         if (r.status === 200) {
@@ -120,12 +142,14 @@ function update() {
         document.getElementById("b1").innerText = "Disabled";
         document.getElementById("b2").innerText = "Enabled";
         document.getElementById("kits").style.display = "block";
+        document.getElementById("commitcount").style.display = "flex";
         document.getElementById("commitlist").style.display = "flex";
     } else if (data.params.movement === null) {
         document.getElementById("type").innerText = "Picking: Movement";
         document.getElementById("b1").innerText = "New";
         document.getElementById("b2").innerText = "Old";
         document.getElementById("kits").style.display = "block";
+        document.getElementById("commitcount").style.display = "flex";
         document.getElementById("commitlist").style.display = "flex";
     } else if (Date.now() / 1000 < data.startsAfter) {
         document.getElementById("turn").style.display = "none";
@@ -133,6 +157,7 @@ function update() {
         document.getElementById("b1").style.display = "none";
         document.getElementById("b2").style.display = "none";
         document.getElementById("kits").style.display = "block";
+        document.getElementById("commitcount").style.display = "flex";
         document.getElementById("commitlist").style.display = "flex";
         document.getElementById("message").innerHTML = `<h1>Almost there</h1>There's ${Math.round(data.startsAfter - Date.now() / 1000)} seconds left to choose your kit.`;
         document.getElementById("message").style.display = "block";
@@ -143,7 +168,9 @@ function update() {
         document.getElementById("b1").style.display = "none";
         document.getElementById("b2").style.display = "none";
         document.getElementById("kits").style.display = "none";
+        document.getElementById("commitcount").style.display = "none";
         document.getElementById("commitlist").style.display = "none";
+        document.getElementById("connectprogress").style.display = "none";
         document.getElementById("message").innerHTML = "<h1>Waiting for server...</h1>Your match will start shortly.";
         document.getElementById("message").style.display = "flex";
 
