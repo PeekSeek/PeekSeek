@@ -94,16 +94,25 @@ body {
 .notch .flare.r { left: 100%; }
 .notch .flare path { fill: rgba(15, 15, 15, 0.9); }
 
+/* A fixed width, not a cap: .mid (the round label) is only ever centred in the notch
+   because the two name slots take up exactly the same space on both sides. A max-width
+   lets a short name shrink its slot, which pulls the whole midpoint off-centre toward
+   whichever side has the longer name. Each name is aligned toward its own score, so a
+   short name still sits flush against the number it belongs to rather than floating in
+   the middle of its slot. */
 .notch .tn {
     font-size: 0.92vw;
     font-weight: 600;
     letter-spacing: 0.01em;
     color: #d8d8d8;
-    max-width: 9vw;
+    width: 9vw;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+.notch .tn:first-of-type { text-align: right; }
+.notch .tn:last-of-type { text-align: left; }
 
 .notch .sc {
     font-size: 1.45vw;

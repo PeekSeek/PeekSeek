@@ -60,6 +60,29 @@ def test_404_renders_error_page(client):
     assert "text/html" in r.headers["content-type"]
 
 
+def test_overlay_requires_id_or_created_by(client):
+    r = client.get("/overlay")
+    assert r.status_code == 302
+    assert r.headers["location"] == "/"
+
+
+def test_overlay_quotes_the_match_id_in_the_script(client):
+    r = client.get("/overlay", params={"id": "5"})
+    assert r.status_code == 200
+    assert 'let matchid = "5"' in r.text
+    assert "let createdby = null" in r.text
+
+
+def test_overlay_quotes_a_steam64_created_by_without_losing_precision(client):
+    """A steam64 is ~17 digits, past Number.MAX_SAFE_INTEGER — interpolated unquoted
+    into the page it becomes a JS number literal that silently rounds, and createdBy
+    never matches the match again. Must stay a string end to end."""
+    steam64 = "76561198012345678"
+    r = client.get("/overlay", params={"createdBy": steam64})
+    assert r.status_code == 200
+    assert f'let createdby = "{steam64}"' in r.text
+
+
 def test_profile_page_renders_match_history(client, user_factory):
     from src.core.db import open as opendb
     from src.core import models as data

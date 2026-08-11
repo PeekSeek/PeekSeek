@@ -1,5 +1,7 @@
 """Static-ish pages: home, rulebooks, GDPR, the Discord redirect, and overlays."""
 
+import json
+
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
@@ -84,10 +86,14 @@ def overlay(request: Request, id: str | None = None, createdBy: str | None = Non
     if id is None and createdBy is None:
         request.session["lastError"] = "No match ID or createdBy specified for overlay."
         return RedirectResponse("/", status_code=302)
+    # json.dumps rather than the raw string: a steam64 is ~17 digits, past
+    # Number.MAX_SAFE_INTEGER, so interpolating it unquoted into the page's <script>
+    # turns it into a JS number literal that silently loses precision and never matches
+    # the createdBy stored on the match. Quoting it keeps it a string end to end.
     return templates.TemplateResponse(
         request=request,
         name="pages/overlay.html",
-        context={"matchid": id or "null", "createdBy": createdBy or "null"},
+        context={"matchid": json.dumps(id), "createdBy": json.dumps(createdBy)},
     )
 
 
