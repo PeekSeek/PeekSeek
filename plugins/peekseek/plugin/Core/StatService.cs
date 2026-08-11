@@ -44,6 +44,14 @@ internal static class StatService {
         GetOrCreate(player).Headshots++;
     }
 
+    internal static void AddDamageDealt(CSteamID player, float damage) {
+        GetOrCreate(player).DamageDealt += damage;
+    }
+
+    internal static void AddDamageTaken(CSteamID player, float damage) {
+        GetOrCreate(player).DamageTaken += damage;
+    }
+
     internal static byte GetStatWins(CSteamID player) {
         return Find(player)?.Wins ?? 0;
     }
@@ -62,6 +70,14 @@ internal static class StatService {
 
     internal static bool HasStats(CSteamID player) {
         return Find(player) != null;
+    }
+
+    internal static float GetStatDamageDealt(CSteamID player) {
+        return Find(player)?.DamageDealt ?? 0;
+    }
+
+    internal static float GetStatDamageTaken(CSteamID player) {
+        return Find(player)?.DamageTaken ?? 0;
     }
 
     internal static void MarkDeadThisRound(CSteamID player) {

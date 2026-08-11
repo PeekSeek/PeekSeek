@@ -79,6 +79,34 @@ def test_match_results_update_stats_and_elo(user_factory):
         assert lost.losses == 1 and lost.deaths == 5 and lost.elo < 300
 
 
+def test_match_results_record_headshots_and_damage(user_factory):
+    winner, loser = user_factory(), user_factory()
+
+    matchmaking.matchResults(
+        RANKED,
+        {
+            "steam64": winner.steam64,
+            "win": True,
+            "kills": 5,
+            "deaths": 2,
+            "headshots": 3,
+            "damageDealt": 620,
+            "damageTaken": 140,
+        },
+        {"steam64": loser.steam64, "win": False, "kills": 2, "deaths": 5},
+    )
+
+    with Session(core_db.engine) as s:
+        won = s.query(data.Stat).where(data.Stat.steam64 == winner.steam64).first()
+        lost = s.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first()
+        assert won.headshots == 3
+        assert won.damageDealt == 620
+        assert won.damageTaken == 140
+        # A payload without the newer fields (an older plugin build) must not error
+        # and must simply record zero rather than crash on a missing key.
+        assert lost.headshots == 0
+
+
 def test_elo_never_drops_below_floor(user_factory):
     loser = user_factory()
 

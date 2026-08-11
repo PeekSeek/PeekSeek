@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
 using HarmonyLib;
+using Newtonsoft.Json;
 using PeekSeek.Core.Models;
 using PeekSeek.Core.Models.Enums;
 using PeekSeek.Core.Web;
@@ -61,19 +61,23 @@ internal abstract class PSManager {
     }
 
     private static void OnDamageRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
-        Player player = PlayerTool.getPlayer(parameters.killer);
+        Player attacker = PlayerTool.getPlayer(parameters.killer);
 
-        if (player == null) return;
-        float ping = player.channel.owner.ping * 1000f;
+        if (attacker != null && parameters.damage > 5) {
+            float ping = attacker.channel.owner.ping * 1000f;
 
-        if (!(parameters.damage > 5)) return;
-
-        foreach (var config in PeekSeek.Config.PingConfig.OrderByDescending(c => c.PingOrHigher)) {
-            Logger.Log($"Checking {config.PingOrHigher} >= {ping}");
-            if (!(ping >= config.PingOrHigher)) continue;
-            parameters.damage *= (config.Precentage / 100f);
-            break;
+            foreach (var config in PeekSeek.Config.PingConfig.OrderByDescending(c => c.PingOrHigher)) {
+                Logger.Log($"Checking {config.PingOrHigher} >= {ping}");
+                if (!(ping >= config.PingOrHigher)) continue;
+                parameters.damage *= (config.Precentage / 100f);
+                break;
+            }
         }
+
+        // Recorded after the ping scaling above, so damage stats reflect what the victim
+        // actually took rather than the pre-reduction number.
+        StatService.AddDamageTaken(parameters.player.channel.owner.playerID.steamID, parameters.damage);
+        if (attacker != null) StatService.AddDamageDealt(parameters.killer, parameters.damage);
     }
 
 
@@ -441,23 +445,24 @@ internal abstract class PSManager {
     }
 
     internal static void SendResults(string winningTeam, bool isPlayed = true) {
-        var jsonBuilder = new StringBuilder("{\"status\":\"finished\",\"data\":[");
-
         List<PSPlayerStat> stats = isPlayed ? StatService.InstanceStats : [];
 
-        bool first = true;
-        foreach (var stat in stats) {
-            if (!first) jsonBuilder.Append(",");
-            first = false;
-
-            jsonBuilder.AppendFormat("{{\"steam64\":\"{0}\",\"win\":{1},\"kills\":{2},\"deaths\":{3}}}",
-                stat.SteamID, (GetPlayerTeam(stat.SteamID).Name == winningTeam).ToString().ToLower(), stat.Kills, stat.Deaths);
-        }
-
-        jsonBuilder.AppendFormat("],\"played\":{0}}}", isPlayed.ToString().ToLower());
+        var payload = new {
+            status = "finished",
+            played = isPlayed,
+            data = stats.Select(stat => new {
+                steam64 = stat.SteamID.ToString(),
+                win = GetPlayerTeam(stat.SteamID).Name == winningTeam,
+                kills = stat.Kills,
+                deaths = stat.Deaths,
+                headshots = stat.Headshots,
+                damageDealt = (int)Math.Round(stat.DamageDealt),
+                damageTaken = (int)Math.Round(stat.DamageTaken)
+            })
+        };
 
         RemoteAPI.SendResults(
-            jsonBuilder.ToString(),
+            JsonConvert.SerializeObject(payload),
             Data.MatchID
         );
     }

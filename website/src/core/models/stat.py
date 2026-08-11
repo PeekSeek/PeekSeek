@@ -22,6 +22,9 @@ class Stat(SQLModel, table=True):
     deaths: int = Field(default=0, nullable=False)
     wins: int = Field(default=0, nullable=False)
     losses: int = Field(default=0, nullable=False)
+    headshots: int = Field(default=0, nullable=False)
+    damageDealt: int = Field(default=0, nullable=False)
+    damageTaken: int = Field(default=0, nullable=False)
 
     user: User = Relationship(back_populates="stats")
 

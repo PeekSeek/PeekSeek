@@ -38,7 +38,7 @@
       <span>User has no statistics.</span>
     {% else %}
       <table class="statTable">
-        <tr><th>Elo</th><th>Win%</th><th>Kills</th><th>Deaths</th><th>K/D</th><th>Wins</th><th>Losses</th></tr>
+        <tr><th>Elo</th><th>Win%</th><th>Kills</th><th>Deaths</th><th>K/D</th><th>HS%</th><th>Wins</th><th>Losses</th></tr>
       {% for stat in statsData %}
         <tr>
           <td>{{stat.elo}}</td>
@@ -46,6 +46,7 @@
           <td>{{stat.kills}}</td>
           <td>{{stat.deaths}}</td>
           <td>{{round(stat.kills / max(stat.deaths, 1), 2)}}</td>
+          <td>{{round(stat.headshots / max(stat.kills, 1) * 100, 1)}}</td>
           <td>{{stat.wins}}</td>
           <td>{{stat.losses}}</td>
         </tr>

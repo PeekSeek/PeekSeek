@@ -151,7 +151,17 @@ def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
 
     for user in users:
         won = bool(user["win"])
-        summary = {"Kills": user["kills"], "Deaths": user["deaths"], "Won": user["win"]}
+        # .get() with a default so results from a plugin build that predates a given
+        # stat (e.g. the deployed 1.0) don't fail the whole match report.
+        headshots = user.get("headshots", 0)
+        damageDealt = user.get("damageDealt", 0)
+        damageTaken = user.get("damageTaken", 0)
+        summary = {
+            "Kills": user["kills"],
+            "Deaths": user["deaths"],
+            "Headshots": headshots,
+            "Won": user["win"],
+        }
 
         eloDelta = 0
         if gamemodeInfo["usesElo"]:
@@ -168,6 +178,9 @@ def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
             wins=int(won),
             losses=int(not won),
             elo=eloDelta,
+            headshots=headshots,
+            damageDealt=damageDealt,
+            damageTaken=damageTaken,
         )
 
     return results, int(avgElo)
