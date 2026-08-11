@@ -13,6 +13,7 @@ using PeekSeek.Core.Models.Enums;
 using Rocket.Core.Logging;
 using Rocket.Core.Utils;
 using SDG.Unturned;
+using Steamworks;
 
 namespace PeekSeek.Core.Web;
 
@@ -71,8 +72,12 @@ internal static class RemoteAPI {
     }
 
     /// The code players paste into Unturned's connect box — the game server's Steam ID,
-    /// the same value the in-game "Copy Server Code" button copies.
-    private static string ServerCode => Provider.server.m_SteamID.ToString();
+    /// the same value the in-game "Copy Server Code" button copies. Provider.server is
+    /// the wrong field for this (reads back as 0 on a dedicated server — it's meant for a
+    /// client's view of the server it's connected to, not the server's own identity);
+    /// SteamGameServer.GetSteamID() is what Unturned's own "Copy Server Code" command
+    /// actually calls.
+    private static string ServerCode => SteamGameServer.GetSteamID().ToString();
 
     private static string WaitQuery =>
         $"?port={Provider.port}&code={ServerCode}&matchid={PSManager.Data?.MatchID.ToString() ?? "0"}";
