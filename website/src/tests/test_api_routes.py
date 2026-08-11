@@ -106,6 +106,42 @@ def test_eventwait_from_a_server_too_old_to_send_a_code_claims_as_zero(
         assert db.query(data.Match).first().claimed == "0"
 
 
+def test_unt_kills_appends_to_the_match_result(client, user_factory):
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+    killer, victim = user_factory(), user_factory()
+    with opendb() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(killer.steam64)]},
+                    {"name": "two", "users": [str(victim.steam64)]},
+                ],
+                matchSettings={
+                    "ballistics": True,
+                    "map": "Alpha Valley",
+                    "movement": True,
+                },
+            )
+        )
+        matchid = db.query(data.Match).first().id
+
+    r = client.post(
+        "/unt/kills",
+        params={"matchid": matchid},
+        json={"killer": str(killer.steam64), "victim": str(victim.steam64)},
+    )
+
+    assert r.status_code == 200
+    with opendb() as db:
+        result = (
+            db.query(data.MatchResult)
+            .where(data.MatchResult.matchId == matchid)
+            .first()
+        )
+        assert len(result.data["kills"]) == 1
+
+
 def test_server_bootstrap_keeps_the_region_already_stored(client):
     data.AuthorizedServer.bootstrap({"testclient": "paris"})
     data.AuthorizedServer.bootstrap({"testclient": "utah"})

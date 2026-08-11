@@ -102,6 +102,7 @@ Tests live directly under [tests/](tests/) and cover logic that does not require
 - `LevelManagerPatch` Harmony patches
 - `ConfigurationManager` SDG gameplay-flag mutations
 - `SerializableVector3.ToVector3()` (constructs `UnityEngine.Vector3`)
+- `FightTracker.RecordHit`/`RecordShot` (also take a `UnityEngine.Vector3`)
 
 The ping damage multiplier resolution in `PSManager.OnDamageRequested` is the most interesting untested bit; testing it without a live server would need the pure selection logic extracted into a helper.
 

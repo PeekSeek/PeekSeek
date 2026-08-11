@@ -297,9 +297,16 @@ class Match(SQLModel, table=True):
 
 
 class MatchResult(SQLModel, table=True):
+    """The durable per-match record: the map/settings, the kill-by-kill log, and (once the
+    match ends) each player's final line. `data` is JSON on purpose — kills and results are
+    two things this row grows to hold, and neither is a fixed shape the way the frozen
+    /unt/* payloads are, so new fields go straight in rather than needing a migration.
+    """
+
     __tablename__ = "MatchResults"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    matchId: Optional[int] = Field(default=None, foreign_key="Matches.id")
     region: str
     gamemode: int
     startTime: datetime = Field(
@@ -310,3 +317,85 @@ class MatchResult(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
     data: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+
+    @staticmethod
+    def appendKill(matchId: int, kill: dict) -> None:
+        """Called from /unt/kills, once per kill. Creates the row on the first kill of a
+        match and appends to it on every one after."""
+        from src.core.db import open
+
+        with open() as db:
+            result = db.query(MatchResult).where(MatchResult.matchId == matchId).first()
+            if result is None:
+                match = db.query(Match).where(Match.id == matchId).first()
+                result = MatchResult(
+                    matchId=matchId,
+                    region=match.region if match else "unknown",
+                    gamemode=match.gamemode if match else 0,
+                    startTime=datetime.utcnow(),
+                    data={
+                        "map": match.meta.get("map") if match else None,
+                        "ballistics": match.meta.get("ballistics") if match else None,
+                        "movement": match.meta.get("movement") if match else None,
+                        "kills": [],
+                    },
+                )
+                db.add(result)
+                db.flush()
+
+            db.query(MatchResult).where(MatchResult.id == result.id).update(
+                {"data": result.data | {"kills": [*result.data.get("kills", []), kill]}}
+            )
+
+    @staticmethod
+    def recordFinalResults(matchId: int, results: dict) -> None:
+        """Called from /unt/results. `results` is matchmaking.matchResults()'s per-player
+        summary, keyed by steam64. A match with no kills (a walkover) still gets a row here,
+        since this is also the only place a player's final per-match line is kept."""
+        from src.core.db import open
+
+        with open() as db:
+            result = db.query(MatchResult).where(MatchResult.matchId == matchId).first()
+            if result is None:
+                match = db.query(Match).where(Match.id == matchId).first()
+                result = MatchResult(
+                    matchId=matchId,
+                    region=match.region if match else "unknown",
+                    gamemode=match.gamemode if match else 0,
+                    startTime=datetime.utcnow(),
+                    data={
+                        "map": match.meta.get("map") if match else None,
+                        "ballistics": match.meta.get("ballistics") if match else None,
+                        "movement": match.meta.get("movement") if match else None,
+                        "kills": [],
+                    },
+                )
+                db.add(result)
+                db.flush()
+
+            db.query(MatchResult).where(MatchResult.id == result.id).update(
+                {
+                    "endTime": datetime.utcnow(),
+                    "data": result.data | {"results": results},
+                }
+            )
+
+    @staticmethod
+    def latestFor(steam64, limit: int = 10) -> list["MatchResult"]:
+        """Every match this player has a final line in, most recent first. Uses the same
+        ->/->> JSON path operators as Match.findLastCreatedBy — supported by both Postgres
+        and the SQLite the tests run against, unlike Postgres-only JSONB operators."""
+        from src.core.db import open
+
+        with open() as db:
+            return (
+                db.query(MatchResult)
+                .filter(
+                    MatchResult.data.op("->")("results")
+                    .op("->>")(str(steam64))
+                    .isnot(None)
+                )
+                .order_by(desc(MatchResult.endTime))
+                .limit(limit)
+                .all()
+            )

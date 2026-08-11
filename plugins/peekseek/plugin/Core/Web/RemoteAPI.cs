@@ -21,6 +21,7 @@ internal static class RemoteAPI {
     private static readonly string WAIT_URL = $"{API_URL}/unt/eventwait/";
     private static readonly string RESULTS_URL = $"{API_URL}/unt/results/";
     private static readonly string UPDATE_URL = $"{API_URL}/unt/update/";
+    private static readonly string KILLS_URL = $"{API_URL}/unt/kills/";
 
     private static HttpClient Client;
     internal static void Init() {
@@ -46,6 +47,16 @@ internal static class RemoteAPI {
         Task.Run(async () => {
             await Client.PostAsync(UPDATE_URL +
                                    $"?matchid={PSManager.Data?.MatchID}", new StringContent(JsonConvert.SerializeObject(state), Encoding.UTF8, "application/json"));
+        });
+    }
+
+    /// Fire-and-forget, same as NotifyServerUpdate — a dropped kill record isn't worth
+    /// blocking the match loop over, and the next kill's request carries no dependency
+    /// on this one having landed first.
+    internal static void SendKillEvent(PSKillEvent killEvent) {
+        Task.Run(async () => {
+            await Client.PostAsync(KILLS_URL +
+                                   $"?matchid={PSManager.Data?.MatchID}", new StringContent(JsonConvert.SerializeObject(killEvent), Encoding.UTF8, "application/json"));
         });
     }
 

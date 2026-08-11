@@ -72,6 +72,7 @@ def results(payload: JsonBody, matchid: int | None = None):
             if payload["played"]:
                 gamemode = mmconfig["gamemodes"][match.gamemode]
                 result, avgElo = matchmaking.matchResults(gamemode, *payload["data"])
+                data.MatchResult.recordFinalResults(matchid, result)
                 players = "\n\n".join(
                     f"{data.User.getSteamData(s).name} ({s})\n"
                     f"**[PeekSeek profile]({settings.profile_url(s)})** - "
@@ -98,6 +99,15 @@ def results(payload: JsonBody, matchid: int | None = None):
 def update(payload: JsonBody, matchid: int | None = None):
     """Live match data pushed during play (scoreboard, positions)."""
     data.Match.setLiveData(matchid, payload)
+    return PlainTextResponse("success")
+
+
+@router.post("/kills")
+def kills(payload: JsonBody, matchid: int | None = None):
+    """One durable kill record, sent as it happens rather than batched at match end so a
+    crashed server doesn't lose the whole match's kill log."""
+    if matchid is not None:
+        data.MatchResult.appendKill(matchid, payload)
     return PlainTextResponse("success")
 
 

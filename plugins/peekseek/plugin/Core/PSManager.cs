@@ -37,6 +37,10 @@ internal abstract class PSManager {
     private const int FeedLength = 5;
     private static readonly List<PSUpdateKill> RecentKills = [];
 
+    /// Separate from EventsRecorded: this ids the durable kill log sent to /unt/kills,
+    /// not the ephemeral overlay feed, and the two have no reason to share a sequence.
+    private static int KillEventsRecorded;
+
     private static CSteamID RelaySteamID => new(PeekSeek.Config.LobbyServerRelaySGSSteamID);
 
     private static Harmony Instrument;
@@ -57,6 +61,7 @@ internal abstract class PSManager {
         Level.onPostLevelLoaded += OnPostLevelLoaded;
 
         DamageTool.damagePlayerRequested += OnDamageRequested;
+        UseableGun.onBulletSpawned += OnBulletSpawned;
         RemoteAPI.Init();
     }
 
@@ -74,10 +79,33 @@ internal abstract class PSManager {
             }
         }
 
-        // Recorded after the ping scaling above, so damage stats reflect what the victim
-        // actually took rather than the pre-reduction number.
-        StatService.AddDamageTaken(parameters.player.channel.owner.playerID.steamID, parameters.damage);
+        // Recorded after the ping scaling above, so damage stats and the fight history
+        // both reflect what the victim actually took rather than the pre-reduction number.
+        CSteamID victimID = parameters.player.channel.owner.playerID.steamID;
+        StatService.AddDamageTaken(victimID, parameters.damage);
         if (attacker != null) StatService.AddDamageDealt(parameters.killer, parameters.damage);
+
+        FightTracker.RecordHit(
+            victimID,
+            parameters.killer,
+            parameters.damage,
+            parameters.limb,
+            attacker?.transform.position ?? default,
+            parameters.player.transform.position
+        );
+    }
+
+    /// Only worth sampling in bullet-drop mode: instant-hit mode has no equivalent
+    /// per-shot event, and Data is null outside a live match, so both are guarded here
+    /// rather than asking every caller to remember the condition.
+    private static void OnBulletSpawned(UseableGun gun, BulletInfo bullet) {
+        if (Data?.Settings?.Ballistics != true) return;
+
+        FightTracker.RecordShot(
+            gun.player.channel.owner.playerID.steamID,
+            bullet.origin,
+            bullet.ApproximatePlayerAimDirection
+        );
     }
 
 
@@ -98,6 +126,9 @@ internal abstract class PSManager {
         Instrument.UnpatchAll("blaze.ps.main");
 
         Level.onPostLevelLoaded -= OnPostLevelLoaded;
+
+        DamageTool.damagePlayerRequested -= OnDamageRequested;
+        UseableGun.onBulletSpawned -= OnBulletSpawned;
 
         RemoteAPI.Shutdown();
     }
@@ -137,6 +168,8 @@ internal abstract class PSManager {
                 StatService.InstanceStats.Clear();
                 LatestEvent = null;
                 EventsRecorded = 0;
+                KillEventsRecorded = 0;
+                FightTracker.Clear();
                 KickAllClients("Match has been forcefully!");
                 Data = null;
                 GroupManager.knownGroups.Clear();
@@ -437,7 +470,9 @@ internal abstract class PSManager {
         StatService.InstanceStats.Clear();
         LatestEvent = null;
         EventsRecorded = 0;
+        KillEventsRecorded = 0;
         RecentKills.Clear();
+        FightTracker.Clear();
         GroupManager.knownGroups.Clear();
         RelayAllClients();
         UpdateStatus(EPSStatus.READY);
@@ -487,9 +522,34 @@ internal abstract class PSManager {
         }
 
         RecordKill(player, unturnedInstigator, limb);
+        SendKillEvent(player, unturnedInstigator, cause, limb, murderer);
 
         player.Player.life.ServerRespawn(false);
         SendUpdateState();
+    }
+
+    /// Builds the durable kill record for /unt/kills from whatever FightTracker buffered,
+    /// separate from RecordKill's ephemeral overlay feed entry above.
+    private static void SendKillEvent(UnturnedPlayer victim, UnturnedPlayer killer, EDeathCause cause, ELimb limb, CSteamID murderer) {
+        bool ballistics = Data.Settings.Ballistics;
+
+        RemoteAPI.SendKillEvent(new PSKillEvent {
+            Id = ++KillEventsRecorded,
+            Time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Map = Data.Settings.Map,
+            Round = StatService.GetTotalPlayedRounds() + 1,
+            Killer = killer?.CSteamID.ToString(),
+            KillerName = killer?.CharacterName,
+            Victim = victim.CSteamID.ToString(),
+            VictimName = victim.CharacterName,
+            Cause = cause.ToString().ToLowerInvariant(),
+            Limb = limb.ToString().ToLowerInvariant(),
+            Weapon = killer?.Player.equipment.itemID ?? 0,
+            KillerPosition = killer != null ? PSVector3.From(killer.Player.transform.position) : null,
+            VictimPosition = PSVector3.From(victim.Player.transform.position),
+            Hits = FightTracker.TakeFight(victim.CSteamID),
+            Shots = murderer != CSteamID.Nil && ballistics ? FightTracker.RecentShotsBy(murderer) : []
+        });
     }
 
     private static void OnPlayerRevive(UnturnedPlayer player, Vector3 position, byte angle) {
