@@ -13,6 +13,22 @@ class AuthorizedServer(SQLModel, table=True):
     address: str = Field(primary_key=True)
     region: Optional[str] = None
 
+    @staticmethod
+    def bootstrap(servers: dict[str, str]) -> None:
+        """Allow-list game-server IPs, so a fresh environment can accept /unt calls.
+
+        There is no page or endpoint that adds one, and an unlisted server gets a
+        401 from every /unt route. Driven by BOOTSTRAP_SERVERS so only the
+        environments that set it are affected.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            known = {server.address for server in db.query(AuthorizedServer).all()}
+            for address, region in servers.items():
+                if address not in known:
+                    db.add(AuthorizedServer(address=address, region=region))
+
 
 class ServerRequest(SQLModel, table=True):
     """Audit log for every /unt request received from a game server."""

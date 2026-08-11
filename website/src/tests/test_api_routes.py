@@ -1,5 +1,7 @@
 """JSON/plain endpoints of the unified app: auth guards and frozen contracts."""
 
+from src.core import models as data
+from src.core.db import open as opendb
 from src.core.settings import settings
 
 
@@ -36,6 +38,23 @@ def test_api_login_via_query_uuid(client, user_factory):
 def test_unturned_endpoints_reject_unknown_ip(client):
     r = client.post("/unt/ban", params={"steam64": "123"})
     assert r.status_code == 401
+
+
+def test_unturned_endpoints_accept_a_bootstrapped_ip(client):
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+
+    r = client.post("/unt/ban", params={"steam64": "123"})
+    assert r.status_code == 200
+
+
+def test_server_bootstrap_keeps_the_region_already_stored(client):
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+    data.AuthorizedServer.bootstrap({"testclient": "utah"})
+
+    with opendb() as db:
+        servers = db.query(data.AuthorizedServer).all()
+
+    assert [(s.address, s.region) for s in servers] == [("testclient", "paris")]
 
 
 def test_change_uuid_rotates_uuid(client, user_factory):

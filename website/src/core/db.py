@@ -44,3 +44,6 @@ SQLModel.metadata.create_all(engine)
 
 if settings.bootstrap_admin:
     models.User.bootstrapAdmin(settings.bootstrap_admin)
+
+if settings.bootstrap_servers:
+    models.AuthorizedServer.bootstrap(settings.bootstrap_servers)

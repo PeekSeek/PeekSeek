@@ -63,6 +63,7 @@ Interactive API docs: http://localhost:8000/docs
 | `PROTOCOL` | | Overrides `[app].protocol` |
 | `BUILD` | | Overrides `[app].build` |
 | `BOOTSTRAP_ADMIN_STEAM64` | | Grants admin to one account on startup; leave unset in production |
+| `BOOTSTRAP_SERVERS` | | Allow-lists game-server IPs on startup, `address=region,address=region`; leave unset in production |
 
 `DB` takes any SQLAlchemy URL. Production uses Postgres; a throwaway environment can
 point at a file, `sqlite:////absolute/path/dev.db`, and get the same schema from
@@ -73,6 +74,11 @@ width being the obvious one.
 there is no way to promote the first one through the site. It creates the account if it
 has never logged in; the Steam callback matches on `steam64`, so the row is reused at
 first login rather than duplicated.
+
+`BOOTSTRAP_SERVERS` exists for the same reason on the other side of the contract: every
+`/unt/*` route 401s an IP that is not in `AuthorizedServers`, and nothing in the site adds
+one. Regions come from `[regions.names]` in `config.toml`. Addresses already present are
+left alone, so changing a region here does not overwrite the stored one.
 
 Non-secret config lives in [`src/config.toml`](src/config.toml). The three `[app]`
 values are env-overridable so one image can serve both dev and production; everything
