@@ -94,6 +94,10 @@ Tests live directly under [tests/](tests/) and cover logic that does not require
 | [StatService](plugin/Core/StatService.cs) | `UpdateStatKills` called three times | `GetStatKills` returns `3` |
 | [StatService](plugin/Core/StatService.cs) | `GetStatDeaths` for unknown player | Returns `0` (null-safe path) |
 | [StatService](plugin/Core/StatService.cs) | Two players with 2 + 3 wins | `GetTotalPlayedRounds` returns `5` |
+| [StatsCommand.FormatStats](plugin/Commands/StatsCommand.cs) | 4 kills, 1 headshot | `"25% HS"`, no divide-by-zero at 0 kills |
+| [RoundLog](plugin/Core/RoundLog.cs) | Same attacker/victim pair hit twice | One entry, damage and hit count both accumulate |
+| [RoundLog](plugin/Core/RoundLog.cs) | Unattributed damage (`CSteamID.Nil`) | Ignored — never recorded against anyone |
+| [PSManager.DeathCauseTranslationKey](plugin/Core/PSManager.cs) | Every `EDeathCause` the whisper covers | Maps to the matching `death_*` translation key, unknown causes fall back to `death_generic` |
 
 ### Not covered (require running Unturned/Rocket host)
 

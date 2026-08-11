@@ -93,6 +93,8 @@ internal abstract class PSManager {
             attacker?.transform.position ?? default,
             parameters.player.transform.position
         );
+
+        RoundLog.RecordDamage(parameters.killer, victimID, parameters.damage);
     }
 
     /// Only worth sampling in bullet-drop mode: instant-hit mode has no equivalent
@@ -170,6 +172,8 @@ internal abstract class PSManager {
                 EventsRecorded = 0;
                 KillEventsRecorded = 0;
                 FightTracker.Clear();
+                RoundLog.Clear();
+                LastKilledBy.Clear();
                 KickAllClients("Match has been forcefully!");
                 Data = null;
                 GroupManager.knownGroups.Clear();
@@ -345,6 +349,20 @@ internal abstract class PSManager {
         );
     }
 
+    /// Same as Announce but to one player only — StatsCommand also uses this rather than
+    /// building its own ChatManager call.
+    internal static void Whisper(SteamPlayer to, string message) {
+        ChatManager.serverSendMessage(
+            message,
+            UnturnedChat.GetColorFromHex(PeekSeek.Config.szHexDefaultChatColor).Value,
+            null,
+            to,
+            EChatMode.SAY,
+            PeekSeek.Config.szChatIconURL,
+            true
+        );
+    }
+
     private static PSTeam GetPlayerTeam(ulong steamID) {
         return Data.Teams.First(
             x => x.Users.Contains(steamID)
@@ -417,18 +435,96 @@ internal abstract class PSManager {
         }
 
         Announce(PeekSeek.Instance.Translate("win", team.Name));
+        AnnounceAceIfAny(team);
+        WhisperCloseCalls();
+        WhisperRoundDamage();
 
         if (StatService.GetStatWins(new(playerID)) < Data.Meta.Rounds) {
             RecordEvent("roundWon", team.Name);
             SendUpdateState();
+            RoundLog.Clear();
             return;
         }
 
         UpdateStatus(EPSStatus.DELAY);
         Announce(PeekSeek.Instance.Translate("match_won", team.Name));
+        AnnounceMvp();
         RecordEvent("matchWon", team.Name);
         SendUpdateState();
+        RoundLog.Clear();
         Task.Run(() => DelayEnd(PeekSeek.Config.DelayKickAfterWin, team.Name));
+    }
+
+    /// A solo ace only means something in a team format — a 1v1 win is just a win — and
+    /// only generalises cleanly to two teams, so FFA/multi-team matches skip it rather
+    /// than guessing at what "the opposing team" means there.
+    private static void AnnounceAceIfAny(PSTeam winningTeam) {
+        if (Data.Teams.Count != 2) return;
+
+        PSTeam losingTeam = Data.Teams.First(t => t.Name != winningTeam.Name);
+        if (losingTeam.Users.Count < 2) return;
+
+        foreach (ulong user in winningTeam.Users) {
+            if (RoundLog.KillsBy(new CSteamID(user)) < losingTeam.Users.Count) continue;
+
+            string name = UnturnedPlayer.FromCSteamID(new CSteamID(user))?.CharacterName ?? user.ToString();
+            Announce(PeekSeek.Instance.Translate("ace", name));
+            return;
+        }
+    }
+
+    private const byte CloseCallHealthThreshold = 15;
+
+    /// Private, not public — celebrates surviving the round to whoever actually did it,
+    /// without turning "I nearly died" into public information for everyone else.
+    private static void WhisperCloseCalls() {
+        foreach (PSTeam team in Data.Teams) {
+            foreach (ulong user in team.Users) {
+                Player p = PlayerTool.getPlayer(new CSteamID(user));
+                if (p == null || p.life.isDead || p.life.health > CloseCallHealthThreshold) continue;
+
+                Whisper(p.channel.owner, PeekSeek.Instance.Translate("close_call", p.life.health));
+            }
+        }
+    }
+
+    /// One whisper per player who dealt damage this round, broken down by who they were
+    /// fighting — built from RoundLog rather than FightTracker, since this covers the
+    /// whole round rather than only the fight that ended in a kill.
+    private static void WhisperRoundDamage() {
+        foreach (PSTeam team in Data.Teams) {
+            foreach (ulong user in team.Users) {
+                List<RoundDamageEntry> entries = RoundLog.DamageBy(new CSteamID(user));
+                if (entries.Count == 0) continue;
+
+                Player p = PlayerTool.getPlayer(new CSteamID(user));
+                if (p == null) continue;
+
+                string breakdown = string.Join(" · ", entries.Select(entry => {
+                    string name = UnturnedPlayer.FromCSteamID(new CSteamID(entry.Victim))?.CharacterName
+                        ?? entry.Victim.ToString();
+                    return $"{name}: {Mathf.Round(entry.Damage)} dmg ({entry.Hits} hits)";
+                }));
+
+                Whisper(p.channel.owner, PeekSeek.Instance.Translate("round_damage", breakdown));
+            }
+        }
+    }
+
+    /// Most kills, headshots as the tiebreak. Says nothing for a round that ended without
+    /// a single kill rather than naming an arbitrary "MVP" who did nothing.
+    private static void AnnounceMvp() {
+        if (StatService.InstanceStats.Count == 0) return;
+
+        PSPlayerStat mvp = StatService.InstanceStats
+            .OrderByDescending(s => s.Kills)
+            .ThenByDescending(s => s.Headshots)
+            .First();
+        if (mvp.Kills == 0) return;
+
+        string name = UnturnedPlayer.FromCSteamID(new CSteamID(mvp.SteamID))?.CharacterName ?? mvp.SteamID.ToString();
+        int hsPercent = mvp.Headshots * 100 / mvp.Kills;
+        Announce(PeekSeek.Instance.Translate("mvp", name, mvp.Kills, hsPercent));
     }
 
     /// Awards the whole match to the only team that showed up before the lobby timed out.
@@ -473,6 +569,8 @@ internal abstract class PSManager {
         KillEventsRecorded = 0;
         RecentKills.Clear();
         FightTracker.Clear();
+        RoundLog.Clear();
+        LastKilledBy.Clear();
         GroupManager.knownGroups.Clear();
         RelayAllClients();
         UpdateStatus(EPSStatus.READY);
@@ -502,6 +600,16 @@ internal abstract class PSManager {
         );
     }
 
+    /// Who last killed each player this match, for the revenge whisper. Steam64 to steam64,
+    /// cleared with the rest of the match's state.
+    private static readonly Dictionary<ulong, ulong> LastKilledBy = [];
+
+    /// Ordinary kills say nothing publicly — the stream overlay already carries the kill
+    /// feed for spectators, and the round/match win announcements below still mark the
+    /// moments that actually matter. Two things replace the old public line: a revenge
+    /// whisper to the killer, and a flavoured private line to anyone who died without a
+    /// killer at all, so silence isn't the only thing an ordinary run of the mill death
+    /// produces for the person on the wrong end of it.
     private static void OnPlayerDead(UnturnedPlayer player, EDeathCause cause, ELimb limb, CSteamID murderer) {
         if (cause == EDeathCause.ARENA) return;
 
@@ -513,12 +621,18 @@ internal abstract class PSManager {
             unturnedInstigator = UnturnedPlayer.FromCSteamID(murderer);
             StatService.UpdateStatKills(murderer);
             if (limb == ELimb.SKULL) StatService.UpdateStatHeadshots(murderer);
-            Announce(PeekSeek.Instance.Translate(
-                "kill",
-                player.CharacterName,
-                unturnedInstigator.CharacterName,
-                limb.ToString().ToLower().Replace("_", " ")
-            ));
+            RoundLog.RecordKill(murderer);
+
+            if (LastKilledBy.TryGetValue(murderer.m_SteamID, out ulong murderersLastKiller)
+                    && murderersLastKiller == player.CSteamID.m_SteamID) {
+                Whisper(unturnedInstigator.Player.channel.owner,
+                    PeekSeek.Instance.Translate("revenge", player.CharacterName));
+            }
+
+            LastKilledBy[player.CSteamID.m_SteamID] = murderer.m_SteamID;
+        } else {
+            string key = DeathCauseTranslationKey(cause);
+            if (key != null) Whisper(player.Player.channel.owner, PeekSeek.Instance.Translate(key));
         }
 
         RecordKill(player, unturnedInstigator, limb);
@@ -526,6 +640,22 @@ internal abstract class PSManager {
 
         player.Player.life.ServerRespawn(false);
         SendUpdateState();
+    }
+
+    /// Only the causes realistic in an arena match get a line — the rest (zombies,
+    /// animals, infection, ...) can't happen here, so they fall back to the generic one
+    /// rather than growing this list for causes that will never fire.
+    internal static string DeathCauseTranslationKey(EDeathCause cause) {
+        return cause switch {
+            EDeathCause.BONES => "death_fall",
+            EDeathCause.WATER => "death_drown",
+            EDeathCause.BURNING => "death_burn",
+            EDeathCause.FREEZING => "death_freeze",
+            EDeathCause.BLEEDING => "death_bleed",
+            EDeathCause.SUICIDE => "death_suicide",
+            EDeathCause.GRENADE or EDeathCause.LANDMINE or EDeathCause.MISSILE or EDeathCause.CHARGE => "death_explosive",
+            _ => "death_generic"
+        };
     }
 
     /// Builds the durable kill record for /unt/kills from whatever FightTracker buffered,

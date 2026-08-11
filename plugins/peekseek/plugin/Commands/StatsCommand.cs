@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 using PeekSeek.Core;
 using Rocket.API;
-using Rocket.Unturned.Chat;
 using Rocket.Unturned.Player;
-using SDG.Unturned;
 using Steamworks;
 
 namespace PeekSeek.Commands;
@@ -69,14 +67,6 @@ internal class StatsCommand : IRocketCommand {
     }
 
     private static void Reply(UnturnedPlayer to, string message) {
-        ChatManager.serverSendMessage(
-            message,
-            UnturnedChat.GetColorFromHex(PeekSeek.Config.szHexDefaultChatColor).Value,
-            null,
-            to.Player.channel.owner,
-            EChatMode.SAY,
-            PeekSeek.Config.szChatIconURL,
-            true
-        );
+        PSManager.Whisper(to.Player.channel.owner, message);
     }
 }
