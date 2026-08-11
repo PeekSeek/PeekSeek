@@ -1,10 +1,33 @@
-* {
-    font-family: sans-serif;
-    margin: 0;
-    padding: 0;
+/* Stream overlay. Flat fills, no borders, no shadows, no gradients.
+   Greyscale plus one red, and red only ever means jeopardy, so it still
+   means something when it appears.
+
+   Sizes are in vw because the overlay is captured at a fixed width (1920 in
+   OBS) and every element has to scale with it, not with the font size. */
+
+:root {
+    --ink: #f2f2f2;
+    --muted: #8a8a8a;
+    --red: #ff4f4f;
+
+    /* One size for every piece of text on a player card. */
+    --card-text: 0.82vw;
+    /* Notch corner radius, reused by the two inverse fillets. */
+    --notch-r: 0.7vw;
 }
 
-#notStarted, #full {
+* {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-variant-numeric: tabular-nums;
+}
+
+#notStarted, #hud {
     position: absolute;
 
     width: 100vw;
@@ -22,81 +45,291 @@
     align-items: center;
     justify-content: center;
     gap: 20px;
-    
+
     background-image: url("/av.png");
     background-size: cover;
     background-position: center;
 
     color: #fff;
-    /* font-size: ; */
 } #notStarted * {
     filter: opacity(.8);
 }
 
-#full {
+#hud {
+    color: #fff;
+    pointer-events: none;
+}
+
+.flat { background: rgba(15, 15, 15, 0.9); }
+
+/* ---- Notch ------------------------------------------------------------ */
+.notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    flex-direction: row;
+    gap: 0.55vw;
+    height: 2.5vw;
+    padding: 0 1.1vw;
+    border-radius: 0 0 var(--notch-r) var(--notch-r);
 }
 
-.team {
-    display: flex;
-    flex-direction: column;
-
-    background-color: #0a0a0a;
-    color: #fff;
-
-    padding: 20px 15px;
-    margin: 10px 0;
-    border-radius: 10px;
-
-    width: 250px;
-    gap: 10px;
+/* The two inverse fillets. Each sits flush against the top edge just outside
+   the notch and is the notch colour minus a quarter disc whose centre is on
+   the OUTER TOP corner. Because that centre is level with y = 0, the fill is
+   full width at the very top and tapers to nothing at depth r, so the notch
+   flares outward and runs smoothly back into the straight top line instead
+   of bulging out of it. */
+.notch .flare {
+    position: absolute;
+    top: 0;
+    width: var(--notch-r);
+    height: var(--notch-r);
+    display: block;
 }
 
-.team * {
-    white-space: nowrap;
+.notch .flare.l { right: 100%; }
+.notch .flare.r { left: 100%; }
+.notch .flare path { fill: rgba(15, 15, 15, 0.9); }
+
+.notch .tn {
+    font-size: 0.92vw;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: #d8d8d8;
+    max-width: 9vw;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.team .wins {
-    color: #fbb;
-    font-size: 24px;
-    font-weight: bold;
+.notch .sc {
+    font-size: 1.45vw;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.25, 1.4);
 }
 
-.user {
+.notch .sc.bump { transform: scale(1.3); }
+
+.notch .mid {
+    font-size: 0.72vw;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding: 0 0.3vw;
+    white-space: nowrap;
+}
+
+.notch .mid.hot { color: var(--red); }
+
+/* ---- Columns ---------------------------------------------------------- */
+.col {
+    position: absolute;
+    bottom: 1.2vw;
     display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    width: 100%;
-    margin-bottom: -5px;
-    font-size: 20px;
+    flex-direction: column;
+    gap: 0.9vw;
+    width: 19.5vw;
 }
 
-.user div {
-    max-width: 150px;
+.col.l { left: 1.2vw; }
+.col.r { right: 1.2vw; }
+
+.group { display: flex; flex-direction: column; gap: 0.22vw; }
+
+.group .tname {
+    font-size: 0.6vw;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    padding: 0 0.1vw 0.1vw;
 }
 
-#left .team {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-} 
-#right .team {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-    text-align: right;
+.col.r .group .tname { text-align: right; }
+
+/* ---- Card ------------------------------------------------------------- */
+.card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.24vw;
+    padding: 0.4vw 0.55vw 0.5vw;
+    border-radius: 0.3vw;
+    overflow: hidden;
+    transition: opacity 0.4s ease;
 }
 
-#left .wins {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-    text-align: right;
-} 
-#right .wins {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-    text-align: left;
+/* Anyone not in play this round fades back rather than disappearing, so the
+   column does not reflow mid-round. */
+.card.out { opacity: 0.3; }
+
+.card .l1, .card .l2 { display: flex; align-items: center; gap: 0.5vw; }
+.col.r .card .l1, .col.r .card .l2 { flex-direction: row-reverse; }
+
+/* Loadout on one side, powerup name pushed to the far edge. */
+.card .l2 { justify-content: space-between; }
+
+.card .nm {
+    font-size: var(--card-text);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Stats sit apart from the loadout because they answer a different question. */
+.stats { display: flex; gap: 0.5vw; align-items: baseline; margin-left: auto; }
+.col.r .stats { margin-left: 0; margin-right: auto; }
+.stats span { font-size: var(--card-text); color: var(--muted); font-weight: 600; letter-spacing: 0.02em; }
+.stats b { font-size: var(--card-text); color: #fff; font-weight: 700; margin-right: 0.12vw; }
+
+/* Gun first, then everything they carry, powerup items included. */
+.kit { display: flex; align-items: center; gap: 0.24vw; }
+.col.r .kit { flex-direction: row-reverse; }
+
+/* Same colour and transparency as the round label, and not bold. */
+.pw {
+    font-size: var(--card-text);
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.slot { position: relative; display: grid; place-items: center; flex: none; width: 1.35vw; height: 1.35vw; }
+.slot img { max-width: 1.35vw; max-height: 1.35vw; object-fit: contain; display: block; }
+.slot.gun { width: 3.9vw; }
+.slot.gun img { max-width: 3.9vw; max-height: 1.3vw; }
+.col.r .slot.gun img { transform: scaleX(-1); }
+
+.slot .n {
+    position: absolute;
+    right: -0.06vw;
+    bottom: -0.12vw;
+    font-size: 0.56vw;
+    font-weight: 700;
+    color: #fff;
+}
+
+.card .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.card.hit .flash { animation: hitFlash 0.4s ease-out; }
+
+@keyframes hitFlash {
+    0% { opacity: 0.22; }
+    100% { opacity: 0; }
+}
+
+/* ---- Health is the card's base line ----------------------------------- */
+.hp {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0.18vw;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.hp i {
+    display: block;
+    height: 100%;
+    background: #fff;
+    transition: width 0.5s cubic-bezier(0.3, 0.8, 0.3, 1), background 0.3s ease;
+}
+
+.hp i.low { background: var(--red); }
+.col.r .hp i { margin-left: auto; }
+
+/* ---- Kill feed -------------------------------------------------------- */
+.feed {
+    position: absolute;
+    top: 3.1vw;
+    right: 1.2vw;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.26vw;
+}
+
+.feed .kill {
+    display: flex;
+    align-items: center;
+    gap: 0.5vw;
+    padding: 0.24vw 0.5vw;
+    border-radius: 0.26vw;
+    font-size: 0.76vw;
+    font-weight: 400;
+    white-space: nowrap;
+    animation: killIn 0.35s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+.feed .kill.leaving { animation: killOut 0.3s ease-in both; }
+
+/* Two plain white labels. Neither name is emphasised over the other. */
+.feed .kill .name { color: #fff; font-weight: 400; }
+
+/* Force every weapon to solid white so the silhouette reads instantly
+   against whatever is behind the overlay. */
+.feed .kill img {
+    width: 2.8vw;
+    height: 1vw;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+
+/* Crosshair marks a headshot. */
+.feed .kill .hs { width: 0.95vw; height: 0.95vw; flex: none; color: #fff; display: block; }
+
+@keyframes killIn {
+    from { opacity: 0; transform: translateX(1.4vw); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes killOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* ---- Banner ----------------------------------------------------------- */
+.banner {
+    position: absolute;
+    top: 26%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.7vw 2.2vw;
+    border-radius: 0.4vw;
+    white-space: nowrap;
+    opacity: 0;
+}
+
+.banner.show { animation: bannerIn 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.1) both; }
+.banner.hide { animation: bannerOut 0.35s ease-in both; }
+.banner .what { font-size: 0.64vw; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.banner .who { font-size: 1.75vw; font-weight: 700; letter-spacing: -0.02em; }
+.banner.final .who { color: var(--red); }
+
+@keyframes bannerIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(0.6vw); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes bannerOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #hud *, #hud *::before, #hud *::after {
+        animation-duration: 0.001s !important;
+        transition-duration: 0.001s !important;
+    }
 }

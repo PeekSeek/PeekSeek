@@ -7,13 +7,13 @@
 
     <meta http-equiv="Content-Security-Policy" content="script-src * 'unsafe-inline' 'unsafe-eval';">
 
-    <script type="text/javascript" defer>
+    <script type="text/javascript">
       let matchid = {{matchid | safe}};
       let createdby = {{createdBy | safe}};
     </script>
 
-    <script src="/static/assets/api.js" crossorigin="anonymous"></script>
-    <script src="/static/assets/overlayUpdated.js" crossorigin="anonymous"></script>
+    <script src="/static/assets/api.js" crossorigin="anonymous" defer></script>
+    <script src="/static/assets/overlayUpdated.js" crossorigin="anonymous" defer></script>
 
     <link rel="stylesheet" href="/static/assets/overlay.css" crossorigin="anonymous"></link>
   </head>
@@ -26,10 +26,6 @@
       <span id="notStartedText" style="font-size:8vh;">Loading teams...</span>
     </div>
 
-    <div id = "full">
-      <div id="left"></div>
-
-      <div id="right"></div>
-    </div>
+    <div id="hud"></div>
 </body>
 </html>
