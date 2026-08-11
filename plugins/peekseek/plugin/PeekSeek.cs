@@ -24,6 +24,12 @@ public class PeekSeek : RocketPlugin<PeekSeekConfiguration> {
         PSManager.Init();
     }
 
+    /// Rocket plugins are MonoBehaviours, so this is the match loop's heartbeat.
+    /// PSManager decides how often that is worth acting on.
+    private void FixedUpdate() {
+        PSManager.Tick();
+    }
+
     protected override void Unload() {
         OnUnload?.Invoke();
         Logger.Log($"PeekSeek is now unloaded.");

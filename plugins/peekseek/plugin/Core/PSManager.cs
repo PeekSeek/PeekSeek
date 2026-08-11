@@ -28,6 +28,15 @@ internal abstract class PSManager {
     internal static float MatchReady;
     private static List<GroupInfoEx> GroupInfos;
 
+    private const float UpdateIntervalSeconds = 1f;
+    private static float LastUpdateSent;
+
+    private static PSUpdateEvent LatestEvent;
+    private static int EventsRecorded;
+
+    private const int FeedLength = 5;
+    private static readonly List<PSUpdateKill> RecentKills = [];
+
     private static CSteamID RelaySteamID => new(PeekSeek.Config.LobbyServerRelaySGSSteamID);
 
     private static Harmony Instrument;
@@ -122,6 +131,8 @@ internal abstract class PSManager {
             case "stop":
                 UpdateStatus(EPSStatus.READY);
                 StatService.InstanceStats.Clear();
+                LatestEvent = null;
+                EventsRecorded = 0;
                 KickAllClients("Match has been forcefully!");
                 Data = null;
                 GroupManager.knownGroups.Clear();
@@ -371,12 +382,15 @@ internal abstract class PSManager {
         Announce(PeekSeek.Instance.Translate("win", team.Name));
 
         if (StatService.GetStatWins(new(playerID)) < Data.Meta.Rounds) {
+            RecordEvent("roundWon", team.Name);
             SendUpdateState();
             return;
         }
 
         UpdateStatus(EPSStatus.DELAY);
         Announce(PeekSeek.Instance.Translate("match_won", team.Name));
+        RecordEvent("matchWon", team.Name);
+        SendUpdateState();
         Task.Run(() => DelayEnd(PeekSeek.Config.DelayKickAfterWin, team.Name));
     }
 
@@ -417,6 +431,9 @@ internal abstract class PSManager {
 
     private static void ClearMatch() {
         StatService.InstanceStats.Clear();
+        LatestEvent = null;
+        EventsRecorded = 0;
+        RecentKills.Clear();
         GroupManager.knownGroups.Clear();
         RelayAllClients();
         UpdateStatus(EPSStatus.READY);
@@ -449,10 +466,13 @@ internal abstract class PSManager {
         if (cause == EDeathCause.ARENA) return;
 
         StatService.UpdateStatDeaths(player.CSteamID);
+        StatService.MarkDeadThisRound(player.CSteamID);
 
+        UnturnedPlayer unturnedInstigator = null;
         if (murderer != CSteamID.Nil && murderer != SteamGameServer.GetSteamID()) {
-            UnturnedPlayer unturnedInstigator = UnturnedPlayer.FromCSteamID(murderer);
+            unturnedInstigator = UnturnedPlayer.FromCSteamID(murderer);
             StatService.UpdateStatKills(murderer);
+            if (limb == ELimb.SKULL) StatService.UpdateStatHeadshots(murderer);
             Announce(PeekSeek.Instance.Translate(
                 "kill",
                 player.CharacterName,
@@ -460,6 +480,8 @@ internal abstract class PSManager {
                 limb.ToString().ToLower().Replace("_", " ")
             ));
         }
+
+        RecordKill(player, unturnedInstigator, limb);
 
         player.Player.life.ServerRespawn(false);
         SendUpdateState();
@@ -480,44 +502,49 @@ internal abstract class PSManager {
         if (player.life.isDead) player.life.ServerRespawn(false);
     }
 
+    /// Pushes a snapshot on a timer as well as on events, so health, held weapon and
+    /// remaining powerup items move on the overlay between kills rather than freezing
+    /// until somebody dies.
+    internal static void Tick() {
+        if (Data == null) return;
+        if (Time.realtimeSinceStartup - LastUpdateSent < UpdateIntervalSeconds) return;
+
+        SendUpdateState();
+    }
+
+    /// Appends to the rolling kill feed, keeping only what the overlay draws. The killer
+    /// is null for a death nobody caused, which the overlay renders without an attacker.
+    private static void RecordKill(UnturnedPlayer victim, UnturnedPlayer killer, ELimb limb) {
+        RecentKills.Add(new PSUpdateKill {
+            Id = ++EventsRecorded,
+            Killer = killer?.CharacterName,
+            Victim = victim.CharacterName,
+            Weapon = killer?.Player.equipment.itemID ?? 0,
+            Limb = limb.ToString().ToLowerInvariant()
+        });
+
+        if (RecentKills.Count > FeedLength) RecentKills.RemoveAt(0);
+    }
+
+    /// Records a result for the overlay to announce. The id increases so the overlay can
+    /// tell a new result from the same one being repeated by every later tick.
+    private static void RecordEvent(string kind, string teamName) {
+        LatestEvent = new PSUpdateEvent {
+            Id = ++EventsRecorded,
+            Kind = kind,
+            Team = teamName,
+            Round = StatService.GetTotalPlayedRounds()
+        };
+    }
+
     private static void SendUpdateState() {
-        PSUpdateState state = new();
-        byte totalRoundsPlayed = (byte)Data.Teams
-                                 .SelectMany(team => team.Users)
-                                 .Sum(user => StatService.GetStatWins(new CSteamID(user)));
-        if (Data.Teams == null) {
-            Logger.LogError("SendUpdateState() Teams is null!");
+        if (Data?.Teams == null) {
+            Logger.LogError("SendUpdateState() has no match data to report!");
             return;
         }
 
-        foreach (var _team in Data.Teams) {
-            byte wins = StatService.GetStatWins(new(_team.Users.First()));
-            state.Teams.Add(new() {
-                TeamName = _team.Name,
-                Wins = wins,
-                Losses = totalRoundsPlayed - wins
-            });
-
-            foreach (ulong user in _team.Users) {
-                Player player = PlayerTool.getPlayer(new CSteamID(user));
-                if (player == null) {
-                    state.Teams.Last().Users.Add(user.ToString(), new() {
-                        Kills = 0,
-                        Deaths = 0,
-                        IsAlive = false
-                    }); continue;
-                }
-
-
-                state.Teams.Last().Users.Add(user.ToString(), new() {
-                    Kills = StatService.GetStatKills(new(user)),
-                    Deaths = StatService.GetStatDeaths(new(user)),
-                    IsAlive = player != null && !(player.life.isDead || player.movement.isSafe)
-                });
-            }
-        }
-
-        RemoteAPI.NotifyServerUpdate(state);
+        LastUpdateSent = Time.realtimeSinceStartup;
+        RemoteAPI.NotifyServerUpdate(LiveState.Build(Data, LatestEvent, RecentKills));
     }
 
     public static bool IsSpectator(ulong steamID) {
