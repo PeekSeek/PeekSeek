@@ -62,6 +62,17 @@ Interactive API docs: http://localhost:8000/docs
 | `DOMAIN` | | Overrides `[app].domain`; set per deployed environment |
 | `PROTOCOL` | | Overrides `[app].protocol` |
 | `BUILD` | | Overrides `[app].build` |
+| `BOOTSTRAP_ADMIN_STEAM64` | | Grants admin to one account on startup; leave unset in production |
+
+`DB` takes any SQLAlchemy URL. Production uses Postgres; a throwaway environment can
+point at a file, `sqlite:////absolute/path/dev.db`, and get the same schema from
+`create_all`. Note that SQLite will not reproduce Postgres-specific problems — integer
+width being the obvious one.
+
+`BOOTSTRAP_ADMIN_STEAM64` exists because a brand-new database contains no admin, and
+there is no way to promote the first one through the site. It creates the account if it
+has never logged in; the Steam callback matches on `steam64`, so the row is reused at
+first login rather than duplicated.
 
 Non-secret config lives in [`src/config.toml`](src/config.toml). The three `[app]`
 values are env-overridable so one image can serve both dev and production; everything

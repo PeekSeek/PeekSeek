@@ -6,9 +6,12 @@ from sqlmodel import Session, SQLModel, create_engine
 from .settings import settings
 
 _engine_kwargs: dict = {"echo": False}
-if settings.db_url.startswith("sqlite") and ":memory:" in settings.db_url:
+if settings.db_url.startswith("sqlite"):
+    # Sync endpoints run in Starlette's threadpool, so connections cross threads.
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
-    _engine_kwargs["poolclass"] = StaticPool
+    if ":memory:" in settings.db_url:
+        # One shared connection, or each pool checkout gets its own empty database.
+        _engine_kwargs["poolclass"] = StaticPool
 
 engine = create_engine(settings.db_url, **_engine_kwargs)
 
@@ -38,3 +41,6 @@ from sqlalchemy.orm import configure_mappers
 
 configure_mappers()
 SQLModel.metadata.create_all(engine)
+
+if settings.bootstrap_admin:
+    models.User.bootstrapAdmin(settings.bootstrap_admin)

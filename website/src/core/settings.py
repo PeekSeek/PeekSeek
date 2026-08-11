@@ -45,6 +45,12 @@ class Settings:
         self.discord_client_secret: str | None = os.environ.get("DISCORD_CLIENT_SECRET")
         self.secret_key: str = os.environ.get("SECRET_KEY", self.domain)
 
+        # Set only where a fresh database needs someone who can reach /admin.
+        bootstrap_admin = os.environ.get("BOOTSTRAP_ADMIN_STEAM64")
+        self.bootstrap_admin: int | None = (
+            int(bootstrap_admin) if bootstrap_admin else None
+        )
+
     @property
     def base_url(self) -> str:
         return f"{self.protocol}://{self.domain}"

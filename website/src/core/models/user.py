@@ -114,6 +114,27 @@ class User(SQLModel, table=True):
             )
 
     @staticmethod
+    def bootstrapAdmin(steam64: int) -> None:
+        """Give one account admin, creating it if it has never logged in.
+
+        A fresh environment has nobody who can reach /admin, and no way to make
+        anyone an admin through the site. Driven by BOOTSTRAP_ADMIN_STEAM64 so
+        only the environments that set it are affected.
+        """
+        from src.core.db import open
+        from uuid import uuid4
+
+        bit = 2 ** settings.permissions.index("admin")
+        with open() as db:
+            user = db.query(User).where(User.steam64 == steam64).first()
+            if user is None:
+                # The Steam callback matches on steam64, so this row is picked up
+                # on first login rather than being duplicated.
+                db.add(User(steam64=steam64, uuid=str(uuid4()), permissions=bit))
+            else:
+                user.permissions |= bit
+
+    @staticmethod
     def addToQueue(
         steam64,
         gamemode: int,
