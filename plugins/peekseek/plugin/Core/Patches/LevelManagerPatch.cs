@@ -16,20 +16,62 @@ namespace PeekSeek.Core.Patches;
 [HarmonyPatch(typeof(LevelManager), "arenaLobby")]
 [UsedImplicitly]
 internal class LevelManagerPatch {
+    private static float LastCountdownBroadcast;
+
     [UsedImplicitly]
     private static bool Prefix(LevelManager __instance) {
         if (PSManager.Status != EPSStatus.IN_PROGRESS) return false;
 
         __instance.findGroups();
-        if (!PSManager.HaveAllPlayersJoined()) {
-            if (LevelManager.arenaMessage != 0)
-                LevelManager.SendArenaMessage.InvokeAndLoopback(ENetReliability.Reliable,
-                    Provider.GatherRemoteClientConnections(), EArenaMessage.LOBBY);
-        } else {
-            LevelManager.arenaState = EArenaState.CLEAR;
+
+        float secondsLeft = PeekSeek.Config.LobbyTimeoutSeconds - (Time.realtimeSinceStartup - PSManager.MatchReady);
+
+        if (secondsLeft <= 0) {
+            ResolveTimedOutLobby();
+            return false;
         }
 
+        if (PSManager.HaveAllPlayersJoined()) {
+            LevelManager.arenaState = EArenaState.CLEAR;
+            return false;
+        }
+
+        if (LevelManager.arenaMessage != 0)
+            LevelManager.SendArenaMessage.InvokeAndLoopback(ENetReliability.Reliable,
+                Provider.GatherRemoteClientConnections(), EArenaMessage.LOBBY);
+
+        BroadcastCountdown(secondsLeft);
         return false;
+    }
+
+    /// Nobody left to play for gets the match released; one team present wins it by default;
+    /// otherwise the match starts short-handed.
+    private static void ResolveTimedOutLobby() {
+        if (!PSManager.HasAnyPlayerJoined()) {
+            PSManager.AbandonMatch();
+            return;
+        }
+
+        PSTeam onlyTeam = PSManager.OnlyTeamOnline();
+        if (onlyTeam != null) {
+            PSManager.NotifyTeamForcedWin(onlyTeam);
+            return;
+        }
+
+        LevelManager.arenaState = EArenaState.CLEAR;
+    }
+
+    private static void BroadcastCountdown(float secondsLeft) {
+        if (Time.realtimeSinceStartup - LastCountdownBroadcast < 1f) return;
+        LastCountdownBroadcast = Time.realtimeSinceStartup;
+
+        // Null when the config file predates this field: XmlSerializer leaves it unset rather than defaulted.
+        List<ushort> broadcastAt = PeekSeek.Config.LobbyTimeoutBroadcastSecondsRemaining;
+
+        ushort rounded = (ushort)Mathf.Round(secondsLeft);
+        if (broadcastAt == null || !broadcastAt.Contains(rounded)) return;
+
+        PSManager.Announce(PeekSeek.Instance.Translate("lobby_timeout_warning", rounded));
     }
 }
 

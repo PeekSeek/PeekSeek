@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Xml.Linq;
 using System.Xml.Serialization;
 using Xunit;
 
@@ -16,6 +20,8 @@ public class PeekSeekConfigurationTests {
         Assert.NotEmpty(config.Spawns);
         Assert.NotNull(config.PingConfig);
         Assert.NotEmpty(config.PingConfig);
+        Assert.NotNull(config.LobbyTimeoutBroadcastSecondsRemaining);
+        Assert.NotEmpty(config.LobbyTimeoutBroadcastSecondsRemaining);
     }
 
     [Fact]
@@ -24,7 +30,9 @@ public class PeekSeekConfigurationTests {
 
         config.LoadDefaults();
 
-        Assert.Equal((short)120, config.sJoinTimeout);
+        Assert.Equal((ushort)120, config.LobbyTimeoutSeconds);
+        Assert.Equal((ushort)10, config.DelayKickAfterWin);
+        Assert.Equal(0UL, config.LobbyServerRelaySGSSteamID);
         Assert.Equal("spectator", config.szSpectatorGroup);
         Assert.Equal("#FFFFFF", config.szHexDefaultChatColor);
         Assert.False(config.UseTestingJSON);
@@ -38,5 +46,26 @@ public class PeekSeekConfigurationTests {
 
         Assert.NotNull(attr);
         Assert.Equal("Config", attr!.ElementName);
+    }
+
+    /// The config deployed with 1.0 must keep working verbatim. XmlSerializer drops elements it
+    /// does not recognise without complaining, so a field this project renames or never declares
+    /// silently reverts to its default on a server that has been running for years.
+    [Fact]
+    public void Live10Config_HasAFieldForEveryElementItSets() {
+        var declared = new HashSet<string>(
+            typeof(PeekSeekConfiguration).GetFields().Select(field => field.Name)
+        );
+
+        var elements = XDocument.Load(FixturePath("live-1.0.configuration.xml"))
+            .Root.Elements()
+            .Select(element => element.Name.LocalName);
+
+        Assert.All(elements, name => Assert.Contains(name, declared));
+    }
+
+    private static string FixturePath(string name) {
+        // Assembly.Location points at a shadow copy under the test host, AppContext.BaseDirectory does not.
+        return Path.Combine(AppContext.BaseDirectory, "fixtures", name);
     }
 }

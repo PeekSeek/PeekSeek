@@ -4,5 +4,6 @@ public enum EPSStatus {
     READY,
     ENDED,
     START,
-    IN_PROGRESS
+    IN_PROGRESS,
+    DELAY
 }

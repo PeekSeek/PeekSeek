@@ -7,7 +7,10 @@ namespace PeekSeek;
 
 [XmlRoot("Config")]
 public class PeekSeekConfiguration : IRocketPluginConfiguration {
-    public short sJoinTimeout;
+    public ushort LobbyTimeoutSeconds;
+    public List<ushort> LobbyTimeoutBroadcastSecondsRemaining;
+    public ushort DelayKickAfterWin;
+    public ulong LobbyServerRelaySGSSteamID;
     public string szHexDefaultChatColor;
     public string szChatIconURL;
     public string szAPIURL;
@@ -18,7 +21,10 @@ public class PeekSeekConfiguration : IRocketPluginConfiguration {
 
 
     public void LoadDefaults() {
-        sJoinTimeout = 120;
+        LobbyTimeoutSeconds = 120;
+        LobbyTimeoutBroadcastSecondsRemaining = [5, 10, 30, 60, 90];
+        DelayKickAfterWin = 10;
+        LobbyServerRelaySGSSteamID = 0;
         szHexDefaultChatColor = "#FFFFFF";
         szChatIconURL = "https://domain.org/image.png";
         szAPIURL = "https://api.peekseek.com";

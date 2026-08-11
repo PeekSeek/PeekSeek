@@ -20,4 +20,12 @@
 		<ProjectReference Include="..\plugin\PeekSeek.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<Reference Include="System.Xml.Linq" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
 </Project>

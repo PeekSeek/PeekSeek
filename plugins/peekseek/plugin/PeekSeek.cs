@@ -36,6 +36,8 @@ public class PeekSeek : RocketPlugin<PeekSeekConfiguration> {
         { "death","{0} died" },
         { "welcome","Welcome to a PeekSeek.net match!" },
         { "win","{0} won the round" },
-        { "damage_reduced", "Your damage was reduced because you have higher ping!"}
+        { "damage_reduced", "Your damage was reduced because you have higher ping!"},
+        { "lobby_timeout_warning", "{0}s left to join. The match will only continue if there is more than 1 team active, otherwise the win is granted to the team online." },
+        { "match_won", "{0} has won the match!" }
     };
 }

@@ -1,12 +1,15 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using HarmonyLib;
 using PeekSeek.Core.Models;
 using PeekSeek.Core.Models.Enums;
 using PeekSeek.Core.Web;
 using Rocket.Core;
+using Rocket.Core.Utils;
 using Rocket.Unturned.Chat;
 using Rocket.Unturned.Events;
 using Rocket.Unturned.Player;
@@ -24,6 +27,8 @@ internal abstract class PSManager {
 
     internal static float MatchReady;
     private static List<GroupInfoEx> GroupInfos;
+
+    private static CSteamID RelaySteamID => new(PeekSeek.Config.LobbyServerRelaySGSSteamID);
 
     private static Harmony Instrument;
 
@@ -270,6 +275,28 @@ internal abstract class PSManager {
         }
     }
 
+    /// Hands every client over to the lobby server before dropping them, when one is configured.
+    private static void RelayAllClients() {
+        foreach (var client in Provider.clients.ToList()) {
+            if (RelaySteamID == CSteamID.Nil || client.player == null) continue;
+            client.player.sendRelayToServer(RelaySteamID, string.Empty, true);
+        }
+
+        KickAllClients("Relay");
+    }
+
+    internal static void Announce(string message) {
+        ChatManager.serverSendMessage(
+            message,
+            UnturnedChat.GetColorFromHex(PeekSeek.Config.szHexDefaultChatColor).Value,
+            null,
+            null,
+            EChatMode.SAY,
+            PeekSeek.Config.szChatIconURL,
+            true
+        );
+    }
+
     private static PSTeam GetPlayerTeam(ulong steamID) {
         return Data.Teams.First(
             x => x.Users.Contains(steamID)
@@ -311,13 +338,22 @@ internal abstract class PSManager {
         return info != null ? info.TeamName : "NONE_TEAM_NULL";
     }
 
+    private static bool IsOnline(ulong steam64) {
+        return Provider.clients.Any(client => client.playerID.steamID.m_SteamID == steam64);
+    }
+
     internal static bool HaveAllPlayersJoined() {
-        var allPlayersJoined = Data.Teams
-            .SelectMany(x => x.Users)
-            .All(player => Provider.clients.Any(client => client.playerID.steamID.m_SteamID == player));
+        return Data.Teams.SelectMany(team => team.Users).All(IsOnline);
+    }
 
+    internal static bool HasAnyPlayerJoined() {
+        return Data.Teams.SelectMany(team => team.Users).Any(IsOnline);
+    }
 
-        return allPlayersJoined;
+    /// The single team that still has players on the server, or null when it is not exactly one.
+    internal static PSTeam OnlyTeamOnline() {
+        List<PSTeam> online = Data.Teams.Where(team => team.Users.Any(IsOnline)).ToList();
+        return online.Count == 1 ? online[0] : null;
     }
 
     private static void UpdateStatus(EPSStatus status) {
@@ -332,31 +368,68 @@ internal abstract class PSManager {
             StatService.UpdateStatWins(new(user));
         }
 
-        ChatManager.serverSendMessage(
-            PeekSeek.Instance.Translate("win", team.Name),
-            UnturnedChat.GetColorFromHex(PeekSeek.Config.szHexDefaultChatColor).Value,
-            null,
-            null,
-            EChatMode.SAY,
-            PeekSeek.Config.szChatIconURL,
-            true
-        );
+        Announce(PeekSeek.Instance.Translate("win", team.Name));
 
-        if (StatService.GetStatWins(new(playerID)) >= Data.Meta.Rounds) {
-            SendResults(team.Name);
-            StatService.InstanceStats.Clear();
-            KickAllClients($"Match has finished, \"{team.Name}\" has won!");
-            UpdateStatus(EPSStatus.READY);
-            Data = null;
-            GroupManager.knownGroups.Clear();
-        } else SendUpdateState();
+        if (StatService.GetStatWins(new(playerID)) < Data.Meta.Rounds) {
+            SendUpdateState();
+            return;
+        }
+
+        UpdateStatus(EPSStatus.DELAY);
+        Announce(PeekSeek.Instance.Translate("match_won", team.Name));
+        Task.Run(() => DelayEnd(PeekSeek.Config.DelayKickAfterWin, team.Name));
     }
 
-    internal static void SendResults(string winningTeam) {
+    /// Awards the whole match to the only team that showed up before the lobby timed out.
+    internal static void NotifyTeamForcedWin(PSTeam team) {
+        for (byte round = 0; round < Data.Meta.Rounds; round++) {
+            foreach (ulong user in team.Users) {
+                StatService.UpdateStatWins(new(user));
+            }
+        }
+
+        EndMatch(team.Name);
+    }
+
+    /// Reports a match nobody turned up for, so the backend can release it.
+    internal static void AbandonMatch() {
+        SendResults(string.Empty, isPlayed: false);
+        ClearMatch();
+    }
+
+    private static async Task DelayEnd(float seconds, string winningTeam) {
+        await Task.Delay(TimeSpan.FromSeconds(seconds));
+
+        TaskDispatcher.QueueOnMainThread(() => {
+            if (Status != EPSStatus.DELAY) {
+                Logger.LogError($"DelayEnd() ran with status {Status}, expected {EPSStatus.DELAY}");
+                return;
+            }
+
+            EndMatch(winningTeam);
+        });
+    }
+
+    private static void EndMatch(string winningTeam) {
+        SendResults(winningTeam);
+        ClearMatch();
+    }
+
+    private static void ClearMatch() {
+        StatService.InstanceStats.Clear();
+        GroupManager.knownGroups.Clear();
+        RelayAllClients();
+        UpdateStatus(EPSStatus.READY);
+        Data = null;
+    }
+
+    internal static void SendResults(string winningTeam, bool isPlayed = true) {
         var jsonBuilder = new StringBuilder("{\"status\":\"finished\",\"data\":[");
 
+        List<PSPlayerStat> stats = isPlayed ? StatService.InstanceStats : [];
+
         bool first = true;
-        foreach (var stat in StatService.InstanceStats) {
+        foreach (var stat in stats) {
             if (!first) jsonBuilder.Append(",");
             first = false;
 
@@ -364,10 +437,11 @@ internal abstract class PSManager {
                 stat.SteamID, (GetPlayerTeam(stat.SteamID).Name == winningTeam).ToString().ToLower(), stat.Kills, stat.Deaths);
         }
 
-        jsonBuilder.Append("]}");
+        jsonBuilder.AppendFormat("],\"played\":{0}}}", isPlayed.ToString().ToLower());
 
         RemoteAPI.SendResults(
-            jsonBuilder.ToString()
+            jsonBuilder.ToString(),
+            Data.MatchID
         );
     }
 
@@ -379,20 +453,12 @@ internal abstract class PSManager {
         if (murderer != CSteamID.Nil && murderer != SteamGameServer.GetSteamID()) {
             UnturnedPlayer unturnedInstigator = UnturnedPlayer.FromCSteamID(murderer);
             StatService.UpdateStatKills(murderer);
-            ChatManager.serverSendMessage(
-                PeekSeek.Instance.Translate(
-                    "kill",
-                    player.CharacterName,
-                    unturnedInstigator.CharacterName,
-                    limb.ToString().ToLower().Replace("_", " ")
-                ),
-                UnturnedChat.GetColorFromHex(PeekSeek.Config.szHexDefaultChatColor).Value,
-                null,
-                null,
-                EChatMode.SAY,
-                PeekSeek.Config.szChatIconURL,
-                true
-            );
+            Announce(PeekSeek.Instance.Translate(
+                "kill",
+                player.CharacterName,
+                unturnedInstigator.CharacterName,
+                limb.ToString().ToLower().Replace("_", " ")
+            ));
         }
 
         player.Player.life.ServerRespawn(false);

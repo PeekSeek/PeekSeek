@@ -49,11 +49,12 @@ internal static class RemoteAPI {
         });
     }
 
-    internal static void SendResults(string json) {
+    /// Takes the match id by value: the caller clears PSManager.Data before this task runs.
+    internal static void SendResults(string json, int matchID) {
         Task.Run(async () => {
-            HttpResponseMessage msg = await Client.PostAsync(RESULTS_URL + $"?matchid={PSManager.Data?.MatchID}", new StringContent(json, Encoding.UTF8, "application/json"));
+            HttpResponseMessage msg = await Client.PostAsync(RESULTS_URL + $"?matchid={matchID}", new StringContent(json, Encoding.UTF8, "application/json"));
             TaskDispatcher.QueueOnMainThread(()
-                    => Logger.Log($"{RESULTS_URL + $"?matchid={PSManager.Data?.MatchID}"} returned {msg.StatusCode}")
+                    => Logger.Log($"{RESULTS_URL + $"?matchid={matchID}"} returned {msg.StatusCode}")
             );
         });
     }
