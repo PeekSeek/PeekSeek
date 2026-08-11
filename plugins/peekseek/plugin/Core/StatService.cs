@@ -60,6 +60,10 @@ internal static class StatService {
         return Find(player)?.Headshots ?? 0;
     }
 
+    internal static bool HasStats(CSteamID player) {
+        return Find(player) != null;
+    }
+
     internal static void MarkDeadThisRound(CSteamID player) {
         GetOrCreate(player).IsDeadThisRound = true;
     }

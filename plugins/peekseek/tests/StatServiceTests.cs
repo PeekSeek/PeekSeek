@@ -38,6 +38,19 @@ public class StatServiceTests {
     }
 
     [Fact]
+    public void HasStats_UnknownPlayer_ReturnsFalse() {
+        Assert.False(StatService.HasStats(new CSteamID(76561198000000030UL)));
+    }
+
+    [Fact]
+    public void HasStats_AfterAnyUpdate_ReturnsTrue() {
+        var id = new CSteamID(76561198000000031UL);
+        StatService.UpdateStatDeaths(id);
+
+        Assert.True(StatService.HasStats(id));
+    }
+
+    [Fact]
     public void IsAliveThisRound_UnknownPlayer_ReturnsTrue() {
         Assert.True(StatService.IsAliveThisRound(new CSteamID(76561198000000020UL)));
     }
