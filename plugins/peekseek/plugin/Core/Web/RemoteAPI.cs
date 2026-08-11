@@ -59,6 +59,13 @@ internal static class RemoteAPI {
         });
     }
 
+    /// The code players paste into Unturned's connect box — the game server's Steam ID,
+    /// the same value the in-game "Copy Server Code" button copies.
+    private static string ServerCode => Provider.server.m_SteamID.ToString();
+
+    private static string WaitQuery =>
+        $"?port={Provider.port}&code={ServerCode}&matchid={PSManager.Data?.MatchID.ToString() ?? "0"}";
+
     private static async Task WaitForMessage(CancellationToken token) {
         if (PeekSeek.Config.UseTestingJSON) {
             try {
@@ -77,9 +84,9 @@ internal static class RemoteAPI {
         while (!token.IsCancellationRequested) {
             string szResponse;
             try {
-                HttpResponseMessage message = await Client.GetAsync(WAIT_URL + $"?port={Provider.port}&matchid={PSManager.Data?.MatchID.ToString() ?? "0"}", token);
+                HttpResponseMessage message = await Client.GetAsync(WAIT_URL + WaitQuery, token);
                 TaskDispatcher.QueueOnMainThread(() => {
-                    Logger.Log($"{WAIT_URL + $"?port={Provider.port}&matchid={PSManager.Data?.MatchID.ToString() ?? "0"}"} returned {message.StatusCode}");
+                    Logger.Log($"{WAIT_URL + WaitQuery} returned {message.StatusCode}");
                 });
                 szResponse = await message.Content.ReadAsStringAsync();
             } catch (WebException ex) {
@@ -94,7 +101,7 @@ internal static class RemoteAPI {
 
             if (string.IsNullOrEmpty(szResponse)) {
                 TaskDispatcher.QueueOnMainThread(() => {
-                    Logger.LogError($"Unexpected response from PeekSeek API! {WAIT_URL + $"?port={Provider.port}&matchid={PSManager.Data?.MatchID.ToString() ?? "0"}"}, Empty response");
+                    Logger.LogError($"Unexpected response from PeekSeek API! {WAIT_URL + WaitQuery}, Empty response");
                 });
                 await Task.Delay(5000, token);
                 continue;
@@ -109,7 +116,7 @@ internal static class RemoteAPI {
                 });
             } catch (JsonException ex) {
                 TaskDispatcher.QueueOnMainThread(() => {
-                    Logger.LogError($"Failed to parse JSON from PeekSeek API! {WAIT_URL + $"?port={Provider.port}&matchid={PSManager.Data?.MatchID.ToString() ?? "0"}"}, {ex.Message}");
+                    Logger.LogError($"Failed to parse JSON from PeekSeek API! {WAIT_URL + WaitQuery}, {ex.Message}");
                 });
             }
 

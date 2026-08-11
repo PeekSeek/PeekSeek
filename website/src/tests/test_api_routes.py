@@ -47,6 +47,65 @@ def test_unturned_endpoints_accept_a_bootstrapped_ip(client):
     assert r.status_code == 200
 
 
+def test_eventwait_claims_a_match_with_the_server_code(client, user_factory):
+    """`claimed` has to hold what a player can connect with, not the server's IP."""
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+    first, second = user_factory(), user_factory()
+    with opendb() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+                matchSettings={
+                    "ballistics": True,
+                    "map": "Alpha Valley",
+                    "movement": True,
+                },
+            )
+        )
+    with opendb() as db:
+        db.query(data.Match).update({"time": 0})
+
+    r = client.get("/unt/eventwait", params={"code": "90071992547409931"})
+
+    assert r.status_code == 200
+    assert r.json()["head"] == "start"
+    with opendb() as db:
+        assert db.query(data.Match).first().claimed == "90071992547409931"
+
+
+def test_eventwait_from_a_server_too_old_to_send_a_code_claims_as_zero(
+    client, user_factory
+):
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+    first, second = user_factory(), user_factory()
+    with opendb() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+                matchSettings={
+                    "ballistics": True,
+                    "map": "Alpha Valley",
+                    "movement": True,
+                },
+            )
+        )
+    with opendb() as db:
+        db.query(data.Match).update({"time": 0})
+
+    client.get("/unt/eventwait")
+
+    with opendb() as db:
+        assert db.query(data.Match).first().claimed == "0"
+
+
 def test_server_bootstrap_keeps_the_region_already_stored(client):
     data.AuthorizedServer.bootstrap({"testclient": "paris"})
     data.AuthorizedServer.bootstrap({"testclient": "utah"})

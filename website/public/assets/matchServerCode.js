@@ -1,6 +1,19 @@
 let canDisplayTurn = true;
 let canInterval = true;
 
+/// Unturned takes the server code on the launch command line; there is no URL
+/// scheme that joins by code directly.
+function connectUrl(serverCode) {
+    return `steam://run/304930//+connect ${serverCode}`;
+}
+
+let launched = false;
+function launchOnce(serverCode) {
+    if (launched) return;
+    launched = true;
+    window.location = connectUrl(serverCode);
+}
+
 function getTeam(s64) {
     for (const team of data.teams) {
         if (team.users.includes(s64)) return team.name;
@@ -83,15 +96,17 @@ function update() {
         document.getElementById("message").innerHTML = "<h1>Waiting for server...</h1>Your match will start shortly.";
         document.getElementById("message").style.display = "flex";
 
-        if (data.claimed !== null) {
+        // "0" means the server that claimed the match is too old to report its
+        // server code, so there is nothing for a player to connect with.
+        if (data.claimed !== null && data.claimed !== "0") {
             if ("users" in data) canInterval = false;
             document.getElementById("message").innerHTML =
                 `<h1>Server found</h1><span>Join the server within 2 minutes.</span>` +
-                `<a href="steam://run/304930//+connect ${data.claimed}"><button class="mbutton">Connect to server</button></a>` +
+                `<a href="${connectUrl(data.claimed)}"><button class="mbutton">Connect to server</button></a>` +
                 `<button class="mbutton" onclick="navigator.clipboard.writeText('${data.claimed}')">Copy server code</button>`;
             document.getElementById("message").style.display = "flex";
             document.getElementById("type").innerHTML = "";
-            window.location = `steam://connect/${data.claimed}`;
+            launchOnce(data.claimed);
         }
     }
 

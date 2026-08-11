@@ -18,7 +18,7 @@
     <div class = "matchGrid">
     {% for match in matches %}
 
-      <div class="matchGridElement {% if match.claimed != None %}clickable" href="steam://connect/{{match.claimed}}"{% else %}"{% endif %}><div class="matchGridInner">
+      <div class="matchGridElement {% if match.claimed not in (None, "0") %}clickable" href="steam://run/304930//+connect {{match.claimed}}"{% else %}"{% endif %}><div class="matchGridInner">
 
             <span>Match.<b style="color:#20a0f0;">{{match.id}}</b></span>
             
@@ -38,7 +38,7 @@
           </div><div class="matchGridInner">
             <button class="settingsButton" style="background-color:#aab;" onclick="navigator.clipboard.writeText('{{config.base_url}}/overlay?id={{match.id}}')"><img src="/static/img/copy.png" height="20" style="filter: invert(1);">Copy overlay link</button>
 
-            {% if match.claimed != None %}
+            {% if match.claimed not in (None, "0") %}
             <button class="settingsButton" style="background-color:#aab;" onclick="window.location.href = 'steam://run/304930//+connect {{match.claimed}}'"><img src="/static/img/spectate.png" height="20" style="filter: invert(1);">Click to spectate</button>
             {% endif %}
 
