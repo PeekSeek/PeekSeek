@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Reflection;
+using HarmonyLib;
 using PeekSeekLobby.Core.Models;
 using PeekSeekLobby.Core.Web;
 using Rocket.Core.Utils;
@@ -41,10 +43,20 @@ internal abstract class LobbyManager {
 
     private const float MagazineCheckIntervalSeconds = 2f;
 
+    private const string HarmonyId = "peekseek.lobby";
+    private static Harmony Instrument;
+
     internal static void Init() {
         Provider.onServerConnected += OnPlayerConnected;
         Provider.onServerDisconnected += OnPlayerDisconnected;
         UnturnedPlayerEvents.OnPlayerDeath += OnPlayerDead;
+
+        // Attribute-based Harmony patches (ArenaNeutralizePatch) are inert until
+        // something actually applies them — this is that something. Without it
+        // the native Arena round system, shrinking zone included, keeps running
+        // completely unpatched.
+        Instrument = new Harmony(HarmonyId);
+        Instrument.PatchAll(Assembly.GetExecutingAssembly());
 
         RemoteAPI.Init();
     }
@@ -53,6 +65,8 @@ internal abstract class LobbyManager {
         Provider.onServerConnected -= OnPlayerConnected;
         Provider.onServerDisconnected -= OnPlayerDisconnected;
         UnturnedPlayerEvents.OnPlayerDeath -= OnPlayerDead;
+
+        Instrument.UnpatchAll(HarmonyId);
 
         RemoteAPI.Shutdown();
     }
