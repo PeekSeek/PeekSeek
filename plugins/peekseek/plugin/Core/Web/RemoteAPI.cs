@@ -61,12 +61,20 @@ internal static class RemoteAPI {
     }
 
     /// Takes the match id by value: the caller clears PSManager.Data before this task runs.
+    /// This is the match's only "I'm done" signal — unlike NotifyServerUpdate/SendKillEvent,
+    /// there's no next call to paper over a dropped one, so a failure here is logged rather
+    /// than swallowed. The website's eventwait backstop (Match.releaseAbandoned) still closes
+    /// the match out even if this never lands, but logging it means an operator can actually
+    /// see why.
     internal static void SendResults(string json, int matchID) {
         Task.Run(async () => {
-            HttpResponseMessage msg = await Client.PostAsync(RESULTS_URL + $"?matchid={matchID}", new StringContent(json, Encoding.UTF8, "application/json"));
-            TaskDispatcher.QueueOnMainThread(()
-                    => Logger.Log($"{RESULTS_URL + $"?matchid={matchID}"} returned {msg.StatusCode}")
-            );
+            string url = RESULTS_URL + $"?matchid={matchID}";
+            try {
+                HttpResponseMessage msg = await Client.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+                TaskDispatcher.QueueOnMainThread(() => Logger.Log($"{url} returned {msg.StatusCode}"));
+            } catch (Exception ex) {
+                TaskDispatcher.QueueOnMainThread(() => Logger.LogError($"Failed to report match results to PeekSeek API! {url}, {ex.Message}"));
+            }
         });
     }
 

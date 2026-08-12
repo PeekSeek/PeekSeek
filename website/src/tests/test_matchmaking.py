@@ -274,3 +274,53 @@ def test_unclaimed_match_cancelled_after_timeout(user_factory):
 
     with Session(core_db.engine) as s:
         assert s.query(data.Match).first().finished is True
+
+
+def test_claimed_match_released_when_its_server_polls_idle(user_factory):
+    """A server whose lobby timed out with too few players locally abandons the
+    match and goes back to polling matchid=0 — even if its one-shot /unt/results
+    report never landed, that next idle poll must still close the match out, or
+    every player in it stays stuck unable to queue again."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+            )
+        )
+    with Session(core_db.engine) as s:
+        s.query(data.Match).update({"claimed": "90071992547409931"})
+        s.commit()
+
+    data.Match.releaseAbandoned("90071992547409931")
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).first().finished is True
+
+
+def test_release_abandoned_ignores_the_shared_legacy_code(user_factory):
+    """code="0" is shared by every server too old to send a real one — releasing on
+    it could close a match a completely different old server is still playing."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+            )
+        )
+    with Session(core_db.engine) as s:
+        s.query(data.Match).update({"claimed": "0"})
+        s.commit()
+
+    data.Match.releaseAbandoned("0")
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).first().finished is False

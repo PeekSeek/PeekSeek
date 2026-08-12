@@ -30,6 +30,7 @@ def event_wait(server: GameServer, matchid: str = "0", code: str = "0"):
     region = server.region
 
     if matchid == "0":
+        data.Match.releaseAbandoned(code)
         return data.Match.claimMatchIfPossible(region, code) or {"head": "idle"}
 
     with opendb() as db:
