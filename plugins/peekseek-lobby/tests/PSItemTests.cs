@@ -4,11 +4,9 @@ using Xunit;
 
 namespace PeekSeekLobby.Tests;
 
-public class PSItemTests
-{
+public class PSItemTests {
     [Fact]
-    public void ParseArray_SingleItem_ParsesAllFields()
-    {
+    public void ParseArray_SingleItem_ParsesAllFields() {
         var array = JArray.Parse("[[363,1,\"100,0,255\"]]");
 
         var result = PSItem.ParseArray(array);
@@ -20,8 +18,7 @@ public class PSItemTests
     }
 
     [Fact]
-    public void ParseArray_EmptyStateString_YieldsEmptyByteArray()
-    {
+    public void ParseArray_EmptyStateString_YieldsEmptyByteArray() {
         var array = JArray.Parse("[[363,1,\"\"]]");
 
         var result = PSItem.ParseArray(array);
@@ -30,8 +27,7 @@ public class PSItemTests
     }
 
     [Fact]
-    public void ParseArray_MultipleItems_ReturnsAllInOrder()
-    {
+    public void ParseArray_MultipleItems_ReturnsAllInOrder() {
         var array = JArray.Parse("[[363,1,\"1,2\"],[519,5,\"\"]]");
 
         var result = PSItem.ParseArray(array);
@@ -40,5 +36,16 @@ public class PSItemTests
         Assert.Equal((ushort)363, result[0].ItemID);
         Assert.Equal((ushort)519, result[1].ItemID);
         Assert.Equal((byte)5, result[1].Amount);
+    }
+
+    [Fact]
+    public void Parse_SingleEntry_ParsesAllFields() {
+        var entry = JArray.Parse("[6,5,\"\"]");
+
+        var result = PSItem.Parse(entry);
+
+        Assert.Equal((ushort)6, result.ItemID);
+        Assert.Equal((byte)5, result.Amount);
+        Assert.Empty(result.State);
     }
 }
