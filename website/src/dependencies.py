@@ -161,8 +161,17 @@ RequestValues = Annotated[dict, Depends(merged_request_values)]
 
 
 async def forced_json_body(request: Request):
-    """The body parsed as JSON regardless of Content-Type — get_json(force=True)."""
-    return json.loads(await request.body())
+    """The body parsed as JSON regardless of Content-Type — get_json(force=True).
+
+    A malformed body (a crashed plugin build, a truncated request) must 400, not
+    500 — this runs as a dependency, before any route's own try/except gets a
+    chance to run, so an uncaught decode error here skips every route's error
+    handling and its Discord webhook logging along with it.
+    """
+    try:
+        return json.loads(await request.body())
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
 
 
 JsonBody = Annotated[dict, Depends(forced_json_body)]

@@ -112,7 +112,7 @@ def kills(payload: JsonBody, matchid: int | None = None):
 
 
 @router.post("/ban")
-def ban(steam64: str | None = None, reason: str = "Cheating"):
+def ban(steam64: int | None = None, reason: str = "Cheating"):
     """Permanent ban issued by PeekSeek Guard on a game server."""
     if not steam64:
         return PlainTextResponse("invalid steam64")
