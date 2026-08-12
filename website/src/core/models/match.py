@@ -183,6 +183,34 @@ class Match(SQLModel, table=True):
         return None
 
     @staticmethod
+    def releaseAbandoned(code: str) -> None:
+        """A server polling `matchid=0` has no live match right now — if it still holds
+        the claim on an unfinished match, that match's one and only "I'm done" signal
+        (the plugin's fire-and-forget POST to /unt/results) never arrived, and nothing
+        else ever revisits a *claimed* match (cancelStaleUnclaimed only sweeps unclaimed
+        ones). Left alone, that match's players stay stuck in it forever. Skipped for the
+        "0" sentinel code, since that's shared by every server too old to send a real one
+        — finishing on it could close a match a different old server is still playing.
+        """
+        if code == "0":
+            return
+
+        from src.core.db import open
+        from src.core.webhook import Webhook
+
+        with open() as db:
+            for match in (
+                db.query(Match)
+                .where(Match.finished.is_(False), Match.claimed == code)
+                .all()
+            ):
+                match.finished = True
+                Webhook(f"Match.{match.id}").error(
+                    f"Server `{code}` polled idle without ever reporting this match's "
+                    "results — force-closed so its players aren't stuck in it."
+                )
+
+    @staticmethod
     def cancelStaleUnclaimed() -> None:
         """Finish matches no server claimed within the timeout, and log it."""
         from src.core.db import open

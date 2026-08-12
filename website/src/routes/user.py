@@ -198,6 +198,14 @@ def _eloHistory(matches: list, steam64Str: str) -> list[dict]:
     return history
 
 
+@router.get("/kit/{steam64}")
+def public_kit_data(steam64: int):
+    """Every saved kit for a player, fully resolved into ready-to-equip item lists
+    — public, no auth, no match context needed. For anything that has to equip
+    someone without a live match (the lobby server, in particular)."""
+    return data.Kit.publicData(steam64)
+
+
 @router.get("/user/{steam64}")
 @router.get("/u/{steam64}")
 def profile(request: Request, steam64: int):

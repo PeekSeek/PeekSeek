@@ -2,36 +2,80 @@
   Weapon kit editor. Self-contained HTMX island: changing any option re-POSTs the
   whole selection and swaps this element with the server's re-rendered response.
 #}
-<form id="kitEditor" class="mainElement queue"
+<form id="kitEditor" class="mainElement kitEditor"
       hx-post="/me/kit/{{category}}"
       hx-trigger="change"
       hx-target="#kitEditor"
       hx-swap="outerHTML">
 
-  <h1>Editing kit <b style="text-transform: uppercase; color: #f66;">{{ category }}</b></h1>
+  <header class="kitHeader">
+    <div class="kitHeaderText">
+      <p class="kitEyebrow">Loadout</p>
+      <h1>Editing <span class="kitCategory">{{ category }}</span></h1>
+      <p class="kitHint">Pick a weapon, then fine-tune its attachments. Changes save instantly.</p>
+    </div>
+    <div class="kitPreview">
+      <div class="kitPreviewFrame">
+        <img src="/static/unturned/{{selection.gun}}.png"
+             alt="Selected gun {{ selection.gun }}">
+      </div>
+      <div class="kitAttachmentStrip">
+        {% for slot in ["sight", "tactical", "grip", "barrel"] %}
+          {% if selection[slot] and selection[slot] != 0 %}
+            <div class="kitChip" title="{{ slot }}">
+              <span class="kitChipLabel">{{ slot }}</span>
+              <img src="/static/unturned/{{selection[slot]}}.png"
+                   alt="{{ slot }} {{ selection[slot] }}">
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </header>
 
-  <div class="slotLabel">Weapon</div>
-  <div class="kitSelector" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
-    {% for gunId in guns %}
-      <label class="option{% if gunId | int == selection.gun %} optionselected{% endif %}">
-        <input type="radio" name="gun" value="{{ gunId }}" hidden
-               {% if gunId | int == selection.gun %}checked{% endif %}>
-        <img src="/static/unturned/{{gunId}}.png"
-             alt="Weapon #{{ gunId }}" style="max-width: 96px; max-height: 96px;">
-      </label>
-    {% endfor %}
-  </div>
-
-  {% for slot in ["sight", "tactical", "grip", "barrel"] %}
-    <div class="slotLabel">{{ slot }}</div>
-    <div class="kitSelector" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
-      {% for itemId in guns[selection.gun | string][slot] %}
-        <label class="option small{% if itemId == selection[slot] %} optionselected{% endif %}">
-          <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
-                 {% if itemId == selection[slot] %}checked{% endif %}>
-          <img src="/static/unturned/{{itemId}}.png" alt="{{ slot }} #{{ itemId }}">
+  <section class="kitSection">
+    <div class="kitSectionHead">
+      <h2>Weapon</h2>
+      <span class="kitSectionMeta">{{ guns | length }} available</span>
+    </div>
+    <div class="kitSelector kitGunGrid">
+      {% for gunId in guns %}
+        <label class="option kitGunOption{% if gunId | int == selection.gun %} optionselected{% endif %}">
+          <input type="radio" name="gun" value="{{ gunId }}" hidden
+                 {% if gunId | int == selection.gun %}checked{% endif %}>
+          <img src="/static/unturned/{{gunId}}.png"
+               alt="Gun {{ gunId }}">
         </label>
       {% endfor %}
     </div>
-  {% endfor %}
+  </section>
+
+  <section class="kitSection kitAttachments">
+    <div class="kitSectionHead">
+      <h2>Attachments</h2>
+      <span class="kitSectionMeta">sight · tactical · grip · barrel</span>
+    </div>
+    <div class="kitAttachmentGrid">
+      {% for slot in ["sight", "tactical", "grip", "barrel"] %}
+        <div class="kitSlot">
+          <div class="kitSlotTitle">{{ slot }}</div>
+          <div class="kitSelector kitSlotOptions">
+            {% for itemId in guns[selection.gun | string][slot] %}
+              <label class="option kitAttachOption{% if itemId == selection[slot] %} optionselected{% endif %}{% if itemId == 0 %} kitEmptyOption{% endif %}">
+                <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
+                       {% if itemId == selection[slot] %}checked{% endif %}>
+                {% if itemId == 0 %}
+                  <span class="kitNone">None</span>
+                {% else %}
+                  <img src="/static/unturned/{{itemId}}.png"
+                       alt="{{ slot }} {{ itemId }}">
+                {% endif %}
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
 </form>
