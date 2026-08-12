@@ -8,14 +8,17 @@
   :root {
     --ground: #08080a;
     --page-panel: #121212;
-    --page-panel-2: #171717;
-    --line: #232323;
     --ink: #f2f2f2;
     --muted: #8a8a8a;
     --red: #ff4f4f;
 
     --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    --card-text: 0.82cqw;
+
+    /* Bigger than the live overlay's 0.82cqw/0.7cqw: nobody is racing a round
+       timer here, and there are at most two players per card column, so the
+       screen can afford to say everything at a larger, couch-legible scale. */
+    --card-text: 1.05cqw;
+    --notch-r: 0.7cqw;
   }
 
   * { box-sizing: border-box; }
@@ -66,9 +69,9 @@
   .note b { color: var(--ink); }
 
   /* ======================================================================
-     STAGE — the 16:9 capture frame. cqw everywhere inside it so every
-     dimension scales off the stage's own width, same trick as the overlay
-     concept doc: the stage IS the overlay's 1920px OBS capture, mocked up.
+     STAGE — the 16:9 capture frame, cqw throughout so every dimension
+     scales off the stage's own width. Same trick as overlay-concept.html:
+     the stage stands in for the overlay's real 1920px OBS capture.
      ====================================================================== */
   .stage {
     position: relative;
@@ -84,154 +87,211 @@
     background-position: center;
   }
 
-  /* Darkens top and bottom so name/kit text stays legible over an arbitrary
-     bit of the map, without flattening the whole background to black — the
-     middle stays bright, same idea as a Valorant agent-select vignette. */
+  /* Darkens top and bottom so the notch/cards stay legible over an arbitrary
+     bit of map, without flattening the whole background to black. */
   .stage::before {
     content: "";
     position: absolute;
     inset: 0;
     background:
-      linear-gradient(rgba(4, 4, 5, 0.82) 0%, rgba(4, 4, 5, 0.35) 22%, rgba(4, 4, 5, 0.35) 78%, rgba(4, 4, 5, 0.88) 100%);
+      linear-gradient(rgba(4, 4, 5, 0.82) 0%, rgba(4, 4, 5, 0.32) 24%, rgba(4, 4, 5, 0.32) 76%, rgba(4, 4, 5, 0.86) 100%);
     pointer-events: none;
   }
 
-  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
-
-  /* ---- Top: match context, same vocabulary as the live overlay's notch --- */
-  .top {
-    position: relative;
+  /* ---- HUD surface: same flat-fill, no-border/shadow/gradient rule, same
+     greyscale-plus-one-red palette as the live overlay.css. ---------------- */
+  .hud {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.3cqw;
-    padding: 2.4cqw 0 1.6cqw;
+  }
+  .hud * { font-family: var(--font); }
+
+  .flat { background: rgba(15, 15, 15, 0.9); }
+
+  /* ---- Notch — lifted straight from overlay.css: the exact same shape and
+     structural pattern (two SVG inverse fillets + a centred "mid" label),
+     just reused for a pre-round moment instead of a live one. Where a round
+     label / score would sit once play starts, this shows the two team names
+     converging on a countdown instead. ------------------------------------ */
+  .notch {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.55cqw;
+    height: 2.5cqw;
+    margin-top: 1.6cqw;
+    padding: 0 1.1cqw;
+    border-radius: 0 0 var(--notch-r) var(--notch-r);
   }
 
-  .top .eyebrow2 {
-    font-size: 0.66cqw;
+  .notch .flare {
+    position: absolute;
+    top: 0;
+    width: var(--notch-r);
+    height: var(--notch-r);
+    display: block;
+  }
+  .notch .flare.l { right: 100%; }
+  .notch .flare.r { left: 100%; }
+  .notch .flare path { fill: rgba(15, 15, 15, 0.9); }
+
+  .notch .tn {
+    font-size: 0.92cqw;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: #d8d8d8;
+    width: 9cqw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .notch .tn:first-of-type { text-align: right; }
+  .notch .tn:last-of-type { text-align: left; }
+
+  /* Red the same way MATCH POINT/FINAL are red on the live overlay: the
+     moment something is about to happen, not a permanent accent. */
+  .notch .mid {
+    font-size: 0.78cqw;
     font-weight: 700;
-    letter-spacing: 0.22em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--red);
+    padding: 0 0.3cqw;
+    white-space: nowrap;
+  }
+  .notch .mid b { font-size: 1.1em; }
+
+  /* ---- Caption: mode / map / ruleset. Secondary to the notch, which now
+     carries the headline (who, and how soon). ------------------------------ */
+  .caption {
+    margin-top: 0.7cqw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25cqw;
+  }
+  .caption .mode {
+    font-size: 0.62cqw;
+    font-weight: 700;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
     color: var(--muted);
   }
-
-  .top .gamemode { font-size: 1.55cqw; font-weight: 700; letter-spacing: -0.01em; }
-
-  .top .countdown {
-    margin-top: 0.5cqw;
-    font-size: 0.78cqw;
+  .caption .rules {
+    font-size: 0.95cqw;
     font-weight: 600;
-    color: var(--red);
-    letter-spacing: 0.04em;
-  }
-  .top .countdown b { font-size: 1em; }
-
-  /* ---- Middle: the two rosters, mirrored, VS between them --------------- */
-  .rosters {
-    position: relative;
-    flex: 1;
-    display: flex;
-    align-items: stretch;
-    justify-content: center;
-    gap: 0;
-    padding: 0 3cqw 3cqw;
+    letter-spacing: -0.005em;
   }
 
-  .roster {
-    width: 24cqw;
+  /* ---- Rosters. Pinned to the screen edges, same positioning scheme as the
+     live overlay's own .col.l/.col.r (left/right + vertically centred) —
+     not narrow columns huddled in the middle. That leaves av.png visible
+     doing the work a background is supposed to do, and echoes Valorant's
+     agent-select, where the roster strips sit at the frame's edges and the
+     hero art owns the centre. ---------------------------------------------- */
+  .rosters { position: absolute; inset: 0; }
+
+  .col {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
-    gap: 0.9cqw;
+    width: 22cqw;
   }
+  .col.l { left: 3cqw; }
+  .col.r { right: 3cqw; align-items: flex-end; }
 
-  .roster.right { align-items: flex-end; }
+  .group { display: flex; flex-direction: column; gap: 0.7cqw; width: 100%; }
 
-  .tname {
-    font-size: 1.05cqw;
-    font-weight: 700;
-    letter-spacing: -0.005em;
-    padding-bottom: 0.5cqw;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-    width: 100%;
-  }
-  .roster.right .tname { text-align: right; }
-
-  .players { display: flex; flex-direction: column; gap: 0.5cqw; width: 100%; }
-
-  /* One flat card per player — same "flat" surface language as the live overlay,
-     just roomier since there is no round timer pressuring the layout here. */
-  .player {
-    display: flex;
-    align-items: center;
-    gap: 0.7cqw;
-    padding: 0.55cqw 0.8cqw;
-    border-radius: 0.35cqw;
-    background: rgba(15, 15, 15, 0.82);
-  }
-  .roster.right .player { flex-direction: row-reverse; text-align: right; }
-
-  .player .who { display: flex; flex-direction: column; gap: 0.15cqw; min-width: 0; flex: 1; }
-  .roster.right .player .who { align-items: flex-end; }
-
-  .player .pname {
-    font-size: 0.92cqw;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* Kit + powerup on one line, muted — this is what the round-start reveal
-     cover on the live overlay card shows in miniature; here there is room to
-     just say it outright since nothing needs revealing yet. */
-  .player .loadout {
-    font-size: 0.66cqw;
+  .group .tname {
+    font-size: 0.68cqw;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
     color: var(--muted);
+    font-weight: 700;
+    padding: 0 0.15cqw;
+  }
+  .col.r .group .tname { text-align: right; }
+
+  /* ---- Card. Same anatomy as the live player card — flat fill, rounded,
+     name on l1, the loadout run + powerup on l2 — just without the K/D/HS%
+     stats or health bar, which don't exist yet before a round starts. ------ */
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4cqw;
+    padding: 0.75cqw 0.9cqw;
+    border-radius: 0.4cqw;
+  }
+  .col.r .card { align-items: flex-end; }
+
+  .card .nm {
+    font-size: calc(var(--card-text) * 1.05);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  /* Two groups — loadout, powerup — pushed to opposite ends, same as the
+     live card's l2. (The live card gets this for free with only two
+     children; ours has a kit-name tag ahead of the icons too, so that tag
+     and the icon run are wrapped together into one .loadout group first.) */
+  .card .l2 { display: flex; align-items: center; justify-content: space-between; gap: 0.6cqw; width: 100%; }
+  .col.r .card .l2 { flex-direction: row-reverse; }
+
+  .loadout { display: flex; align-items: center; gap: 0.4cqw; min-width: 0; }
+  .col.r .loadout { flex-direction: row-reverse; }
+
+  /* Kit name is a small prefix tag ahead of the icon run — the one piece of
+     "chosen kit" data the icons alone can't be trusted to convey to a
+     viewer seeing this loadout for the first time. */
+  .card .kitname {
+    font-size: var(--card-text);
     font-weight: 500;
-    letter-spacing: 0.01em;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    color: var(--muted);
     white-space: nowrap;
   }
-  .player .loadout b { color: #cfcfcf; font-weight: 600; }
-  .player .loadout .pw { color: var(--red); }
 
-  .slot {
-    flex: none;
-    display: grid;
-    place-items: center;
-    height: 2cqw;
-    width: 2cqw;
-    border-radius: 0.3cqw;
-    background: rgba(255, 255, 255, 0.06);
+  .kit { display: flex; align-items: center; gap: 0.28cqw; }
+  .col.r .kit { flex-direction: row-reverse; }
+
+  /* Powerup at the far edge, away from the icons. */
+  .card .pw {
+    font-size: var(--card-text);
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
   }
-  .slot img { height: 65%; width: auto; object-fit: contain; display: block; }
 
-  /* Not-yet-locked players sit dimmer, same "fade rather than remove" rule
-     the live overlay uses for anyone out of play. */
-  .player.pending { opacity: 0.45; }
-  .player.pending .loadout::after { content: "picking\2026"; }
-  .player.pending .loadout b, .player.pending .loadout .pw { display: none; }
+  .slot { display: grid; place-items: center; flex: none; width: 1.9cqw; height: 1.9cqw; }
+  .slot img { max-width: 1.9cqw; max-height: 1.9cqw; object-fit: contain; display: block; }
+  .slot.gun { width: 5cqw; }
+  .slot.gun img { max-width: 5cqw; max-height: 1.8cqw; }
+  .col.r .slot.gun img { transform: scaleX(-1); }
+
+  /* Not-yet-locked sits dimmer, same "fade rather than remove" rule the live
+     overlay uses for anyone out of play — never a faked pre-selection. */
+  .card.pending { opacity: 0.35; }
+  .card.pending .waiting {
+    font-size: var(--card-text);
+    color: var(--muted);
+    font-style: italic;
+  }
 
   .vs {
-    align-self: center;
-    flex: none;
-    width: 4cqw;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     font-size: 1.3cqw;
     font-weight: 700;
     color: var(--muted);
     letter-spacing: 0.02em;
-  }
-
-  @media (max-width: 900px) {
-    .rosters { flex-direction: column; align-items: center; padding: 0 4cqw 2cqw; }
-    .roster, .roster.right { width: 100%; align-items: stretch; }
-    .roster.right .tname, .roster.right .player { text-align: left; flex-direction: row; }
-    .vs { display: none; }
   }
 </style>
 </head>
@@ -255,55 +315,87 @@
     <span><b>Data it needs</b> that the live snapshot doesn't send today: each player's chosen
     kit and powerup while picks are still being made — <code>/match/overlay</code> already has
     this in <code>params.userData</code>, it just isn't rendered here yet.</span>
+    <span><b>Mock scenario:</b> Casual Duo (two players per team, per <code>mmconfig.json</code>)
+    rather than the 1v1 Competitive shown in the first draft — a lone player next to a lone
+    "team name" didn't actually exercise the roster layout this screen exists for.</span>
   </div>
 
   <div class="stage">
-    <div class="screen">
-      <div class="top">
-        <span class="eyebrow2">Competitive · Alpha Valley</span>
-        <span class="gamemode">Ballistics On · Old Movement Off</span>
-        <span class="countdown">Round 1 starts in <b>0:22</b></span>
+    <div class="hud">
+      <div class="notch flat">
+        <svg class="flare l" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0 L10 0 L10 10 A10 10 0 0 0 0 0 Z"/></svg>
+        <span class="tn">Nova</span>
+        <span class="mid">Starts in <b>0:22</b></span>
+        <span class="tn">Redline</span>
+        <svg class="flare r" viewBox="0 0 10 10" aria-hidden="true"><path d="M10 0 L0 0 L0 10 A10 10 0 0 1 10 0 Z"/></svg>
+      </div>
+
+      <div class="caption">
+        <span class="mode">Casual Duo · Alpha Valley</span>
+        <span class="rules">Ballistics On · Old Movement Off</span>
       </div>
 
       <div class="rosters">
-        <div class="roster">
-          <span class="tname">Nova</span>
-          <div class="players">
-            <div class="player">
-              <span class="slot"><img src="website/public/unturned/395.png" alt=""></span>
-              <span class="who">
-                <span class="pname">ferret</span>
-                <span class="loadout"><b>Meta kit</b> · <span class="pw">Ammo</span></span>
-              </span>
+        <div class="col l">
+          <div class="group">
+            <span class="tname">Nova</span>
+
+            <div class="card flat">
+              <span class="nm">ferret</span>
+              <div class="l2">
+                <span class="loadout">
+                  <span class="kitname">Meta</span>
+                  <span class="kit">
+                    <span class="slot gun"><img src="website/public/unturned/363.png" alt=""></span>
+                    <span class="slot"><img src="website/public/unturned/17.png" alt=""></span>
+                    <span class="slot"><img src="website/public/unturned/125.png" alt=""></span>
+                  </span>
+                </span>
+                <span class="pw">Ammo</span>
+              </div>
             </div>
-            <div class="player pending">
-              <span class="slot"><img src="website/public/unturned/1103.png" alt=""></span>
-              <span class="who">
-                <span class="pname">whisker</span>
-                <span class="loadout"></span>
-              </span>
+
+            <div class="card flat pending">
+              <span class="nm">whisker</span>
+              <div class="l2"><span class="waiting">picking…</span></div>
             </div>
           </div>
         </div>
 
         <span class="vs">VS</span>
 
-        <div class="roster right">
-          <span class="tname">Redline</span>
-          <div class="players">
-            <div class="player">
-              <span class="slot"><img src="website/public/unturned/519.png" alt=""></span>
-              <span class="who">
-                <span class="pname">quorn</span>
-                <span class="loadout"><b>Sniper kit</b> · <span class="pw">Boom</span></span>
-              </span>
+        <div class="col r">
+          <div class="group">
+            <span class="tname">Redline</span>
+
+            <div class="card flat">
+              <span class="nm">quorn</span>
+              <div class="l2">
+                <span class="loadout">
+                  <span class="kitname">Sniper</span>
+                  <span class="kit">
+                    <span class="slot gun"><img src="website/public/unturned/1382.png" alt=""></span>
+                    <span class="slot"><img src="website/public/unturned/519.png" alt=""></span>
+                    <span class="slot"><img src="website/public/unturned/1838.png" alt=""></span>
+                  </span>
+                </span>
+                <span class="pw">Boom</span>
+              </div>
             </div>
-            <div class="player">
-              <span class="slot"><img src="website/public/unturned/488.png" alt=""></span>
-              <span class="who">
-                <span class="pname">delta9</span>
-                <span class="loadout"><b>Meta kit</b> · <span class="pw">Doctor</span></span>
-              </span>
+
+            <div class="card flat">
+              <span class="nm">delta9</span>
+              <div class="l2">
+                <span class="loadout">
+                  <span class="kitname">Meta</span>
+                  <span class="kit">
+                    <span class="slot gun"><img src="website/public/unturned/363.png" alt=""></span>
+                    <span class="slot"><img src="website/public/unturned/95.png" alt=""></span>
+                    <span class="slot"><img src="website/public/unturned/488.png" alt=""></span>
+                  </span>
+                </span>
+                <span class="pw">Doctor</span>
+              </div>
             </div>
           </div>
         </div>
@@ -316,7 +408,10 @@
     dims and reads "picking…" rather than guessing, same honesty rule the pick-screen rework
     already applies (no faked pre-selection).</span>
     <span><b>Countdown</b> reuses <code>startsAfter</code> from the match JSON, already sent
-    today.</span>
+    today. It sits in the notch's own label slot — where a round number or "MATCH POINT" would
+    read once the match is actually live — rather than as a separate bolted-on timer.</span>
+    <span><b>No responsive breakpoint:</b> matching <code>overlay-concept.html</code>, the stage
+    is a fixed 1920px OBS capture, not a page fragment that needs to reflow for mobile.</span>
   </div>
 </div>
 </body>
