@@ -18,6 +18,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public List<ushort> RespawnCountdownAtSecondsRemaining;
     public ushort BloodBagItemID;
     public List<LobbySpawn> Spawns;
+    public string szDiscordURL;
 
     /// Which kits.json weapon categories players may equip in the lobby and pick
     /// between with /kit — a subset of what the site actually supports, so this
@@ -39,6 +40,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
         BloodBagItemID = 395;
         AllowedKitCategories = ["meta", "sniper"];
+        szDiscordURL = "https://discord.gg/NKgTe6RnvH";
 
         // Placeholder — real Alpha Valley spawn points get filled in once the
         // plugin is installed on the live arena map.

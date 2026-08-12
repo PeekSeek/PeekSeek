@@ -41,5 +41,6 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "kit_options", "Available kits: {0}. /kit <name> to switch." },
         { "kit_invalid", "\"{0}\" isn't a kit you can use. Available: {1}" },
         { "kit_switched", "Switched to your {0} kit." },
+        { "discord_prompt", "Join the PeekSeek Discord for matches, tournaments and updates!" },
     };
 }

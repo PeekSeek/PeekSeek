@@ -86,6 +86,8 @@ internal abstract class LobbyManager {
             UnturnedChat.GetColorFromHex(PeekSeekLobby.Config.szHexDefaultChatColor).Value,
             null, player.channel.owner, EChatMode.SAY, PeekSeekLobby.Config.szChatIconURL, true
         );
+
+        player.sendBrowserRequest(PeekSeekLobby.Instance.Translate("discord_prompt"), PeekSeekLobby.Config.szDiscordURL);
     }
 
     private static void OnPlayerDisconnected(CSteamID steamID) {
