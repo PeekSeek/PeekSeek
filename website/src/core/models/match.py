@@ -329,12 +329,16 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def findLastCreatedBy(steam64) -> int | None:
-        """Despite the name (kept because it's a public ?createdBy= overlay URL param
-        streamers already have saved), this finds the player's last match by
-        participation, not by who actually created it: meta["createdBy"] is only ever
-        set for /match/custom's premium matches, so filtering on it left the overlay
-        broken for every regular matchmade match — the overwhelming majority."""
+        """A premium perk: a stable personal overlay link that always resolves to
+        whichever match this steam64 is most recently playing in, matchmade or custom
+        — not literally who administratively created it (the name is kept because it's
+        the public ?createdBy= URL param streamers already have saved). Gated on
+        premium so it stays a paid feature rather than working for anyone's steam64."""
         from src.core.db import open
+        from .user import User
+
+        if not User.getPermission(steam64, "premium"):
+            return None
 
         with open() as db:
             for match in db.query(Match).order_by(desc(Match.id)).all():

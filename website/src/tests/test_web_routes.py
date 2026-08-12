@@ -91,15 +91,46 @@ def test_overlay_quotes_a_steam64_created_by_without_losing_precision(client):
     assert f'let createdby = "{steam64}"' in r.text
 
 
-def test_match_overlay_finds_a_regular_matchmade_match_by_created_by(client, user_factory):
-    """meta["createdBy"] is only ever set for /match/custom's premium matches — a
-    normal matchmade match never sets it, so ?createdBy=<participant> found nothing
-    for the overwhelming majority of matches until this looked up by participation
-    instead."""
+def test_match_overlay_finds_a_premium_users_custom_match_by_created_by(
+    client, login, user_factory
+):
+    """The premium /match/custom flow, end to end: create the match through the real
+    route (not by constructing Match directly), then confirm ?createdBy=<creator> on
+    the public overlay endpoint actually finds it."""
+    owner = user_factory()
+    owner.setPermission("premium", True)
+    login(client, owner)
+
+    created = client.post(
+        "/match/custom",
+        json={
+            "teams": {"one": [str(owner.steam64)], "two": ["76561197960287930"]},
+            "region": "paris",
+            "gamemode": 0,
+            "ballistics": True,
+            "map": "Alpha Valley",
+            "movement": True,
+        },
+    )
+    assert created.status_code == 200
+    matchId = int(created.text)
+
+    r = client.get("/match/overlay", params={"createdBy": owner.steam64})
+    assert r.status_code == 200
+    assert r.json()["id"] == matchId
+
+
+def test_match_overlay_created_by_also_finds_a_premium_users_regular_match(
+    client, user_factory
+):
+    """The personal overlay link is meant to follow whatever match a premium streamer
+    is actually playing — regular matchmaking is how most of their matches happen, not
+    just the ones they spin up through /match/custom."""
     from src.core.db import open as opendb
     from src.core import models as data
 
     player = user_factory()
+    player.setPermission("premium", True)
     with opendb() as db:
         match = data.Match(
             gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
@@ -111,6 +142,24 @@ def test_match_overlay_finds_a_regular_matchmade_match_by_created_by(client, use
     r = client.get("/match/overlay", params={"createdBy": player.steam64})
     assert r.status_code == 200
     assert r.json()["id"] == matchId
+
+
+def test_match_overlay_created_by_requires_premium(client, user_factory):
+    """The personal overlay link is a premium perk — a non-premium participant must
+    not get a working ?createdBy= link just by having played a match."""
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player = user_factory()
+    with opendb() as db:
+        match = data.Match(
+            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+        )
+        db.add(match)
+        db.flush()
+
+    r = client.get("/match/overlay", params={"createdBy": player.steam64})
+    assert r.status_code == 404
 
 
 def test_profile_page_renders_match_history(client, user_factory):
