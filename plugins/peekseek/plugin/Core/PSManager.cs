@@ -72,6 +72,8 @@ internal abstract class PSManager {
         DamageTool.damagePlayerRequested += OnDamageRequested;
         UseableGun.onBulletSpawned += OnBulletSpawned;
         RemoteAPI.Init();
+
+        ConfigurationManager.DisablePassiveHealthRegen();
     }
 
     private static void OnDamageRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {

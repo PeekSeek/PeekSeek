@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PeekSeek intermission concept</title>
+
+<style>
+  :root {
+    --ground: #08080a;
+    --page-panel: #121212;
+    --page-panel-2: #171717;
+    --line: #232323;
+    --ink: #f2f2f2;
+    --muted: #8a8a8a;
+    --red: #ff4f4f;
+
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --card-text: 0.82cqw;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font);
+    line-height: 1.55;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wrap {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  header { display: flex; flex-direction: column; gap: 12px; }
+
+  .eyebrow {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--red);
+    font-weight: 600;
+  }
+
+  h1 { margin: 0; font-size: clamp(30px, 4.4vw, 44px); line-height: 1.05; letter-spacing: -0.025em; }
+  .lede { margin: 0; max-width: 74ch; color: #b0b0b0; }
+  .lede b { color: var(--ink); font-weight: 600; }
+
+  .note {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    background: var(--page-panel);
+    border-radius: 8px;
+    font-size: 13px;
+    color: #b0b0b0;
+  }
+  .note b { color: var(--ink); }
+
+  /* ======================================================================
+     STAGE — the 16:9 capture frame. cqw everywhere inside it so every
+     dimension scales off the stage's own width, same trick as the overlay
+     concept doc: the stage IS the overlay's 1920px OBS capture, mocked up.
+     ====================================================================== */
+  .stage {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    container-type: inline-size;
+    border-radius: 10px;
+    font-family: var(--font);
+    color: var(--ink);
+
+    background-image: url("website/public/img/av.png");
+    background-size: cover;
+    background-position: center;
+  }
+
+  /* Darkens top and bottom so name/kit text stays legible over an arbitrary
+     bit of the map, without flattening the whole background to black — the
+     middle stays bright, same idea as a Valorant agent-select vignette. */
+  .stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(rgba(4, 4, 5, 0.82) 0%, rgba(4, 4, 5, 0.35) 22%, rgba(4, 4, 5, 0.35) 78%, rgba(4, 4, 5, 0.88) 100%);
+    pointer-events: none;
+  }
+
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  /* ---- Top: match context, same vocabulary as the live overlay's notch --- */
+  .top {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3cqw;
+    padding: 2.4cqw 0 1.6cqw;
+  }
+
+  .top .eyebrow2 {
+    font-size: 0.66cqw;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .top .gamemode { font-size: 1.55cqw; font-weight: 700; letter-spacing: -0.01em; }
+
+  .top .countdown {
+    margin-top: 0.5cqw;
+    font-size: 0.78cqw;
+    font-weight: 600;
+    color: var(--red);
+    letter-spacing: 0.04em;
+  }
+  .top .countdown b { font-size: 1em; }
+
+  /* ---- Middle: the two rosters, mirrored, VS between them --------------- */
+  .rosters {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 0;
+    padding: 0 3cqw 3cqw;
+  }
+
+  .roster {
+    width: 24cqw;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9cqw;
+  }
+
+  .roster.right { align-items: flex-end; }
+
+  .tname {
+    font-size: 1.05cqw;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    padding-bottom: 0.5cqw;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    width: 100%;
+  }
+  .roster.right .tname { text-align: right; }
+
+  .players { display: flex; flex-direction: column; gap: 0.5cqw; width: 100%; }
+
+  /* One flat card per player — same "flat" surface language as the live overlay,
+     just roomier since there is no round timer pressuring the layout here. */
+  .player {
+    display: flex;
+    align-items: center;
+    gap: 0.7cqw;
+    padding: 0.55cqw 0.8cqw;
+    border-radius: 0.35cqw;
+    background: rgba(15, 15, 15, 0.82);
+  }
+  .roster.right .player { flex-direction: row-reverse; text-align: right; }
+
+  .player .who { display: flex; flex-direction: column; gap: 0.15cqw; min-width: 0; flex: 1; }
+  .roster.right .player .who { align-items: flex-end; }
+
+  .player .pname {
+    font-size: 0.92cqw;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Kit + powerup on one line, muted — this is what the round-start reveal
+     cover on the live overlay card shows in miniature; here there is room to
+     just say it outright since nothing needs revealing yet. */
+  .player .loadout {
+    font-size: 0.66cqw;
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .player .loadout b { color: #cfcfcf; font-weight: 600; }
+  .player .loadout .pw { color: var(--red); }
+
+  .slot {
+    flex: none;
+    display: grid;
+    place-items: center;
+    height: 2cqw;
+    width: 2cqw;
+    border-radius: 0.3cqw;
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .slot img { height: 65%; width: auto; object-fit: contain; display: block; }
+
+  /* Not-yet-locked players sit dimmer, same "fade rather than remove" rule
+     the live overlay uses for anyone out of play. */
+  .player.pending { opacity: 0.45; }
+  .player.pending .loadout::after { content: "picking\2026"; }
+  .player.pending .loadout b, .player.pending .loadout .pw { display: none; }
+
+  .vs {
+    align-self: center;
+    flex: none;
+    width: 4cqw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3cqw;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+
+  @media (max-width: 900px) {
+    .rosters { flex-direction: column; align-items: center; padding: 0 4cqw 2cqw; }
+    .roster, .roster.right { width: 100%; align-items: stretch; }
+    .roster.right .tname, .roster.right .player { text-align: left; flex-direction: row; }
+    .vs { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Concept — not wired up</p>
+    <h1>Intermission screen</h1>
+    <p class="lede">
+      What used to fill the gap before a round actually starts. A Valorant-style agent-select
+      beat: both rosters laid out side by side over <b>av.png</b>, so viewers can read who is
+      playing, what they picked, and what they are up against — instead of watching
+      <b>"Starting soon / Loading teams…"</b> sit on screen with nothing to look at.
+    </p>
+  </header>
+
+  <div class="note">
+    <span><b>Where this sits:</b> replaces <code>#notStarted</code>'s current bare splash on
+    <code>overlay.html</code>, for the selectKitsTime window between a match being found and the
+    first round actually starting.</span>
+    <span><b>Data it needs</b> that the live snapshot doesn't send today: each player's chosen
+    kit and powerup while picks are still being made — <code>/match/overlay</code> already has
+    this in <code>params.userData</code>, it just isn't rendered here yet.</span>
+  </div>
+
+  <div class="stage">
+    <div class="screen">
+      <div class="top">
+        <span class="eyebrow2">Competitive · Alpha Valley</span>
+        <span class="gamemode">Ballistics On · Old Movement Off</span>
+        <span class="countdown">Round 1 starts in <b>0:22</b></span>
+      </div>
+
+      <div class="rosters">
+        <div class="roster">
+          <span class="tname">Nova</span>
+          <div class="players">
+            <div class="player">
+              <span class="slot"><img src="website/public/unturned/395.png" alt=""></span>
+              <span class="who">
+                <span class="pname">ferret</span>
+                <span class="loadout"><b>Meta kit</b> · <span class="pw">Ammo</span></span>
+              </span>
+            </div>
+            <div class="player pending">
+              <span class="slot"><img src="website/public/unturned/1103.png" alt=""></span>
+              <span class="who">
+                <span class="pname">whisker</span>
+                <span class="loadout"></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <span class="vs">VS</span>
+
+        <div class="roster right">
+          <span class="tname">Redline</span>
+          <div class="players">
+            <div class="player">
+              <span class="slot"><img src="website/public/unturned/519.png" alt=""></span>
+              <span class="who">
+                <span class="pname">quorn</span>
+                <span class="loadout"><b>Sniper kit</b> · <span class="pw">Boom</span></span>
+              </span>
+            </div>
+            <div class="player">
+              <span class="slot"><img src="website/public/unturned/488.png" alt=""></span>
+              <span class="who">
+                <span class="pname">delta9</span>
+                <span class="loadout"><b>Meta kit</b> · <span class="pw">Doctor</span></span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <span><b>Pending state:</b> "whisker" above hasn't locked a kit/powerup yet — the card just
+    dims and reads "picking…" rather than guessing, same honesty rule the pick-screen rework
+    already applies (no faked pre-selection).</span>
+    <span><b>Countdown</b> reuses <code>startsAfter</code> from the match JSON, already sent
+    today.</span>
+  </div>
+</div>
+</body>
+</html>

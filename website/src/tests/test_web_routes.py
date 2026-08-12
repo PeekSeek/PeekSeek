@@ -91,6 +91,28 @@ def test_overlay_quotes_a_steam64_created_by_without_losing_precision(client):
     assert f'let createdby = "{steam64}"' in r.text
 
 
+def test_match_overlay_finds_a_regular_matchmade_match_by_created_by(client, user_factory):
+    """meta["createdBy"] is only ever set for /match/custom's premium matches — a
+    normal matchmade match never sets it, so ?createdBy=<participant> found nothing
+    for the overwhelming majority of matches until this looked up by participation
+    instead."""
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player = user_factory()
+    with opendb() as db:
+        match = data.Match(
+            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+
+    r = client.get("/match/overlay", params={"createdBy": player.steam64})
+    assert r.status_code == 200
+    assert r.json()["id"] == matchId
+
+
 def test_profile_page_renders_match_history(client, user_factory):
     from src.core.db import open as opendb
     from src.core import models as data

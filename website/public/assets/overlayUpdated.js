@@ -119,7 +119,8 @@ function buildState(payload) {
                         deaths: pick(stats, "deaths", "Deaths") ?? 0,
                         headshots: pick(stats, "headshots", "Headshots") ?? 0,
                         equipped: pick(stats, "equipped", "Equipped") ?? 0,
-                        inventory: pick(stats, "inventory", "Inventory") || []
+                        inventory: pick(stats, "inventory", "Inventory") || [],
+                        totalAmmo: pick(stats, "totalAmmo", "TotalAmmo") ?? 0
                     };
                 })
             };
@@ -165,7 +166,8 @@ function columnHtml(state, side) {
             </div>
             <div class="l2">
               <span class="kit"></span>
-              <span class="pw"></span>
+              <span class="ammo"></span>
+              <span class="reveal"></span>
             </div>
             <span class="hp"><i></i></span>
           </div>`).join("")}
@@ -199,7 +201,8 @@ function mount(state) {
             nm: el.querySelector(".nm"),
             stats: el.querySelector(".stats"),
             kit: el.querySelector(".kit"),
-            pw: el.querySelector(".pw"),
+            ammo: el.querySelector(".ammo"),
+            reveal: el.querySelector(".reveal"),
             gauge: el.querySelector(".hp i"),
             health: null
         });
@@ -215,7 +218,10 @@ function mount(state) {
         banner: hud.querySelector(".banner"),
         shownKills: new Set(),
         shownEvent: null,
-        bannerTimer: null
+        bannerTimer: null,
+        /* Which round the reveal-cover slide-away has already played for, so a fresh
+           poll mid-round does not replay it — see apply(). */
+        revealedRound: null
     };
 }
 
@@ -236,6 +242,12 @@ function apply(state) {
     view.mid.textContent = label.text;
     view.mid.classList.toggle("hot", label.hot);
 
+    /* Only the moment the round number itself changes counts as "round start" — every
+       other poll this tick just re-confirms the cover should stay wherever it already
+       animated to. */
+    const roundStarted = view.revealedRound !== state.round;
+    view.revealedRound = state.round;
+
     seatsOf(state).forEach(({ user }, i) => {
         const c = view.cards.get(i);
         if (!c) return;
@@ -246,9 +258,21 @@ function apply(state) {
             `<span><b>${user.kills}</b>K</span>` +
             `<span><b>${user.deaths}</b>D</span>` +
             `<span><b>${hsPercent(user)}</b>%</span>`;
-        c.kit.innerHTML = slotHtml({ id: user.equipped, amount: 1 }, "gun") +
+        c.kit.innerHTML = (user.equipped ? slotHtml({ id: user.equipped, amount: 1 }, "gun") : "") +
             loadout(user, user.powerupIds).map(item => slotHtml(item)).join("");
-        c.pw.textContent = user.powerup || "";
+        c.ammo.textContent = user.totalAmmo > 0 ? user.totalAmmo : "";
+
+        c.reveal.textContent = user.powerup || "";
+        c.reveal.classList.toggle("has", !!user.powerup);
+        if (user.state === "dead") {
+            /* Nothing under the cover is worth revealing for someone who is out —
+               leave it in place for the rest of the round. */
+            c.reveal.classList.remove("leaving");
+        } else if (roundStarted) {
+            c.reveal.classList.remove("leaving");
+            void c.reveal.offsetWidth;
+            c.reveal.classList.add("leaving");
+        }
 
         /* Flash the card when they lost health since the last poll. */
         if (c.health !== null && user.health < c.health) {

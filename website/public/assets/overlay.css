@@ -180,8 +180,9 @@ body {
 .card .l1, .card .l2 { display: flex; align-items: center; gap: 0.5vw; }
 .col.r .card .l1, .col.r .card .l2 { flex-direction: row-reverse; }
 
-/* Loadout on one side, powerup name pushed to the far edge. */
-.card .l2 { justify-content: space-between; }
+/* Loadout on one side, ammo count pushed to the far edge. Relative so .reveal (the
+   powerup-name cover, see below) can sit on top of exactly this row and nothing else. */
+.card .l2 { position: relative; justify-content: space-between; }
 
 .card .nm {
     font-size: var(--card-text);
@@ -202,20 +203,58 @@ body {
 .kit { display: flex; align-items: center; gap: 0.24vw; }
 .col.r .kit { flex-direction: row-reverse; }
 
-/* Same colour and transparency as the round label, and not bold. */
-.pw {
+/* Same treatment as the stat numbers — muted, not bold, no unit shown since position
+   next to the gun already says what it's counting. Empty rather than "0" when there is
+   nothing to add up (no gun, no spare magazines): a bare 0 would read as "empty" for a
+   melee kit that was never going to have ammo in the first place. */
+.ammo {
+    font-size: var(--card-text);
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+/* Covers the loadout row with the powerup's name, the same width and position as .l2
+   itself. Shown at round start and slid away to reveal the items underneath — sliding
+   rather than fading so it reads as "pulling back a cover", not just disappearing — and
+   left in place (no .leaving) for the rest of the round on anyone who is dead, since
+   there is nothing under it worth revealing for a player who is out. */
+.card .reveal {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    background: rgba(15, 15, 15, 0.9);
     font-size: var(--card-text);
     font-weight: 400;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--muted);
     white-space: nowrap;
+    overflow: hidden;
 }
 
-.slot { position: relative; display: grid; place-items: center; flex: none; width: 1.35vw; height: 1.35vw; }
-.slot img { max-width: 1.35vw; max-height: 1.35vw; object-fit: contain; display: block; }
-.slot.gun { width: 3.9vw; }
-.slot.gun img { max-width: 3.9vw; max-height: 1.3vw; }
+.card .reveal.has { display: flex; }
+.col.r .card .reveal { justify-content: flex-end; }
+
+.card .reveal.leaving { animation: revealAway 1.1s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.col.r .card .reveal.leaving { animation: revealAwayR 1.1s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+@keyframes revealAway {
+    from { transform: translateX(0); }
+    to { transform: translateX(100%); }
+}
+
+@keyframes revealAwayR {
+    from { transform: translateX(0); }
+    to { transform: translateX(-100%); }
+}
+
+/* One height for every item, gun included — no width constraint, so each icon keeps its
+   own aspect ratio instead of being squashed into a square (which is what made a gun
+   suddenly look like a normal item any time the loadout re-rendered). */
+.slot { position: relative; display: grid; place-items: center; flex: none; height: 1.35vw; }
+.slot img { height: 100%; width: auto; object-fit: contain; display: block; }
 .col.r .slot.gun img { transform: scaleX(-1); }
 
 .slot .n {
