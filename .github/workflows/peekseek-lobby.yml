@@ -1,0 +1,33 @@
+name: peekseek-lobby
+
+on:
+  push:
+    branches: [main]
+    paths: ["plugins/peekseek-lobby/**", ".github/workflows/peekseek-lobby.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["plugins/peekseek-lobby/**", ".github/workflows/peekseek-lobby.yml"]
+  workflow_dispatch: # path filters mean a shared change may not trigger this on its own
+
+defaults:
+  run:
+    working-directory: plugins/peekseek-lobby
+
+jobs:
+  lint:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet format PeekSeekLobby.sln --verify-no-changes
+
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test PeekSeekLobby.sln --configuration Release

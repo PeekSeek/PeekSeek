@@ -129,6 +129,30 @@ def ban(steam64: str | None = None, reason: str = "Cheating"):
     return PlainTextResponse("success")
 
 
+@router.get("/queue/heartbeat")
+def queue_heartbeat(steam64: int, gamemode: int = 1, region: str = "paris"):
+    """Same job as the browser's /queue/heartbeat, for a player standing in a
+    server-side lobby instead of a browser tab — the lobby plugin calls this on a
+    timer for whoever is currently connected. IP-gated like every /unt route rather
+    than session-gated, and no party support: a lobby server only knows about the
+    individuals connected to it, not who's grouped with whom on the site."""
+    current_match = data.User.getCurrentMatchId(steam64)
+    if current_match:
+        return {"succes": "true", "matchid": current_match}
+
+    if matchmaking.attemptCreateMatch(steam64, region):
+        return {"succes": "true", "matchid": 1}
+
+    data.User.addToQueue(steam64, gamemode, region=region)
+    return {"succes": "true"}
+
+
+@router.get("/queue/quit")
+def queue_quit(steam64: int):
+    data.User.removeFromQueue(steam64)
+    return PlainTextResponse("success")
+
+
 @router.get("/hlwn25/{steam64}")
 def hlwn25(steam64: int):
     data.Hlwn25.append(steam64)

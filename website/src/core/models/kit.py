@@ -122,3 +122,59 @@ class Kit(SQLModel, table=True):
                         items.append(item)
 
             return items
+
+    @staticmethod
+    def publicData(steam64) -> dict:
+        """Every kit category, fully resolved into a ready-to-equip item list — same
+        [id, amount, state] shape and the same gun/outfit/bonus-mag logic
+        Kit.getItems builds for a live match (minus the gamemode default items and
+        powerup a match would add), just without a match to read the selection
+        from. Lets a caller with no match context (the lobby plugin, equipping a
+        player before they've even queued) hand them their real loadout."""
+        from src.core.db import open
+        from src.core import metagun
+
+        with open() as db:
+            saved = {
+                kit.category: kit.data
+                for kit in db.query(Kit).where(Kit.steam64 == steam64).all()
+            }
+
+        outfitSaved = saved.get("outfit") or {}
+        outfitItems = [
+            [
+                outfitSaved[slot] if outfitSaved.get(slot) in options else options[0],
+                1,
+                "",
+            ]
+            for slot, options in kitsConfig["outfits"].items()
+        ]
+
+        result = {}
+        for category, guns in kitsConfig["kits"].items():
+            selection = saved.get(category) or {}
+            gunId = str(selection.get("gun", next(iter(guns))))
+            if gunId not in guns:
+                gunId = next(iter(guns))
+
+            # Not every gun in kits.json has an attachment/ammo profile in
+            # defaultMagAmountFiremodePerGunId — Kit.getItems falls back to a bare
+            # item (no attachment state, no bonus mags) for those, and this does
+            # the same.
+            if gunId not in mmconfig["defaultMagAmountFiremodePerGunId"]:
+                result[category] = [[int(gunId), 1, ""], *outfitItems]
+                continue
+
+            attach = {
+                slot: selection[slot] if selection.get(slot) in options else options[0]
+                for slot, options in guns[gunId].items()
+            }
+            gunState = metagun.metaObject(gunId).setAttach(**attach)()
+            magId = mmconfig["defaultMagAmountFiremodePerGunId"][gunId][0]
+            result[category] = [
+                [int(gunId), 1, gunState],
+                *outfitItems,
+                [magId, 5, ""],
+            ]
+
+        return result
