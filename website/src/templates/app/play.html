@@ -1,8 +1,67 @@
 {% extends "layout.html" %}
 
-{% block script %}<script src="/static/assets/playupdated.js" defer></script>{% endblock %}
+{% block script %}
+<script src="/static/assets/party.js" defer></script>
+<script src="/static/assets/playupdated.js" defer></script>
+{% endblock %}
 
 {% block currentPage %}play{% endblock %}
+
+{% block addheader %}
+<style>
+  .partyPanel {
+    gap: 10px;
+  } .partyPanel h1 {
+    font-size: 18px;
+    margin: 0;
+  } .partyMembers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  } .partyInviteRow {
+    display: flex;
+    gap: 8px;
+  } .partyInviteRow input {
+    flex: 1;
+    background: #121212;
+    border: 1px solid #333;
+    border-radius: 5px;
+    color: #fff;
+    padding: 8px 10px;
+  } .partyInviteRow button, .partyLeave {
+    background: #fff;
+    color: #000;
+    border: 0;
+    border-radius: 5px;
+    padding: 8px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  } .partyNotice {
+    display: none;
+    font-size: 13px;
+    color: #ffa34e;
+  } .partyInvite {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #121212;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    gap: 10px;
+  } .partyInviteActions {
+    display: flex;
+    gap: 6px;
+  } .partyInviteActions button {
+    background: #fff;
+    color: #000;
+    border: 0;
+    border-radius: 5px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
 
@@ -15,6 +74,18 @@
   <span>You currently have a <b>match ongoing</b>. Click here to return.</span>
 </a>
 {% endif %}
+
+<div class="mainElement partyPanel" id="partyPanel">
+  <h1>Party</h1>
+  <span class="partyNotice" id="partyNotice">Your party leader starts the queue for everyone.</span>
+  <div class="partyMembers" id="partyMembers"></div>
+  <div id="partyInvitesIncoming"></div>
+  <div class="partyInviteRow" id="partyInviteRow">
+    <input type="text" id="partyInviteInput" placeholder="Invite by Steam64" aria-label="Steam64 to invite">
+    <button type="button" onclick="invitePartyMember()">Invite</button>
+  </div>
+  <button type="button" class="partyLeave" id="partyLeave" style="display:none;" onclick="leaveParty()">Leave party</button>
+</div>
 
 <div class="mainElement queue">
   <h1>Match Making</h1>

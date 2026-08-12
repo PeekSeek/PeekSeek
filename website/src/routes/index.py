@@ -84,7 +84,8 @@ def queue_heartbeat(
     team: int | None = None,
     eventId: int | None = None,
 ):
-    """Keep the player in queue and report back if they've been matched."""
+    """Keep the player — and their whole party, if they lead one — in queue, and
+    report back if they've been matched."""
     current_match = data.User.getCurrentMatchId(steam64)
     if current_match:
         return {"succes": "true", "matchid": current_match}
@@ -92,11 +93,22 @@ def queue_heartbeat(
     if eventId is not None:
         return _event_heartbeat(steam64, team, eventId)
 
+    with opendb() as db:
+        party = data.Party.find(db, steam64)
+    if party and str(party.steam64) != str(steam64):
+        raise HTTPException(
+            status_code=403, detail="Only your party leader can start the queue."
+        )
+
     _ping_if_queueing_alone(region)
     if matchmaking.attemptCreateMatch(steam64, region):
         return {"succes": "true", "matchid": 1}
 
-    data.User.addToQueue(steam64, gamemode, region=region)
+    partyMembers = party.data.get("members", []) if party else [str(steam64)]
+    for member in partyMembers:
+        data.User.addToQueue(
+            int(member), gamemode, partyId=(party.id if party else None), region=region
+        )
     return {"succes": "true"}
 
 
