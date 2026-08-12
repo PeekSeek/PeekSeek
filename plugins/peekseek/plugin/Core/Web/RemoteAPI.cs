@@ -84,6 +84,9 @@ internal static class RemoteAPI {
 
     private static async Task WaitForMessage(CancellationToken token) {
         if (PeekSeek.Config.UseTestingJSON) {
+            // Testing mode stands in for the real API entirely — polling dev/prod
+            // alongside it would let a live "stop" response wipe the fixture's
+            // match state seconds after it's seeded.
             try {
                 string szJson = File.ReadAllText("TestingJSON.json");
                 TaskDispatcher.QueueOnMainThread(() => {
@@ -95,6 +98,7 @@ internal static class RemoteAPI {
             } catch (Exception ex) {
                 Logger.LogError($"Failed to load TestingJSON.json! {ex.Message}");
             }
+            return;
         }
 
         while (!token.IsCancellationRequested) {

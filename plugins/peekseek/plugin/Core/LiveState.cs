@@ -63,8 +63,10 @@ internal static class LiveState {
 
     /// Death wins over the safezone: a killed player respawns straight back into the
     /// lobby, and the overlay should still say they lost the round rather than that
-    /// they are waiting for the next one.
-    private static string RoundState(CSteamID steamID, Player player) {
+    /// they are waiting for the next one. Internal rather than private so PSManager's
+    /// debug heartbeat can log the exact same value the overlay is being sent, instead
+    /// of a second copy of this logic that could quietly drift from it.
+    internal static string RoundState(CSteamID steamID, Player player) {
         if (!StatService.IsAliveThisRound(steamID)) return "dead";
         if (player.movement.isSafe) return "waiting";
 
