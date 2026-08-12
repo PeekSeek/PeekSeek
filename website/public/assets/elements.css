@@ -214,6 +214,31 @@
   max-height: 64px;
 }
 
+/* A row of picker tiles with no name to show for what's in it (item names aren't
+   in the data, only ids) is just a label problem — say what the row itself is, in
+   the one place we do have a real name: the slot. */
+.slotLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a8a8a;
+  text-align: center;
+  margin: 16px 0 8px;
+} .slotLabel:first-of-type {
+  margin-top: 4px;
+}
+
+/* Attachment rows (4 slots side by side) get a smaller tile than the primary
+   weapon/outfit-piece picker so four rows still fit without a scrollbar — still
+   nearly 3x the 14px the attachment icons used to render at. */
+.kitSelector .option.small {
+  padding: 8px;
+} .kitSelector .option.small img {
+  max-width: 40px;
+  max-height: 40px;
+}
+
 .centerflex {
   display: flex;
   flex-direction: column;

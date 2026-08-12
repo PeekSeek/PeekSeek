@@ -10,33 +10,28 @@
 
   <h1>Editing kit <b style="text-transform: uppercase; color: #f66;">{{ category }}</b></h1>
 
+  <div class="slotLabel">Weapon</div>
   <div class="kitSelector" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
     {% for gunId in guns %}
       <label class="option{% if gunId | int == selection.gun %} optionselected{% endif %}">
         <input type="radio" name="gun" value="{{ gunId }}" hidden
                {% if gunId | int == selection.gun %}checked{% endif %}>
         <img src="/static/unturned/{{gunId}}.png"
-             alt="Gun {{ gunId }}" style="max-width: 200px;">
+             alt="Weapon #{{ gunId }}" style="max-width: 96px; max-height: 96px;">
       </label>
     {% endfor %}
   </div>
 
-  <img src="/static/unturned/{{selection.gun}}.png"
-       width="30%" alt="Selected gun">
-
-  <div style="display: grid; grid-template-columns: repeat(4, 1fr); width: min(90%, 315px);">
-    {% for slot in ["sight", "tactical", "grip", "barrel"] %}
-      <div class="kitSelector" style="padding: 0 8px;">
-        {% for itemId in guns[selection.gun | string][slot] %}
-          <label class="option{% if itemId == selection[slot] %} optionselected{% endif %}"
-                 style="margin-bottom: 20px;">
-            <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
-                   {% if itemId == selection[slot] %}checked{% endif %}>
-            <img src="/static/unturned/{{itemId}}.png"
-                 alt="{{ slot }} {{ itemId }}" style="max-height: 14px; max-width: 14px;">
-          </label>
-        {% endfor %}
-      </div>
-    {% endfor %}
-  </div>
+  {% for slot in ["sight", "tactical", "grip", "barrel"] %}
+    <div class="slotLabel">{{ slot }}</div>
+    <div class="kitSelector" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
+      {% for itemId in guns[selection.gun | string][slot] %}
+        <label class="option small{% if itemId == selection[slot] %} optionselected{% endif %}">
+          <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
+                 {% if itemId == selection[slot] %}checked{% endif %}>
+          <img src="/static/unturned/{{itemId}}.png" alt="{{ slot }} #{{ itemId }}">
+        </label>
+      {% endfor %}
+    </div>
+  {% endfor %}
 </form>

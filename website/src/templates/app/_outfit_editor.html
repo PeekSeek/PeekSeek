@@ -12,13 +12,14 @@
 
   <div class="outfitselectorgrid">
     {% for slot, options in outfits.items() %}
+      <div class="slotLabel">{{ slot }}</div>
       <div class="row">
         {% for itemId in options %}
           <label class="option{% if itemId == selection[slot] %} optionselected{% endif %}">
             <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
                    {% if itemId == selection[slot] %}checked{% endif %}>
             <img src="/static/unturned/{{itemId}}.png"
-                 alt="{{ slot }} {{ itemId }}">
+                 alt="{{ slot }} #{{ itemId }}">
           </label>
         {% endfor %}
       </div>
