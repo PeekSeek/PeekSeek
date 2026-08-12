@@ -93,6 +93,13 @@ class Match(SQLModel, table=True):
         else:
             self.meta = self.meta | matchSettings
 
+        # Nothing stops the current picker from just never clicking — without a deadline
+        # that stalls the match forever. Only start the clock when there's actually a
+        # pick left to make (matchSettings can arrive fully pre-decided, e.g. a custom
+        # match or these tests' fixtures).
+        if any(self.meta[o] is None for o in ["ballistics", "map", "movement"]):
+            self.meta["pickDeadline"] = time() + mmconfig["pickTimeout"]
+
         creator = "matchmaking"
         if createdBy:
             creator = (
@@ -246,18 +253,56 @@ class Match(SQLModel, table=True):
             if str(current) != steam64:
                 return m
 
-            next_team = 0
-            for i, team in enumerate(self.teams):
-                if current in team["users"]:
-                    next_team = (i + 1) % len(self.teams)
-                    break
-
-            m["currentPick"] = self.teams[next_team]["users"][0]
+            Match._advancePick(m, self.teams)
 
             not_picked = [o for o in ["ballistics", "map", "movement"] if m[o] is None]
             if not_picked:
                 m[not_picked[0]] = pick
+                m["pickDeadline"] = Match._nextPickDeadline(m)
 
+        return m
+
+    @staticmethod
+    def _advancePick(m: dict, teams: list) -> None:
+        """Move `currentPick` to the next team's first player, in place."""
+        current = m.get("currentPick", teams[0]["users"][0])
+        next_team = 0
+        for i, team in enumerate(teams):
+            if current in team["users"]:
+                next_team = (i + 1) % len(teams)
+                break
+        m["currentPick"] = teams[next_team]["users"][0]
+
+    @staticmethod
+    def _nextPickDeadline(m: dict) -> float | None:
+        """A fresh pickTimeout if anything's still undecided, else None — each of
+        ballistics/map/movement gets its own full window rather than sharing the match's
+        original deadline, so a slow first pick doesn't starve the next one."""
+        if any(m[o] is None for o in ["ballistics", "map", "movement"]):
+            return time() + mmconfig["pickTimeout"]
+        return None
+
+    def resolvedMetaIfExpired(self) -> dict | None:
+        """Auto-decide the current ballistics/map/movement pick once its deadline passes,
+        so a player can't stall the match indefinitely by never clicking. Falls back to
+        the gamemode's first configured option — the same "index 0" convention
+        kits/powerups already use when nobody picks. Returns None when there's nothing to
+        resolve, so callers only write to the DB when something actually changed."""
+        deadline = self.meta.get("pickDeadline")
+        if deadline is None or time() < deadline:
+            return None
+
+        not_picked = [o for o in ["ballistics", "map", "movement"] if self.meta[o] is None]
+        if not not_picked:
+            return None
+
+        gm = mmconfig["gamemodes"][self.gamemode]
+        m = self.meta.copy()
+        field = not_picked[0]
+        m[field] = gm[field][0]
+
+        Match._advancePick(m, self.teams)
+        m["pickDeadline"] = Match._nextPickDeadline(m)
         return m
 
     def localJson(self) -> dict:

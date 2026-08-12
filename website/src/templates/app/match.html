@@ -34,47 +34,6 @@
     margin-bottom: 5px;
   }
 
-  #match {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-  }
-
-  #match .teams {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 10px;
-  } #match .teams div {
-    background-color: #0001;
-    border-radius: 15px;
-    border: 3px solid #000;
-    padding: 10px 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  } #match .teams div .name {
-    font-weight: bold;
-    margin-bottom: 5px;
-    font-size: 20px;
-  } #match .teams div img {
-    height: 20px;
-    width: 20px;
-    border-radius: 5px;
-  } #match .teams div .hiddenAvatar {
-    height: 20px;
-    width: 20px;
-    border-radius: 5px;
-    background-color: #222;
-    display: inline-block;
-  } #match .teams div .hidden span {
-    color: #8885;
-  } #match .teams div .hiddenNote {
-    color: #333;
-    font-size: 12px;
-  }
-
   #message {
     display: flex;
     flex-direction: column;
@@ -83,6 +42,13 @@
 
   .botmargin {
     margin-bottom: 10px;
+  }
+
+  .picktimer {
+    font-size: 12.5px;
+    color: #8a8a8a;
+  } .picktimer b {
+    color: var(--commit-red, #ff2d2d);
   }
 
   .choicegrid {
@@ -123,50 +89,66 @@
     --commit-line: #262626;
   }
 
+  /* Real <button>s, not divs, so a kit/powerup pick is keyboard-reachable and reads as
+     an actual control rather than a label. Unselected tiles get a dashed border — an
+     outline nobody mistakes for "already chosen" — while a real pick fills solid, so
+     the two states never look alike even to a glance. */
   .kitbutton, .powerupbutton {
     position: relative;
     padding: 12px 10px;
     min-height: 40px;
+    font: inherit;
+    text-align: center;
     background-color: var(--commit-card);
-    border: 1px solid var(--commit-line) !important;
+    border: 1px dashed var(--commit-line) !important;
     border-radius: 7px;
     font-weight: 700;
     font-size: 13px;
     color: #8a8a8a;
-    transition: border-color 0.15s ease, color 0.15s ease;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
   } .kitbutton:hover, .powerupbutton:hover {
     border-color: #3a3a3a !important;
+  } .kitbutton:focus-visible, .powerupbutton:focus-visible {
+    outline: 2px solid var(--commit-red);
+    outline-offset: 2px;
   } .kitbutton.selectedChoice, .powerupbutton.selectedChoice {
-    background-color: var(--commit-card);
-    border-color: var(--commit-red) !important;
+    background-color: var(--commit-red-dim);
+    border: 1px solid var(--commit-red) !important;
     color: #f5f5f5;
   } .kitbutton.selectedChoice::before, .powerupbutton.selectedChoice::before {
     content: none;
   }
 
-  /* Absolutely positioned rather than the concept's inline-after-text placement — the
-     powerup tiles stack a name and several item rows (.qgridoption's column layout), so a
-     corner badge reads cleanly on both tile shapes where an inline icon would only work
-     on the single-line kit tiles. */
-  .checkmark {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
-    color: var(--commit-red);
-    opacity: 0;
-    transform: scale(0.5);
-    transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.3, 0.8, 0.3, 1.4);
-  } .selectedChoice .checkmark {
-    opacity: 1;
-    transform: scale(1);
+  /* CIW: the ask itself is the affordance — no separate label competing for
+     attention, and the reason to act now (a faster match) sits right under it. */
+  .pickPrompt {
+    font-size: 12px;
+    color: #8a8a8a;
+    margin: -6px 0 10px;
   }
 
-  /* ---- Commit list: who's picked, opponents collapsed until locked ------ */
+  /* ---- Match settings: bullet drop / movement, shown once decided ------- */
+  .settingpills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  } .settingpill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background-color: var(--commit-card);
+    font-size: 12.5px;
+    color: #8a8a8a;
+  } .settingpill b {
+    color: #f5f5f5;
+  } .settingpill.undecided {
+    color: #555;
+  }
+
+  /* ---- Commit list: who's picked, opponents collapsed until everyone has -- */
   .timerow {
     display: flex;
     align-items: center;
@@ -199,7 +181,7 @@
   } #commitlist .row .status {
     font-size: 12px;
     color: #8a8a8a;
-  } #commitlist .row .status.locked {
+  } #commitlist .row .status.picked {
     color: var(--commit-red);
     font-weight: 700;
   } #commitlist .row .status.picking::after {
@@ -285,6 +267,7 @@
   <a id="turn" class="userProfile uprof">Loading...</a>
   
   <span id="type">Loading...</span>
+  <span id="picktimer" class="picktimer" style="display:none;"></span>
 
   <div style="display: flex;flex-direction: row;gap:15px;">
     <button class="mbutton" id="b1" onclick="decide('0')">
@@ -310,13 +293,13 @@
   <div id = "kits">
     {% if len(dataAsDict["config"]["kitsAllowed"]) > 1 %}
     <h1 class="botmargin">Kit</h1>
+    <p class="pickPrompt">Pick one — the match starts the moment everyone has.</p>
 
     <div class="choicegrid">
       {% for kit in dataAsDict["config"]["kitsAllowed"] %}
-      <div class="kitbutton choiceButton qgridoption" data-kit="{{kit}}" onclick="setKit('{{kit}}')">
+      <button type="button" class="kitbutton choiceButton qgridoption" data-kit="{{kit}}" onclick="setKit('{{kit}}')">
         {{kit.upper()}}
-        <svg class="checkmark" viewBox="0 0 16 16"><path d="M3 8.5L6.5 12L13 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
+      </button>
       {% endfor %}
     </div>
 
@@ -325,16 +308,16 @@
 
     {% if len(dataAsDict["config"]["powerups"]) > 1 %}
     <h1 class="botmargin">Powerup</h1>
+    <p class="pickPrompt">Pick one — the match starts the moment everyone has.</p>
 
     <div class="choicegrid">
       {% for powerup in dataAsDict["config"]["powerups"] %}
-        <div class="powerupbutton choiceButton qgridoption" data-powerup="{{powerup["name"]}}" onclick="setPowerup('{{powerup["name"]}}')">
+        <button type="button" class="powerupbutton choiceButton qgridoption" data-powerup="{{powerup["name"]}}" onclick="setPowerup('{{powerup["name"]}}')">
           <b>{{powerup["name"]}}</b>
           {% for item in powerup["items"] %}
-            <span>{{item[1]}}x <img src="/static/unturned/{{item[0]}}.png" height="16px"></span>
+            <span>{{item[1]}}x <img src="/static/unturned/{{item[0]}}.png" height="16px" alt=""></span>
           {% endfor %}
-          <svg class="checkmark" viewBox="0 0 16 16"><path d="M3 8.5L6.5 12L13 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
+        </button>
       {% endfor %}
     </div>
 
@@ -349,7 +332,7 @@
     <span class="caption" id="connectcaption"></span>
   </div>
 
-  <div id="match"></div>
+  <div class="settingpills" id="matchsettings"></div>
 
   <span style="color:#333">Matchid: {{ dataAsDict["id"] }}</span>
 </div>
