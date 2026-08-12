@@ -28,6 +28,47 @@ def test_two_queued_players_get_matched(user_factory):
         assert s.query(data.UserHB).count() == 0, "players must leave the queue"
 
 
+def test_party_members_land_on_the_same_team(user_factory):
+    """Casual Duo is 2 teams of 2 — a partied pair queueing under the same partyId
+    must end up on one team together, never split across both."""
+    DUO_GAMEMODE = 3
+    DUO_BIT = 2**DUO_GAMEMODE
+    partyA = [user_factory(), user_factory()]
+    partyB = [user_factory(), user_factory()]
+
+    for player in partyA:
+        data.User.addToQueue(player.steam64, DUO_BIT, partyId=101, region="paris")
+    for player in partyB:
+        data.User.addToQueue(player.steam64, DUO_BIT, partyId=202, region="paris")
+
+    assert matchmaking.attemptCreateMatch(partyA[0].steam64, "paris") is True
+
+    with Session(core_db.engine) as s:
+        match = s.query(data.Match).first()
+        assert match.gamemode == DUO_GAMEMODE
+        teamA = next(t for t in match.teams if str(partyA[0].steam64) in t["users"])
+        assert str(partyA[1].steam64) in teamA["users"]
+        assert str(partyB[0].steam64) not in teamA["users"]
+
+
+def test_oversized_party_never_matches(user_factory):
+    """A 3-person party can't fit Casual Duo's 2-per-team cap — it must simply wait
+    forever rather than ever being split across teams to make it fit."""
+    DUO_BIT = 2**3
+    trio = [user_factory(), user_factory(), user_factory()]
+    for player in trio:
+        data.User.addToQueue(player.steam64, DUO_BIT, partyId=101, region="paris")
+    # Enough solo players queued alongside to fill both teams if the trio were
+    # (wrongly) allowed to split.
+    solo = [user_factory() for _ in range(2)]
+    for player in solo:
+        data.User.addToQueue(player.steam64, DUO_BIT, region="paris")
+
+    assert matchmaking.attemptCreateMatch(trio[0].steam64, "paris") is False
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).count() == 0
+
+
 def test_lone_player_is_not_matched(user_factory):
     player = user_factory()
     data.User.addToQueue(player.steam64, GAMEMODE_BIT, region="paris")
@@ -118,6 +159,142 @@ def test_elo_never_drops_below_floor(user_factory):
     with Session(core_db.engine) as s:
         stat = s.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first()
         assert stat.elo >= 100
+
+
+def test_match_without_matchsettings_gets_a_pick_deadline(user_factory):
+    """Matchmaking never passes matchSettings, so ballistics/movement start undecided —
+    that's exactly when a deadline is needed, or a silent player could stall forever."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+        )
+        db.add(match)
+
+    with Session(core_db.engine) as s:
+        loaded = s.query(data.Match).first()
+        assert loaded.meta["pickDeadline"] is not None
+        assert loaded.meta["pickDeadline"] <= time() + settings.mmconfig["pickTimeout"]
+
+
+def test_match_with_full_matchsettings_gets_no_pick_deadline(user_factory):
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+            matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
+        )
+        db.add(match)
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).first().meta.get("pickDeadline") is None
+
+
+def test_expired_pick_is_not_resolved_before_its_deadline(user_factory):
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+        )
+        db.add(match)
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).first().resolvedMetaIfExpired() is None
+
+
+def test_expired_pick_auto_resolves_to_the_gamemode_default_and_advances_turn(
+    user_factory,
+):
+    """A player who never clicks Yes/No must not be able to hang the whole match —
+    once the deadline passes, the pick resolves itself to the gamemode's first
+    configured option (the same fallback kits/powerups already use) and turn passes
+    on, exactly as if the stalling player had picked."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+        db.query(data.Match).where(data.Match.id == matchId).update(
+            {"meta": match.meta | {"pickDeadline": time() - 1}}
+        )
+
+    with Session(core_db.engine) as s:
+        loaded = s.query(data.Match).where(data.Match.id == matchId).first()
+        resolved = loaded.resolvedMetaIfExpired()
+        assert resolved is not None
+        assert resolved["ballistics"] == RANKED["ballistics"][0]
+        assert resolved["movement"] is None  # only the first outstanding field resolves
+        assert resolved["currentPick"] == str(second.steam64)
+        # movement is still outstanding, so the next field gets its own full window
+        assert resolved["pickDeadline"] > time()
+
+
+def test_expired_pick_clears_the_deadline_once_everything_is_decided(user_factory):
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+        db.query(data.Match).where(data.Match.id == matchId).update(
+            {
+                "meta": match.meta
+                | {"pickDeadline": time() - 1, "ballistics": True}
+            }
+        )
+
+    with Session(core_db.engine) as s:
+        loaded = s.query(data.Match).where(data.Match.id == matchId).first()
+        resolved = loaded.resolvedMetaIfExpired()
+        assert resolved["movement"] == RANKED["movement"][0]
+        assert resolved["pickDeadline"] is None
+
+
+def test_a_real_pick_resets_the_deadline_for_the_next_field(user_factory):
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+
+    with Session(core_db.engine) as s:
+        loaded = s.query(data.Match).where(data.Match.id == matchId).first()
+        result = loaded.getReturnedMeta(first.steam64, pick="1")
+        assert result["ballistics"] is True
+        assert result["movement"] is None
+        assert result["pickDeadline"] > time()  # a fresh window for movement
 
 
 def test_match_cannot_be_claimed_early_with_picks_outstanding(user_factory):
@@ -274,3 +451,53 @@ def test_unclaimed_match_cancelled_after_timeout(user_factory):
 
     with Session(core_db.engine) as s:
         assert s.query(data.Match).first().finished is True
+
+
+def test_claimed_match_released_when_its_server_polls_idle(user_factory):
+    """A server whose lobby timed out with too few players locally abandons the
+    match and goes back to polling matchid=0 — even if its one-shot /unt/results
+    report never landed, that next idle poll must still close the match out, or
+    every player in it stays stuck unable to queue again."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+            )
+        )
+    with Session(core_db.engine) as s:
+        s.query(data.Match).update({"claimed": "90071992547409931"})
+        s.commit()
+
+    data.Match.releaseAbandoned("90071992547409931")
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).first().finished is True
+
+
+def test_release_abandoned_ignores_the_shared_legacy_code(user_factory):
+    """code="0" is shared by every server too old to send a real one — releasing on
+    it could close a match a completely different old server is still playing."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+            )
+        )
+    with Session(core_db.engine) as s:
+        s.query(data.Match).update({"claimed": "0"})
+        s.commit()
+
+    data.Match.releaseAbandoned("0")
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).first().finished is False

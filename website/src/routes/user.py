@@ -28,14 +28,15 @@ def match(request: Request, steam64: LoggedInSteam64):
 
         current = db.query(data.Match).where(data.Match.id == current_id).first()
         localJson = current.localJson()
-        gm = mmconfig["gamemodes"][current.gamemode]
         userData = current.meta["userData"][str(steam64)]
 
-        localJson["currentkit"] = userData["kit"] or gm["kitsAllowed"][0]
-        powerups = gm["powerups"]
-        localJson["currentpowerup"] = userData["powerup"] or (
-            powerups[0]["name"] if powerups else None
-        )
+        # Left as the player's real (possibly still-unmade) choice rather than
+        # defaulting to the first option — the match still falls back to
+        # kitsAllowed[0]/powerups[0] server-side (Kit.getItems, Match.allKitsLocked)
+        # if they never pick, but the tile UI should never claim a choice was made
+        # when it wasn't.
+        localJson["currentkit"] = userData["kit"]
+        localJson["currentpowerup"] = userData["powerup"]
 
         return templates.TemplateResponse(
             request=request,
@@ -58,6 +59,17 @@ def match_current(steam64: ApiSteam64, id: int | None = None):
     with opendb() as db:
         current = db.query(data.Match).where(data.Match.id == current_id).first()
         data.Match.cancelStaleUnclaimed()
+
+        # This poll is also what auto-resolves a stalled ballistics/map/movement pick —
+        # there's no separate background job, so the deadline is only ever enforced when
+        # someone's screen is actually asking for the current state.
+        resolved = current.resolvedMetaIfExpired()
+        if resolved is not None:
+            db.query(data.Match).where(data.Match.id == current_id).update(
+                {"meta": resolved}
+            )
+            current.meta = resolved
+
         return current.localJson()
 
 
@@ -169,6 +181,23 @@ def custom_match(request: Request, steam64: LoggedInSteam64):
     )
 
 
+def _eloHistory(matches: list, steam64Str: str) -> list[dict]:
+    """Elo right after each ranked match, oldest first — `matches` is already the
+    same latestFor() list the match list renders, newest first, so this just walks
+    it backwards rather than running a second query for the graph."""
+    history = []
+    for m in reversed(matches):
+        r = m.data.get("results", {}).get(steam64Str, {})
+        if "Current Elo" in r and "Elo Change" in r:
+            history.append(
+                {
+                    "date": m.endTime.strftime("%d/%m"),
+                    "elo": r["Current Elo"] + r["Elo Change"],
+                }
+            )
+    return history
+
+
 @router.get("/kit/{steam64}")
 def public_kit_data(steam64: int):
     """Every saved kit for a player, fully resolved into ready-to-equip item lists
@@ -181,6 +210,7 @@ def public_kit_data(steam64: int):
 @router.get("/u/{steam64}")
 def profile(request: Request, steam64: int):
     with opendb() as db:
+        matches = data.MatchResult.latestFor(steam64)
         return templates.TemplateResponse(
             request=request,
             name="pages/profile.html",
@@ -192,7 +222,8 @@ def profile(request: Request, steam64: int):
                 .where(data.Stat.steam64 == steam64)
                 .all(),
                 "kitData": db.query(data.Kit).where(data.Kit.steam64 == steam64).all(),
-                "matches": data.MatchResult.latestFor(steam64),
+                "matches": matches,
+                "eloHistory": _eloHistory(matches, str(steam64)),
                 "steam64Str": str(steam64),
                 "steamData": data.User.getSteamData(steam64),
                 "max": max,

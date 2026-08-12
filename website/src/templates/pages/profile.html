@@ -48,6 +48,19 @@
       {% endfor %}
     {% endif %}
 
+    <h2>Performance</h2>
+    {% if eloHistory|length < 2 %}
+      <span>Not enough ranked matches yet to show a trend.</span>
+    {% else %}
+      <div class="formstrip">
+        {% for match in matches[:10] | reverse %}
+          {% set r = match.data.get("results", {}).get(steam64Str, {}) %}
+          <span class="formpill {{ 'win' if r.get('Won') else 'loss' }}" title="{{ match.data.get('map') or 'Unknown map' }}">{{ 'W' if r.get('Won') else 'L' }}</span>
+        {% endfor %}
+      </div>
+      <div class="eloChartWrap"><canvas id="eloChart" height="90"></canvas></div>
+    {% endif %}
+
     <h2>Recent Matches</h2>
     {% if not matches %}
       <span>No matches played yet.</span>
@@ -119,7 +132,43 @@
     });
   }
   {% endif %}
+
+  {% if eloHistory|length >= 2 %}
+  let eloHistory = {{ eloHistory | tojson | safe }};
+  {% endif %}
 </script>
+
+{% if eloHistory|length >= 2 %}
+{# Chart.js — an out-of-the-box, no-maintenance line chart. Same CDN-script pattern
+   layout.html already uses for AdSense/gtag, so this isn't a new site convention. #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4" crossorigin="anonymous"></script>
+<script>
+  new Chart(document.getElementById("eloChart"), {
+    type: "line",
+    data: {
+      labels: eloHistory.map(p => p.date),
+      datasets: [{
+        data: eloHistory.map(p => p.elo),
+        borderColor: "#ff4444",
+        backgroundColor: "rgba(255,68,68,0.08)",
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+        pointBackgroundColor: "#ff4444",
+        pointBorderColor: "#ff4444",
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: "#1a1a1a" }, ticks: { color: "#8a8a8a", font: { size: 11 } } },
+        y: { grid: { color: "#1a1a1a" }, ticks: { color: "#8a8a8a", font: { size: 11 } } },
+      },
+    },
+  });
+</script>
+{% endif %}
 
 {% endblock %}
 
@@ -148,9 +197,7 @@
     color: #fff9;
   }
 
-  .currentProfile {
-    font-size: 50px;
-  } .currentProfile img {
+  .currentProfile img {
     width: 100px;
     height: 100px;
     margin-right: 20px;
@@ -158,7 +205,6 @@
     max-width: none;
     display: flex;
     align-items: flex-start;
-  } .currentProfile span span {
     font-size: 20px;
     margin-top: 15px;
   }
@@ -197,6 +243,36 @@
   } .statcard .value {
     font-size: 18px;
     font-weight: 800;
+  }
+
+  /* ---- Performance: recent form + Elo trend, faceit-style ---- */
+  .formstrip {
+    display: flex;
+    gap: 4px;
+    margin: 5px 0 10px;
+  } .formpill {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: #fff;
+  } .formpill.win {
+    background-color: #2e7d3a;
+  } .formpill.loss {
+    background-color: #333;
+    color: #aaa;
+  }
+
+  .eloChartWrap {
+    background-color: #121212;
+    border-radius: 6px;
+    padding: 14px;
+    height: 160px;
+    margin: 5px 0;
   }
 
   .matchlist {

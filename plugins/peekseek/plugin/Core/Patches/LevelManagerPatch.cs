@@ -160,6 +160,7 @@ internal class LevelManagerArenaSpawnPatch {
         Dictionary<CSteamID, HomelessSpawn> assignedGroupSpawns = [];
 
         StatService.BeginRound();
+        Logger.Log("[alive-check] Round starting — everyone marked alive again.");
 
         var roundNumber = StatService.GetTotalPlayedRounds() + 1;
         var teamIndex = 0;

@@ -120,6 +120,10 @@ function queue() {
     if (el.classList.contains("isQueing")) {
         stopQueue();
     } else {
+        if (window.partyBlocksQueue) {
+            setError("Only your party leader can start the queue.");
+            return;
+        }
         t = Date.now();
         if (selected === 0 && game.value === "matchmaking") {
             setError("Please select gamemode(s) before queue'ing.");

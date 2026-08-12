@@ -34,6 +34,12 @@ internal abstract class PSManager {
     private const float VisibilityIntervalSeconds = 0.15f;
     private static float LastVisibilityCheck;
 
+    /// Separate from UpdateIntervalSeconds: this is a console log for debugging alive/dead
+    /// state solo, not the payload sent to the overlay, so it can run on its own slower
+    /// cadence without touching what the overlay actually receives.
+    private const float DebugStateLogIntervalSeconds = 10f;
+    private static float LastDebugStateLogged;
+
     private static PSUpdateEvent LatestEvent;
     private static int EventsRecorded;
 
@@ -66,6 +72,8 @@ internal abstract class PSManager {
         DamageTool.damagePlayerRequested += OnDamageRequested;
         UseableGun.onBulletSpawned += OnBulletSpawned;
         RemoteAPI.Init();
+
+        ConfigurationManager.DisablePassiveHealthRegen();
     }
 
     private static void OnDamageRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
@@ -630,6 +638,7 @@ internal abstract class PSManager {
 
         StatService.UpdateStatDeaths(player.CSteamID);
         StatService.MarkDeadThisRound(player.CSteamID);
+        Logger.Log($"[alive-check] {player.CharacterName} ({player.CSteamID}) died (cause={cause}, limb={limb}) — marked dead this round.");
 
         UnturnedPlayer unturnedInstigator = null;
         if (murderer != CSteamID.Nil && murderer != SteamGameServer.GetSteamID()) {
@@ -703,6 +712,10 @@ internal abstract class PSManager {
     private static void OnPlayerRevive(UnturnedPlayer player, Vector3 position, byte angle) {
         if (IsSpectator(Player.LocalPlayer)) return;
 
+        // Respawning does not clear StatService's dead-this-round flag — see LiveState's
+        // RoundState comment — so the overlay keeps reporting them dead until the next round.
+        Logger.Log($"[alive-check] {player.CharacterName} ({player.CSteamID}) respawned into the lobby — still reported dead until the next round starts.");
+
         AssignPlayerKit(player.Player, Data.Users.First(
                 x => x.UserID == player.CSteamID.m_SteamID
             ).Kit
@@ -711,8 +724,21 @@ internal abstract class PSManager {
         player.Heal(255);
     }
 
+    /// Safety net: if a death is ever resolved without UnturnedPlayerEvents.OnPlayerDeath
+    /// firing, this force-respawns so nobody sits on a death screen — but OnPlayerDead is
+    /// also the only place that told StatService someone died. A death only this path
+    /// catches would otherwise never be marked, and the overlay would keep reporting that
+    /// player as alive for the rest of the round even though they just respawned.
     private static void OnLifeUpdated(Player player) {
-        if (player.life.isDead) player.life.ServerRespawn(false);
+        if (!player.life.isDead) return;
+
+        CSteamID steamID = player.channel.owner.playerID.steamID;
+        if (StatService.IsAliveThisRound(steamID)) {
+            Logger.LogWarning($"[alive-check] {player.channel.owner.playerID.characterName} ({steamID}) was dead without OnPlayerDead firing — marking dead now so the overlay does not show them as alive.");
+            StatService.MarkDeadThisRound(steamID);
+        }
+
+        player.life.ServerRespawn(false);
     }
 
     /// Pushes a snapshot on a timer as well as on events, so health, held weapon and
@@ -728,9 +754,36 @@ internal abstract class PSManager {
             VisibilityTracker.Tick(Data.Teams);
         }
 
+        if (Time.realtimeSinceStartup - LastDebugStateLogged >= DebugStateLogIntervalSeconds) {
+            LastDebugStateLogged = Time.realtimeSinceStartup;
+            LogPlayerStates();
+        }
+
         if (Time.realtimeSinceStartup - LastUpdateSent < UpdateIntervalSeconds) return;
 
         SendUpdateState();
+    }
+
+    /// Prints exactly what LiveState.RoundState would tell the overlay for every roster
+    /// player, on its own 10s cadence, so alive/dead can be watched from the server console
+    /// alone — no browser, no OBS, no waiting for the next kill/round event to see a change.
+    private static void LogPlayerStates() {
+        foreach (PSTeam team in Data.Teams) {
+            foreach (ulong user in team.Users) {
+                CSteamID steamID = new(user);
+                Player player = PlayerTool.getPlayer(steamID);
+
+                if (player == null) {
+                    Logger.Log($"[alive-check] {steamID} => offline");
+                    continue;
+                }
+
+                string state = LiveState.RoundState(steamID, player);
+                string name = player.channel.owner.playerID.characterName;
+                Logger.Log($"[alive-check] {name} ({steamID}) => {state} "
+                    + $"(deadThisRound={!StatService.IsAliveThisRound(steamID)}, isDead={player.life.isDead}, isSafe={player.movement.isSafe})");
+            }
+        }
     }
 
     /// Appends to the rolling kill feed, keeping only what the overlay draws. The killer

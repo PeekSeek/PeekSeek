@@ -47,6 +47,27 @@ def test_unturned_endpoints_accept_a_bootstrapped_ip(client):
     assert r.status_code == 200
 
 
+def test_ban_rejects_a_non_numeric_steam64(client):
+    """steam64 must be typed int like everywhere else in the codebase — a bare str
+    let a garbage value reach the UserBans table instead of failing cleanly."""
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+    r = client.post("/unt/ban", params={"steam64": "not-a-number"})
+    assert r.status_code == 422
+
+
+def test_malformed_json_body_400s_instead_of_crashing(client):
+    """The JSON body is parsed in a dependency, ahead of any route's own
+    try/except — a decode error there must not fall through as a bare 500."""
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+    r = client.post(
+        "/unt/kills",
+        params={"matchid": 1},
+        content=b"not json",
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 400
+
+
 def test_eventwait_claims_a_match_with_the_server_code(client, user_factory):
     """`claimed` has to hold what a player can connect with, not the server's IP."""
     data.AuthorizedServer.bootstrap({"testclient": "paris"})
@@ -165,6 +186,40 @@ def test_match_current_404_without_match(client, user_factory):
     r = client.get("/match/current", params={"uuid": user.uuid})
     assert r.status_code == 404
     assert r.json()["error"] == "No match found."
+
+
+def test_match_current_poll_auto_resolves_an_expired_pick(client, user_factory):
+    """Nobody has to be watching for this to fire — the very next poll from either
+    player's own screen is what notices the deadline passed and moves the match on."""
+    from time import time
+    from sqlmodel import Session
+    from src.core import db as core_db
+
+    first, second = user_factory(), user_factory()
+    with opendb() as db:
+        match = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+        db.query(data.Match).where(data.Match.id == matchId).update(
+            {"meta": match.meta | {"pickDeadline": time() - 1}}
+        )
+
+    r = client.get("/match/current", params={"uuid": first.uuid})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["params"]["ballistics"] is not None
+    assert body["currentPick"] == str(second.steam64)
+
+    with Session(core_db.engine) as s:
+        stored = s.query(data.Match).where(data.Match.id == matchId).first()
+        assert stored.meta["ballistics"] is not None
 
 
 def test_public_kit_data_requires_no_auth(client, user_factory):

@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from src.core.settings import settings
 from src.dependencies import ActiveBan, LoginRedirect, load_user, templates
-from src.routes import admin, auth, esports, index, kits, pages, unturned, user
+from src.routes import admin, auth, esports, index, kits, pages, party, unturned, user
 
 app = FastAPI(title="PeekSeek", dependencies=[Depends(load_user)])
 app.add_middleware(
@@ -22,7 +22,7 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=settings.public), name="static")
 
-for module in (index, pages, auth, user, kits, admin, esports, unturned):
+for module in (index, pages, auth, user, kits, admin, esports, unturned, party):
     app.include_router(module.router)
 
 

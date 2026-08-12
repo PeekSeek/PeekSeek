@@ -34,47 +34,6 @@
     margin-bottom: 5px;
   }
 
-  #match {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-  }
-
-  #match .teams {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 10px;
-  } #match .teams div {
-    background-color: #0001;
-    border-radius: 15px;
-    border: 3px solid #000;
-    padding: 10px 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  } #match .teams div .name {
-    font-weight: bold;
-    margin-bottom: 5px;
-    font-size: 20px;
-  } #match .teams div img {
-    height: 20px;
-    width: 20px;
-    border-radius: 5px;
-  } #match .teams div .hiddenAvatar {
-    height: 20px;
-    width: 20px;
-    border-radius: 5px;
-    background-color: #222;
-    display: inline-block;
-  } #match .teams div .hidden span {
-    color: #8885;
-  } #match .teams div .hiddenNote {
-    color: #333;
-    font-size: 12px;
-  }
-
   #message {
     display: flex;
     flex-direction: column;
@@ -83,6 +42,13 @@
 
   .botmargin {
     margin-bottom: 10px;
+  }
+
+  .picktimer {
+    font-size: 12.5px;
+    color: #8a8a8a;
+  } .picktimer b {
+    color: var(--commit-red, #ff2d2d);
   }
 
   .choicegrid {
@@ -112,54 +78,111 @@
     font-weight: 200;
   }
 
-  .kitbutton {
-    padding: 3px 5px;
-    min-height: 40px;
-    font-weight: 600;
-    font-size: 14px;
+  /* ---- Kit/powerup tiles: ported from the "commit list" concept ---------
+     Scoped to .kitbutton/.powerupbutton rather than changing .qgridoption or
+     .selectedChoice globally, since those are shared with the outfit selector
+     and other pickers elsewhere on the site. */
+  :root {
+    --commit-red: #ff2d2d;
+    --commit-red-dim: rgba(255, 45, 45, 0.16);
+    --commit-card: #161616;
+    --commit-line: #262626;
   }
 
-  /* A quiet checkmark badge replaces the "Selected" label on kit/powerup tiles
-     specifically — scoped here rather than changing .selectedChoice globally, since
-     that class is shared with the outfit selector and other pickers elsewhere. */
+  /* Real <button>s, not divs, so a kit/powerup pick is keyboard-reachable and reads as
+     an actual control rather than a label. Unselected tiles get a dashed border — an
+     outline nobody mistakes for "already chosen" — while a real pick fills solid, so
+     the two states never look alike even to a glance. */
   .kitbutton, .powerupbutton {
     position: relative;
+    padding: 12px 10px;
+    min-height: 40px;
+    font: inherit;
+    text-align: center;
+    background-color: var(--commit-card);
+    border: 1px dashed var(--commit-line) !important;
+    border-radius: 7px;
+    font-weight: 700;
+    font-size: 13px;
+    color: #8a8a8a;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  } .kitbutton:hover, .powerupbutton:hover {
+    border-color: #3a3a3a !important;
+  } .kitbutton:focus-visible, .powerupbutton:focus-visible {
+    outline: 2px solid var(--commit-red);
+    outline-offset: 2px;
+  } .kitbutton.selectedChoice, .powerupbutton.selectedChoice {
+    background-color: var(--commit-red-dim);
+    border: 1px solid var(--commit-red) !important;
+    color: #f5f5f5;
   } .kitbutton.selectedChoice::before, .powerupbutton.selectedChoice::before {
     content: none;
-  } .kitbutton.selectedChoice, .powerupbutton.selectedChoice {
-    border-color: #aae0ff;
-  } .kitbutton.selectedChoice::after, .powerupbutton.selectedChoice::after {
-    content: "\2713";
-    position: absolute;
-    top: 4px;
-    right: 7px;
-    color: #aae0ff;
-    font-size: 12px;
-    font-weight: 700;
   }
 
-  /* ---- Commit list: who's picked, opponents collapsed until locked ------ */
+  /* CIW: the ask itself is the affordance — no separate label competing for
+     attention, and the reason to act now (a faster match) sits right under it. */
+  .pickPrompt {
+    font-size: 12px;
+    color: #8a8a8a;
+    margin: -6px 0 10px;
+  }
+
+  /* ---- Match settings: bullet drop / movement, shown once decided ------- */
+  .settingpills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  } .settingpill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background-color: var(--commit-card);
+    font-size: 12.5px;
+    color: #8a8a8a;
+  } .settingpill b {
+    color: #f5f5f5;
+  } .settingpill.undecided {
+    color: #555;
+  }
+
+  /* ---- Commit list: who's picked, opponents collapsed until everyone has -- */
+  .timerow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: #8a8a8a;
+    width: 100%;
+    max-width: 360px;
+  } .timerow b {
+    color: #f5f5f5;
+  }
+
   #commitlist {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 2px;
     width: 100%;
     max-width: 360px;
   } #commitlist .row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
-    background-color: #121212;
-    border-radius: 8px;
+    padding: 9px 4px;
+    border-bottom: 1px solid var(--commit-line);
     font-size: 13px;
   } #commitlist .row .name {
     font-weight: 600;
+    color: #f5f5f5;
   } #commitlist .row .status {
     font-size: 12px;
     color: #8a8a8a;
-  } #commitlist .row .status.locked {
-    color: #aae0ff;
+  } #commitlist .row .status.picked {
+    color: var(--commit-red);
     font-weight: 700;
   } #commitlist .row .status.picking::after {
     content: "";
@@ -180,25 +203,58 @@
   }
 
   #commitlist .opponents {
-    background-color: #121212;
-    border-radius: 8px;
+    background-color: var(--commit-card);
+    border-radius: 7px;
     overflow: hidden;
-    max-height: 41px;
+    max-height: 44px;
     transition: max-height 0.45s cubic-bezier(0.3, 0.8, 0.3, 1);
   } #commitlist .opponents.expanded {
     max-height: 300px;
   } #commitlist .opponents .head {
-    padding: 8px 12px;
-    font-size: 12px;
+    padding: 11px 12px;
+    font-size: 12.5px;
     color: #8a8a8a;
     display: flex;
     justify-content: space-between;
   } #commitlist .opponents .head b {
-    color: #fff;
+    color: #f5f5f5;
   } #commitlist .opponents .row {
     background: transparent;
     border-radius: 0;
-    padding: 6px 12px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--commit-line);
+  }
+
+  /* ---- Progress line: shown once everyone's locked, before a server claims it -- */
+  #connectprogress {
+    width: 100%;
+    max-width: 360px;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+  } #connectprogress .progressline {
+    height: 4px;
+    background-color: var(--commit-card);
+    border-radius: 2px;
+    overflow: hidden;
+  } #connectprogress .progressline i {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background-color: var(--commit-red);
+    transform-origin: left;
+    animation: connectPulse 1.4s ease-in-out infinite;
+  } #connectprogress .caption {
+    font-size: 12.5px;
+    color: #8a8a8a;
+    text-align: center;
+  } #connectprogress .caption b {
+    color: #f5f5f5;
+  }
+
+  @keyframes connectPulse {
+    0%, 100% { transform: scaleX(0.15); }
+    50% { transform: scaleX(1); }
   }
 </style>
 {% endblock %}
@@ -211,6 +267,7 @@
   <a id="turn" class="userProfile uprof">Loading...</a>
   
   <span id="type">Loading...</span>
+  <span id="picktimer" class="picktimer" style="display:none;"></span>
 
   <div style="display: flex;flex-direction: row;gap:15px;">
     <button class="mbutton" id="b1" onclick="decide('0')">
@@ -236,12 +293,13 @@
   <div id = "kits">
     {% if len(dataAsDict["config"]["kitsAllowed"]) > 1 %}
     <h1 class="botmargin">Kit</h1>
+    <p class="pickPrompt">Pick one — the match starts the moment everyone has.</p>
 
     <div class="choicegrid">
       {% for kit in dataAsDict["config"]["kitsAllowed"] %}
-      <div class="kitbutton choiceButton qgridoption" data-kit="{{kit}}" onclick="setKit('{{kit}}')">
+      <button type="button" class="kitbutton choiceButton qgridoption" data-kit="{{kit}}" onclick="setKit('{{kit}}')">
         {{kit.upper()}}
-      </div>
+      </button>
       {% endfor %}
     </div>
 
@@ -250,24 +308,31 @@
 
     {% if len(dataAsDict["config"]["powerups"]) > 1 %}
     <h1 class="botmargin">Powerup</h1>
+    <p class="pickPrompt">Pick one — the match starts the moment everyone has.</p>
 
     <div class="choicegrid">
       {% for powerup in dataAsDict["config"]["powerups"] %}
-        <div class="powerupbutton choiceButton qgridoption" data-powerup="{{powerup["name"]}}" onclick="setPowerup('{{powerup["name"]}}')">
+        <button type="button" class="powerupbutton choiceButton qgridoption" data-powerup="{{powerup["name"]}}" onclick="setPowerup('{{powerup["name"]}}')">
           <b>{{powerup["name"]}}</b>
           {% for item in powerup["items"] %}
-            <span>{{item[1]}}x <img src="/static/unturned/{{item[0]}}.png" height="16px"></span>
+            <span>{{item[1]}}x <img src="/static/unturned/{{item[0]}}.png" height="16px" alt=""></span>
           {% endfor %}
-        </div>
+        </button>
       {% endfor %}
     </div>
 
     {% endif %}
   </div>
 
+  <div class="timerow" id="commitcount"></div>
   <div id="commitlist"></div>
 
-  <div id="match"></div>
+  <div id="connectprogress">
+    <div class="progressline"><i></i></div>
+    <span class="caption" id="connectcaption"></span>
+  </div>
+
+  <div class="settingpills" id="matchsettings"></div>
 
   <span style="color:#333">Matchid: {{ dataAsDict["id"] }}</span>
 </div>

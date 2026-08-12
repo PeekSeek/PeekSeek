@@ -21,6 +21,22 @@ class Party(SQLModel, table=True):
     user: User = Relationship(back_populates="parties")
     heartbeats: UserHB = Relationship(back_populates="party")
 
+    @staticmethod
+    def find(db, steam64) -> "Party | None":
+        """The party this player currently belongs to, if any. Scans every party
+        rather than indexing membership — the same "small table, filter in Python"
+        approach User.getCurrentMatchId already takes over Matches."""
+        steam64 = str(steam64)
+        for party in db.query(Party).all():
+            if steam64 in party.data.get("members", []):
+                return party
+        return None
+
+    @staticmethod
+    def pendingInvites(db, steam64) -> list["Party"]:
+        steam64 = str(steam64)
+        return [p for p in db.query(Party).all() if steam64 in p.data.get("invites", [])]
+
 
 class UserHB(SQLModel, table=True):
     """A queue heartbeat — one row per player currently waiting for a match."""

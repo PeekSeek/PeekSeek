@@ -21,8 +21,10 @@ function getTeam(s64) {
 }
 
 /// A gamemode with only one kit or one powerup has nothing to pick, so a player is never
-/// "still picking" on that axis — mirrors Match.allKitsLocked() on the backend.
-function isLocked(s64) {
+/// "still picking" on that axis — mirrors Match.allKitsLocked() on the backend. Picking
+/// doesn't stop anyone from changing their mind afterwards (see setKit/setPowerup) — this
+/// only tracks whether a real choice has been made yet, not whether it's final.
+function hasPicked(s64) {
     const config = data.config;
     const userData = (data.params.userData || {})[s64] || {};
     const needsKit = (config.kitsAllowed || []).length > 1;
@@ -30,34 +32,64 @@ function isLocked(s64) {
     return (!needsKit || userData.kit) && (!needsPowerup || userData.powerup);
 }
 
-function commitRow(name, locked) {
+function commitRow(name, picked) {
     return `<div class="row"><span class="name">${name}</span>` +
-        `<span class="status ${locked ? "locked" : "picking"}">${locked ? "locked" : "picking…"}</span></div>`;
+        `<span class="status ${picked ? "picked" : "picking"}">${picked ? "picked" : "picking…"}</span></div>`;
 }
 
-/// Your own team by name always; opponents collapse to a locked-count summary until
-/// `picksLocked`, then expand to the same per-player rows — same reveal moment the
-/// team panels below use, just presented as a quiet list instead of a roster grid.
-function commitListHtml(picksLocked, myTeamName) {
+function allSteam64s() {
+    return data.teams.flatMap(t => t.users);
+}
+
+/// Your own team by name always; opponents collapse to a picked-count summary until
+/// `picksDone`, then expand to the same per-player rows — same reveal moment the
+/// server snapshot uses for the match itself, just presented as a quiet list instead
+/// of a roster grid (no avatars — the name + status is all this needs to say).
+function commitListHtml(picksDone, myTeamName) {
     if (!data.config || !("users" in data)) return "";
 
     const myTeam = data.teams.find(t => t.name === myTeamName);
     const opponents = data.teams.filter(t => t.name !== myTeamName).flatMap(t => t.users);
 
     const myRows = (myTeam ? myTeam.users : [])
-        .map(s64 => commitRow(data.users[s64] ? data.users[s64].name : s64, isLocked(s64)))
+        .map(s64 => commitRow(data.users[s64] ? data.users[s64].name : s64, hasPicked(s64)))
         .join("");
 
-    const oppLockedCount = opponents.filter(isLocked).length;
+    const oppPickedCount = opponents.filter(hasPicked).length;
     const oppRows = opponents
-        .map(s64 => commitRow(picksLocked && data.users[s64] ? data.users[s64].name : "—", isLocked(s64)))
+        .map(s64 => commitRow(picksDone && data.users[s64] ? data.users[s64].name : "—", hasPicked(s64)))
         .join("");
 
     return `${myRows}
-    <div class="opponents ${picksLocked ? "expanded" : ""}">
-      <div class="head"><span>Opponents</span><b>${picksLocked ? `${opponents.length}/${opponents.length} locked` : `hidden · ${oppLockedCount}/${opponents.length} locked`}</b></div>
+    <div class="opponents ${picksDone ? "expanded" : ""}">
+      <div class="head"><span>Opponents</span><b>${picksDone ? `${opponents.length}/${opponents.length} picked` : `hidden · ${oppPickedCount}/${opponents.length} picked`}</b></div>
       ${oppRows}
     </div>`;
+}
+
+/// Persistent readout for the two coin-flip settings — stays visible after the vote
+/// UI (#turn/#type/b1/b2) moves on to the next thing to decide or disappears entirely,
+/// so "what did we land on" doesn't require scrolling back through the vote prompts.
+function matchSettingsHtml() {
+    const ballistics = data.params.ballistics;
+    const movement = data.params.movement;
+    const pill = (label, value, decidedText) =>
+        value === null
+            ? `<span class="settingpill undecided">${label}<b>Undecided</b></span>`
+            : `<span class="settingpill">${label}<b>${decidedText}</b></span>`;
+
+    return pill("Bullet drop", ballistics, ballistics ? "Enabled" : "Disabled") +
+        pill("Movement", movement, movement ? "Old" : "New");
+}
+
+/// Purely the countdown display — Match.resolvedMetaIfExpired on the backend is what
+/// actually enforces the deadline (on the next /match/current poll, from anyone's
+/// screen), so this timer reaching 0 a little before the real cutoff is fine.
+function pickTimerHtml() {
+    const deadline = data.params.pickDeadline;
+    if (!deadline) return "";
+    const remaining = Math.max(0, Math.ceil(deadline - Date.now() / 1000));
+    return `Auto-picks in <b>${remaining}s</b> if nobody answers`;
 }
 
 function update() {
@@ -72,9 +104,28 @@ function update() {
     // Kits stop changing the instant the match is claimed (that's the snapshot the
     // server pulls the loadout from), so that's also the moment there's nothing left
     // to hide: reveal every roster together rather than opponents trickling in.
-    const picksLocked = data.claimed !== null;
+    const picksDone = data.claimed !== null;
     const myTeam = getTeam(steam64);
-    document.getElementById("commitlist").innerHTML = commitListHtml(picksLocked, myTeam);
+    document.getElementById("commitlist").innerHTML = commitListHtml(picksDone, myTeam);
+    document.getElementById("matchsettings").innerHTML = matchSettingsHtml();
+
+    const everyone = data.config ? allSteam64s() : [];
+    const pickedCount = everyone.filter(hasPicked).length;
+    document.getElementById("commitcount").innerHTML =
+        everyone.length ? `<b>${pickedCount}</b>/${everyone.length} picked` : "";
+
+    // Picking is immediate client-side feedback; the server only claims the match on
+    // its own poll cycle, so there's a real gap between "everyone's picked" and a code
+    // showing up — that gap is what the progress line is for.
+    const allPicked = everyone.length > 0 && pickedCount === everyone.length;
+    const connectProgress = document.getElementById("connectprogress");
+    if (allPicked && data.claimed === null) {
+        connectProgress.style.display = "flex";
+        document.getElementById("connectcaption").innerHTML =
+            `<b>Connecting…</b> ${data.params.map || ""}`;
+    } else {
+        connectProgress.style.display = "none";
+    }
 
     api.get("/match/current").then(r => {
         if (r.status === 200) {
@@ -120,20 +171,28 @@ function update() {
         document.getElementById("b1").innerText = "Disabled";
         document.getElementById("b2").innerText = "Enabled";
         document.getElementById("kits").style.display = "block";
+        document.getElementById("commitcount").style.display = "flex";
         document.getElementById("commitlist").style.display = "flex";
+        document.getElementById("picktimer").style.display = "flex";
+        document.getElementById("picktimer").innerHTML = pickTimerHtml();
     } else if (data.params.movement === null) {
         document.getElementById("type").innerText = "Picking: Movement";
         document.getElementById("b1").innerText = "New";
         document.getElementById("b2").innerText = "Old";
         document.getElementById("kits").style.display = "block";
+        document.getElementById("commitcount").style.display = "flex";
         document.getElementById("commitlist").style.display = "flex";
+        document.getElementById("picktimer").style.display = "flex";
+        document.getElementById("picktimer").innerHTML = pickTimerHtml();
     } else if (Date.now() / 1000 < data.startsAfter) {
         document.getElementById("turn").style.display = "none";
         document.getElementById("type").style.display = "none";
         document.getElementById("b1").style.display = "none";
         document.getElementById("b2").style.display = "none";
         document.getElementById("kits").style.display = "block";
+        document.getElementById("commitcount").style.display = "flex";
         document.getElementById("commitlist").style.display = "flex";
+        document.getElementById("picktimer").style.display = "none";
         document.getElementById("message").innerHTML = `<h1>Almost there</h1>There's ${Math.round(data.startsAfter - Date.now() / 1000)} seconds left to choose your kit.`;
         document.getElementById("message").style.display = "block";
     } else {
@@ -143,7 +202,10 @@ function update() {
         document.getElementById("b1").style.display = "none";
         document.getElementById("b2").style.display = "none";
         document.getElementById("kits").style.display = "none";
+        document.getElementById("commitcount").style.display = "none";
         document.getElementById("commitlist").style.display = "none";
+        document.getElementById("connectprogress").style.display = "none";
+        document.getElementById("picktimer").style.display = "none";
         document.getElementById("message").innerHTML = "<h1>Waiting for server...</h1>Your match will start shortly.";
         document.getElementById("message").style.display = "flex";
 
@@ -160,26 +222,6 @@ function update() {
             launchOnce(data.claimed);
         }
     }
-
-    const ballisticsText = data.params.ballistics === true ? "Enabled" : data.params.ballistics === false ? "Disabled" : "Undecided";
-    const movementText = data.params.movement === true ? "Old" : data.params.movement === false ? "New" : "Undecided";
-    let currentMatch = `<h1>Match data</h1><div><span>Bulletdrop: ${ballisticsText}</span><br><span>Movement: ${movementText}</span></div><div class="teams">`;
-
-    for (const t of data.teams) {
-        currentMatch += `<div><span class="name">${t.name}</span>`;
-        if ("users" in data) {
-            const reveal = picksLocked || t.name === myTeam;
-            for (const s64 of t.users) {
-                currentMatch += reveal
-                    ? `<a class="userProfile"><img src="${data.users[s64].avatar}"><span>${data.users[s64].name}</span></a>`
-                    : `<a class="userProfile hidden"><span class="hiddenAvatar"></span><span>???</span></a>`;
-            }
-            if (!reveal) currentMatch += `<span class="hiddenNote">Hidden until kits lock</span>`;
-        }
-        currentMatch += "</div>";
-    }
-    currentMatch += "</div>";
-    document.getElementById("match").innerHTML = currentMatch;
 }
 
 function coreDecide(params) {

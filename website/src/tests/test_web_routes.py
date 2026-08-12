@@ -9,6 +9,14 @@ def test_play_redirects_anonymous(client):
     assert r.headers["location"] == "/"
 
 
+def test_play_page_renders_the_party_panel(client, login, user_factory):
+    login(client, user_factory())
+    r = client.get("/play")
+    assert r.status_code == 200
+    assert 'id="partyPanel"' in r.text
+    assert 'id="partyInviteInput"' in r.text
+
+
 def test_index_redirects_when_logged_in(client, login, user_factory):
     login(client, user_factory())
     r = client.get("/")
@@ -60,6 +68,100 @@ def test_404_renders_error_page(client):
     assert "text/html" in r.headers["content-type"]
 
 
+def test_overlay_requires_id_or_created_by(client):
+    r = client.get("/overlay")
+    assert r.status_code == 302
+    assert r.headers["location"] == "/"
+
+
+def test_overlay_quotes_the_match_id_in_the_script(client):
+    r = client.get("/overlay", params={"id": "5"})
+    assert r.status_code == 200
+    assert 'let matchid = "5"' in r.text
+    assert "let createdby = null" in r.text
+
+
+def test_overlay_quotes_a_steam64_created_by_without_losing_precision(client):
+    """A steam64 is ~17 digits, past Number.MAX_SAFE_INTEGER — interpolated unquoted
+    into the page it becomes a JS number literal that silently rounds, and createdBy
+    never matches the match again. Must stay a string end to end."""
+    steam64 = "76561198012345678"
+    r = client.get("/overlay", params={"createdBy": steam64})
+    assert r.status_code == 200
+    assert f'let createdby = "{steam64}"' in r.text
+
+
+def test_match_overlay_finds_a_premium_users_custom_match_by_created_by(
+    client, login, user_factory
+):
+    """The premium /match/custom flow, end to end: create the match through the real
+    route (not by constructing Match directly), then confirm ?createdBy=<creator> on
+    the public overlay endpoint actually finds it."""
+    owner = user_factory()
+    owner.setPermission("premium", True)
+    login(client, owner)
+
+    created = client.post(
+        "/match/custom",
+        json={
+            "teams": {"one": [str(owner.steam64)], "two": ["76561197960287930"]},
+            "region": "paris",
+            "gamemode": 0,
+            "ballistics": True,
+            "map": "Alpha Valley",
+            "movement": True,
+        },
+    )
+    assert created.status_code == 200
+    matchId = int(created.text)
+
+    r = client.get("/match/overlay", params={"createdBy": owner.steam64})
+    assert r.status_code == 200
+    assert r.json()["id"] == matchId
+
+
+def test_match_overlay_created_by_also_finds_a_premium_users_regular_match(
+    client, user_factory
+):
+    """The personal overlay link is meant to follow whatever match a premium streamer
+    is actually playing — regular matchmaking is how most of their matches happen, not
+    just the ones they spin up through /match/custom."""
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player = user_factory()
+    player.setPermission("premium", True)
+    with opendb() as db:
+        match = data.Match(
+            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+
+    r = client.get("/match/overlay", params={"createdBy": player.steam64})
+    assert r.status_code == 200
+    assert r.json()["id"] == matchId
+
+
+def test_match_overlay_created_by_requires_premium(client, user_factory):
+    """The personal overlay link is a premium perk — a non-premium participant must
+    not get a working ?createdBy= link just by having played a match."""
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player = user_factory()
+    with opendb() as db:
+        match = data.Match(
+            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+        )
+        db.add(match)
+        db.flush()
+
+    r = client.get("/match/overlay", params={"createdBy": player.steam64})
+    assert r.status_code == 404
+
+
 def test_profile_page_renders_match_history(client, user_factory):
     from src.core.db import open as opendb
     from src.core import models as data
@@ -101,6 +203,48 @@ def test_profile_page_renders_match_history(client, user_factory):
     assert r.status_code == 200
     assert "statcards" in r.text
     assert "matchlist" in r.text
+    # Only one match, and it has no "Current Elo" paired with the change — not
+    # enough to plot a trend.
+    assert "Not enough ranked matches yet" in r.text
+    assert "chart.js" not in r.text
+
+
+def test_profile_page_renders_the_elo_trend_with_two_ranked_matches(
+    client, user_factory
+):
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player = user_factory()
+    matchIds = []
+    for _ in range(2):
+        with opendb() as db:
+            match = data.Match(
+                gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+            )
+            db.add(match)
+            db.flush()
+            matchIds.append(match.id)
+
+    data.MatchResult.recordFinalResults(
+        matchIds[0],
+        {str(player.steam64): {"Kills": 4, "Deaths": 1, "Won": True, "Current Elo": 300, "Elo Change": 12}},
+    )
+    data.MatchResult.recordFinalResults(
+        matchIds[1],
+        {str(player.steam64): {"Kills": 2, "Deaths": 5, "Won": False, "Current Elo": 312, "Elo Change": -5}},
+    )
+
+    r = client.get(f"/u/{player.steam64}")
+
+    assert r.status_code == 200
+    assert "Not enough ranked matches yet" not in r.text
+    assert "chart.js" in r.text
+    assert 'id="eloChart"' in r.text
+    assert '"elo": 312' in r.text  # 300 + 12, chronologically first
+    assert '"elo": 307' in r.text  # 312 - 5, second
+    assert 'class="formpill win"' in r.text
+    assert 'class="formpill loss"' in r.text
 
 
 def test_profile_page_with_no_matches_renders(client, user_factory):
@@ -175,4 +319,48 @@ def test_match_page_renders_the_commit_list(client, login, user_factory):
 
     assert r.status_code == 200
     assert 'id="commitlist"' in r.text
-    assert "selectedChoice::after" in r.text
+    assert 'id="commitcount"' in r.text
+    assert 'id="connectprogress"' in r.text
+    assert 'id="matchsettings"' in r.text
+    assert 'id="picktimer"' in r.text
+    # No checkmark badge, and kit/powerup tiles are real buttons (keyboard-reachable),
+    # not divs with an onclick.
+    assert "checkmark" not in r.text
+    assert '<button type="button" class="kitbutton' in r.text
+    assert '<button type="button" class="powerupbutton' in r.text
+
+
+def test_match_page_never_shows_a_kit_or_powerup_as_pre_selected(client, login, user_factory):
+    """A tile carrying .selectedChoice before the player has ever clicked would claim a
+    choice was made when the saved pick is still None — the server falls back to the
+    first kit/powerup at match time regardless, but the tile UI must not imply that's
+    already "your" pick."""
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player, opponent = user_factory(), user_factory()
+    with opendb() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(player.steam64)]},
+                    {"name": "two", "users": [str(opponent.steam64)]},
+                ],
+                matchSettings={
+                    "ballistics": True,
+                    "map": "Alpha Valley",
+                    "movement": True,
+                },
+            )
+        )
+
+    login(client, player)
+    r = client.get("/match")
+
+    assert r.status_code == 200
+    # These seed the client-side `currentkit`/`currentPowerup` vars that
+    # updateKitClasses()/updatePowerupClasses() use to add .selectedChoice — null
+    # means no tile renders as selected until the player actually clicks one.
+    assert '"currentkit": null' in r.text
+    assert '"currentpowerup": null' in r.text

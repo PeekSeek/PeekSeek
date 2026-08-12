@@ -93,6 +93,13 @@ class Match(SQLModel, table=True):
         else:
             self.meta = self.meta | matchSettings
 
+        # Nothing stops the current picker from just never clicking — without a deadline
+        # that stalls the match forever. Only start the clock when there's actually a
+        # pick left to make (matchSettings can arrive fully pre-decided, e.g. a custom
+        # match or these tests' fixtures).
+        if any(self.meta[o] is None for o in ["ballistics", "map", "movement"]):
+            self.meta["pickDeadline"] = time() + mmconfig["pickTimeout"]
+
         creator = "matchmaking"
         if createdBy:
             creator = (
@@ -176,6 +183,34 @@ class Match(SQLModel, table=True):
         return None
 
     @staticmethod
+    def releaseAbandoned(code: str) -> None:
+        """A server polling `matchid=0` has no live match right now — if it still holds
+        the claim on an unfinished match, that match's one and only "I'm done" signal
+        (the plugin's fire-and-forget POST to /unt/results) never arrived, and nothing
+        else ever revisits a *claimed* match (cancelStaleUnclaimed only sweeps unclaimed
+        ones). Left alone, that match's players stay stuck in it forever. Skipped for the
+        "0" sentinel code, since that's shared by every server too old to send a real one
+        — finishing on it could close a match a different old server is still playing.
+        """
+        if code == "0":
+            return
+
+        from src.core.db import open
+        from src.core.webhook import Webhook
+
+        with open() as db:
+            for match in (
+                db.query(Match)
+                .where(Match.finished.is_(False), Match.claimed == code)
+                .all()
+            ):
+                match.finished = True
+                Webhook(f"Match.{match.id}").error(
+                    f"Server `{code}` polled idle without ever reporting this match's "
+                    "results — force-closed so its players aren't stuck in it."
+                )
+
+    @staticmethod
     def cancelStaleUnclaimed() -> None:
         """Finish matches no server claimed within the timeout, and log it."""
         from src.core.db import open
@@ -246,18 +281,56 @@ class Match(SQLModel, table=True):
             if str(current) != steam64:
                 return m
 
-            next_team = 0
-            for i, team in enumerate(self.teams):
-                if current in team["users"]:
-                    next_team = (i + 1) % len(self.teams)
-                    break
-
-            m["currentPick"] = self.teams[next_team]["users"][0]
+            Match._advancePick(m, self.teams)
 
             not_picked = [o for o in ["ballistics", "map", "movement"] if m[o] is None]
             if not_picked:
                 m[not_picked[0]] = pick
+                m["pickDeadline"] = Match._nextPickDeadline(m)
 
+        return m
+
+    @staticmethod
+    def _advancePick(m: dict, teams: list) -> None:
+        """Move `currentPick` to the next team's first player, in place."""
+        current = m.get("currentPick", teams[0]["users"][0])
+        next_team = 0
+        for i, team in enumerate(teams):
+            if current in team["users"]:
+                next_team = (i + 1) % len(teams)
+                break
+        m["currentPick"] = teams[next_team]["users"][0]
+
+    @staticmethod
+    def _nextPickDeadline(m: dict) -> float | None:
+        """A fresh pickTimeout if anything's still undecided, else None — each of
+        ballistics/map/movement gets its own full window rather than sharing the match's
+        original deadline, so a slow first pick doesn't starve the next one."""
+        if any(m[o] is None for o in ["ballistics", "map", "movement"]):
+            return time() + mmconfig["pickTimeout"]
+        return None
+
+    def resolvedMetaIfExpired(self) -> dict | None:
+        """Auto-decide the current ballistics/map/movement pick once its deadline passes,
+        so a player can't stall the match indefinitely by never clicking. Falls back to
+        the gamemode's first configured option — the same "index 0" convention
+        kits/powerups already use when nobody picks. Returns None when there's nothing to
+        resolve, so callers only write to the DB when something actually changed."""
+        deadline = self.meta.get("pickDeadline")
+        if deadline is None or time() < deadline:
+            return None
+
+        not_picked = [o for o in ["ballistics", "map", "movement"] if self.meta[o] is None]
+        if not not_picked:
+            return None
+
+        gm = mmconfig["gamemodes"][self.gamemode]
+        m = self.meta.copy()
+        field = not_picked[0]
+        m[field] = gm[field][0]
+
+        Match._advancePick(m, self.teams)
+        m["pickDeadline"] = Match._nextPickDeadline(m)
         return m
 
     def localJson(self) -> dict:
@@ -284,16 +357,23 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def findLastCreatedBy(steam64) -> int | None:
+        """A premium perk: a stable personal overlay link that always resolves to
+        whichever match this steam64 is most recently playing in, matchmade or custom
+        — not literally who administratively created it (the name is kept because it's
+        the public ?createdBy= URL param streamers already have saved). Gated on
+        premium so it stays a paid feature rather than working for anyone's steam64."""
         from src.core.db import open
+        from .user import User
+
+        if not User.getPermission(steam64, "premium"):
+            return None
 
         with open() as db:
-            found = (
-                db.query(Match)
-                .filter(Match.meta.op("->>")("createdBy") == str(steam64))
-                .order_by(desc(Match.id))
-                .first()
-            )
-            return found.id if found else None
+            for match in db.query(Match).order_by(desc(Match.id)).all():
+                users = [str(u) for team in match.teams for u in team["users"]]
+                if str(steam64) in users:
+                    return match.id
+        return None
 
 
 class MatchResult(SQLModel, table=True):

@@ -22,7 +22,7 @@ def attemptCreateMatch(trackSteam64: int | None = None, region: str = "paris") -
     with open() as db:
         queued = data.UserHB.freshInQueue(db)
 
-    perGamemode: dict[int, list[int]] = {
+    perGamemode: dict[int, list] = {
         gid: [] for gid in range(len(mmconfig["gamemodes"]))
     }
     for heartbeat in queued:
@@ -30,7 +30,7 @@ def attemptCreateMatch(trackSteam64: int | None = None, region: str = "paris") -
             continue
         for gid in perGamemode:
             if heartbeat.gamemode & (2**gid):
-                perGamemode[gid].append(heartbeat.steam64)
+                perGamemode[gid].append(heartbeat)
 
     tracked_matched = False
     for gid, queueList in perGamemode.items():
@@ -38,21 +38,46 @@ def attemptCreateMatch(trackSteam64: int | None = None, region: str = "paris") -
         if not players:
             continue
         _createMatch(gid, players, region)
-        if trackSteam64 and trackSteam64 in players:
+        if trackSteam64 and str(trackSteam64) in [str(p) for p in players]:
             tracked_matched = True
     return tracked_matched
 
 
-def _playersForMatch(queueList: list[int], mode: dict) -> list[int] | None:
-    """The first queued players that fill the mode, or None if it can't fill."""
-    needed = mode["playersPerTeam"] * mode["teams"]
-    players: list[int] = []
-    for player in queueList:
-        if len(players) >= needed:
+def _partyGroups(heartbeats: list) -> list[list[int]]:
+    """Queued players grouped by party — a solo player is a group of one — ordered by
+    the earliest heartbeat in the group, so queueing together doesn't jump a party
+    ahead of players who'd already been waiting."""
+    groups: dict[object, list[int]] = {}
+    earliest: dict[object, float] = {}
+    for hb in heartbeats:
+        if data.User.getCurrentMatchId(hb.steam64):
+            continue
+        key = hb.partyId or f"solo-{hb.steam64}"
+        groups.setdefault(key, []).append(hb.steam64)
+        earliest[key] = min(earliest.get(key, hb.time), hb.time)
+    return [g for _, g in sorted(groups.items(), key=lambda kv: earliest[kv[0]])]
+
+
+def _playersForMatch(queueList: list, mode: dict) -> list[int] | None:
+    """Fills every team of the mode at once, keeping each party together on a single
+    team — first-fit over the (small, fixed) number of teams. A party larger than one
+    team can't be matched here at all and just keeps waiting; nothing in this loop
+    ever splits one across two teams."""
+    perTeam = mode["playersPerTeam"]
+    groups = [g for g in _partyGroups(queueList) if len(g) <= perTeam]
+
+    teams: list[list[int]] = [[] for _ in range(mode["teams"])]
+    for group in groups:
+        for team in teams:
+            if len(team) + len(group) <= perTeam:
+                team.extend(group)
+                break
+        if all(len(team) == perTeam for team in teams):
             break
-        if not data.User.getCurrentMatchId(player):
-            players.append(player)
-    return players if len(players) == needed else None
+
+    if not all(len(team) == perTeam for team in teams):
+        return None
+    return [player for team in teams for player in team]
 
 
 def _createMatch(gamemode: int, players: list[int], region: str) -> None:
