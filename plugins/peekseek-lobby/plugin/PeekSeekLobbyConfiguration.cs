@@ -6,8 +6,7 @@ using Rocket.API;
 namespace PeekSeekLobby;
 
 [XmlRoot("Config")]
-public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration
-{
+public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public string szAPIURL;
     public string szHexDefaultChatColor;
     public string szChatIconURL;
@@ -20,8 +19,13 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration
     public ushort BloodBagItemID;
     public List<LobbySpawn> Spawns;
 
-    public void LoadDefaults()
-    {
+    /// Which kits.json weapon categories players may equip in the lobby and pick
+    /// between with /kit — a subset of what the site actually supports, so this
+    /// can grow (or shrink) without a plugin release. The first entry is the
+    /// default a player equips on join.
+    public List<string> AllowedKitCategories;
+
+    public void LoadDefaults() {
         szAPIURL = "https://api.peekseek.com";
         szHexDefaultChatColor = "#FFFFFF";
         szChatIconURL = "https://domain.org/image.png";
@@ -34,6 +38,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration
         RespawnDelaySeconds = 10f;
         RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
         BloodBagItemID = 395;
+        AllowedKitCategories = ["meta", "sniper"];
 
         // Placeholder — real Alpha Valley spawn points get filled in once the
         // plugin is installed on the live arena map.

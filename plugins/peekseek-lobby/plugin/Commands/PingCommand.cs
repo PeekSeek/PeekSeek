@@ -8,8 +8,7 @@ namespace PeekSeekLobby.Commands;
 
 /// /ping (alias /ms) with no arguments shows the caller's own connection ping;
 /// /ping <player> shows anyone else currently connected.
-internal class PingCommand : IRocketCommand
-{
+internal class PingCommand : IRocketCommand {
     public AllowedCaller AllowedCaller => AllowedCaller.Player;
     public string Name => "ping";
     public string Help => "Shows your connection ping, or another player's.";
@@ -17,13 +16,11 @@ internal class PingCommand : IRocketCommand
     public List<string> Aliases => ["ms"];
     public List<string> Permissions => [];
 
-    public void Execute(IRocketPlayer caller, string[] command)
-    {
+    public void Execute(IRocketPlayer caller, string[] command) {
         UnturnedPlayer callerPlayer = (UnturnedPlayer)caller;
         UnturnedPlayer target = command.Length == 0 ? callerPlayer : UnturnedPlayer.FromName(command[0]);
 
-        if (target == null)
-        {
+        if (target == null) {
             LobbyManager.Whisper(callerPlayer.Player.channel.owner,
                 PeekSeekLobby.Instance.Translate("no_player_found", command[0]));
             return;

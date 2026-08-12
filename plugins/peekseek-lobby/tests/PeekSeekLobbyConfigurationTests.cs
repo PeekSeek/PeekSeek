@@ -5,11 +5,9 @@ using Xunit;
 
 namespace PeekSeekLobby.Tests;
 
-public class PeekSeekLobbyConfigurationTests
-{
+public class PeekSeekLobbyConfigurationTests {
     [Fact]
-    public void LoadDefaults_PopulatesAllCollections()
-    {
+    public void LoadDefaults_PopulatesAllCollections() {
         var config = new PeekSeekLobbyConfiguration();
 
         config.LoadDefaults();
@@ -18,11 +16,12 @@ public class PeekSeekLobbyConfigurationTests
         Assert.NotEmpty(config.Spawns);
         Assert.NotNull(config.RespawnCountdownAtSecondsRemaining);
         Assert.NotEmpty(config.RespawnCountdownAtSecondsRemaining);
+        Assert.NotNull(config.AllowedKitCategories);
+        Assert.NotEmpty(config.AllowedKitCategories);
     }
 
     [Fact]
-    public void LoadDefaults_SetsKnownDefaultValues()
-    {
+    public void LoadDefaults_SetsKnownDefaultValues() {
         var config = new PeekSeekLobbyConfiguration();
 
         config.LoadDefaults();
@@ -33,11 +32,11 @@ public class PeekSeekLobbyConfigurationTests
         Assert.Equal(3f, config.SpawnProtectionSeconds);
         Assert.Equal(10f, config.RespawnDelaySeconds);
         Assert.Equal("#FFFFFF", config.szHexDefaultChatColor);
+        Assert.Equal(["meta", "sniper"], config.AllowedKitCategories);
     }
 
     [Fact]
-    public void XmlRootAttribute_IsConfig()
-    {
+    public void XmlRootAttribute_IsConfig() {
         var attr = typeof(PeekSeekLobbyConfiguration)
             .GetCustomAttributes<XmlRootAttribute>(inherit: false)
             .SingleOrDefault();

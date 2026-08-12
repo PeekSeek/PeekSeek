@@ -5,14 +5,12 @@ using Rocket.Core.Plugins;
 
 namespace PeekSeekLobby;
 
-public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration>
-{
+public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
     public static PeekSeekLobby Instance { get; private set; }
 
     public static PeekSeekLobbyConfiguration Config { get => Instance.Configuration.Instance; }
 
-    protected override void Load()
-    {
+    protected override void Load() {
         Instance = this;
         Logger.Log($"PeekSeekLobby {Assembly.GetName().Version} is now loaded.");
 
@@ -22,13 +20,11 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration>
     /// Rocket plugins are MonoBehaviours, same heartbeat the main PeekSeek plugin
     /// drives its match loop from — LobbyManager decides how often that's worth
     /// acting on.
-    private void FixedUpdate()
-    {
+    private void FixedUpdate() {
         LobbyManager.Tick();
     }
 
-    protected override void Unload()
-    {
+    protected override void Unload() {
         Logger.Log("PeekSeekLobby is now unloaded.");
         LobbyManager.Shutdown();
     }
@@ -42,5 +38,8 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration>
         { "not_queued", "You have left the matchmaking queue — you will not be matched." },
         { "no_player_found", "No player found matching \"{0}\"." },
         { "no_stats", "That player has no stats recorded yet." },
+        { "kit_options", "Available kits: {0}. /kit <name> to switch." },
+        { "kit_invalid", "\"{0}\" isn't a kit you can use. Available: {1}" },
+        { "kit_switched", "Switched to your {0} kit." },
     };
 }

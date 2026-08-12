@@ -13,16 +13,14 @@ namespace PeekSeekLobby.Core.Patches;
 /// the native round system to run at all.
 [HarmonyPatch(typeof(LevelManager), "arenaLobby")]
 [UsedImplicitly]
-internal class ArenaLobbyPatch
-{
+internal class ArenaLobbyPatch {
     [UsedImplicitly]
     private static bool Prefix() => false;
 }
 
 [HarmonyPatch(typeof(LevelManager), "arenaPlay")]
 [UsedImplicitly]
-internal class ArenaPlayPatch
-{
+internal class ArenaPlayPatch {
     [UsedImplicitly]
     private static bool Prefix() => false;
 }
@@ -30,8 +28,7 @@ internal class ArenaPlayPatch
 [HarmonyPatch(typeof(LevelManager))]
 [HarmonyPatch(nameof(LevelManager.arenaSpawn))]
 [UsedImplicitly]
-internal class ArenaSpawnPatch
-{
+internal class ArenaSpawnPatch {
     [UsedImplicitly]
     private static bool Prefix() => false;
 }
@@ -39,8 +36,7 @@ internal class ArenaSpawnPatch
 [HarmonyPatch(typeof(LevelManager))]
 [HarmonyPatch(nameof(LevelManager.findGroups))]
 [UsedImplicitly]
-internal class FindGroupsPatch
-{
+internal class FindGroupsPatch {
     [UsedImplicitly]
     private static bool Prefix() => false;
 }

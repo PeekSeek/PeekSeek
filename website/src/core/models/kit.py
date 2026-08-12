@@ -125,12 +125,17 @@ class Kit(SQLModel, table=True):
 
     @staticmethod
     def publicData(steam64) -> dict:
-        """Every kit category, fully resolved into a ready-to-equip item list — same
-        [id, amount, state] shape and the same gun/outfit/bonus-mag logic
+        """Every kit category, fully resolved — same gun/outfit/bonus-mag logic
         Kit.getItems builds for a live match (minus the gamemode default items and
         powerup a match would add), just without a match to read the selection
         from. Lets a caller with no match context (the lobby plugin, equipping a
-        player before they've even queued) hand them their real loadout."""
+        player before they've even queued) hand them their real loadout.
+
+        Each category is {"items": [[id, amount, state], ...], "magazine": [id,
+        amount, state] | null} — the magazine is broken out on its own rather than
+        appended to items so a caller can keep restocking it (a spare mag that's
+        always full) without having to guess which item in the list is the gun,
+        which are outfit pieces, and which is the magazine."""
         from src.core.db import open
         from src.core import metagun
 
@@ -162,7 +167,10 @@ class Kit(SQLModel, table=True):
             # item (no attachment state, no bonus mags) for those, and this does
             # the same.
             if gunId not in mmconfig["defaultMagAmountFiremodePerGunId"]:
-                result[category] = [[int(gunId), 1, ""], *outfitItems]
+                result[category] = {
+                    "items": [[int(gunId), 1, ""], *outfitItems],
+                    "magazine": None,
+                }
                 continue
 
             attach = {
@@ -171,10 +179,9 @@ class Kit(SQLModel, table=True):
             }
             gunState = metagun.metaObject(gunId).setAttach(**attach)()
             magId = mmconfig["defaultMagAmountFiremodePerGunId"][gunId][0]
-            result[category] = [
-                [int(gunId), 1, gunState],
-                *outfitItems,
-                [magId, 5, ""],
-            ]
+            result[category] = {
+                "items": [[int(gunId), 1, gunState], *outfitItems],
+                "magazine": [magId, 5, ""],
+            }
 
         return result
