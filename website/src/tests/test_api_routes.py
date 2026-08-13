@@ -127,6 +127,35 @@ def test_eventwait_from_a_server_too_old_to_send_a_code_claims_as_zero(
         assert db.query(data.Match).first().claimed == "0"
 
 
+def test_eventwait_idle_poll_releases_a_match_that_server_abandoned(
+    client, user_factory
+):
+    """If a server's own results report never reaches us, its next idle
+    (matchid=0) poll is the only remaining signal that the match is over."""
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+    first, second = user_factory(), user_factory()
+    with opendb() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+            )
+        )
+    with opendb() as db:
+        db.query(data.Match).update({"claimed": "90071992547409931"})
+
+    r = client.get(
+        "/unt/eventwait", params={"code": "90071992547409931", "matchid": "0"}
+    )
+
+    assert r.status_code == 200
+    with opendb() as db:
+        assert db.query(data.Match).first().finished is True
+
+
 def test_unt_kills_appends_to_the_match_result(client, user_factory):
     data.AuthorizedServer.bootstrap({"testclient": "paris"})
     killer, victim = user_factory(), user_factory()
