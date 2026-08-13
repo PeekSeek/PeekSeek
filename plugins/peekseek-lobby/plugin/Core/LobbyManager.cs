@@ -40,13 +40,20 @@ internal abstract class LobbyManager {
         /// Non-zero once matchmaking has paired this player up, until the match's
         /// server claims it and they get relayed over.
         internal int MatchId;
+
+        /// The player's Elo, re-asserted as their reputation on a timer because
+        /// Unturned moves reputation itself on kills. Zero until the site answers.
+        internal int Elo;
     }
 
     private static readonly Dictionary<ulong, PlayerState> Players = [];
     private static float LastHeartbeatSent;
     private static float LastMagazineCheck;
+    private static float LastReputationSync;
+    private static float LastArenaReset;
 
     private const float MagazineCheckIntervalSeconds = 2f;
+    private const float ReputationSyncIntervalSeconds = 5f;
 
     private const string HarmonyId = "peekseek.lobby";
     private static Harmony Instrument;
@@ -63,7 +70,17 @@ internal abstract class LobbyManager {
         Instrument = new Harmony(HarmonyId);
         Instrument.PatchAll(Assembly.GetExecutingAssembly());
 
+        ItemManager.onServerSpawningItemDrop += OnItemDropRequested;
+
+        LastArenaReset = Time.realtimeSinceStartup;
         RemoteAPI.Init();
+    }
+
+    /// Refusing the drop outright is cheaper and cleaner than spawning it and
+    /// deleting it a frame later, and it covers every source at once — death
+    /// piles, manual drops, and inventory overflow from a re-equip.
+    private static void OnItemDropRequested(Item item, ref Vector3 location, ref bool shouldAllow) {
+        if (PeekSeekLobby.Config.RemoveDroppedItems) shouldAllow = false;
     }
 
     internal static void Shutdown() {
@@ -71,6 +88,7 @@ internal abstract class LobbyManager {
         Provider.onServerDisconnected -= OnPlayerDisconnected;
         UnturnedPlayerEvents.OnPlayerDeath -= OnPlayerDead;
 
+        ItemManager.onServerSpawningItemDrop -= OnItemDropRequested;
         Instrument.UnpatchAll(HarmonyId);
 
         RemoteAPI.Shutdown();
@@ -85,6 +103,7 @@ internal abstract class LobbyManager {
         Players[steamID.m_SteamID] = state;
 
         SpawnPlayer(steamID, state);
+        RemoteAPI.FetchElo(steamID.m_SteamID, elo => state.Elo = elo);
         if (queueing) {
             RemoteAPI.SendHeartbeat(steamID.m_SteamID, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
         }
@@ -359,6 +378,12 @@ internal abstract class LobbyManager {
             if (state.SpawnProtectedUntil > 0 && now >= state.SpawnProtectedUntil) {
                 state.SpawnProtectedUntil = 0;
                 SetGodMode(steamID, false);
+
+                Player protectedPlayer = PlayerTool.getPlayer(steamID);
+                if (protectedPlayer != null) {
+                    Whisper(protectedPlayer.channel.owner,
+                        PeekSeekLobby.Instance.Translate("spawn_protection_over"));
+                }
             }
 
             if (!state.IsDead) continue;
@@ -377,6 +402,16 @@ internal abstract class LobbyManager {
             if (player != null) {
                 Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("respawn_in", rounded));
             }
+        }
+
+        if (now - LastReputationSync >= ReputationSyncIntervalSeconds) {
+            LastReputationSync = now;
+            SyncReputations();
+        }
+
+        if (now - LastArenaReset >= PeekSeekLobby.Config.ResetIntervalSeconds) {
+            LastArenaReset = now;
+            ResetArena();
         }
 
         if (now - LastMagazineCheck >= MagazineCheckIntervalSeconds) {
@@ -434,6 +469,50 @@ internal abstract class LobbyManager {
     /// deleting items it can't reason about.
     private static byte MagazineCapacity(ushort itemId) {
         return Assets.find(EAssetType.ITEM, itemId) is ItemMagazineAsset asset ? asset.amount : (byte)0;
+    }
+
+    /// Unturned adjusts reputation itself when players kill each other, so this
+    /// keeps putting it back — the number over someone's head is their Elo and
+    /// nothing else.
+    private static void SyncReputations() {
+        if (!PeekSeekLobby.Config.ShowEloAsReputation) return;
+
+        foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
+            if (entry.Value.Elo == 0) continue;
+
+            Player player = PlayerTool.getPlayer(new CSteamID(entry.Key));
+            if (player == null) continue;
+
+            int drift = entry.Value.Elo - player.skills.reputation;
+            if (drift != 0) player.skills.askRep(drift);
+        }
+    }
+
+    /// Wipes the arena back to how it started: nothing left on the ground,
+    /// nothing built, every session score back to zero and everyone respawned
+    /// with a fresh kit. Elo is deliberately untouched — it isn't a session stat.
+    private static void ResetArena() {
+        ItemManager.askClearAllItems();
+        BarricadeManager.askClearAllBarricades();
+        StructureManager.askClearAllStructures();
+
+        foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
+            PlayerState state = entry.Value;
+            state.Kills = 0;
+            state.Deaths = 0;
+            state.Headshots = 0;
+            state.IsDead = false;
+            state.AnnouncedCountdown.Clear();
+
+            CSteamID steamID = new(entry.Key);
+            Player player = PlayerTool.getPlayer(steamID);
+            if (player == null) continue;
+
+            if (player.life.isDead) player.life.ServerRespawn(false);
+            SpawnPlayer(steamID, state);
+        }
+
+        Announce(PeekSeekLobby.Instance.Translate("arena_reset"));
     }
 
     private static void SendHeartbeats() {

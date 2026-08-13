@@ -23,6 +23,19 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// /noqueue has nothing to toggle.
     public bool EnableQueue;
 
+    /// Dropped items are deleted the moment they hit the ground, so the arena
+    /// never fills with the guns and magazines of everyone who died in it.
+    public bool RemoveDroppedItems;
+
+    /// How often the arena is wiped back to a clean slate — world items and
+    /// player-placed builds cleared, session stats zeroed, everyone respawned.
+    public float ResetIntervalSeconds;
+
+    /// Mirror each player's Elo into their in-game reputation. Unturned moves
+    /// reputation on its own for kills and similar, so this is re-asserted on a
+    /// timer rather than set once.
+    public bool ShowEloAsReputation;
+
     public string szDiscordURL;
 
     /// Where a matched player is sent to log in and pick their kit. Opening it
@@ -57,6 +70,9 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         BloodBagItemID = 395;
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = false;
+        RemoveDroppedItems = true;
+        ResetIntervalSeconds = 600f;
+        ShowEloAsReputation = true;
         szDiscordURL = "https://discord.gg/NKgTe6RnvH";
         szMatchURL = "https://dev.peekseek.net/match";
 
