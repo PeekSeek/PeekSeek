@@ -29,6 +29,18 @@ public class ConfigurationRoundTripTests {
         Assert.Equal(config.szDiscordURL, loaded.szDiscordURL);
         Assert.Equal(config.BloodBagItemID, loaded.BloodBagItemID);
         Assert.Equal(config.Spawns.Count, loaded.Spawns.Count);
+        Assert.Equal(config.EnableQueue, loaded.EnableQueue);
+        Assert.Equal(config.szMatchURL, loaded.szMatchURL);
+    }
+
+    /// Matchmaking stays off until it's deliberately switched on, so a fresh
+    /// config never starts heartbeating at a site that isn't ready for it.
+    [Fact]
+    public void Defaults_LeaveMatchmakingDisabled() {
+        var config = new PeekSeekLobbyConfiguration();
+        config.LoadDefaults();
+
+        Assert.False(config.EnableQueue);
     }
 
     [Fact]

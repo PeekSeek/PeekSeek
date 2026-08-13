@@ -31,6 +31,8 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
 
     public override TranslationList DefaultTranslations => new TranslationList() {
         { "welcome", "Welcome to the PeekSeek lobby! You're in queue for a match — fight while you wait. /noqueue to leave the queue." },
+        { "welcome_no_queue", "Welcome to the PeekSeek lobby! Matchmaking is off right now — this is a free-for-all warm-up server." },
+        { "queue_disabled", "Matchmaking is disabled on this server right now." },
         { "kill_feed", "{0} killed {1} with {2}" },
         { "kill_feed_headshot", "{0} killed {1} with {2} (HEADSHOT)" },
         { "respawn_in", "Respawning in {0}..." },

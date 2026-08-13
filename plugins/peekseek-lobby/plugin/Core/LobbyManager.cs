@@ -80,14 +80,17 @@ internal abstract class LobbyManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
-        PlayerState state = new() { KitCategory = DefaultKitCategory() };
+        bool queueing = PeekSeekLobby.Config.EnableQueue;
+        PlayerState state = new() { KitCategory = DefaultKitCategory(), Queueing = queueing };
         Players[steamID.m_SteamID] = state;
 
         SpawnPlayer(steamID, state);
-        RemoteAPI.SendHeartbeat(steamID.m_SteamID, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
+        if (queueing) {
+            RemoteAPI.SendHeartbeat(steamID.m_SteamID, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
+        }
 
         ChatManager.serverSendMessage(
-            PeekSeekLobby.Instance.Translate("welcome"),
+            PeekSeekLobby.Instance.Translate(queueing ? "welcome" : "welcome_no_queue"),
             UnturnedChat.GetColorFromHex(PeekSeekLobby.Config.szHexDefaultChatColor).Value,
             null, player.channel.owner, EChatMode.SAY, PeekSeekLobby.Config.szChatIconURL, true
         );
@@ -96,6 +99,10 @@ internal abstract class LobbyManager {
     }
 
     private static void OnPlayerDisconnected(CSteamID steamID) {
+        if (!PeekSeekLobby.Config.EnableQueue) {
+            Players.Remove(steamID.m_SteamID);
+            return;
+        }
         if (Players.Remove(steamID.m_SteamID)) {
             RemoteAPI.SendQuit(steamID.m_SteamID);
         }
@@ -247,7 +254,10 @@ internal abstract class LobbyManager {
         );
     }
 
+    internal static bool QueueEnabled => PeekSeekLobby.Config.EnableQueue;
+
     internal static bool ToggleQueueing(CSteamID steamID) {
+        if (!QueueEnabled) return false;
         if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
 
         state.Queueing = !state.Queueing;
@@ -427,6 +437,8 @@ internal abstract class LobbyManager {
     }
 
     private static void SendHeartbeats() {
+        if (!PeekSeekLobby.Config.EnableQueue) return;
+
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
             // Already matched: stop asking for a match and start watching for the
             // server that will host it, so they get relayed the moment it claims.
