@@ -36,6 +36,10 @@ internal abstract class LobbyManager {
         /// mag profile in mmconfig.json, so there's nothing to keep full.
         internal ushort SpareMagItemId;
         internal byte SpareMagFullStock;
+
+        /// Non-zero once matchmaking has paired this player up, until the match's
+        /// server claims it and they get relayed over.
+        internal int MatchId;
     }
 
     private static readonly Dictionary<ulong, PlayerState> Players = [];
@@ -143,16 +147,20 @@ internal abstract class LobbyManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
-        List<LobbySpawn> spawns = PeekSeekLobby.Config.Spawns;
-        if (spawns is { Count: > 0 }) {
-            LobbySpawn spawn = spawns[Random.Range(0, spawns.Count)];
-            player.teleportToLocationUnsafe(spawn.Position.ToVector3(), player.look.yaw);
-        }
+        TeleportToSpawn(player);
 
         state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
         SetGodMode(steamID, true);
 
         EquipRealKit(player, steamID, state);
+    }
+
+    private static void TeleportToSpawn(Player player) {
+        List<LobbySpawn> spawns = PeekSeekLobby.Config.Spawns;
+        if (spawns is not { Count: > 0 }) return;
+
+        LobbySpawn spawn = spawns[Random.Range(0, spawns.Count)];
+        player.teleportToLocationUnsafe(spawn.Position.ToVector3(), player.look.yaw);
     }
 
     private static void Respawn(CSteamID steamID, PlayerState state) {
@@ -255,18 +263,46 @@ internal abstract class LobbyManager {
         return Players.TryGetValue(steamID.m_SteamID, out state);
     }
 
-    /// Hands a matched player over to the server hosting their match, the same
-    /// way the main plugin relays everyone back to the lobby when a match ends.
-    /// "0" is what a server too old to report its own code claims with, and
-    /// relaying to that would just drop the player.
-    internal static void SendToMatch(ulong steam64, string serverCode) {
+    /// A matched player stops fighting: back to a spawn point, out of the queue
+    /// so the lobby stops heartbeating for them, and handed the link that logs
+    /// them in and lands them on their match page. Hitting /match while logged
+    /// out is itself what records it as the page to return to, so the site sends
+    /// them back there after login without needing a redirect parameter.
+    internal static void SendToMatch(ulong steam64, int matchId) {
+        if (!Players.TryGetValue(steam64, out PlayerState state)) return;
+        // A heartbeat already in flight when the first one matched would
+        // otherwise teleport them a second time.
+        if (!state.Queueing) return;
+        state.Queueing = false;
+        state.MatchId = matchId;
+
+        CSteamID steamID = new(steam64);
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null) return;
+
+        TeleportToSpawn(player);
+        state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
+        SetGodMode(steamID, true);
+
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_found"));
+        player.sendBrowserRequest(
+            PeekSeekLobby.Instance.Translate("match_found_browser"), PeekSeekLobby.Config.szMatchURL);
+    }
+
+    /// Once a game server has claimed the match it's ready to be played, so the
+    /// waiting player is handed over to it — the same relay the main plugin uses
+    /// to send everyone back here when a match ends. "0" is what a server too old
+    /// to report its own code claims with, and relaying there would drop them.
+    internal static void RelayToMatch(ulong steam64, string serverCode) {
+        if (!Players.TryGetValue(steam64, out PlayerState state) || state.MatchId == 0) return;
         if (string.IsNullOrEmpty(serverCode) || serverCode == "0") return;
         if (!ulong.TryParse(serverCode, out ulong serverId)) return;
 
         Player player = PlayerTool.getPlayer(new CSteamID(steam64));
         if (player == null) return;
 
-        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_found"));
+        state.MatchId = 0;
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_started"));
         player.sendRelayToServer(new CSteamID(serverId), string.Empty, true);
     }
 
@@ -392,6 +428,12 @@ internal abstract class LobbyManager {
 
     private static void SendHeartbeats() {
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
+            // Already matched: stop asking for a match and start watching for the
+            // server that will host it, so they get relayed the moment it claims.
+            if (entry.Value.MatchId != 0) {
+                RemoteAPI.PollMatchStart(entry.Key, entry.Value.MatchId);
+                continue;
+            }
             if (!entry.Value.Queueing) continue;
             RemoteAPI.SendHeartbeat(entry.Key, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
         }
