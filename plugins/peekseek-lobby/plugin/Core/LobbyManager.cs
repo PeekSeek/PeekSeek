@@ -25,6 +25,11 @@ internal abstract class LobbyManager {
         internal byte Headshots;
         internal float SpawnProtectedUntil;
 
+        /// Set by the death event, acted on by the next tick. Respawning from
+        /// inside the event itself does nothing, because Unturned has not finished
+        /// killing them at that point.
+        internal bool AwaitingRespawn;
+
         /// Which kits.json category (from AllowedKitCategories) this player is
         /// currently equipped with — set on join, changed with /kit.
         internal string KitCategory;
@@ -587,6 +592,11 @@ internal abstract class LobbyManager {
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
             CSteamID steamID = new(entry.Key);
             PlayerState state = entry.Value;
+
+            if (state.AwaitingRespawn) {
+                state.AwaitingRespawn = false;
+                Respawn(steamID, state);
+            }
 
             // Checked every tick rather than on the magazine timer: the gap between
             // reloading a drum away and having it taken back is the window in which
