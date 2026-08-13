@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using PeekSeekLobby.Core;
 using Rocket.API;
 using Rocket.Unturned.Player;
+using SDG.Unturned;
 using UnityEngine;
 
 namespace PeekSeekLobby.Commands;
@@ -18,16 +19,16 @@ internal class PingCommand : IRocketCommand {
 
     public void Execute(IRocketPlayer caller, string[] command) {
         UnturnedPlayer callerPlayer = (UnturnedPlayer)caller;
-        UnturnedPlayer target = command.Length == 0 ? callerPlayer : UnturnedPlayer.FromName(command[0]);
+        SteamPlayer self = callerPlayer.Player.channel.owner;
+        SteamPlayer target = command.Length == 0 ? self : LobbyManager.FindPlayer(command[0]);
 
         if (target == null) {
-            LobbyManager.Whisper(callerPlayer.Player.channel.owner,
-                PeekSeekLobby.Instance.Translate("no_player_found", command[0]));
+            LobbyManager.Whisper(self, PeekSeekLobby.Instance.Translate("no_player_found", command[0]));
             return;
         }
 
-        int ms = Mathf.RoundToInt(target.Player.channel.owner.ping * 1000f);
-        string label = target.CSteamID == callerPlayer.CSteamID ? "Your" : $"{target.CharacterName}'s";
-        LobbyManager.Whisper(callerPlayer.Player.channel.owner, $"{label} ping: {ms}ms");
+        int ms = Mathf.RoundToInt(target.ping * 1000f);
+        string label = target.playerID.steamID == callerPlayer.CSteamID ? "Your" : $"{target.playerID.characterName}'s";
+        LobbyManager.Whisper(self, $"{label} ping: {ms}ms");
     }
 }

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using PeekSeekLobby.Core;
 using Rocket.API;
 using Rocket.Unturned.Player;
+using SDG.Unturned;
 using Steamworks;
 
 namespace PeekSeekLobby.Commands;
@@ -38,8 +39,8 @@ internal class StatsCommand : IRocketCommand {
     }
 
     private static CSteamID? Resolve(string query) {
-        UnturnedPlayer byName = UnturnedPlayer.FromName(query);
-        if (byName != null) return byName.CSteamID;
+        SteamPlayer byName = LobbyManager.FindPlayer(query);
+        if (byName != null) return byName.playerID.steamID;
 
         return ulong.TryParse(query, out ulong steam64) ? new CSteamID(steam64) : null;
     }
