@@ -8,6 +8,7 @@ using Rocket.Core.Utils;
 using Rocket.Unturned.Chat;
 using Rocket.Unturned.Events;
 using Rocket.Unturned.Player;
+using SDG.NetTransport;
 using SDG.Unturned;
 using Steamworks;
 using UnityEngine;
@@ -55,6 +56,11 @@ internal abstract class LobbyManager {
     private const float MagazineCheckIntervalSeconds = 2f;
     private const float ReputationSyncIntervalSeconds = 5f;
     private const float ProtectedNoticeIntervalSeconds = 3f;
+    private const float StaminaTopUpIntervalSeconds = 0.5f;
+    private const float HudIntervalSeconds = 1f;
+
+    private static float LastStaminaTopUp;
+    private static float LastHudUpdate;
     private const int LeaderboardPlaces = 5;
 
     private static readonly Dictionary<ulong, float> LastProtectedNotice = [];
@@ -478,6 +484,16 @@ internal abstract class LobbyManager {
             }
         }
 
+        if (PeekSeekLobby.Config.UnlimitedStamina && now - LastStaminaTopUp >= StaminaTopUpIntervalSeconds) {
+            LastStaminaTopUp = now;
+            RefillStamina();
+        }
+
+        if (now - LastHudUpdate >= HudIntervalSeconds) {
+            LastHudUpdate = now;
+            UpdateArenaHud(now);
+        }
+
         if (now - LastReputationSync >= ReputationSyncIntervalSeconds) {
             LastReputationSync = now;
             SyncReputations();
@@ -543,6 +559,33 @@ internal abstract class LobbyManager {
     /// deleting items it can't reason about.
     private static byte MagazineCapacity(ushort itemId) {
         return Assets.find(EAssetType.ITEM, itemId) is ItemMagazineAsset asset ? asset.amount : (byte)0;
+    }
+
+    /// Topped back up rather than disabled outright: there is no switch for
+    /// infinite stamina, and refilling faster than it can visibly drain is
+    /// indistinguishable from having none.
+    private static void RefillStamina() {
+        foreach (SteamPlayer client in Provider.clients) {
+            if (client?.player == null || client.player.life.isDead) continue;
+            client.player.life.serverModifyStamina(byte.MaxValue);
+        }
+    }
+
+    /// The arena HUD puts the server name across the top of the screen and the
+    /// level number underneath it, so the name carries the round countdown and
+    /// the number carries how many people are actually here.
+    private static void UpdateArenaHud(float now) {
+        if (PeekSeekLobby.Config.ShowRoundTimerInName) {
+            float remaining = Mathf.Max(0f, PeekSeekLobby.Config.ResetIntervalSeconds - (now - LastArenaReset));
+            int minutes = (int)(remaining / 60f);
+            int seconds = (int)(remaining % 60f);
+            Provider.serverName = $"{PeekSeekLobby.Config.szServerDisplayName} - {minutes}:{seconds:00}";
+        }
+
+        LevelManager.SendLevelNumber.InvokeAndLoopback(
+            ENetReliability.Unreliable,
+            Provider.GatherRemoteClientConnections(),
+            (byte)Mathf.Min(Provider.clients.Count, byte.MaxValue));
     }
 
     /// Unturned adjusts reputation itself when players kill each other, so this
