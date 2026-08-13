@@ -195,12 +195,34 @@ internal abstract class LobbyManager {
             if (limb == ELimb.SKULL) killerState.Headshots++;
         }
 
-        AwardBloodBag(killer);
+        GrantRewards(killer.Player);
         AnnounceKill(killer, victim, limb, killerState?.Kills ?? 0);
     }
 
-    private static void AwardBloodBag(UnturnedPlayer killer) {
-        killer.Player.inventory.forceAddItem(new Item(PeekSeekLobby.Config.BloodBagItemID, true), true);
+    /// Tops each reward back up to its cap rather than adding one blindly, so a
+    /// player who never spent theirs doesn't accumulate a stack across a killstreak.
+    private static void GrantRewards(Player player) {
+        List<RewardItem> rewards = PeekSeekLobby.Config.KillRewards;
+        if (rewards is not { Count: > 0 }) return;
+
+        foreach (RewardItem reward in rewards) {
+            int missing = reward.MaxCarried - CountItem(player, reward.ItemID);
+            for (int i = 0; i < missing; i++) {
+                player.inventory.forceAddItem(new Item(reward.ItemID, true), true);
+            }
+        }
+    }
+
+    private static int CountItem(Player player, ushort itemId) {
+        int count = 0;
+        for (byte page = 0; page < PlayerInventory.PAGES - 1; page++) {
+            byte itemCount = player.inventory.getItemCount(page);
+            for (byte i = 0; i < itemCount; i++) {
+                ItemJar jar = player.inventory.getItem(page, i);
+                if (jar?.item != null && jar.item.id == itemId) count++;
+            }
+        }
+        return count;
     }
 
     private static void AnnounceKill(UnturnedPlayer killer, UnturnedPlayer victim, ELimb limb, byte killerKills) {
@@ -285,6 +307,10 @@ internal abstract class LobbyManager {
                 state.SpareMagItemId = loadout.Magazine?.ItemID ?? 0;
                 state.SpareMagFullStock = loadout.Magazine?.Amount ?? 0;
                 if (loadout.Magazine != null) GiveItem(player, loadout.Magazine);
+
+                // After the kit, never before: EquipRealKit clears the inventory
+                // first, so rewards granted earlier would be thrown away.
+                GrantRewards(player);
             });
         });
     }

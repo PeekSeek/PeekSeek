@@ -16,12 +16,15 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public float SpawnProtectionSeconds;
     public float RespawnDelaySeconds;
     public List<ushort> RespawnCountdownAtSecondsRemaining;
-    public ushort BloodBagItemID;
     public List<LobbySpawn> Spawns;
     /// Master switch for matchmaking. Off means the lobby is purely a warm-up
     /// server: no heartbeats leave the box, nobody is matched or relayed, and
     /// /noqueue has nothing to toggle.
     public bool EnableQueue;
+
+    /// Consumables every player spawns holding, restocked to the same cap on
+    /// each kill. Raise MaxCarried to let players bank more than one.
+    public List<RewardItem> KillRewards;
 
     /// Dropped items are deleted the moment they hit the ground, so the arena
     /// never fills with the guns and magazines of everyone who died in it.
@@ -67,9 +70,14 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         SpawnProtectionSeconds = 5f;
         RespawnDelaySeconds = 10f;
         RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
-        BloodBagItemID = 395;
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = false;
+        // Blood bag heals, beacon bounces. One of each at a time so they stay a
+        // reward for the next fight rather than a stockpile.
+        KillRewards = [
+            new RewardItem { ItemID = 395, MaxCarried = 1 },
+            new RewardItem { ItemID = 1838, MaxCarried = 1 }
+        ];
         RemoveDroppedItems = true;
         ResetIntervalSeconds = 600f;
         ShowEloAsReputation = true;
