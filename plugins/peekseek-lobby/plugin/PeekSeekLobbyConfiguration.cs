@@ -20,6 +20,11 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public List<LobbySpawn> Spawns;
     public string szDiscordURL;
 
+    /// Where a matched player is sent to log in and pick their kit. Opening it
+    /// logged out is what records it as the page to come back to, so the site
+    /// returns them here after login on its own.
+    public string szMatchURL;
+
     /// Which kits.json weapon categories players may equip in the lobby and pick
     /// between with /kit — a subset of what the site actually supports, so this
     /// can grow (or shrink) without a plugin release. The first entry is the
@@ -47,6 +52,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         BloodBagItemID = 395;
         AllowedKitCategories = ["meta", "sniper"];
         szDiscordURL = "https://discord.gg/NKgTe6RnvH";
+        szMatchURL = "https://dev.peekseek.net/match";
 
         // The same first-option gun, attachments and outfit the website would
         // resolve for a player who has never saved a kit — see kits.json and

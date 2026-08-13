@@ -46,10 +46,7 @@ internal static class RemoteAPI {
                 int matchId = MatchIdFrom(await ReadJson(response));
                 if (matchId <= 0) return;
 
-                string code = await FetchMatchServerCode(matchId);
-                if (string.IsNullOrEmpty(code)) return;
-
-                TaskDispatcher.QueueOnMainThread(() => LobbyManager.SendToMatch(steam64, code));
+                TaskDispatcher.QueueOnMainThread(() => LobbyManager.SendToMatch(steam64, matchId));
             } catch (Exception ex) {
                 Logger.LogError($"Failed to send queue heartbeat for {steam64}: {ex.Message}");
             }
@@ -94,6 +91,21 @@ internal static class RemoteAPI {
     /// The match's `claimed` value — the Unturned server code of whichever server
     /// picked the match up, which is what a player connects with. Empty while no
     /// server has claimed it yet, so the next heartbeat can try again.
+    /// A matched player waits in the lobby until a game server claims their
+    /// match; this watches for that and hands them over when it happens.
+    internal static void PollMatchStart(ulong steam64, int matchId) {
+        Task.Run(async () => {
+            try {
+                string code = await FetchMatchServerCode(matchId);
+                if (string.IsNullOrEmpty(code)) return;
+
+                TaskDispatcher.QueueOnMainThread(() => LobbyManager.RelayToMatch(steam64, code));
+            } catch (Exception ex) {
+                Logger.LogError($"Failed to check match {matchId} for {steam64}: {ex.Message}");
+            }
+        });
+    }
+
     private static async Task<string> FetchMatchServerCode(int matchId) {
         HttpResponseMessage response = await Client.GetAsync($"{ApiUrl}/match/overlay?id={matchId}");
         if (!response.IsSuccessStatusCode) return null;
