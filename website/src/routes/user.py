@@ -206,6 +206,18 @@ def public_kit_data(steam64: int):
     return data.Kit.publicData(steam64)
 
 
+@router.get("/reputation/{steam64}")
+def public_reputation(steam64: int):
+    """A player's Elo, public and unauthenticated — what the lobby server mirrors
+    into their in-game reputation so rank is visible over someone's head.
+
+    Deliberately just Elo: Unturned moves reputation itself on kills and other
+    actions, so anything reading this has to be able to re-assert the real value
+    rather than track a drifting one.
+    """
+    return {"steam64": str(steam64), "elo": data.Stat.getElo(steam64)}
+
+
 @router.get("/user/{steam64}")
 @router.get("/u/{steam64}")
 def profile(request: Request, steam64: int):

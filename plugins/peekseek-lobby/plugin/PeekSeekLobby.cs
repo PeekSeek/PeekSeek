@@ -47,5 +47,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "match_found", "Match found! Open the page that just appeared to log in and pick your kit." },
         { "match_found_browser", "Open this and log in to select your kit and start your match" },
         { "match_started", "Your match is ready — sending you to the server now!" },
+        { "spawn_protection_over", "Spawn protection has ended — you can be hurt now." },
+        { "arena_reset", "The arena has been reset. Everyone's session stats are back to zero." },
     };
 }

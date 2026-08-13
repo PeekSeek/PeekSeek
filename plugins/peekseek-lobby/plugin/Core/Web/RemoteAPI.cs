@@ -88,9 +88,6 @@ internal static class RemoteAPI {
         return matchId == null || matchId.Type == JTokenType.Null ? 0 : (int)matchId;
     }
 
-    /// The match's `claimed` value — the Unturned server code of whichever server
-    /// picked the match up, which is what a player connects with. Empty while no
-    /// server has claimed it yet, so the next heartbeat can try again.
     /// A matched player waits in the lobby until a game server claims their
     /// match; this watches for that and hands them over when it happens.
     internal static void PollMatchStart(ulong steam64, int matchId) {
@@ -106,6 +103,9 @@ internal static class RemoteAPI {
         });
     }
 
+    /// The match's `claimed` value — the Unturned server code of whichever server
+    /// picked the match up, which is what a player connects with. Empty while no
+    /// server has claimed it yet, so the next poll can try again.
     private static async Task<string> FetchMatchServerCode(int matchId) {
         HttpResponseMessage response = await Client.GetAsync($"{ApiUrl}/match/overlay?id={matchId}");
         if (!response.IsSuccessStatusCode) return null;
@@ -120,6 +120,26 @@ internal static class RemoteAPI {
                 await Client.GetAsync($"{ApiUrl}/unt/queue/quit?steam64={steam64}");
             } catch (Exception ex) {
                 Logger.LogError($"Failed to dequeue {steam64}: {ex.Message}");
+            }
+        });
+    }
+
+    /// A player's Elo, mirrored into their in-game reputation. Null when the
+    /// site can't be reached, which leaves reputation untouched rather than
+    /// stamping a wrong number over it.
+    internal static void FetchElo(ulong steam64, Action<int> onFetched) {
+        Task.Run(async () => {
+            try {
+                HttpResponseMessage response = await Client.GetAsync($"{ApiUrl}/reputation/{steam64}");
+                if (!response.IsSuccessStatusCode) return;
+
+                JObject body = await ReadJson(response);
+                if (body?["elo"] == null) return;
+
+                int elo = (int)body["elo"];
+                TaskDispatcher.QueueOnMainThread(() => onFetched(elo));
+            } catch (Exception ex) {
+                Logger.LogError($"Failed to fetch reputation for {steam64}: {ex.Message}");
             }
         });
     }

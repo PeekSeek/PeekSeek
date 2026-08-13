@@ -298,3 +298,31 @@ def test_unt_queue_quit_removes_the_heartbeat(client, user_factory):
             db.query(data.UserHB).where(data.UserHB.steam64 == player.steam64).first()
             is None
         )
+
+
+def test_public_reputation_returns_elo(client, user_factory):
+    player = user_factory()
+    data.Stat.append(player.steam64, "unt", elo=42)
+
+    r = client.get(f"/reputation/{player.steam64}")
+
+    assert r.status_code == 200
+    assert r.json()["elo"] == data.Stat.getElo(player.steam64)
+
+
+def test_public_reputation_defaults_for_an_unknown_player(client):
+    """The lobby asks about anyone who connects, including players who have
+    never had a ranked match — they get the starting Elo, not a 404."""
+    r = client.get("/reputation/76561197960287930")
+
+    assert r.status_code == 200
+    assert r.json()["elo"] == 300
+
+
+def test_public_reputation_steam64_is_a_string(client, user_factory):
+    """A steam64 exceeds Number.MAX_SAFE_INTEGER, so it must not go out as a
+    JSON number for any browser-side caller."""
+    player = user_factory()
+    r = client.get(f"/reputation/{player.steam64}")
+
+    assert r.json()["steam64"] == str(player.steam64)
