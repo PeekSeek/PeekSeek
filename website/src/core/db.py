@@ -1,5 +1,6 @@
 import traceback
 
+from sqlalchemy import inspect, text
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -36,11 +37,61 @@ class open:
             self._session.close()
 
 
+def _defaultClause(column) -> str:
+    """`DEFAULT <value>` for a column whose model declares one, so rows already in the
+    table get that value rather than NULL. `Stats.headshots` is why this matters: the
+    profile page divides by it, and `None / 1` raises just as loudly as a missing column.
+    """
+    default = getattr(column.default, "arg", None)
+    if default is None or callable(default):
+        return ""
+    return f" DEFAULT {column.type.literal_processor(dialect=engine.dialect)(default)}"
+
+
+def addMissingColumns() -> None:
+    """Add columns a model has gained since its table was first created.
+
+    `create_all` only ever creates whole tables. A column added to a model whose table
+    already exists is silently skipped, and every query naming it then fails at runtime.
+    `MatchResults` was created before `MatchResult.matchId` existed, which is why every
+    profile page in production 500'd on `column MatchResults.matchId does not exist`
+    long after the model looked correct. `Stats` is three columns behind for the same
+    reason.
+
+    Columns are added nullable and without their foreign keys, since existing rows have
+    nothing to point at and no value to be checked against. A database created from
+    scratch still gets the full definition straight from `create_all`. Nothing here
+    drops, renames or retypes anything, so a change needing any of those still has to be
+    done by hand.
+    """
+    inspector = inspect(engine)
+    statements = []
+    for table in SQLModel.metadata.sorted_tables:
+        if not inspector.has_table(table.name):
+            continue
+        present = {column["name"] for column in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name not in present:
+                statements.append(
+                    f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" '
+                    f"{column.type.compile(engine.dialect)}{_defaultClause(column)}"
+                )
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            print(f"Schema: {statement}")
+            connection.execute(text(statement))
+
+
 from . import models  # noqa: F401, E402 — ensures all tables are registered
 from sqlalchemy.orm import configure_mappers
 
 configure_mappers()
 SQLModel.metadata.create_all(engine)
+addMissingColumns()
 
 if settings.bootstrap_admin:
     models.User.bootstrapAdmin(settings.bootstrap_admin)

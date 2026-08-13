@@ -70,6 +70,12 @@ point at a file, `sqlite:////absolute/path/dev.db`, and get the same schema from
 `create_all`. Note that SQLite will not reproduce Postgres-specific problems — integer
 width being the obvious one.
 
+There is no migration tool. `create_all` builds tables that do not exist yet, and
+`addMissingColumns` in [`src/core/db.py`](src/core/db.py) then adds columns the models
+have gained since their table was built, backfilling the model's default where there is
+one. Each `ALTER` it runs is printed at startup. Dropping, renaming or retyping a column
+is not covered, and still has to be done against the database by hand.
+
 `BOOTSTRAP_ADMIN_STEAM64` exists because a brand-new database contains no admin, and
 there is no way to promote the first one through the site. It creates the account if it
 has never logged in; the Steam callback matches on `steam64`, so the row is reused at
