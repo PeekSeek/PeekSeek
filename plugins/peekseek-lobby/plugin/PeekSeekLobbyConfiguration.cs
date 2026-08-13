@@ -26,6 +26,12 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// default a player equips on join.
     public List<string> AllowedKitCategories;
 
+    /// Handed out when the website's kit data can't be fetched, so a site outage
+    /// (or a player who has never saved a kit) still leaves someone able to
+    /// fight rather than standing in the arena with an empty inventory. One
+    /// entry per category in AllowedKitCategories.
+    public List<FallbackKit> FallbackKits;
+
     public void LoadDefaults() {
         szAPIURL = "https://api.peekseek.com";
         szHexDefaultChatColor = "#FFFFFF";
@@ -41,6 +47,25 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         BloodBagItemID = 395;
         AllowedKitCategories = ["meta", "sniper"];
         szDiscordURL = "https://discord.gg/NKgTe6RnvH";
+
+        // The same first-option gun, attachments and outfit the website would
+        // resolve for a player who has never saved a kit — see kits.json and
+        // metagun.py. Kept in config rather than hardcoded so a balance change
+        // doesn't need a plugin release.
+        FallbackKits = [
+            new FallbackKit {
+                Category = "meta",
+                Items = [
+                    new FallbackItem { ItemID = 363, Amount = 1, State = "148,0,239,3,8,0,150,0,6,0,30,2,1,100,100,100,0,100" },
+                    new FallbackItem { ItemID = 309, Amount = 1, State = "" },
+                    new FallbackItem { ItemID = 310, Amount = 1, State = "" },
+                    new FallbackItem { ItemID = 253, Amount = 1, State = "" },
+                    new FallbackItem { ItemID = 307, Amount = 1, State = "" },
+                    new FallbackItem { ItemID = 308, Amount = 1, State = "" }
+                ],
+                Magazine = new FallbackItem { ItemID = 6, Amount = 5, State = "" }
+            }
+        ];
 
         // Placeholder — real Alpha Valley spawn points get filled in once the
         // plugin is installed on the live arena map.
