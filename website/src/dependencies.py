@@ -38,7 +38,7 @@ PAGES_NEVER_REMEMBERED = (
     "/match/current",
     "/match/overlay",
     "/user/changeuuid",
-    "/unt/",
+    "/server/",
     "/ping",
     "/build",
     "/ads",
@@ -163,13 +163,18 @@ RequestValues = Annotated[dict, Depends(merged_request_values)]
 async def forced_json_body(request: Request):
     """The body parsed as JSON regardless of Content-Type — get_json(force=True).
 
-    A malformed body (a crashed plugin build, a truncated request) must 400, not
-    500 — this runs as a dependency, before any route's own try/except gets a
-    chance to run, so an uncaught decode error here skips every route's error
-    handling and its Discord webhook logging along with it.
+    An absent body reads as `{}` so a route whose body is entirely optional does not
+    need a second signature for the empty case. A body that is present but malformed (a
+    crashed plugin build, a truncated request) must 400, not 500 — this runs as a
+    dependency, before any route's own try/except gets a chance to run, so an uncaught
+    decode error here skips every route's error handling and its Discord webhook
+    logging along with it.
     """
+    raw = await request.body()
+    if not raw.strip():
+        return {}
     try:
-        return json.loads(await request.body())
+        return json.loads(raw)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from time import time
-from typing import Optional
+from typing import ClassVar, Optional
 
 from sqlalchemy import BigInteger, Column, DateTime, JSON, desc, text
 from sqlmodel import Field, SQLModel
@@ -132,18 +132,66 @@ class Match(SQLModel, table=True):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-    def canBeClaimed(self) -> bool:
+    # The four states a match can be in. They are derived from `finished`, `claimed`
+    # and `meta["hostedAt"]` rather than stored — a fourth place to write the same fact
+    # is a fourth place for it to disagree. ClassVar keeps SQLModel from reading them
+    # as columns.
+    PENDING: ClassVar[str] = "pending"  # exists, no game server holds it
+    PICKING: ClassVar[str] = "picking"  # a server holds it while its players choose
+    LIVE: ClassVar[str] = "live"  # handed over; the server is running it
+    FINISHED: ClassVar[str] = "finished"  # scored, abandoned or cancelled
+
+    STATUS_LABELS: ClassVar[dict] = {
+        PENDING: "Waiting for a server",
+        PICKING: "Players choosing",
+        LIVE: "In progress",
+        FINISHED: "Over",
+    }
+
+    @property
+    def status(self) -> str:
+        if self.finished:
+            return Match.FINISHED
+        if self.meta.get("hostedAt"):
+            return Match.LIVE
+        return Match.PICKING if self.claimed else Match.PENDING
+
+    @property
+    def statusLabel(self) -> str:
+        """`status` in words, for the spectate and admin lists."""
+        return Match.STATUS_LABELS[self.status]
+
+    def selectionEndsAt(self) -> float:
+        return self.time + mmconfig["selectKitsTime"]
+
+    def readyToHost(self) -> bool:
+        """Whether everything the game server needs to run this match has been decided.
+
+        Deliberately not "is a server available" — that is the caller's business. This
+        answers only "is there anything left to wait for", which is every map/ballistics/
+        movement pick made, and either every player locked in or the selection window
+        run out.
+        """
         return (
-            self.finished is not True
-            and self.claimed is None
+            not self.finished
             and self.meta["ballistics"] is not None
             and self.meta["map"] is not None
             and self.meta["movement"] is not None
-            and (
-                time() >= (self.time + mmconfig["selectKitsTime"])
-                or self.allKitsLocked()
-            )
+            and (time() >= self.selectionEndsAt() or self.allKitsLocked())
         )
+
+    def waitingOn(self) -> list[str]:
+        """The players who still have a pick to make, for the server to name while it
+        waits. Empty once selection is done, however it ended."""
+        gm = mmconfig["gamemodes"][self.gamemode]
+        needsKit = len(gm["kitsAllowed"]) > 1
+        needsPowerup = len(gm["powerups"]) > 1
+        return [
+            steam64
+            for steam64, user in self.meta["userData"].items()
+            if (needsKit and user["kit"] is None)
+            or (needsPowerup and user["powerup"] is None)
+        ]
 
     def allKitsLocked(self) -> bool:
         """True once every player has made every pick the gamemode asks for them to
@@ -158,74 +206,142 @@ class Match(SQLModel, table=True):
             for user in self.meta["userData"].values()
         )
 
-    def claim(self, code: str = "0") -> "Match":
+    def assignTo(self, serverCode: str) -> "Match":
+        """Hand this match to a game server. From here on that server is the only one
+        that can host it, and the only one whose result report will be believed."""
         from src.core.db import open
 
         with open() as db:
-            db.query(Match).where(Match.id == self.id).update({"claimed": code})
+            db.query(Match).where(Match.id == self.id).update({"claimed": serverCode})
+        self.claimed = serverCode
         return self
 
+    def markHosting(self) -> None:
+        """Record that the server has now been handed the match and is running it.
+
+        This is what makes the session poll idempotent: a server that asks again gets
+        told to carry on rather than being handed the same match a second time, which
+        would restart the round and kick everyone already playing.
+        """
+        from src.core.db import open
+
+        self.meta = self.meta | {"hostedAt": time()}
+        with open() as db:
+            db.query(Match).where(Match.id == self.id).update({"meta": self.meta})
+
     @staticmethod
-    def claimMatchIfPossible(region: str, code: str = "0") -> dict | None:
+    def pendingFor(region: str) -> "Match | None":
+        """The oldest match in this region that nobody is hosting yet.
+
+        Oldest first, not newest: a match that has been waiting is the one closest to
+        having its players give up on it, so it gets the next free server.
+        """
         from src.core.db import open
 
         with open() as db:
-            for match in (
+            return (
                 db.query(Match)
-                .where(Match.claimed.is_(None), Match.region == region)
-                .order_by(desc(Match.time))
-                .all()
-            ):
-                if match.canBeClaimed():
-                    j = match.json()
-                    match.claim(code)
-                    return j
-        return None
+                .where(
+                    Match.claimed.is_(None),
+                    Match.finished.is_(False),
+                    Match.region == region,
+                )
+                .order_by(Match.time)
+                .first()
+            )
 
     @staticmethod
-    def releaseAbandoned(code: str) -> None:
-        """A server polling `matchid=0` has no live match right now — if it still holds
-        the claim on an unfinished match, that match's one and only "I'm done" signal
-        (the plugin's fire-and-forget POST to /unt/results) never arrived, and nothing
-        else ever revisits a *claimed* match (cancelStaleUnclaimed only sweeps unclaimed
-        ones). Left alone, that match's players stay stuck in it forever. Skipped for the
-        "0" sentinel code, since that's shared by every server too old to send a real one
-        — finishing on it could close a match a different old server is still playing.
+    def releaseAbandoned(serverCode: str) -> None:
+        """A server reporting itself free has no match — so if it still holds one that
+        never finished, that match's only "I'm done" signal never arrived. Nothing else
+        revisits a match a server is holding, so left alone its players stay stuck in it
+        forever.
+
+        A server with a result to report keeps naming the match in its polls until the
+        report is acknowledged, so reaching here means the server genuinely has nothing
+        left to say about it. The match is recorded as abandoned rather than merely
+        closed: nobody's Elo moves, because no winner was ever reported, but the match
+        stops being invisible.
         """
-        if code == "0":
+        if not serverCode or serverCode == "0":
             return
 
         from src.core.db import open
         from src.core.webhook import Webhook
 
+        abandoned = []
         with open() as db:
             for match in (
                 db.query(Match)
-                .where(Match.finished.is_(False), Match.claimed == code)
+                .where(Match.finished.is_(False), Match.claimed == serverCode)
                 .all()
             ):
                 match.finished = True
-                Webhook(f"Match.{match.id}").error(
-                    f"Server `{code}` polled idle without ever reporting this match's "
-                    "results — force-closed so its players aren't stuck in it."
-                )
+                abandoned.append(match.id)
+
+        for matchId in abandoned:
+            MatchResult.recordUnscored(matchId, "abandoned")
+            Webhook(f"Match.{matchId}").error(
+                f"Server `{serverCode}` reported itself free without ever reporting "
+                "this match's results — recorded as abandoned so its players aren't "
+                "stuck in it. No Elo was applied, because no winner was ever reported."
+            )
 
     @staticmethod
-    def cancelStaleUnclaimed() -> None:
-        """Finish matches no server claimed within the timeout, and log it."""
+    def cancelStranded() -> None:
+        """Cancel every match that has run out of ways to ever be played.
+
+        Matchmaking only makes a match for a server that has just said it is free, so
+        the only matches that reach here are ones created without one — a custom match,
+        an event pairing — that no server picked up. Once selection has closed on such a
+        match, `hostGrace` more seconds is all it gets: game servers poll every few
+        seconds, so a match that has gone that long without one has none coming.
+
+        Leaving them alone is how players used to end up locked out of matchmaking by a
+        match that was never going to start; `getCurrentMatchId` counts any unfinished
+        match they are in.
+        """
         from src.core.db import open
         from src.core.webhook import Webhook
 
+        stranded = []
         with open() as db:
             for match in (
                 db.query(Match)
                 .where(Match.finished.is_(False), Match.claimed.is_(None))
                 .all()
             ):
-                if time() - match.time <= settings.claim_timeout:
+                if time() < match.selectionEndsAt() + settings.host_grace:
                     continue
                 match.finished = True
-                Webhook(f"Match.{match.id}").error("Cancelled due to timeout.")
+                stranded.append(match.id)
+
+        for matchId in stranded:
+            MatchResult.recordUnscored(matchId, "noServer")
+            Webhook(f"Match.{matchId}").error(
+                "Cancelled — selection finished and no game server ever became free to "
+                "host it."
+            )
+
+    @staticmethod
+    def resolveExpiredPicks() -> None:
+        """Auto-decide every stalled map/ballistics/movement pick that is past its
+        deadline, across every unfinished match.
+
+        Enforced here, from the game servers' own polling, rather than only when a
+        player's match page happens to ask: a match whose players all closed the tab
+        used to sit on an undecided pick forever, never becoming hostable, never being
+        cancelled, and never letting its players queue for anything else.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            for match in db.query(Match).where(Match.finished.is_(False)).all():
+                resolved = match.resolvedMetaIfExpired()
+                if resolved is not None:
+                    db.query(Match).where(Match.id == match.id).update(
+                        {"meta": resolved}
+                    )
 
     @staticmethod
     def setLiveData(match_id, livedata: dict) -> None:
@@ -235,26 +351,6 @@ class Match(SQLModel, table=True):
             match_id = match_id.id
         with open() as db:
             db.query(Match).where(Match.id == match_id).update({"livedata": livedata})
-
-    def json(self) -> dict:
-        from .kit import Kit
-
-        return {
-            "head": "start",
-            "matchid": self.id,
-            "meta": {"rounds": 3},
-            "settings": {
-                "ballistics": self.meta["ballistics"],
-                "map": self.meta["map"],
-                "movement": self.meta["movement"],
-            },
-            "teams": self.teams,
-            "users": [
-                {"kit": Kit.getItems(steam64, self), "userId": str(steam64)}
-                for steam64 in self.meta["userData"]
-            ],
-            "spectators": self.spectators,
-        }
 
     def getReturnedMeta(
         self,
@@ -334,17 +430,35 @@ class Match(SQLModel, table=True):
         return m
 
     def localJson(self) -> dict:
+        """The match as the site's own pages read it — the match screen, the stream
+        overlay, and the spectate and admin lists.
+
+        `status` is what tells the match screen which of its three faces to show, and
+        `serverCode` is null until there is genuinely something to connect to. They are
+        separate on purpose: a match has a server from the moment it is made, so "a
+        server exists" stopped being the same question as "the match has started".
+        """
         return {
             "id": self.id,
+            "status": self.status,
+            "serverCode": self.connectCode(),
             "teams": self.teams,
             "currentPick": self.meta.get("currentPick", self.teams[0]["users"][0]),
             "params": self.meta,
             "claimed": self.claimed,
             "users": self.getSteamUserData(),
             "liveData": self.livedata,
-            "startsAfter": self.time + mmconfig["selectKitsTime"],
+            "startsAfter": self.selectionEndsAt(),
             "config": mmconfig["gamemodes"][self.gamemode],
         }
+
+    def connectCode(self) -> str | None:
+        """What a player types into Unturned to join this match, once there is anything
+        to join. Null while the match is still being set up, and null for the "0"
+        sentinel a server too old to report its own code holds it with."""
+        if self.status != Match.LIVE or self.claimed in (None, "0"):
+            return None
+        return self.claimed
 
     def getSteamUserData(self) -> dict:
         from src.core import steam
@@ -399,64 +513,95 @@ class MatchResult(SQLModel, table=True):
     data: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
 
     @staticmethod
+    def _row(db, matchId: int) -> "MatchResult":
+        """This match's row, created from the match's own settings if it has none yet.
+        Both the kill log and the final line arrive independently and either can be first,
+        so neither can assume the other already made the row."""
+        result = db.query(MatchResult).where(MatchResult.matchId == matchId).first()
+        if result is not None:
+            return result
+
+        match = db.query(Match).where(Match.id == matchId).first()
+        result = MatchResult(
+            matchId=matchId,
+            region=match.region if match else "unknown",
+            gamemode=match.gamemode if match else 0,
+            startTime=datetime.utcnow(),
+            data={
+                "map": match.meta.get("map") if match else None,
+                "ballistics": match.meta.get("ballistics") if match else None,
+                "movement": match.meta.get("movement") if match else None,
+                "kills": [],
+            },
+        )
+        db.add(result)
+        db.flush()
+        return result
+
+    @staticmethod
     def appendKill(matchId: int, kill: dict) -> None:
-        """Called from /unt/kills, once per kill. Creates the row on the first kill of a
-        match and appends to it on every one after."""
+        """One kill, as it happens. Creates the row on the first kill of a match and
+        appends to it on every one after."""
         from src.core.db import open
 
         with open() as db:
-            result = db.query(MatchResult).where(MatchResult.matchId == matchId).first()
-            if result is None:
-                match = db.query(Match).where(Match.id == matchId).first()
-                result = MatchResult(
-                    matchId=matchId,
-                    region=match.region if match else "unknown",
-                    gamemode=match.gamemode if match else 0,
-                    startTime=datetime.utcnow(),
-                    data={
-                        "map": match.meta.get("map") if match else None,
-                        "ballistics": match.meta.get("ballistics") if match else None,
-                        "movement": match.meta.get("movement") if match else None,
-                        "kills": [],
-                    },
-                )
-                db.add(result)
-                db.flush()
-
+            result = MatchResult._row(db, matchId)
             db.query(MatchResult).where(MatchResult.id == result.id).update(
                 {"data": result.data | {"kills": [*result.data.get("kills", []), kill]}}
             )
 
     @staticmethod
-    def recordFinalResults(matchId: int, results: dict) -> None:
-        """Called from /unt/results. `results` is matchmaking.matchResults()'s per-player
-        summary, keyed by steam64. A match with no kills (a walkover) still gets a row here,
-        since this is also the only place a player's final per-match line is kept."""
+    def hasResults(matchId: int) -> bool:
+        """Whether this match's final per-player line has already been recorded.
+
+        The guard against applying a match's Elo twice. A game server retries its result
+        report until the site acknowledges it, so a reply that gets lost on the way back
+        means the same result arrives again — that retry must not move anyone's Elo a
+        second time.
+        """
         from src.core.db import open
 
         with open() as db:
             result = db.query(MatchResult).where(MatchResult.matchId == matchId).first()
-            if result is None:
-                match = db.query(Match).where(Match.id == matchId).first()
-                result = MatchResult(
-                    matchId=matchId,
-                    region=match.region if match else "unknown",
-                    gamemode=match.gamemode if match else 0,
-                    startTime=datetime.utcnow(),
-                    data={
-                        "map": match.meta.get("map") if match else None,
-                        "ballistics": match.meta.get("ballistics") if match else None,
-                        "movement": match.meta.get("movement") if match else None,
-                        "kills": [],
-                    },
-                )
-                db.add(result)
-                db.flush()
+            return bool(result and result.data.get("results"))
 
+    @staticmethod
+    def recordFinalResults(matchId: int, results: dict) -> None:
+        """`results` is matchmaking.matchResults()'s per-player summary, keyed by steam64.
+        A match with no kills (a walkover) still gets a row here, since this is also the
+        only place a player's final per-match line is kept."""
+        from src.core.db import open
+
+        with open() as db:
+            result = MatchResult._row(db, matchId)
             db.query(MatchResult).where(MatchResult.id == result.id).update(
                 {
                     "endTime": datetime.utcnow(),
                     "data": result.data | {"results": results},
+                }
+            )
+
+    @staticmethod
+    def recordUnscored(matchId: int, reason: str) -> None:
+        """Close out a match that ends without a score: nobody turned up for it, or its
+        server never reported one.
+
+        No results block is invented. There is no trustworthy winner, so nobody's Elo
+        moves — but the match is recorded rather than simply vanishing, so an unscored
+        match is something an operator can see and count instead of a gap.
+
+        `reason` is `notPlayed` or `abandoned`.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            result = MatchResult._row(db, matchId)
+            if result.data.get("results"):
+                return
+            db.query(MatchResult).where(MatchResult.id == result.id).update(
+                {
+                    "endTime": datetime.utcnow(),
+                    "data": result.data | {"unscored": reason},
                 }
             )
 

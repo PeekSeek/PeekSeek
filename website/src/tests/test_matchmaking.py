@@ -10,6 +10,7 @@ from src.core import models as data
 from src.core.settings import settings
 
 GAMEMODE_BIT = 1  # bitmask selecting gamemode 0 (Competitive, 1v1, ranked)
+SERVER_CODE = "90071992547409931"  # the free game server matchmaking runs for
 RANKED = settings.mmconfig["gamemodes"][0]
 
 
@@ -18,7 +19,7 @@ def test_two_queued_players_get_matched(user_factory):
     data.User.addToQueue(first.steam64, GAMEMODE_BIT, region="paris")
     data.User.addToQueue(second.steam64, GAMEMODE_BIT, region="paris")
 
-    assert matchmaking.attemptCreateMatch(first.steam64, "paris") is True
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
 
     with Session(core_db.engine) as s:
         match = s.query(data.Match).first()
@@ -41,7 +42,7 @@ def test_party_members_land_on_the_same_team(user_factory):
     for player in partyB:
         data.User.addToQueue(player.steam64, DUO_BIT, partyId=202, region="paris")
 
-    assert matchmaking.attemptCreateMatch(partyA[0].steam64, "paris") is True
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
 
     with Session(core_db.engine) as s:
         match = s.query(data.Match).first()
@@ -64,7 +65,7 @@ def test_oversized_party_never_matches(user_factory):
     for player in solo:
         data.User.addToQueue(player.steam64, DUO_BIT, region="paris")
 
-    assert matchmaking.attemptCreateMatch(trio[0].steam64, "paris") is False
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is None
     with Session(core_db.engine) as s:
         assert s.query(data.Match).count() == 0
 
@@ -73,7 +74,7 @@ def test_lone_player_is_not_matched(user_factory):
     player = user_factory()
     data.User.addToQueue(player.steam64, GAMEMODE_BIT, region="paris")
 
-    assert not matchmaking.attemptCreateMatch(player.steam64, "paris")
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is None
     with Session(core_db.engine) as s:
         assert s.query(data.Match).count() == 0
         assert s.query(data.UserHB).count() == 1
@@ -84,7 +85,7 @@ def test_region_mismatch_does_not_match(user_factory):
     data.User.addToQueue(first.steam64, GAMEMODE_BIT, region="paris")
     data.User.addToQueue(second.steam64, GAMEMODE_BIT, region="utah")
 
-    assert not matchmaking.attemptCreateMatch(first.steam64, "paris")
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is None
     with Session(core_db.engine) as s:
         assert s.query(data.Match).count() == 0
 
@@ -96,7 +97,7 @@ def test_stale_heartbeats_are_pruned(user_factory):
         s.query(data.UserHB).update({"time": int(time()) - settings.queue_timeout - 1})
         s.commit()
 
-    assert not matchmaking.attemptCreateMatch(player.steam64, "paris")
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is None
     with Session(core_db.engine) as s:
         assert s.query(data.UserHB).count() == 0
 
@@ -106,13 +107,13 @@ def test_match_results_update_stats_and_elo(user_factory):
 
     results, avgElo = matchmaking.matchResults(
         RANKED,
-        {"steam64": winner.steam64, "win": True, "kills": 5, "deaths": 2},
-        {"steam64": loser.steam64, "win": False, "kills": 2, "deaths": 5},
+        {"steam64": str(winner.steam64), "won": True, "kills": 5, "deaths": 2},
+        {"steam64": str(loser.steam64), "won": False, "kills": 2, "deaths": 5},
     )
 
     assert avgElo == 300
-    assert results[winner.steam64]["Elo Change"] > 0
-    assert results[loser.steam64]["Elo Change"] < 0
+    assert results[str(winner.steam64)]["Elo Change"] > 0
+    assert results[str(loser.steam64)]["Elo Change"] < 0
     with Session(core_db.engine) as s:
         won = s.query(data.Stat).where(data.Stat.steam64 == winner.steam64).first()
         lost = s.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first()
@@ -297,7 +298,7 @@ def test_a_real_pick_resets_the_deadline_for_the_next_field(user_factory):
         assert result["pickDeadline"] > time()  # a fresh window for movement
 
 
-def test_match_cannot_be_claimed_early_with_picks_outstanding(user_factory):
+def test_match_is_not_hostable_early_with_picks_outstanding(user_factory):
     first, second = user_factory(), user_factory()
     with core_db.open() as db:
         match = data.Match(
@@ -313,10 +314,10 @@ def test_match_cannot_be_claimed_early_with_picks_outstanding(user_factory):
     with Session(core_db.engine) as s:
         loaded = s.query(data.Match).first()
         assert loaded.allKitsLocked() is False
-        assert loaded.canBeClaimed() is False
+        assert loaded.readyToHost() is False
 
 
-def test_match_starts_early_once_every_kit_and_powerup_is_locked(user_factory):
+def test_match_is_hostable_early_once_every_kit_and_powerup_is_locked(user_factory):
     """Waiting out the full `selectKitsTime` timer is pointless once nobody has
     anything left to decide — the match should be claimable immediately."""
     first, second = user_factory(), user_factory()
@@ -347,7 +348,7 @@ def test_match_starts_early_once_every_kit_and_powerup_is_locked(user_factory):
     with Session(core_db.engine) as s:
         loaded = s.query(data.Match).where(data.Match.id == matchId).first()
         assert loaded.allKitsLocked() is True
-        assert loaded.canBeClaimed() is True
+        assert loaded.readyToHost() is True
 
 
 def test_append_kill_creates_and_grows_the_match_result(user_factory):
@@ -431,7 +432,9 @@ def test_latest_for_finds_matches_a_player_has_a_result_in(user_factory):
     assert data.MatchResult.latestFor(other.steam64) == []
 
 
-def test_unclaimed_match_cancelled_after_timeout(user_factory):
+def test_a_serverless_match_is_cancelled_once_its_grace_runs_out(user_factory):
+    """No server, no match. Nothing else ever revisits a match nobody is hosting, so
+    without this its players stay locked into it and out of matchmaking."""
     first, second = user_factory(), user_factory()
     with core_db.open() as db:
         db.add(
@@ -444,20 +447,54 @@ def test_unclaimed_match_cancelled_after_timeout(user_factory):
             )
         )
     with Session(core_db.engine) as s:
-        s.query(data.Match).update({"time": int(time()) - settings.claim_timeout - 1})
+        s.query(data.Match).update(
+            {
+                "time": int(time())
+                - settings.mmconfig["selectKitsTime"]
+                - settings.host_grace
+                - 1
+            }
+        )
         s.commit()
 
-    data.Match.cancelStaleUnclaimed()
+    data.Match.cancelStranded()
 
     with Session(core_db.engine) as s:
         assert s.query(data.Match).first().finished is True
+    assert data.User.getCurrentMatchId(first.steam64) is None
+
+
+def test_a_serverless_match_is_left_alone_inside_its_grace(user_factory):
+    """A server coming free a moment late still gets to take the match, so the sweep
+    must not scrap one that is only just past selection."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+            )
+        )
+    with Session(core_db.engine) as s:
+        s.query(data.Match).update(
+            {"time": int(time()) - settings.mmconfig["selectKitsTime"] - 1}
+        )
+        s.commit()
+
+    data.Match.cancelStranded()
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).first().finished is False
 
 
 def test_claimed_match_released_when_its_server_polls_idle(user_factory):
-    """A server whose lobby timed out with too few players locally abandons the
-    match and goes back to polling matchid=0 — even if its one-shot /unt/results
-    report never landed, that next idle poll must still close the match out, or
-    every player in it stays stuck unable to queue again."""
+    """A server whose lobby timed out with too few players abandons the match and
+    goes back to reporting itself free — even if its result report never landed, that
+    next free poll must still close the match out, or every player in it stays stuck
+    unable to queue again."""
     first, second = user_factory(), user_factory()
     with core_db.open() as db:
         db.add(
@@ -501,3 +538,116 @@ def test_release_abandoned_ignores_the_shared_legacy_code(user_factory):
 
     with Session(core_db.engine) as s:
         assert s.query(data.Match).first().finished is False
+
+
+def elo(user, value):
+    """Put a player at a given Elo. Stat.append adds a delta to the 300 everyone
+    starts on, so the delta is what gets stored."""
+    data.Stat.append(user.steam64, "unt", elo=value - 300)
+
+
+def test_teams_too_far_apart_in_elo_are_not_matched(user_factory):
+    """A 200-point gap is the widest a match is allowed to be. Beyond it the two keep
+    waiting for someone closer rather than being handed a foregone conclusion."""
+    strong, weak = user_factory(), user_factory()
+    elo(strong, 700)
+    elo(weak, 300)
+    data.User.addToQueue(strong.steam64, GAMEMODE_BIT, region="paris")
+    data.User.addToQueue(weak.steam64, GAMEMODE_BIT, region="paris")
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is None
+    with Session(core_db.engine) as s:
+        assert s.query(data.UserHB).count() == 2, "both stay in the queue"
+
+
+def test_players_within_the_elo_gap_are_matched(user_factory):
+    strong, weak = user_factory(), user_factory()
+    elo(strong, 480)
+    elo(weak, 300)
+    data.User.addToQueue(strong.steam64, GAMEMODE_BIT, region="paris")
+    data.User.addToQueue(weak.steam64, GAMEMODE_BIT, region="paris")
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
+
+
+def test_a_closer_opponent_further_down_the_queue_is_preferred(user_factory):
+    """Waiting time orders the queue, but it does not override fairness: the player at
+    the front is skipped for the one who actually makes a legal match."""
+    waiting, mismatch, fair = user_factory(), user_factory(), user_factory()
+    elo(waiting, 300)
+    elo(mismatch, 900)
+    elo(fair, 350)
+    for player in (waiting, mismatch, fair):
+        data.User.addToQueue(player.steam64, GAMEMODE_BIT, region="paris")
+
+    match = matchmaking.matchForServer("paris", SERVER_CODE)
+
+    assert match is not None
+    players = {u for team in match.teams for u in team["users"]}
+    assert players == {str(waiting.steam64), str(fair.steam64)}
+
+
+def test_the_same_two_players_are_not_rematched_straight_away(user_factory):
+    """Diversity over convenience: having just played each other, these two wait for
+    somebody else rather than running the same fixture back."""
+    first, second = user_factory(), user_factory()
+    data.User.addToQueue(first.steam64, GAMEMODE_BIT, region="paris")
+    data.User.addToQueue(second.steam64, GAMEMODE_BIT, region="paris")
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
+
+    with Session(core_db.engine) as s:
+        s.query(data.Match).update({"finished": True})
+        s.commit()
+    data.User.addToQueue(first.steam64, GAMEMODE_BIT, region="paris")
+    data.User.addToQueue(second.steam64, GAMEMODE_BIT, region="paris")
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is None
+
+
+def test_a_rematch_is_allowed_once_the_cooldown_has_passed(user_factory):
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+            )
+        )
+    with Session(core_db.engine) as s:
+        s.query(data.Match).update(
+            {"finished": True, "time": int(time()) - settings.rematch_cooldown - 1}
+        )
+        s.commit()
+
+    data.User.addToQueue(first.steam64, GAMEMODE_BIT, region="paris")
+    data.User.addToQueue(second.steam64, GAMEMODE_BIT, region="paris")
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
+
+
+def test_changing_one_player_is_not_enough_to_beat_the_cooldown(user_factory):
+    """(a+b vs c+d) then (a+b vs c+e): swapping d for e still leaves a and b facing c
+    for a second time, so the fixture counts as a repeat."""
+    DUO_BIT = 2**3  # Casual Duo: 2 teams of 2
+    a, b, c, d, e = [user_factory() for _ in range(5)]
+    with core_db.open() as db:
+        db.add(
+            data.Match(
+                gamemode=3,
+                teams=[
+                    {"name": "ab", "users": [str(a.steam64), str(b.steam64)]},
+                    {"name": "cd", "users": [str(c.steam64), str(d.steam64)]},
+                ],
+            )
+        )
+    with Session(core_db.engine) as s:
+        s.query(data.Match).update({"finished": True})
+        s.commit()
+
+    for player in (a, b, c, e):
+        data.User.addToQueue(player.steam64, DUO_BIT, partyId=None, region="paris")
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is None

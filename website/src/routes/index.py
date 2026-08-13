@@ -73,7 +73,12 @@ def queue_heartbeat(
     eventId: int | None = None,
 ):
     """Keep the player — and their whole party, if they lead one — in queue, and
-    report back if they've been matched."""
+    report back if they've been matched.
+
+    Queueing does not make a match. A free game server in the player's region is what
+    scans this queue and forms one (see `/server/v1/session`), so this only ever adds
+    them to it and reports what happened elsewhere.
+    """
     current_match = data.User.getCurrentMatchId(steam64)
     if current_match:
         return {"succes": "true", "matchid": current_match}
@@ -89,8 +94,6 @@ def queue_heartbeat(
         )
 
     _ping_if_queueing_alone(region)
-    if matchmaking.attemptCreateMatch(steam64, region):
-        return {"succes": "true", "matchid": 1}
 
     partyMembers = party.data.get("members", []) if party else [str(steam64)]
     for member in partyMembers:

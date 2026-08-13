@@ -58,11 +58,10 @@ def match_current(steam64: ApiSteam64, id: int | None = None):
 
     with opendb() as db:
         current = db.query(data.Match).where(data.Match.id == current_id).first()
-        data.Match.cancelStaleUnclaimed()
 
-        # This poll is also what auto-resolves a stalled ballistics/map/movement pick —
-        # there's no separate background job, so the deadline is only ever enforced when
-        # someone's screen is actually asking for the current state.
+        # The game server's own poll enforces the pick deadline too, so a match whose
+        # players all closed the tab still resolves — this just makes it instant for
+        # whoever is actually watching rather than waiting on the next server tick.
         resolved = current.resolvedMetaIfExpired()
         if resolved is not None:
             db.query(data.Match).where(data.Match.id == current_id).update(

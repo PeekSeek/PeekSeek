@@ -349,7 +349,7 @@ function render() {
 
     /* livedata starts as {} and is reset to {} when the match ends, so an
        empty snapshot means "not playing" just as much as a missing one. */
-    const state = data.claimed === null ? null : buildState(data);
+    const state = data.status === "live" ? buildState(data) : null;
     if (state === null) {
         showSplash();
         return;
