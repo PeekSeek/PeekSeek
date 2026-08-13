@@ -743,7 +743,9 @@ internal abstract class LobbyManager {
             Player player = PlayerTool.getPlayer(new CSteamID(entry.Key));
             if (player == null) continue;
 
-            int drift = state.Elo - player.skills.reputation;
+            // Asserted negative: a 300-Elo player carries -300 reputation in game.
+            int target = -state.Elo;
+            int drift = target - player.skills.reputation;
             if (drift != 0) player.skills.askRep(drift);
         }
     }

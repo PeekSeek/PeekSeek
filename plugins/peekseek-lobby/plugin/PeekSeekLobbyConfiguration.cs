@@ -59,9 +59,9 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// player-placed builds cleared, session stats zeroed, everyone respawned.
     public float ResetIntervalSeconds;
 
-    /// Mirror each player's Elo into their in-game reputation. Unturned moves
-    /// reputation on its own for kills and similar, so this is re-asserted on a
-    /// timer rather than set once.
+    /// Mirror each player's Elo into their in-game reputation, as a negative
+    /// number. Unturned moves reputation on its own for kills and similar, so this
+    /// is re-asserted on a timer rather than set once.
     public bool ShowEloAsReputation;
 
     public string szDiscordURL;
