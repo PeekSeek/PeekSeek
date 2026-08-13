@@ -27,6 +27,17 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// players bank more than one.
     public List<RewardItem> KillRewards;
 
+    /// Paid out for killing several players in a row. Each entry fires on its own
+    /// exact kill count, so a 5-kill streak collects the 2, 3 and 5 rewards on the
+    /// way up rather than only the last one.
+    public List<StreakReward> StreakRewards;
+
+    /// How long a streak survives between kills. A kill that lands later than this
+    /// starts the count again at one; dying ends a streak outright, whatever the
+    /// gap. Keeping it short makes a streak a burst of fighting rather than a
+    /// tally of the whole life.
+    public float StreakWindowSeconds;
+
     /// Everyone fights solo. Steam group membership is applied automatically on
     /// connect and group mates cannot damage each other, so leaving it alone
     /// would quietly make the arena unplayable for anyone sharing a group.
@@ -35,16 +46,6 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// Sprinting never costs anything here. A warm-up server is about fights,
     /// not about running out of breath crossing the map to reach one.
     public bool UnlimitedStamina;
-
-    /// The arena HUD draws the server name across the top of the screen with the
-    /// live player count beneath it, so the round timer is appended to the name
-    /// to put it where players are already looking.
-    public bool ShowRoundTimerInName;
-
-    /// The name the timer is appended to. Kept separate from the server's real
-    /// name because that gets rewritten every second once the timer is on, and
-    /// reading the base back out of it would compound.
-    public string szServerDisplayName;
 
     /// Dropped items are deleted the moment they hit the ground, so the arena
     /// never fills with the guns and magazines of everyone who died in it.
@@ -91,19 +92,53 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         RespawnDelaySeconds = 10f;
         RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
         AllowedKitCategories = ["meta", "sniper"];
-        EnableQueue = false;
+        EnableQueue = true;
         ForceSoloPlayers = true;
         UnlimitedStamina = true;
-        ShowRoundTimerInName = true;
-        szServerDisplayName = "PeekSeek.net";
-        // The bounce is standard kit, the heal has to be earned. One of each at
-        // a time so they stay a reward for the next fight rather than a stockpile.
+        // Every kill earns a heal, one at a time so it stays a reward for the next
+        // fight rather than a stockpile. Bounces are no longer standard equipment:
+        // they are a streak reward now, so they have to be fought for.
         KillRewards = [
-            new RewardItem { ItemID = 1838, MaxCarried = 1, GrantOnSpawn = true },
             new RewardItem { ItemID = 395, MaxCarried = 1, GrantOnSpawn = false }
         ];
+        StreakWindowSeconds = 10f;
+        // Two kills buys an umbrella and a bounce, three fits a drum to the gun
+        // they are already holding, five is a rampage. Every id here is one the
+        // site already hands out in mmconfig.json's powerups.
+        StreakRewards = [
+            new StreakReward {
+                KillsRequired = 2,
+                CooldownSeconds = 60f,
+                szChatMessage = "<color=white>{0}</color> is on a <color=white>double kill</color>.",
+                Items = [
+                    new StreakItem { ItemID = 1103, Amount = 1 },
+                    new StreakItem { ItemID = 1838, Amount = 1 }
+                ]
+            },
+            new StreakReward {
+                KillsRequired = 3,
+                CooldownSeconds = 60f,
+                szChatMessage = "<color=white>{0}</color> earned a <color=white>drum</color>.",
+                // Both drums are listed and only the one the equipped gun can
+                // chamber is fitted — the ranger drum to a ranger gun, the military
+                // drum to a military one, and nothing at all to a sniper.
+                Items = [
+                    new StreakItem { ItemID = 125, Amount = 1 },
+                    new StreakItem { ItemID = 17, Amount = 1 }
+                ]
+            },
+            new StreakReward {
+                KillsRequired = 5,
+                CooldownSeconds = 60f,
+                szChatMessage = "<color=white>{0}</color> is on a <color=white>rampage</color>!",
+                Items = [
+                    new StreakItem { ItemID = 1520, Amount = 2 },
+                    new StreakItem { ItemID = 1838, Amount = 2 }
+                ]
+            }
+        ];
         RemoveDroppedItems = true;
-        ResetIntervalSeconds = 600f;
+        ResetIntervalSeconds = 300f;
         ShowEloAsReputation = true;
         szDiscordURL = "https://discord.gg/NKgTe6RnvH";
         szMatchURL = "https://dev.peekseek.net/match";

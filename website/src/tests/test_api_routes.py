@@ -68,6 +68,48 @@ def test_malformed_json_body_400s_instead_of_crashing(client):
     assert r.status_code == 400
 
 
+def test_queue_match_reports_an_existing_match(client, user_factory):
+    """What the lobby polls with for players who are not in its queue, so a match
+    made on the site still pulls them out of the arena."""
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+    first, second = user_factory(), user_factory()
+    with opendb() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "one", "users": [str(first.steam64)]},
+                    {"name": "two", "users": [str(second.steam64)]},
+                ],
+                matchSettings={
+                    "ballistics": True,
+                    "map": "Alpha Valley",
+                    "movement": True,
+                },
+            )
+        )
+
+    r = client.get("/unt/queue/match", params={"steam64": first.steam64})
+
+    assert r.status_code == 200
+    with opendb() as db:
+        assert r.json()["matchid"] == db.query(data.Match).first().id
+
+
+def test_queue_match_does_not_queue_the_player_it_asks_about(client, user_factory):
+    """The whole reason this exists rather than reusing /queue/heartbeat: asking
+    must not undo a player's /noqueue by putting them back in the queue."""
+    data.AuthorizedServer.bootstrap({"testclient": "paris"})
+    user = user_factory()
+
+    r = client.get("/unt/queue/match", params={"steam64": user.steam64})
+
+    assert r.status_code == 200
+    assert r.json()["matchid"] is None
+    with opendb() as db:
+        assert db.query(data.UserHB).count() == 0
+
+
 def test_eventwait_claims_a_match_with_the_server_code(client, user_factory):
     """`claimed` has to hold what a player can connect with, not the server's IP."""
     data.AuthorizedServer.bootstrap({"testclient": "paris"})

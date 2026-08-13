@@ -88,6 +88,28 @@ internal static class RemoteAPI {
         return matchId == null || matchId.Type == JTokenType.Null ? 0 : (int)matchId;
     }
 
+    /// Asks whether this player already has a match, without putting them in a
+    /// queue to get one. That side-effect-free check is the whole point: it's what
+    /// lets the lobby pull someone who has left its queue out of the arena when a
+    /// match reaches them from the site or a party.
+    internal static void PollExistingMatch(ulong steam64) {
+        Task.Run(async () => {
+            try {
+                HttpResponseMessage response = await Client.GetAsync(
+                    $"{ApiUrl}/unt/queue/match?steam64={steam64}"
+                );
+                if (!response.IsSuccessStatusCode) return;
+
+                int matchId = MatchIdFrom(await ReadJson(response));
+                if (matchId <= 0) return;
+
+                TaskDispatcher.QueueOnMainThread(() => LobbyManager.SendToMatch(steam64, matchId));
+            } catch (Exception ex) {
+                Logger.LogError($"Failed to check for an existing match for {steam64}: {ex.Message}");
+            }
+        });
+    }
+
     /// A matched player waits in the lobby until a game server claims their
     /// match; this watches for that and hands them over when it happens.
     internal static void PollMatchStart(ulong steam64, int matchId) {
