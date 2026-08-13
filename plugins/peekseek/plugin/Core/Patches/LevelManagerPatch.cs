@@ -18,6 +18,11 @@ namespace PeekSeek.Core.Patches;
 internal class LevelManagerPatch {
     private static float LastCountdownBroadcast;
 
+    /// The lobby is polled every frame, so "everyone is here" would otherwise be
+    /// announced dozens of times in the moment before the round spawns. Reset by the
+    /// spawn patch below, which is what ends the wait.
+    internal static bool AnnouncedEveryoneHere;
+
     [UsedImplicitly]
     private static bool Prefix(LevelManager __instance) {
         if (PSManager.Status != EPSStatus.IN_PROGRESS) return false;
@@ -32,6 +37,10 @@ internal class LevelManagerPatch {
         }
 
         if (PSManager.HaveAllPlayersJoined()) {
+            if (!AnnouncedEveryoneHere) {
+                AnnouncedEveryoneHere = true;
+                PSManager.Announce(PeekSeek.Instance.Translate("lobby_everyone_here"));
+            }
             LevelManager.arenaState = EArenaState.CLEAR;
             return false;
         }
@@ -71,7 +80,7 @@ internal class LevelManagerPatch {
         ushort rounded = (ushort)Mathf.Round(secondsLeft);
         if (broadcastAt == null || !broadcastAt.Contains(rounded)) return;
 
-        PSManager.Announce(PeekSeek.Instance.Translate("lobby_timeout_warning", rounded));
+        PSManager.Announce(PeekSeek.Instance.Translate("lobby_countdown", rounded));
     }
 }
 
@@ -160,6 +169,8 @@ internal class LevelManagerArenaSpawnPatch {
         Dictionary<CSteamID, HomelessSpawn> assignedGroupSpawns = [];
 
         StatService.BeginRound();
+        LevelManagerPatch.AnnouncedEveryoneHere = false;
+        PSManager.AnnounceRoundStart();
         Logger.Log("[alive-check] Round starting — everyone marked alive again.");
 
         var roundNumber = StatService.GetTotalPlayedRounds() + 1;
