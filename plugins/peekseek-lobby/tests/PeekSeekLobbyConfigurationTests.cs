@@ -29,7 +29,7 @@ public class PeekSeekLobbyConfigurationTests {
         Assert.Equal((ushort)1, config.GamemodeBitmask);
         Assert.Equal("paris", config.szRegion);
         Assert.Equal((ushort)395, config.BloodBagItemID);
-        Assert.Equal(3f, config.SpawnProtectionSeconds);
+        Assert.Equal(5f, config.SpawnProtectionSeconds);
         Assert.Equal(10f, config.RespawnDelaySeconds);
         Assert.Equal("#FFFFFF", config.szHexDefaultChatColor);
         Assert.Equal(["meta", "sniper"], config.AllowedKitCategories);

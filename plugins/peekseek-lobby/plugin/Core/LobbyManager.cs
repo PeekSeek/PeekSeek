@@ -54,6 +54,10 @@ internal abstract class LobbyManager {
 
     private const float MagazineCheckIntervalSeconds = 2f;
     private const float ReputationSyncIntervalSeconds = 5f;
+    private const float ProtectedNoticeIntervalSeconds = 3f;
+    private const int LeaderboardPlaces = 5;
+
+    private static readonly Dictionary<ulong, float> LastProtectedNotice = [];
 
     private const string HarmonyId = "peekseek.lobby";
     private static Harmony Instrument;
@@ -71,6 +75,7 @@ internal abstract class LobbyManager {
         Instrument.PatchAll(Assembly.GetExecutingAssembly());
 
         ItemManager.onServerSpawningItemDrop += OnItemDropRequested;
+        DamageTool.damagePlayerRequested += OnDamagePlayerRequested;
 
         LastArenaReset = Time.realtimeSinceStartup;
         RemoteAPI.Init();
@@ -83,12 +88,36 @@ internal abstract class LobbyManager {
         if (PeekSeekLobby.Config.RemoveDroppedItems) shouldAllow = false;
     }
 
+    /// Spawn protection already stops the damage; without this the shooter just
+    /// sees their hits do nothing and assumes the server is broken. Throttled per
+    /// shooter, since this fires once per bullet.
+    private static void OnDamagePlayerRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
+        CSteamID victimID = parameters.player.channel.owner.playerID.steamID;
+        if (!Players.TryGetValue(victimID.m_SteamID, out PlayerState victimState)) return;
+        if (victimState.SpawnProtectedUntil <= Time.realtimeSinceStartup) return;
+
+        CSteamID attacker = parameters.killer;
+        if (attacker == CSteamID.Nil || attacker == victimID) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (LastProtectedNotice.TryGetValue(attacker.m_SteamID, out float last)
+                && now - last < ProtectedNoticeIntervalSeconds) return;
+        LastProtectedNotice[attacker.m_SteamID] = now;
+
+        Player attackerPlayer = PlayerTool.getPlayer(attacker);
+        if (attackerPlayer == null) return;
+
+        Whisper(attackerPlayer.channel.owner, PeekSeekLobby.Instance.Translate(
+            "target_protected", parameters.player.channel.owner.playerID.characterName));
+    }
+
     internal static void Shutdown() {
         Provider.onServerConnected -= OnPlayerConnected;
         Provider.onServerDisconnected -= OnPlayerDisconnected;
         UnturnedPlayerEvents.OnPlayerDeath -= OnPlayerDead;
 
         ItemManager.onServerSpawningItemDrop -= OnItemDropRequested;
+        DamageTool.damagePlayerRequested -= OnDamagePlayerRequested;
         Instrument.UnpatchAll(HarmonyId);
 
         RemoteAPI.Shutdown();
@@ -108,13 +137,28 @@ internal abstract class LobbyManager {
             RemoteAPI.SendHeartbeat(steamID.m_SteamID, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
         }
 
-        ChatManager.serverSendMessage(
-            PeekSeekLobby.Instance.Translate(queueing ? "welcome" : "welcome_no_queue"),
-            UnturnedChat.GetColorFromHex(PeekSeekLobby.Config.szHexDefaultChatColor).Value,
-            null, player.channel.owner, EChatMode.SAY, PeekSeekLobby.Config.szChatIconURL, true
-        );
+        SendWelcome(player, queueing);
 
         player.sendBrowserRequest(PeekSeekLobby.Instance.Translate("discord_prompt"), PeekSeekLobby.Config.szDiscordURL);
+    }
+
+    /// Three short lines instead of one long one: what this server is and the
+    /// loop you are already in, then the controls, then what can wait. Someone
+    /// who reads only the first line still knows how the place works.
+    private static void SendWelcome(Player player, bool queueing) {
+        PeekSeekLobbyConfiguration config = PeekSeekLobby.Config;
+
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
+            queueing ? "welcome_what_queue" : "welcome_what",
+            Mathf.RoundToInt(config.RespawnDelaySeconds), Mathf.RoundToInt(config.SpawnProtectionSeconds)));
+
+        string kits = string.Join("|", config.AllowedKitCategories ?? []);
+        string queueHint = queueing ? " <color=white>/noqueue</color> leave the queue." : string.Empty;
+        Whisper(player.channel.owner,
+            PeekSeekLobby.Instance.Translate("welcome_commands", kits, queueHint));
+
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
+            "welcome_extra", Mathf.RoundToInt(config.ResetIntervalSeconds / 60f)));
     }
 
     private static void OnPlayerDisconnected(CSteamID steamID) {
@@ -152,17 +196,18 @@ internal abstract class LobbyManager {
         }
 
         AwardBloodBag(killer);
-        AnnounceKill(killer, victim, limb);
+        AnnounceKill(killer, victim, limb, killerState?.Kills ?? 0);
     }
 
     private static void AwardBloodBag(UnturnedPlayer killer) {
         killer.Player.inventory.forceAddItem(new Item(PeekSeekLobby.Config.BloodBagItemID, true), true);
     }
 
-    private static void AnnounceKill(UnturnedPlayer killer, UnturnedPlayer victim, ELimb limb) {
+    private static void AnnounceKill(UnturnedPlayer killer, UnturnedPlayer victim, ELimb limb, byte killerKills) {
         string weapon = WeaponName(killer.Player.equipment.itemID);
         string key = limb == ELimb.SKULL ? "kill_feed_headshot" : "kill_feed";
-        Announce(PeekSeekLobby.Instance.Translate(key, killer.CharacterName, victim.CharacterName, weapon));
+        Announce(PeekSeekLobby.Instance.Translate(
+            key, killer.CharacterName, victim.CharacterName, weapon, killerKills));
     }
 
     private static string WeaponName(ushort itemID) {
@@ -492,6 +537,8 @@ internal abstract class LobbyManager {
     /// nothing built, every session score back to zero and everyone respawned
     /// with a fresh kit. Elo is deliberately untouched — it isn't a session stat.
     private static void ResetArena() {
+        AnnounceLeaderboard();
+
         ItemManager.askClearAllItems();
         BarricadeManager.askClearAllBarricades();
         StructureManager.askClearAllStructures();
@@ -513,6 +560,34 @@ internal abstract class LobbyManager {
         }
 
         Announce(PeekSeekLobby.Instance.Translate("arena_reset"));
+    }
+
+    /// Read out before the wipe, since the scores it reports are exactly what is
+    /// about to be cleared.
+    private static void AnnounceLeaderboard() {
+        List<KeyValuePair<ulong, PlayerState>> ranked = Players
+            .Where(entry => entry.Value.Kills > 0)
+            .OrderByDescending(entry => entry.Value.Kills)
+            .ThenBy(entry => entry.Value.Deaths)
+            .Take(LeaderboardPlaces)
+            .ToList();
+
+        int minutes = Mathf.RoundToInt(PeekSeekLobby.Config.ResetIntervalSeconds / 60f);
+        if (ranked.Count == 0) {
+            Announce(PeekSeekLobby.Instance.Translate("leaderboard_empty"));
+            return;
+        }
+
+        Announce(PeekSeekLobby.Instance.Translate("leaderboard_header", minutes));
+        for (int place = 0; place < ranked.Count; place++) {
+            PlayerState state = ranked[place].Value;
+            string name = UnturnedPlayer.FromCSteamID(new CSteamID(ranked[place].Key))?.CharacterName
+                ?? ranked[place].Key.ToString();
+            int headshotPercent = state.Kills > 0 ? state.Headshots * 100 / state.Kills : 0;
+
+            Announce(PeekSeekLobby.Instance.Translate(
+                "leaderboard_entry", place + 1, name, state.Kills, state.Deaths, headshotPercent));
+        }
     }
 
     private static void SendHeartbeats() {
