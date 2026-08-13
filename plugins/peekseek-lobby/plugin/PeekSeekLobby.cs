@@ -40,10 +40,12 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "welcome_commands", "<color=white>/kit {0}</color> switch loadout. <color=white>/stats</color> your score. <color=white>/ping</color> your latency.{1}" },
         { "welcome_extra", "Every kill earns a <color=white>heal</color>. Kills in a row earn <color=white>more</color>. Arena and scores reset every <color=white>{0} min</color>. Discord: <color=white>peekseek.net/discord</color>" },
 
-        { "kill_feed", "<color=white>{0}</color> killed <color=white>{1}</color> with {2}. <color=white>{3}</color> kills." },
-        { "kill_feed_headshot", "<color=white>{0}</color> headshot <color=white>{1}</color> with {2}. <color=white>{3}</color> kills." },
+        { "kill_feed", "<color=white>{0}</color> killed <color=white>{1}</color> with {2}." },
+        { "kill_feed_headshot", "<color=white>{0}</color> headshot <color=white>{1}</color> with {2}." },
+        { "kill_feed_streak", "<color=white>{0}</color> killed <color=white>{1}</color> with {2}. <color=white>{3} streak</color>." },
+        { "kill_feed_headshot_streak", "<color=white>{0}</color> headshot <color=white>{1}</color> with {2}. <color=white>{3} streak</color>." },
 
-        { "spawn_protection_over","Spawn protection <color=white>ended</color>. You can be hurt now." },
+        { "spawn_protection_over", "Spawn protection <color=white>ended</color>. You can be hurt now." },
         { "target_protected", "<color=white>{0}</color> still has spawn protection." },
 
         { "leaderboard_header", "<color=white>Round over.</color> Top of the last <color=white>{0} min</color>:" },
