@@ -27,6 +27,11 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// players bank more than one.
     public List<RewardItem> KillRewards;
 
+    /// Everyone fights solo. Steam group membership is applied automatically on
+    /// connect and group mates cannot damage each other, so leaving it alone
+    /// would quietly make the arena unplayable for anyone sharing a group.
+    public bool ForceSoloPlayers;
+
     /// Sprinting never costs anything here. A warm-up server is about fights,
     /// not about running out of breath crossing the map to reach one.
     public bool UnlimitedStamina;
@@ -87,6 +92,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = false;
+        ForceSoloPlayers = true;
         UnlimitedStamina = true;
         ShowRoundTimerInName = true;
         szServerDisplayName = "PeekSeek.net";
