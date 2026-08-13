@@ -75,15 +75,16 @@ def login():
     """Give a client a signed session cookie, exactly as SessionMiddleware writes it."""
 
     def _login(client, user, **extra_session):
-        # A prior response on this client (from an earlier login()) may have set its
-        # own "session" cookie scoped to the TestClient's domain; a plain .set() with
-        # no domain adds a *second*, differently-scoped entry rather than overwriting
-        # it, and the old one wins on the next request. Clearing first is what makes
-        # logging in as a second user on the same client actually switch identity.
+        # Scope the cookie exactly as a response from the app would, or the jar
+        # keeps ours *and* the app's as two separate entries: logging in as a
+        # second user would not switch identity, and a logout clearing the
+        # session would delete only the app's copy and leave ours signed in.
         client.cookies.clear()
         payload = {"uuid": user.uuid, **extra_session}
         signer = TimestampSigner(settings.secret_key)
         encoded = base64.b64encode(json.dumps(payload).encode())
-        client.cookies.set("session", signer.sign(encoded).decode())
+        client.cookies.set(
+            "session", signer.sign(encoded).decode(), domain="testserver.local", path="/"
+        )
 
     return _login

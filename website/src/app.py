@@ -19,6 +19,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
     https_only=settings.protocol == "https",
+    max_age=60 * 60 * 24 * 30,
 )
 app.mount("/static", StaticFiles(directory=settings.public), name="static")
 

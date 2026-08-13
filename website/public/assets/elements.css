@@ -178,26 +178,12 @@
   border-radius: 10px;
 }
 
-/* Loadout editors. The weapon-kit picker and the outfit picker are the same UI and
-   share every component below.
-
-   Unturned draws weapon parts near-black on a transparent background, so against
-   this page's near-black panels a sight or a barrel was simply invisible. No CSS
-   filter fixes it: the icons run the full range from black attachments to white
-   clothing, so anything that lifts the dark ones blows the light ones out, and
-   flattening them to silhouettes throws away the only thing separating a red laser
-   from a tan light, or four helmets that differ by colour alone. So each icon sits
-   on its own light plate instead, the way the game's own inventory shows it, and
-   keeps its real colours. The plate is mid-light rather than white because that is
-   the value with the best worst case measured across every item in kits.json --
-   dark icons stay crisp on it without white garments disappearing into it. */
 .itemIcon {
   width: 100%;
   height: 42px;
   object-fit: contain;
   padding: 4px 6px;
   box-sizing: border-box;
-  background-color: #bababa;
   border-radius: 6px;
 }
 

@@ -19,32 +19,20 @@ DISCORD_API = "https://discord.com/api/v10"
 
 @router.get("/")
 def index(request: Request):
-    if "uuid" in request.session:
+    if request.state.user:
         return RedirectResponse("/play", status_code=302)
     return templates.TemplateResponse(request=request, name="pages/index.html")
 
 
 @router.get("/play")
 def play(request: Request):
-    if "uuid" not in request.session:
+    # request.state.user, not the session UUID: a cookie can hold a UUID that no
+    # longer resolves to anyone, and the two answers must never disagree.
+    user = request.state.user
+    if not user:
         return RedirectResponse("/", status_code=302)
 
     with opendb() as db:
-        user = (
-            db.query(data.User).where(data.User.uuid == request.session["uuid"]).first()
-        )
-        if not user:
-            return templates.TemplateResponse(
-                request=request,
-                name="app/play.html",
-                context={
-                    "mmconfig": settings.visible_mmconfig,
-                    "events": [],
-                    "eventPlayers": {},
-                    "maxTeam": {},
-                },
-            )
-
         events = []
         for signup in (
             db.query(data.EventSignup)

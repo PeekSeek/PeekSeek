@@ -1,5 +1,6 @@
 """Steam OpenID login, Discord OAuth linking, and logout."""
 
+import logging
 import urllib.parse
 from uuid import uuid4
 
@@ -24,8 +25,19 @@ def _back(request: Request) -> RedirectResponse:
 
 @router.get("/steam")
 def steam(request: Request):
-    if "uuid" in request.session:
-        return RedirectResponse("/", status_code=302)
+    """Start a Steam login, whatever the visitor's cookie currently says.
+
+    Never refuse this because the session already holds a UUID. The cookie is a
+    signed but stateless blob, so it can carry a UUID the site no longer treats
+    as logged in: a wiped database, a UUID rotated from another browser, a
+    changed secret. Bouncing those visitors home makes the login button do
+    nothing, and deleting the cookie by hand becomes their only way back in. We
+    drop the old session here instead, keeping only the page to return them to.
+    """
+    last_page = request.session.get("lastPage")
+    request.session.clear()
+    if last_page:
+        request.session["lastPage"] = last_page
 
     query = urllib.parse.urlencode(
         {
@@ -62,6 +74,9 @@ def steam_callback(request: Request):
     r = requests.post(STEAM_OPENID, data=params)
 
     if "is_valid:true" not in r.text:
+        # The only other trace of this is a lastError the next render pops, so
+        # log it. A re-used nonce and a Steam outage look identical otherwise.
+        logging.error("Steam rejected the login: %s %s", r.status_code, r.text)
         request.session["lastError"] = "Authentication failed."
         return _back(request)
 
@@ -81,7 +96,7 @@ def steam_callback(request: Request):
 
 @router.get("/discord")
 def discord(request: Request):
-    if "uuid" not in request.session:
+    if not request.state.user:
         return _back(request)
 
     query = urllib.parse.urlencode(
@@ -128,5 +143,7 @@ def discord_callback(request: Request, code: str):
 
 @router.get("/logout")
 def logout(request: Request):
-    request.session.pop("uuid", None)
-    return _back(request)
+    # Clear the lot: popping only the UUID leaves lastPage, lastBanCheck and
+    # logged behind for whoever uses the browser next.
+    request.session.clear()
+    return RedirectResponse("/", status_code=302)

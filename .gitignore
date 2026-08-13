@@ -18,3 +18,4 @@ data.sql
 .vscode
 .claude
 **/*.code-workspace
+test.db
