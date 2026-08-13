@@ -30,6 +30,7 @@ public class ConfigurationRoundTripTests {
         Assert.Equal(config.KillRewards.Count, loaded.KillRewards.Count);
         Assert.Equal(config.KillRewards[0].ItemID, loaded.KillRewards[0].ItemID);
         Assert.Equal(config.KillRewards[0].MaxCarried, loaded.KillRewards[0].MaxCarried);
+        Assert.Equal(config.KillRewards[0].GrantOnSpawn, loaded.KillRewards[0].GrantOnSpawn);
         Assert.Equal(config.Spawns.Count, loaded.Spawns.Count);
         Assert.Equal(config.EnableQueue, loaded.EnableQueue);
         Assert.Equal(config.szMatchURL, loaded.szMatchURL);

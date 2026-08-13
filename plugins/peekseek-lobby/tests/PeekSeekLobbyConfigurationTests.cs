@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Reflection;
 using System.Xml.Serialization;
+using PeekSeekLobby.Core.Models;
 using Xunit;
 
 namespace PeekSeekLobby.Tests;
@@ -22,18 +23,25 @@ public class PeekSeekLobbyConfigurationTests {
         Assert.NotEmpty(config.KillRewards);
     }
 
-    /// Spawning with a heal and a bounce is the intended loadout, and a cap of
-    /// one each is what stops a long life turning into a stockpile.
+    /// The bounce is standard equipment and the heal is earned, so only the
+    /// bounce may be handed out on spawn. A cap of one each is what stops a long
+    /// life turning into a stockpile.
     [Fact]
-    public void LoadDefaults_GivesOneHealAndOneBounce() {
+    public void LoadDefaults_SpawnsWithABounceButEarnsTheHeal() {
         var config = new PeekSeekLobbyConfiguration();
 
         config.LoadDefaults();
 
         Assert.Equal(2, config.KillRewards.Count);
-        Assert.Contains(config.KillRewards, reward => reward.ItemID == 395);
-        Assert.Contains(config.KillRewards, reward => reward.ItemID == 1838);
         Assert.All(config.KillRewards, reward => Assert.Equal((byte)1, reward.MaxCarried));
+
+        RewardItem bounce = config.KillRewards.Find(reward => reward.ItemID == 1838);
+        RewardItem heal = config.KillRewards.Find(reward => reward.ItemID == 395);
+
+        Assert.NotNull(bounce);
+        Assert.NotNull(heal);
+        Assert.True(bounce.GrantOnSpawn);
+        Assert.False(heal.GrantOnSpawn);
     }
 
     [Fact]

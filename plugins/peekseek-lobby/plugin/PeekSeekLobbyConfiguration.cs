@@ -22,8 +22,9 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// /noqueue has nothing to toggle.
     public bool EnableQueue;
 
-    /// Consumables every player spawns holding, restocked to the same cap on
-    /// each kill. Raise MaxCarried to let players bank more than one.
+    /// Consumables restocked to their cap on every kill. GrantOnSpawn decides
+    /// which of them players also start a life with. Raise MaxCarried to let
+    /// players bank more than one.
     public List<RewardItem> KillRewards;
 
     /// Dropped items are deleted the moment they hit the ground, so the arena
@@ -72,11 +73,11 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = false;
-        // Blood bag heals, beacon bounces. One of each at a time so they stay a
-        // reward for the next fight rather than a stockpile.
+        // The bounce is standard kit, the heal has to be earned. One of each at
+        // a time so they stay a reward for the next fight rather than a stockpile.
         KillRewards = [
-            new RewardItem { ItemID = 395, MaxCarried = 1 },
-            new RewardItem { ItemID = 1838, MaxCarried = 1 }
+            new RewardItem { ItemID = 1838, MaxCarried = 1, GrantOnSpawn = true },
+            new RewardItem { ItemID = 395, MaxCarried = 1, GrantOnSpawn = false }
         ];
         RemoveDroppedItems = true;
         ResetIntervalSeconds = 600f;
