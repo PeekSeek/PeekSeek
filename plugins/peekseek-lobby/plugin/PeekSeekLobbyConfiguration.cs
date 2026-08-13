@@ -18,6 +18,11 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public List<ushort> RespawnCountdownAtSecondsRemaining;
     public ushort BloodBagItemID;
     public List<LobbySpawn> Spawns;
+    /// Master switch for matchmaking. Off means the lobby is purely a warm-up
+    /// server: no heartbeats leave the box, nobody is matched or relayed, and
+    /// /noqueue has nothing to toggle.
+    public bool EnableQueue;
+
     public string szDiscordURL;
 
     /// Where a matched player is sent to log in and pick their kit. Opening it
@@ -51,6 +56,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
         BloodBagItemID = 395;
         AllowedKitCategories = ["meta", "sniper"];
+        EnableQueue = false;
         szDiscordURL = "https://discord.gg/NKgTe6RnvH";
         szMatchURL = "https://dev.peekseek.net/match";
 

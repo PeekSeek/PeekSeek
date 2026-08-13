@@ -18,6 +18,12 @@ internal class NoQueueCommand : IRocketCommand {
 
     public void Execute(IRocketPlayer caller, string[] command) {
         UnturnedPlayer player = (UnturnedPlayer)caller;
+        if (!LobbyManager.QueueEnabled) {
+            LobbyManager.Whisper(player.Player.channel.owner,
+                PeekSeekLobby.Instance.Translate("queue_disabled"));
+            return;
+        }
+
         bool nowQueueing = LobbyManager.ToggleQueueing(player.CSteamID);
         LobbyManager.Whisper(player.Player.channel.owner,
             PeekSeekLobby.Instance.Translate(nowQueueing ? "queued" : "not_queued"));
