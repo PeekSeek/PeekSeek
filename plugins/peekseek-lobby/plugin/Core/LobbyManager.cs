@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using PeekSeekLobby.Core.Models;
@@ -174,14 +175,28 @@ internal abstract class LobbyManager {
         return allowed is { Count: > 0 } ? allowed[0] : "meta";
     }
 
+    /// The configured stand-in for a category when the website can't be reached.
+    /// Falls back to the first configured kit of any category rather than
+    /// nothing, since an armed player in the wrong kit still beats an unarmed one.
+    private static KitLoadout FallbackLoadout(string category) {
+        List<FallbackKit> kits = PeekSeekLobby.Config.FallbackKits;
+        if (kits is not { Count: > 0 }) return null;
+
+        FallbackKit match = kits.FirstOrDefault(kit => kit.Category == category) ?? kits[0];
+        return match.ToLoadout();
+    }
+
     /// Re-fetched and re-applied on every spawn (join and respawn alike) — each
     /// life starts with the player's real, currently-saved kit, same as a ranked
     /// match would give them, rather than whatever they picked up mid-fight.
     private static void EquipRealKit(Player player, CSteamID steamID, PlayerState state) {
         string category = state.KitCategory;
         System.Threading.Tasks.Task.Run(async () => {
-            KitLoadout loadout = await RemoteAPI.FetchKit(steamID.m_SteamID, category);
-            if (loadout == null) return;
+            KitLoadout loadout = await RemoteAPI.FetchKit(steamID.m_SteamID, category) ?? FallbackLoadout(category);
+            if (loadout == null) {
+                Logger.LogWarning($"No kit for {steamID} ({category}) and no fallback configured — they spawn empty-handed.");
+                return;
+            }
 
             TaskDispatcher.QueueOnMainThread(() => {
                 if (player == null) return;
