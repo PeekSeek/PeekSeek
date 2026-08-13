@@ -25,11 +25,6 @@ internal abstract class LobbyManager {
         internal byte Headshots;
         internal float SpawnProtectedUntil;
 
-        /// Set by the death event, acted on by the next tick. Respawning from
-        /// inside the event itself does nothing, because Unturned has not finished
-        /// killing them at that point.
-        internal bool AwaitingRespawn;
-
         /// Which kits.json category (from AllowedKitCategories) this player is
         /// currently equipped with — set on join, changed with /kit.
         internal string KitCategory;
@@ -89,6 +84,7 @@ internal abstract class LobbyManager {
         Provider.onServerConnected += OnPlayerConnected;
         Provider.onServerDisconnected += OnPlayerDisconnected;
         UnturnedPlayerEvents.OnPlayerDeath += OnPlayerDead;
+        PlayerLife.onPlayerLifeUpdated += OnLifeUpdated;
 
         // Attribute-based Harmony patches (ArenaNeutralizePatch) are inert until
         // something actually applies them — this is that something. Without it
@@ -138,6 +134,7 @@ internal abstract class LobbyManager {
         Provider.onServerConnected -= OnPlayerConnected;
         Provider.onServerDisconnected -= OnPlayerDisconnected;
         UnturnedPlayerEvents.OnPlayerDeath -= OnPlayerDead;
+        PlayerLife.onPlayerLifeUpdated -= OnLifeUpdated;
 
         ItemManager.onServerSpawningItemDrop -= OnItemDropRequested;
         DamageTool.damagePlayerRequested -= OnDamagePlayerRequested;
@@ -205,10 +202,9 @@ internal abstract class LobbyManager {
         // Dying ends a streak outright, however recent the last kill was.
         victimState.Streak.End();
 
-        // Straight back into the fight, the same as a real PeekSeek match: no
-        // wait, and no death screen to sit through, because respawning inside the
-        // death event never lets one be shown.
-        Respawn(victim.CSteamID, victimState);
+        // Putting them back on their feet is OnLifeUpdated's job, not this
+        // event's: a ServerRespawn from in here is ignored, because Unturned has
+        // not finished applying the death at the point this fires.
 
         bool isPlayerKill = murderer != CSteamID.Nil
             && murderer != SteamGameServer.GetSteamID()
@@ -224,21 +220,27 @@ internal abstract class LobbyManager {
         }
 
         GrantRewards(killer.Player, spawning: false);
-        AnnounceKill(killer, victim, limb, killerState?.Kills ?? 0);
-        if (killerState != null) GrantStreakRewards(killer, killerState);
+
+        // The streak is advanced before the kill is announced so the feed can name
+        // it, then the reward is paid out after, which reads as "what they did"
+        // followed by "what they got".
+        StreakReward earned = killerState == null ? null : AdvanceStreak(killerState);
+        AnnounceKill(killer, victim, limb, killerState?.Streak.Kills ?? 0);
+        if (earned != null) PayOutStreak(killer, killerState, earned);
     }
 
     /// A streak is kills in a row with no death and no long gap between them. At
     /// most one reward lands per kill — the one whose exact kill count this kill
     /// just reached — so climbing to five collects the two, three and five rewards
     /// on the way up rather than all of them at once.
-    private static void GrantStreakRewards(UnturnedPlayer killer, PlayerState state) {
-        StreakReward reward = state.Streak.Advance(
+    private static StreakReward AdvanceStreak(PlayerState state) {
+        return state.Streak.Advance(
             Time.realtimeSinceStartup,
             PeekSeekLobby.Config.StreakWindowSeconds,
             PeekSeekLobby.Config.StreakRewards);
-        if (reward == null) return;
+    }
 
+    private static void PayOutStreak(UnturnedPlayer killer, PlayerState state, StreakReward reward) {
         GiveStreakItems(killer.Player, state, reward);
 
         if (string.IsNullOrEmpty(reward.szChatMessage)) return;
@@ -357,11 +359,22 @@ internal abstract class LobbyManager {
         return count;
     }
 
-    private static void AnnounceKill(UnturnedPlayer killer, UnturnedPlayer victim, ELimb limb, byte killerKills) {
+    /// One kill is not a streak, so the feed only mentions the run once it is worth
+    /// mentioning — from two up. Below that the line just says who killed whom.
+    private static void AnnounceKill(UnturnedPlayer killer, UnturnedPlayer victim, ELimb limb, byte streak) {
         string weapon = WeaponName(killer.Player.equipment.itemID);
-        string key = limb == ELimb.SKULL ? "kill_feed_headshot" : "kill_feed";
+        bool headshot = limb == ELimb.SKULL;
+
+        if (streak < 2) {
+            Announce(PeekSeekLobby.Instance.Translate(
+                headshot ? "kill_feed_headshot" : "kill_feed",
+                killer.CharacterName, victim.CharacterName, weapon));
+            return;
+        }
+
         Announce(PeekSeekLobby.Instance.Translate(
-            key, killer.CharacterName, victim.CharacterName, weapon, killerKills));
+            headshot ? "kill_feed_headshot_streak" : "kill_feed_streak",
+            killer.CharacterName, victim.CharacterName, weapon, streak));
     }
 
     private static string WeaponName(ushort itemID) {
@@ -394,6 +407,33 @@ internal abstract class LobbyManager {
 
         player.life.ServerRespawn(false);
         SpawnPlayer(steamID, state);
+    }
+
+    /// The one thing that actually puts people back on their feet, copied from the
+    /// main plugin because that is the version proven to work. Unturned raises this
+    /// once a life has really changed, which is after the death has been applied —
+    /// the death event fires too early for a respawn to take. It also keeps firing
+    /// while someone is dead, so a respawn that does not land is simply retried
+    /// instead of leaving them stuck on a death screen.
+    private static void OnLifeUpdated(Player player) {
+        if (player?.channel?.owner == null || !player.life.isDead) return;
+
+        CSteamID steamID = player.channel.owner.playerID.steamID;
+        if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return;
+
+        Respawn(steamID, state);
+    }
+
+    /// The sweep behind OnLifeUpdated. Nobody stays dead in a warm-up lobby, so if
+    /// a life update is ever missed this still catches them within the second
+    /// rather than stranding them for the rest of the round.
+    private static void RespawnAnyoneStillDead() {
+        foreach (SteamPlayer client in Provider.clients) {
+            if (client?.player == null || !client.player.life.isDead) continue;
+            if (!Players.TryGetValue(client.playerID.steamID.m_SteamID, out PlayerState state)) continue;
+
+            Respawn(client.playerID.steamID, state);
+        }
     }
 
     private static void SetGodMode(CSteamID steamID, bool enabled) {
@@ -593,11 +633,6 @@ internal abstract class LobbyManager {
             CSteamID steamID = new(entry.Key);
             PlayerState state = entry.Value;
 
-            if (state.AwaitingRespawn) {
-                state.AwaitingRespawn = false;
-                Respawn(steamID, state);
-            }
-
             // Checked every tick rather than on the magazine timer: the gap between
             // reloading a drum away and having it taken back is the window in which
             // it could be reloaded straight back in.
@@ -624,6 +659,7 @@ internal abstract class LobbyManager {
             LastHudUpdate = now;
             UpdateArenaHud();
             ForceEveryoneSolo();
+            RespawnAnyoneStillDead();
         }
 
         if (now - LastReputationSync >= ReputationSyncIntervalSeconds) {
