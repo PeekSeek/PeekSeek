@@ -255,6 +255,21 @@ internal abstract class LobbyManager {
         return Players.TryGetValue(steamID.m_SteamID, out state);
     }
 
+    /// Hands a matched player over to the server hosting their match, the same
+    /// way the main plugin relays everyone back to the lobby when a match ends.
+    /// "0" is what a server too old to report its own code claims with, and
+    /// relaying to that would just drop the player.
+    internal static void SendToMatch(ulong steam64, string serverCode) {
+        if (string.IsNullOrEmpty(serverCode) || serverCode == "0") return;
+        if (!ulong.TryParse(serverCode, out ulong serverId)) return;
+
+        Player player = PlayerTool.getPlayer(new CSteamID(steam64));
+        if (player == null) return;
+
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_found"));
+        player.sendRelayToServer(new CSteamID(serverId), string.Empty, true);
+    }
+
     /// Switches the caller's kit category and re-equips them immediately (no
     /// teleport, no fresh spawn protection — just what they're holding). False for
     /// an unrecognised category or a player Tick doesn't know about.
@@ -328,10 +343,6 @@ internal abstract class LobbyManager {
         SendHeartbeats();
     }
 
-    /// A reload (or dropping, trading, whatever) can only ever bring the spare
-    /// stock down — this just watches the count and refills it, rather than
-    /// hooking the specific moment a gun reloads, so it self-heals no matter how
-    /// the count dropped.
     private static void TopUpMagazines() {
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
             PlayerState state = entry.Value;
@@ -340,22 +351,43 @@ internal abstract class LobbyManager {
             Player player = PlayerTool.getPlayer(new CSteamID(entry.Key));
             if (player == null) continue;
 
-            int missing = state.SpareMagFullStock - CountItem(player, state.SpareMagItemId);
-            for (int i = 0; i < missing; i++) {
-                player.inventory.forceAddItem(new Item(state.SpareMagItemId, true), true);
-            }
+            RestockMagazines(player, state);
         }
     }
 
-    private static int CountItem(Player player, ushort itemId) {
-        int count = 0;
+    /// Reloading doesn't consume the spare — it swaps the spent magazine back into
+    /// the inventory — so the magazine *count* never drops and counting alone sees
+    /// nothing wrong while every spare sits empty. Partly-used magazines are
+    /// dropped and replaced instead, which also self-heals a spare that was
+    /// thrown away rather than fired.
+    private static void RestockMagazines(Player player, PlayerState state) {
+        byte capacity = MagazineCapacity(state.SpareMagItemId);
+        int full = 0;
+
         for (byte page = 0; page < PlayerInventory.PAGES - 1; page++) {
-            byte itemCount = player.inventory.getItemCount(page);
-            for (byte i = 0; i < itemCount; i++) {
-                if (player.inventory.getItem(page, i).item.id == itemId) count++;
+            // Backwards: removing an item shifts everything after it down an index.
+            for (int index = player.inventory.getItemCount(page) - 1; index >= 0; index--) {
+                ItemJar jar = player.inventory.getItem(page, (byte)index);
+                if (jar?.item == null || jar.item.id != state.SpareMagItemId) continue;
+
+                if (capacity > 0 && jar.item.amount < capacity) {
+                    player.inventory.removeItem(page, (byte)index);
+                    continue;
+                }
+                full++;
             }
         }
-        return count;
+
+        for (int i = full; i < state.SpareMagFullStock; i++) {
+            player.inventory.forceAddItem(new Item(state.SpareMagItemId, true), true);
+        }
+    }
+
+    /// Rounds the magazine holds when full. Zero when the id isn't a magazine
+    /// asset, which makes RestockMagazines keep every one it finds rather than
+    /// deleting items it can't reason about.
+    private static byte MagazineCapacity(ushort itemId) {
+        return Assets.find(EAssetType.ITEM, itemId) is ItemMagazineAsset asset ? asset.amount : (byte)0;
     }
 
     private static void SendHeartbeats() {

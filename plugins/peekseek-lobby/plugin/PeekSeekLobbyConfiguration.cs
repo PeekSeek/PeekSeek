@@ -64,6 +64,18 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
                     new FallbackItem { ItemID = 308, Amount = 1, State = "" }
                 ],
                 Magazine = new FallbackItem { ItemID = 6, Amount = 5, State = "" }
+            },
+            new FallbackKit {
+                Category = "sniper",
+                Items = [
+                    new FallbackItem { ItemID = 1382, Amount = 1, State = "148,0,239,3,8,0,0,0,104,5,7,1,1,100,100,100,100,100" },
+                    new FallbackItem { ItemID = 309, Amount = 1, State = "" },
+                    new FallbackItem { ItemID = 310, Amount = 1, State = "" },
+                    new FallbackItem { ItemID = 253, Amount = 1, State = "" },
+                    new FallbackItem { ItemID = 307, Amount = 1, State = "" },
+                    new FallbackItem { ItemID = 308, Amount = 1, State = "" }
+                ],
+                Magazine = new FallbackItem { ItemID = 1384, Amount = 5, State = "" }
             }
         ];
 

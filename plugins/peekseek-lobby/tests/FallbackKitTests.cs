@@ -71,4 +71,32 @@ public class FallbackKitTests {
         // A gun and every outfit slot, or players spawn half-dressed.
         Assert.Equal(6, meta.Items.Count);
     }
+
+    /// Every fallback gun needs its full attachment/ammo state. The sniper
+    /// fallback originally shipped with an empty one, which spawned the rifle in
+    /// safety mode with no sight and no ammo — visibly broken and unshootable.
+    [Fact]
+    public void LoadDefaults_EveryFallbackGunCarriesFullWeaponState() {
+        var config = new PeekSeekLobbyConfiguration();
+
+        config.LoadDefaults();
+
+        foreach (FallbackKit kit in config.FallbackKits) {
+            string[] state = kit.Items[0].State.Split(',');
+            Assert.True(state.Length == 18,
+                $"{kit.Category} fallback gun has {state.Length} state bytes, expected 18");
+            Assert.NotNull(kit.Magazine);
+        }
+    }
+
+    [Fact]
+    public void LoadDefaults_CoversEveryAllowedKitCategory() {
+        var config = new PeekSeekLobbyConfiguration();
+
+        config.LoadDefaults();
+
+        foreach (string category in config.AllowedKitCategories) {
+            Assert.Contains(config.FallbackKits, kit => kit.Category == category);
+        }
+    }
 }

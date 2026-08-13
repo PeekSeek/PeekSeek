@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using PeekSeekLobby.Core.Models;
 using Rocket.Core.Logging;
+using Rocket.Core.Utils;
 
 namespace PeekSeekLobby.Core.Web;
 
@@ -26,16 +27,53 @@ internal static class RemoteAPI {
 
     /// Fire-and-forget, same as the main PeekSeek plugin's RemoteAPI calls — a
     /// dropped heartbeat costs nothing, the next tick's heartbeat covers for it.
+    /// A heartbeat that comes back carrying a match id means the player has been
+    /// matched, and the lobby's job is then to hand them over to the server
+    /// hosting it.
     internal static void SendHeartbeat(ulong steam64, int gamemode, string region) {
         Task.Run(async () => {
             try {
-                await Client.GetAsync(
+                HttpResponseMessage response = await Client.GetAsync(
                     $"{ApiUrl}/unt/queue/heartbeat?steam64={steam64}&gamemode={gamemode}&region={region}"
                 );
+                if (!response.IsSuccessStatusCode) return;
+
+                int matchId = MatchIdFrom(await ReadJson(response));
+                if (matchId <= 0) return;
+
+                string code = await FetchMatchServerCode(matchId);
+                if (string.IsNullOrEmpty(code)) return;
+
+                TaskDispatcher.QueueOnMainThread(() => LobbyManager.SendToMatch(steam64, code));
             } catch (Exception ex) {
                 Logger.LogError($"Failed to send queue heartbeat for {steam64}: {ex.Message}");
             }
         });
+    }
+
+    /// Null unless the response really is JSON. The endpoint 404s to an HTML
+    /// error page when the site is down or predates this route, and every player
+    /// heartbeats every few seconds — parsing that would bury the console in
+    /// identical parse errors.
+    private static async Task<JObject> ReadJson(HttpResponseMessage response) {
+        if (response.Content.Headers.ContentType?.MediaType != "application/json") return null;
+        return JObject.Parse(await response.Content.ReadAsStringAsync());
+    }
+
+    private static int MatchIdFrom(JObject body) {
+        JToken matchId = body?["matchid"];
+        return matchId == null || matchId.Type == JTokenType.Null ? 0 : (int)matchId;
+    }
+
+    /// The match's `claimed` value — the Unturned server code of whichever server
+    /// picked the match up, which is what a player connects with. Empty while no
+    /// server has claimed it yet, so the next heartbeat can try again.
+    private static async Task<string> FetchMatchServerCode(int matchId) {
+        HttpResponseMessage response = await Client.GetAsync($"{ApiUrl}/match/overlay?id={matchId}");
+        if (!response.IsSuccessStatusCode) return null;
+
+        JObject body = await ReadJson(response);
+        return body?["claimed"]?.ToString();
     }
 
     internal static void SendQuit(ulong steam64) {
