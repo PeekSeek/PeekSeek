@@ -35,19 +35,46 @@ public class ConfigurationRoundTripTests {
         Assert.Equal(config.EnableQueue, loaded.EnableQueue);
         Assert.Equal(config.UnlimitedStamina, loaded.UnlimitedStamina);
         Assert.Equal(config.ForceSoloPlayers, loaded.ForceSoloPlayers);
-        Assert.Equal(config.ShowRoundTimerInName, loaded.ShowRoundTimerInName);
-        Assert.Equal(config.szServerDisplayName, loaded.szServerDisplayName);
         Assert.Equal(config.szMatchURL, loaded.szMatchURL);
+        Assert.Equal(config.ResetIntervalSeconds, loaded.ResetIntervalSeconds);
+        Assert.Equal(config.StreakWindowSeconds, loaded.StreakWindowSeconds);
     }
 
-    /// Matchmaking stays off until it's deliberately switched on, so a fresh
-    /// config never starts heartbeating at a site that isn't ready for it.
+    /// Matchmaking is on, and stays switchable — the lobby is live, but a server
+    /// that wants to be a pure warm-up box has to be able to turn it back off.
     [Fact]
-    public void Defaults_LeaveMatchmakingDisabled() {
+    public void Defaults_EnableMatchmaking() {
         var config = new PeekSeekLobbyConfiguration();
         config.LoadDefaults();
 
-        Assert.False(config.EnableQueue);
+        Assert.True(config.EnableQueue);
+
+        config.EnableQueue = false;
+        Assert.False(RoundTrip(config).EnableQueue);
+    }
+
+    /// Every field of a streak reward has to survive the XML, the item list most
+    /// of all — a streak that deserialises with no items pays out nothing and
+    /// says nothing about why.
+    [Fact]
+    public void StreakRewards_SurviveAnXmlRoundTripIntact() {
+        var config = new PeekSeekLobbyConfiguration();
+        config.LoadDefaults();
+
+        PeekSeekLobbyConfiguration loaded = RoundTrip(config);
+
+        Assert.Equal(config.StreakRewards.Count, loaded.StreakRewards.Count);
+        for (int i = 0; i < config.StreakRewards.Count; i++) {
+            var original = config.StreakRewards[i];
+            var restored = loaded.StreakRewards[i];
+
+            Assert.Equal(original.KillsRequired, restored.KillsRequired);
+            Assert.Equal(original.CooldownSeconds, restored.CooldownSeconds);
+            Assert.Equal(original.szChatMessage, restored.szChatMessage);
+            Assert.Equal(original.Items.Count, restored.Items.Count);
+            Assert.Equal(original.Items[0].ItemID, restored.Items[0].ItemID);
+            Assert.Equal(original.Items[0].Amount, restored.Items[0].Amount);
+        }
     }
 
     [Fact]

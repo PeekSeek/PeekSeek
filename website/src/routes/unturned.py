@@ -148,6 +148,17 @@ def queue_heartbeat(steam64: int, gamemode: int = 1, region: str = "paris"):
     return {"succes": "true"}
 
 
+@router.get("/queue/match")
+def queue_match(steam64: int):
+    """Whether this player already has a match, without queueing them for one.
+
+    The lobby plugin polls this for players who are not in its queue, so a match
+    made on the site or in a party still pulls them out of the arena.
+    /queue/heartbeat cannot answer this: it enqueues as a side effect, which would
+    quietly undo a player's /noqueue."""
+    return {"matchid": data.User.getCurrentMatchId(steam64)}
+
+
 @router.get("/queue/quit")
 def queue_quit(steam64: int):
     data.User.removeFromQueue(steam64)

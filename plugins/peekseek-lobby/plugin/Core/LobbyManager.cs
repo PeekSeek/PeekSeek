@@ -45,6 +45,13 @@ internal abstract class LobbyManager {
         /// The player's Elo, re-asserted as their reputation on a timer because
         /// Unturned moves reputation itself on kills. Zero until the site answers.
         internal int Elo;
+
+        /// Kills in a row and the cooldowns on what they have already earned.
+        internal readonly KillStreak Streak = new();
+
+        /// The magazine a streak fitted into this player's gun, remembered so it
+        /// can be taken back the moment it leaves the gun. Zero when they have none.
+        internal ushort StreakMagItemId;
     }
 
     private static readonly Dictionary<ulong, PlayerState> Players = [];
@@ -188,6 +195,8 @@ internal abstract class LobbyManager {
         victimState.IsDead = true;
         victimState.DeadUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.RespawnDelaySeconds;
         victimState.AnnouncedCountdown.Clear();
+        // Dying ends a streak outright, however recent the last kill was.
+        victimState.Streak.End();
 
         bool isPlayerKill = murderer != CSteamID.Nil
             && murderer != SteamGameServer.GetSteamID()
@@ -204,6 +213,107 @@ internal abstract class LobbyManager {
 
         GrantRewards(killer.Player, spawning: false);
         AnnounceKill(killer, victim, limb, killerState?.Kills ?? 0);
+        if (killerState != null) GrantStreakRewards(killer, killerState);
+    }
+
+    /// A streak is kills in a row with no death and no long gap between them. At
+    /// most one reward lands per kill — the one whose exact kill count this kill
+    /// just reached — so climbing to five collects the two, three and five rewards
+    /// on the way up rather than all of them at once.
+    private static void GrantStreakRewards(UnturnedPlayer killer, PlayerState state) {
+        StreakReward reward = state.Streak.Advance(
+            Time.realtimeSinceStartup,
+            PeekSeekLobby.Config.StreakWindowSeconds,
+            PeekSeekLobby.Config.StreakRewards);
+        if (reward == null) return;
+
+        GiveStreakItems(killer.Player, state, reward);
+
+        if (string.IsNullOrEmpty(reward.szChatMessage)) return;
+        Announce(string.Format(reward.szChatMessage, killer.CharacterName, reward.KillsRequired));
+    }
+
+    /// Magazines are fitted into the gun the player is already holding rather than
+    /// dropped in their pack — a drum is only a reward if it's the one they are
+    /// shooting — and are skipped when that gun can't chamber them. Everything else
+    /// goes into the inventory the ordinary way.
+    private static void GiveStreakItems(Player player, PlayerState state, StreakReward reward) {
+        if (reward.Items is not { Count: > 0 }) return;
+
+        foreach (StreakItem item in reward.Items) {
+            if (Assets.find(EAssetType.ITEM, item.ItemID) is ItemMagazineAsset magazine) {
+                AttachMagazine(player, state, item.ItemID, magazine);
+                continue;
+            }
+
+            for (byte i = 0; i < item.Amount; i++) {
+                player.inventory.forceAddItem(new Item(item.ItemID, true), true);
+            }
+        }
+    }
+
+    /// Swaps the magazine fitted to the equipped gun for this one, full. Bytes 8
+    /// and 9 of a gun's state are the fitted magazine's id and byte 10 its round
+    /// count — the same layout the site writes its kit states in. Does nothing
+    /// unless the player is holding a gun that shares a caliber with it, which is
+    /// what makes one "drum" reward give the ranger drum to ranger guns, the
+    /// military drum to military guns, and a sniper nothing at all.
+    private static void AttachMagazine(Player player, PlayerState state, ushort itemId, ItemMagazineAsset magazine) {
+        ItemGunAsset gun = player.equipment.asset as ItemGunAsset;
+        if (gun == null) return;
+
+        byte[] gunState = player.equipment.state;
+        if (gunState == null || gunState.Length <= 10) return;
+        if (!gun.magazineCalibers.Intersect(magazine.calibers).Any()) return;
+
+        gunState[8] = (byte)itemId;
+        gunState[9] = (byte)(itemId >> 8);
+        gunState[10] = magazine.amount;
+        player.equipment.sendUpdateState();
+
+        state.StreakMagItemId = itemId;
+    }
+
+    /// The magazine currently fitted to the gun the player is holding, or zero when
+    /// they aren't holding a gun.
+    private static ushort FittedMagazine(Player player) {
+        if (player.equipment.asset is not ItemGunAsset) return 0;
+
+        byte[] gunState = player.equipment.state;
+        if (gunState == null || gunState.Length <= 10) return 0;
+        return (ushort)(gunState[8] | (gunState[9] << 8));
+    }
+
+    /// A streak magazine only ever exists in the gun. The moment it leaves — the
+    /// player reloaded it away, dropped it or switched weapons — it is taken back
+    /// wherever it ended up, so a spent drum can't be reloaded a second time or
+    /// carried out of the fight it was earned in. Nothing else a streak hands out
+    /// is touched: grenades and bounces consume themselves when thrown, and the
+    /// umbrella is meant to be kept.
+    private static void TakeBackSpentStreakMagazine(CSteamID steamID, PlayerState state) {
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null) return;
+
+        // Only a gun in their hands can say the magazine has left it. Zero means
+        // they are holding something else — the umbrella the last streak gave
+        // them, say — and the magazine is still in the gun in their pack rather
+        // than spent, so there is nothing to take yet.
+        ushort fitted = FittedMagazine(player);
+        if (fitted == 0 || fitted == state.StreakMagItemId) return;
+
+        RemoveItem(player, state.StreakMagItemId);
+        state.StreakMagItemId = 0;
+    }
+
+    /// Every copy of an item, wherever it sits. Walks each page backwards because
+    /// removing an item shifts everything after it down an index.
+    private static void RemoveItem(Player player, ushort itemId) {
+        for (byte page = 0; page < PlayerInventory.PAGES - 1; page++) {
+            for (int index = player.inventory.getItemCount(page) - 1; index >= 0; index--) {
+                ItemJar jar = player.inventory.getItem(page, (byte)index);
+                if (jar?.item != null && jar.item.id == itemId) player.inventory.removeItem(page, (byte)index);
+            }
+        }
     }
 
     /// Tops each reward back up to its cap rather than adding one blindly, so a
@@ -314,6 +424,10 @@ internal abstract class LobbyManager {
                 ClearInventory(player);
                 GiveItems(player, loadout.Items);
 
+                // The kit that was just cleared took any streak magazine with it,
+                // so there is nothing left to take back.
+                state.StreakMagItemId = 0;
+
                 state.SpareMagItemId = loadout.Magazine?.ItemID ?? 0;
                 state.SpareMagFullStock = loadout.Magazine?.Amount ?? 0;
                 if (loadout.Magazine != null) GiveItem(player, loadout.Magazine);
@@ -378,11 +492,15 @@ internal abstract class LobbyManager {
     /// them in and lands them on their match page. Hitting /match while logged
     /// out is itself what records it as the page to return to, so the site sends
     /// them back there after login without needing a redirect parameter.
+    ///
+    /// Having a match is what matters here, not being in this lobby's queue — a
+    /// match made on the site or in a party has to pull someone out of the arena
+    /// just the same, or they fight on unaware their match is waiting.
     internal static void SendToMatch(ulong steam64, int matchId) {
         if (!Players.TryGetValue(steam64, out PlayerState state)) return;
-        // A heartbeat already in flight when the first one matched would
+        // A heartbeat or poll already in flight when the first one matched would
         // otherwise teleport them a second time.
-        if (!state.Queueing) return;
+        if (state.MatchId != 0) return;
         state.Queueing = false;
         state.MatchId = matchId;
 
@@ -456,6 +574,11 @@ internal abstract class LobbyManager {
             CSteamID steamID = new(entry.Key);
             PlayerState state = entry.Value;
 
+            // Checked every tick rather than on the magazine timer: the gap between
+            // reloading a drum away and having it taken back is the window in which
+            // it could be reloaded straight back in.
+            if (state.StreakMagItemId != 0) TakeBackSpentStreakMagazine(steamID, state);
+
             if (state.SpawnProtectedUntil > 0 && now >= state.SpawnProtectedUntil) {
                 state.SpawnProtectedUntil = 0;
                 SetGodMode(steamID, false);
@@ -492,7 +615,7 @@ internal abstract class LobbyManager {
 
         if (now - LastHudUpdate >= HudIntervalSeconds) {
             LastHudUpdate = now;
-            UpdateArenaHud(now);
+            UpdateArenaHud();
             ForceEveryoneSolo();
         }
 
@@ -594,17 +717,10 @@ internal abstract class LobbyManager {
         }
     }
 
-    /// The arena HUD puts the server name across the top of the screen and the
-    /// level number underneath it, so the name carries the round countdown and
-    /// the number carries how many people are actually here.
-    private static void UpdateArenaHud(float now) {
-        if (PeekSeekLobby.Config.ShowRoundTimerInName) {
-            float remaining = Mathf.Max(0f, PeekSeekLobby.Config.ResetIntervalSeconds - (now - LastArenaReset));
-            int minutes = (int)(remaining / 60f);
-            int seconds = (int)(remaining % 60f);
-            Provider.serverName = $"{PeekSeekLobby.Config.szServerDisplayName} - {minutes}:{seconds:00}";
-        }
-
+    /// The arena HUD draws the level number under the server name, so it is made to
+    /// carry how many people are actually here. The server name itself is left
+    /// exactly as the server set it — it is the server's name, not a scoreboard.
+    private static void UpdateArenaHud() {
         LevelManager.SendLevelNumber.InvokeAndLoopback(
             ENetReliability.Unreliable,
             Provider.GatherRemoteClientConnections(),
@@ -645,6 +761,7 @@ internal abstract class LobbyManager {
             state.Headshots = 0;
             state.IsDead = false;
             state.AnnouncedCountdown.Clear();
+            state.Streak.EndRound();
 
             CSteamID steamID = new(entry.Key);
             Player player = PlayerTool.getPlayer(steamID);
@@ -695,8 +812,16 @@ internal abstract class LobbyManager {
                 RemoteAPI.PollMatchStart(entry.Key, entry.Value.MatchId);
                 continue;
             }
-            if (!entry.Value.Queueing) continue;
-            RemoteAPI.SendHeartbeat(entry.Key, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
+            if (entry.Value.Queueing) {
+                RemoteAPI.SendHeartbeat(entry.Key, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
+                continue;
+            }
+
+            // Out of this lobby's queue, but a match can still reach them from the
+            // site or a party, and that has to pull them out of the arena too.
+            // Heartbeating can't be used to ask: it enqueues as a side effect,
+            // which would quietly undo their /noqueue.
+            RemoteAPI.PollExistingMatch(entry.Key);
         }
     }
 }
