@@ -38,7 +38,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "welcome_what", "<color=white>PeekSeek warm-up lobby.</color> Free-for-all deathmatch. Respawn <color=white>{0}s</color> after death with <color=white>{1}s</color> spawn protection." },
         { "welcome_what_queue", "<color=white>PeekSeek warm-up lobby.</color> You are <color=white>in queue</color>, fight while you wait. Respawn <color=white>{0}s</color> after death with <color=white>{1}s</color> spawn protection." },
         { "welcome_commands", "<color=white>/kit {0}</color> switch loadout. <color=white>/stats</color> your score. <color=white>/ping</color> your latency.{1}" },
-        { "welcome_extra", "Every kill drops <color=white>1 bloodbag</color>. Arena and scores reset every <color=white>{0} min</color>. Discord: <color=white>pksk.to/dc</color>" },
+        { "welcome_extra", "You spawn with a <color=white>heal</color> and a <color=white>bounce</color>, and every kill restocks them. Arena and scores reset every <color=white>{0} min</color>. Discord: <color=white>pksk.to/dc</color>" },
 
         { "kill_feed", "<color=white>{0}</color> killed <color=white>{1}</color> with {2}. <color=white>{3}</color> kills." },
         { "kill_feed_headshot", "<color=white>{0}</color> headshot <color=white>{1}</color> with {2}. <color=white>{3}</color> kills." },
