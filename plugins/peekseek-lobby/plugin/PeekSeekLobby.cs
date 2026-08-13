@@ -35,16 +35,15 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
     public override TranslationList DefaultTranslations => new TranslationList() {
         // Front-loaded on purpose: what the server is and the loop you're in
         // first, then the controls, then the things that can wait.
-        { "welcome_what", "<color=white>PeekSeek warm-up lobby.</color> Free-for-all deathmatch. Respawn <color=white>{0}s</color> after death with <color=white>{1}s</color> spawn protection." },
-        { "welcome_what_queue", "<color=white>PeekSeek warm-up lobby.</color> You are <color=white>in queue</color>, fight while you wait. Respawn <color=white>{0}s</color> after death with <color=white>{1}s</color> spawn protection." },
+        { "welcome_what", "<color=white>PeekSeek warm-up lobby.</color> Free-for-all deathmatch. Death respawns you <color=white>instantly</color> with <color=white>{0}s</color> spawn protection." },
+        { "welcome_what_queue", "<color=white>PeekSeek warm-up lobby.</color> You are <color=white>in queue</color>, fight while you wait. Death respawns you <color=white>instantly</color> with <color=white>{0}s</color> spawn protection." },
         { "welcome_commands", "<color=white>/kit {0}</color> switch loadout. <color=white>/stats</color> your score. <color=white>/ping</color> your latency.{1}" },
         { "welcome_extra", "Every kill earns a <color=white>heal</color>. Kills in a row earn <color=white>more</color>. Arena and scores reset every <color=white>{0} min</color>. Discord: <color=white>peekseek.net/discord</color>" },
 
         { "kill_feed", "<color=white>{0}</color> killed <color=white>{1}</color> with {2}. <color=white>{3}</color> kills." },
         { "kill_feed_headshot", "<color=white>{0}</color> headshot <color=white>{1}</color> with {2}. <color=white>{3}</color> kills." },
 
-        { "respawn_in", "Respawning in <color=white>{0}</color>..." },
-        { "spawn_protection_over", "Spawn protection <color=white>ended</color>. You can be hurt now." },
+        { "spawn_protection_over","Spawn protection <color=white>ended</color>. You can be hurt now." },
         { "target_protected", "<color=white>{0}</color> still has spawn protection." },
 
         { "leaderboard_header", "<color=white>Round over.</color> Top of the last <color=white>{0} min</color>:" },

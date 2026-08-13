@@ -23,10 +23,7 @@ internal abstract class LobbyManager {
         internal byte Kills;
         internal byte Deaths;
         internal byte Headshots;
-        internal bool IsDead;
         internal float SpawnProtectedUntil;
-        internal float DeadUntil;
-        internal readonly HashSet<int> AnnouncedCountdown = [];
 
         /// Which kits.json category (from AllowedKitCategories) this player is
         /// currently equipped with — set on join, changed with /kit.
@@ -43,8 +40,15 @@ internal abstract class LobbyManager {
         internal int MatchId;
 
         /// The player's Elo, re-asserted as their reputation on a timer because
-        /// Unturned moves reputation itself on kills. Zero until the site answers.
+        /// Unturned moves reputation itself on kills.
         internal int Elo;
+
+        /// Whether the site has actually answered with an Elo yet. Kept separate
+        /// from the value because zero is a legitimate Elo, and because a player
+        /// whose lookup has not landed has to be asked again rather than silently
+        /// left without a rank for the rest of their session.
+        internal bool EloKnown;
+        internal float EloRequestedAt;
 
         /// Kills in a row and the cooldowns on what they have already earned.
         internal readonly KillStreak Streak = new();
@@ -62,6 +66,7 @@ internal abstract class LobbyManager {
 
     private const float MagazineCheckIntervalSeconds = 2f;
     private const float ReputationSyncIntervalSeconds = 5f;
+    private const float EloRetryIntervalSeconds = 15f;
     private const float ProtectedNoticeIntervalSeconds = 3f;
     private const float StaminaTopUpIntervalSeconds = 0.5f;
     private const float HudIntervalSeconds = 1f;
@@ -146,7 +151,7 @@ internal abstract class LobbyManager {
 
         ForceSolo(player);
         SpawnPlayer(steamID, state);
-        RemoteAPI.FetchElo(steamID.m_SteamID, elo => state.Elo = elo);
+        RequestElo(steamID.m_SteamID, state, Time.realtimeSinceStartup);
         if (queueing) {
             RemoteAPI.SendHeartbeat(steamID.m_SteamID, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
         }
@@ -164,7 +169,7 @@ internal abstract class LobbyManager {
 
         Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
             queueing ? "welcome_what_queue" : "welcome_what",
-            Mathf.RoundToInt(config.RespawnDelaySeconds), Mathf.RoundToInt(config.SpawnProtectionSeconds)));
+            Mathf.RoundToInt(config.SpawnProtectionSeconds)));
 
         string kits = string.Join("|", config.AllowedKitCategories ?? []);
         string queueHint = queueing ? " <color=white>/noqueue</color> leave the queue." : string.Empty;
@@ -192,11 +197,13 @@ internal abstract class LobbyManager {
         if (!Players.TryGetValue(victim.CSteamID.m_SteamID, out PlayerState victimState)) return;
 
         victimState.Deaths++;
-        victimState.IsDead = true;
-        victimState.DeadUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.RespawnDelaySeconds;
-        victimState.AnnouncedCountdown.Clear();
         // Dying ends a streak outright, however recent the last kill was.
         victimState.Streak.End();
+
+        // Straight back into the fight, the same as a real PeekSeek match: no
+        // wait, and no death screen to sit through, because respawning inside the
+        // death event never lets one be shown.
+        Respawn(victim.CSteamID, victimState);
 
         bool isPlayerKill = murderer != CSteamID.Nil
             && murderer != SteamGameServer.GetSteamID()
@@ -377,8 +384,6 @@ internal abstract class LobbyManager {
     }
 
     private static void Respawn(CSteamID steamID, PlayerState state) {
-        state.IsDead = false;
-
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
@@ -428,9 +433,13 @@ internal abstract class LobbyManager {
                 // so there is nothing left to take back.
                 state.StreakMagItemId = 0;
 
+                // How many spares the kit asks for is ignored in favour of the
+                // configured count: a lobby life is short and constantly re-kitted,
+                // so a match's worth of magazines is just inventory clutter.
+                byte spares = PeekSeekLobby.Config.SpareMagazines;
                 state.SpareMagItemId = loadout.Magazine?.ItemID ?? 0;
-                state.SpareMagFullStock = loadout.Magazine?.Amount ?? 0;
-                if (loadout.Magazine != null) GiveItem(player, loadout.Magazine);
+                state.SpareMagFullStock = loadout.Magazine == null ? (byte)0 : spares;
+                if (loadout.Magazine != null) GiveItem(player, loadout.Magazine, spares);
 
                 // After the kit, never before: EquipRealKit clears the inventory
                 // first, so rewards granted earlier would be thrown away.
@@ -444,7 +453,13 @@ internal abstract class LobbyManager {
     }
 
     private static void GiveItem(Player player, PSItem item) {
-        for (byte i = 0; i < item.Amount; i++) {
+        GiveItem(player, item, item.Amount);
+    }
+
+    /// The same item, but however many of it the caller wants rather than what the
+    /// kit says — the lobby caps magazines at its own count.
+    private static void GiveItem(Player player, PSItem item, byte amount) {
+        for (byte i = 0; i < amount; i++) {
             player.inventory.forceAddItem(new Item(item.ItemID, true) { state = item.State }, true);
         }
     }
@@ -563,10 +578,9 @@ internal abstract class LobbyManager {
         );
     }
 
-    /// Everyone still queueing gets pinged on a timer, spawn protection expires on
-    /// its own clock, and dead players get whispered a countdown at the specific
-    /// seconds-remaining checkpoints configured — same "throttle to fixed
-    /// checkpoints" idea the main plugin's lobby-timeout broadcast uses.
+    /// Everyone still queueing gets pinged on a timer and spawn protection expires
+    /// on its own clock. Nothing here waits on the dead: respawning happens in the
+    /// death event itself.
     internal static void Tick() {
         float now = Time.realtimeSinceStartup;
 
@@ -588,23 +602,6 @@ internal abstract class LobbyManager {
                     Whisper(protectedPlayer.channel.owner,
                         PeekSeekLobby.Instance.Translate("spawn_protection_over"));
                 }
-            }
-
-            if (!state.IsDead) continue;
-
-            float secondsLeft = state.DeadUntil - now;
-            if (secondsLeft <= 0) {
-                Respawn(steamID, state);
-                continue;
-            }
-
-            int rounded = Mathf.RoundToInt(secondsLeft);
-            if (!PeekSeekLobby.Config.RespawnCountdownAtSecondsRemaining.Contains((ushort)rounded)) continue;
-            if (!state.AnnouncedCountdown.Add(rounded)) continue;
-
-            Player player = PlayerTool.getPlayer(steamID);
-            if (player != null) {
-                Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("respawn_in", rounded));
             }
         }
 
@@ -729,19 +726,39 @@ internal abstract class LobbyManager {
 
     /// Unturned adjusts reputation itself when players kill each other, so this
     /// keeps putting it back — the number over someone's head is their Elo and
-    /// nothing else.
+    /// nothing else. Players the site hasn't answered for yet are asked again on
+    /// the way past, since without an Elo there is nothing to assert.
     private static void SyncReputations() {
         if (!PeekSeekLobby.Config.ShowEloAsReputation) return;
 
+        float now = Time.realtimeSinceStartup;
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
-            if (entry.Value.Elo == 0) continue;
+            PlayerState state = entry.Value;
+
+            if (!state.EloKnown) {
+                if (now - state.EloRequestedAt >= EloRetryIntervalSeconds) RequestElo(entry.Key, state, now);
+                continue;
+            }
 
             Player player = PlayerTool.getPlayer(new CSteamID(entry.Key));
             if (player == null) continue;
 
-            int drift = entry.Value.Elo - player.skills.reputation;
+            int drift = state.Elo - player.skills.reputation;
             if (drift != 0) player.skills.askRep(drift);
         }
+    }
+
+    /// Asked for again until the site answers. A single fire-and-forget lookup on
+    /// connect meant one blip — a site restart, a timeout, a request that landed
+    /// before the site was up — left a player's Elo unknown for their whole
+    /// session, and since an unknown Elo has nothing to assert, their rank simply
+    /// never appeared and nothing said why.
+    private static void RequestElo(ulong steam64, PlayerState state, float now) {
+        state.EloRequestedAt = now;
+        RemoteAPI.FetchElo(steam64, elo => {
+            state.Elo = elo;
+            state.EloKnown = true;
+        });
     }
 
     /// Wipes the arena back to how it started: nothing left on the ground,
@@ -759,8 +776,6 @@ internal abstract class LobbyManager {
             state.Kills = 0;
             state.Deaths = 0;
             state.Headshots = 0;
-            state.IsDead = false;
-            state.AnnouncedCountdown.Clear();
             state.Streak.EndRound();
 
             CSteamID steamID = new(entry.Key);

@@ -146,23 +146,54 @@ internal static class RemoteAPI {
         });
     }
 
-    /// A player's Elo, mirrored into their in-game reputation. Null when the
-    /// site can't be reached, which leaves reputation untouched rather than
-    /// stamping a wrong number over it.
+    /// A player's Elo, mirrored into their in-game reputation. The callback only
+    /// fires on a real answer, so a site that can't be reached leaves reputation
+    /// untouched rather than stamping a wrong number over it — the caller retries
+    /// until it lands.
     internal static void FetchElo(ulong steam64, Action<int> onFetched) {
         Task.Run(async () => {
             try {
                 HttpResponseMessage response = await Client.GetAsync($"{ApiUrl}/reputation/{steam64}");
-                if (!response.IsSuccessStatusCode) return;
+                if (!response.IsSuccessStatusCode) {
+                    ReportEloStatus($"{(int)response.StatusCode} {response.StatusCode}");
+                    return;
+                }
 
                 JObject body = await ReadJson(response);
-                if (body?["elo"] == null) return;
+                if (body?["elo"] == null) {
+                    ReportEloStatus("a reply that wasn't JSON carrying an elo");
+                    return;
+                }
 
+                ReportEloStatus(null);
                 int elo = (int)body["elo"];
                 TaskDispatcher.QueueOnMainThread(() => onFetched(elo));
             } catch (Exception ex) {
-                Logger.LogError($"Failed to fetch reputation for {steam64}: {ex.Message}");
+                ReportEloStatus(ex.Message);
             }
+        });
+    }
+
+    private static string LastEloFailure = string.Empty;
+
+    /// Reports only when the outcome changes, the same rule the heartbeat status
+    /// uses — every player without an Elo is retried on a timer, so an unreachable
+    /// site would otherwise repeat itself into the console forever. Both failure
+    /// paths used to return in silence, which is exactly why a lobby showing
+    /// nobody's rank gave no hint as to why.
+    private static void ReportEloStatus(string failure) {
+        string current = failure ?? string.Empty;
+        if (LastEloFailure == current) return;
+        LastEloFailure = current;
+
+        TaskDispatcher.QueueOnMainThread(() => {
+            if (failure == null) {
+                Logger.Log("Elo lookups are being answered — reputation is showing rank.");
+                return;
+            }
+            Logger.LogWarning(
+                $"Elo lookups are failing with {failure} — reputation will not show rank. "
+                + $"Check {ApiUrl}/reputation/<steam64>.");
         });
     }
 

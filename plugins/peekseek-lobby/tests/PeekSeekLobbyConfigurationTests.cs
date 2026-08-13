@@ -15,8 +15,6 @@ public class PeekSeekLobbyConfigurationTests {
 
         Assert.NotNull(config.Spawns);
         Assert.NotEmpty(config.Spawns);
-        Assert.NotNull(config.RespawnCountdownAtSecondsRemaining);
-        Assert.NotEmpty(config.RespawnCountdownAtSecondsRemaining);
         Assert.NotNull(config.AllowedKitCategories);
         Assert.NotEmpty(config.AllowedKitCategories);
         Assert.NotNull(config.KillRewards);
@@ -94,9 +92,21 @@ public class PeekSeekLobbyConfigurationTests {
         Assert.Equal((ushort)1, config.GamemodeBitmask);
         Assert.Equal("paris", config.szRegion);
         Assert.Equal(5f, config.SpawnProtectionSeconds);
-        Assert.Equal(10f, config.RespawnDelaySeconds);
         Assert.Equal("#FFFFFF", config.szHexDefaultChatColor);
         Assert.Equal(["meta", "sniper"], config.AllowedKitCategories);
+    }
+
+    /// One spare, not the five a match kit carries: a lobby life is short and
+    /// re-kitted constantly, so more than one is just clutter. The fallback kits
+    /// carry the same count so the two don't tell different stories.
+    [Fact]
+    public void LoadDefaults_CarriesASingleSpareMagazine() {
+        var config = new PeekSeekLobbyConfiguration();
+
+        config.LoadDefaults();
+
+        Assert.Equal((byte)1, config.SpareMagazines);
+        Assert.All(config.FallbackKits, kit => Assert.Equal((byte)1, kit.Magazine.Amount));
     }
 
     [Fact]
