@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
@@ -36,7 +37,11 @@ internal static class RemoteAPI {
                 HttpResponseMessage response = await Client.GetAsync(
                     $"{ApiUrl}/unt/queue/heartbeat?steam64={steam64}&gamemode={gamemode}&region={region}"
                 );
-                if (!response.IsSuccessStatusCode) return;
+                if (!response.IsSuccessStatusCode) {
+                    ReportHeartbeatStatus(response.StatusCode);
+                    return;
+                }
+                ReportHeartbeatStatus(response.StatusCode);
 
                 int matchId = MatchIdFrom(await ReadJson(response));
                 if (matchId <= 0) return;
@@ -48,6 +53,27 @@ internal static class RemoteAPI {
             } catch (Exception ex) {
                 Logger.LogError($"Failed to send queue heartbeat for {steam64}: {ex.Message}");
             }
+        });
+    }
+
+    private static HttpStatusCode? LastHeartbeatStatus;
+
+    /// Every connected player heartbeats every few seconds, so logging each
+    /// result would bury the console — this reports only when the outcome
+    /// changes, which is enough to see "401, the server IP isn't allow-listed"
+    /// or to watch it recover without the noise.
+    private static void ReportHeartbeatStatus(HttpStatusCode status) {
+        if (LastHeartbeatStatus == status) return;
+        LastHeartbeatStatus = status;
+
+        TaskDispatcher.QueueOnMainThread(() => {
+            if (status == HttpStatusCode.OK) {
+                Logger.Log($"Queue heartbeats are being accepted ({(int)status}).");
+                return;
+            }
+            Logger.LogWarning(
+                $"Queue heartbeats are being rejected with {(int)status} {status} — "
+                + $"players will not enter matchmaking. Check {ApiUrl} and that this server's IP is allow-listed.");
         });
     }
 
