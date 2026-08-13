@@ -14,9 +14,13 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public ushort GamemodeBitmask;
     public float HeartbeatIntervalSeconds;
     public float SpawnProtectionSeconds;
-    public float RespawnDelaySeconds;
-    public List<ushort> RespawnCountdownAtSecondsRemaining;
     public List<LobbySpawn> Spawns;
+
+    /// How many spare magazines a player carries, whatever the kit itself asks
+    /// for. The magazine check keeps exactly this many topped up, so it is both
+    /// the starting count and the cap.
+    public byte SpareMagazines;
+
     /// Master switch for matchmaking. Off means the lobby is purely a warm-up
     /// server: no heartbeats leave the box, nobody is matched or relayed, and
     /// /noqueue has nothing to toggle.
@@ -55,9 +59,9 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// player-placed builds cleared, session stats zeroed, everyone respawned.
     public float ResetIntervalSeconds;
 
-    /// Mirror each player's Elo into their in-game reputation. Unturned moves
-    /// reputation on its own for kills and similar, so this is re-asserted on a
-    /// timer rather than set once.
+    /// Mirror each player's Elo into their in-game reputation, as a negative
+    /// number. Unturned moves reputation on its own for kills and similar, so this
+    /// is re-asserted on a timer rather than set once.
     public bool ShowEloAsReputation;
 
     public string szDiscordURL;
@@ -89,8 +93,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         GamemodeBitmask = 1;
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;
-        RespawnDelaySeconds = 10f;
-        RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
+        SpareMagazines = 1;
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = true;
         ForceSoloPlayers = true;
@@ -158,7 +161,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
                     new FallbackItem { ItemID = 307, Amount = 1, State = "" },
                     new FallbackItem { ItemID = 308, Amount = 1, State = "" }
                 ],
-                Magazine = new FallbackItem { ItemID = 6, Amount = 5, State = "" }
+                Magazine = new FallbackItem { ItemID = 6, Amount = 1, State = "" }
             },
             new FallbackKit {
                 Category = "sniper",
@@ -170,7 +173,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
                     new FallbackItem { ItemID = 307, Amount = 1, State = "" },
                     new FallbackItem { ItemID = 308, Amount = 1, State = "" }
                 ],
-                Magazine = new FallbackItem { ItemID = 1384, Amount = 5, State = "" }
+                Magazine = new FallbackItem { ItemID = 1384, Amount = 1, State = "" }
             }
         ];
 
