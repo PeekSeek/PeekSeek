@@ -34,6 +34,7 @@ public class ConfigurationRoundTripTests {
         Assert.Equal(config.Spawns.Count, loaded.Spawns.Count);
         Assert.Equal(config.EnableQueue, loaded.EnableQueue);
         Assert.Equal(config.UnlimitedStamina, loaded.UnlimitedStamina);
+        Assert.Equal(config.ForceSoloPlayers, loaded.ForceSoloPlayers);
         Assert.Equal(config.ShowRoundTimerInName, loaded.ShowRoundTimerInName);
         Assert.Equal(config.szServerDisplayName, loaded.szServerDisplayName);
         Assert.Equal(config.szMatchURL, loaded.szMatchURL);

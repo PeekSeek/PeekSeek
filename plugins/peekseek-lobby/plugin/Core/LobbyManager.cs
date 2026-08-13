@@ -137,6 +137,7 @@ internal abstract class LobbyManager {
         PlayerState state = new() { KitCategory = DefaultKitCategory(), Queueing = queueing };
         Players[steamID.m_SteamID] = state;
 
+        ForceSolo(player);
         SpawnPlayer(steamID, state);
         RemoteAPI.FetchElo(steamID.m_SteamID, elo => state.Elo = elo);
         if (queueing) {
@@ -492,6 +493,7 @@ internal abstract class LobbyManager {
         if (now - LastHudUpdate >= HudIntervalSeconds) {
             LastHudUpdate = now;
             UpdateArenaHud(now);
+            ForceEveryoneSolo();
         }
 
         if (now - LastReputationSync >= ReputationSyncIntervalSeconds) {
@@ -559,6 +561,27 @@ internal abstract class LobbyManager {
     /// deleting items it can't reason about.
     private static byte MagazineCapacity(ushort itemId) {
         return Assets.find(EAssetType.ITEM, itemId) is ItemMagazineAsset asset ? asset.amount : (byte)0;
+    }
+
+    /// Steam groups are applied on connect without the player choosing to, and
+    /// group mates cannot damage each other, so anyone sharing a group would be
+    /// unkillable to their friends in what is meant to be a free-for-all.
+    private static void ForceSolo(Player player) {
+        if (!PeekSeekLobby.Config.ForceSoloPlayers) return;
+        if (player.quests.groupID == CSteamID.Nil) return;
+
+        player.quests.leaveGroup(true);
+        GroupManager.alertGroupmatesLeft(player);
+    }
+
+    /// Swept rather than only handled on join: a group can be re-applied at any
+    /// point by Steam or by the player, and the cost of checking is a field read.
+    private static void ForceEveryoneSolo() {
+        if (!PeekSeekLobby.Config.ForceSoloPlayers) return;
+
+        foreach (SteamPlayer client in Provider.clients) {
+            if (client?.player != null) ForceSolo(client.player);
+        }
     }
 
     /// Topped back up rather than disabled outright: there is no switch for
