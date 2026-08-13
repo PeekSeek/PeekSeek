@@ -195,17 +195,20 @@ internal abstract class LobbyManager {
             if (limb == ELimb.SKULL) killerState.Headshots++;
         }
 
-        GrantRewards(killer.Player);
+        GrantRewards(killer.Player, spawning: false);
         AnnounceKill(killer, victim, limb, killerState?.Kills ?? 0);
     }
 
     /// Tops each reward back up to its cap rather than adding one blindly, so a
     /// player who never spent theirs doesn't accumulate a stack across a killstreak.
-    private static void GrantRewards(Player player) {
+    /// A spawn only hands out what GrantOnSpawn allows; a kill restocks everything.
+    private static void GrantRewards(Player player, bool spawning) {
         List<RewardItem> rewards = PeekSeekLobby.Config.KillRewards;
         if (rewards is not { Count: > 0 }) return;
 
         foreach (RewardItem reward in rewards) {
+            if (spawning && !reward.GrantOnSpawn) continue;
+
             int missing = reward.MaxCarried - CountItem(player, reward.ItemID);
             for (int i = 0; i < missing; i++) {
                 player.inventory.forceAddItem(new Item(reward.ItemID, true), true);
@@ -310,7 +313,7 @@ internal abstract class LobbyManager {
 
                 // After the kit, never before: EquipRealKit clears the inventory
                 // first, so rewards granted earlier would be thrown away.
-                GrantRewards(player);
+                GrantRewards(player, spawning: true);
             });
         });
     }
