@@ -27,6 +27,20 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// players bank more than one.
     public List<RewardItem> KillRewards;
 
+    /// Sprinting never costs anything here. A warm-up server is about fights,
+    /// not about running out of breath crossing the map to reach one.
+    public bool UnlimitedStamina;
+
+    /// The arena HUD draws the server name across the top of the screen with the
+    /// live player count beneath it, so the round timer is appended to the name
+    /// to put it where players are already looking.
+    public bool ShowRoundTimerInName;
+
+    /// The name the timer is appended to. Kept separate from the server's real
+    /// name because that gets rewritten every second once the timer is on, and
+    /// reading the base back out of it would compound.
+    public string szServerDisplayName;
+
     /// Dropped items are deleted the moment they hit the ground, so the arena
     /// never fills with the guns and magazines of everyone who died in it.
     public bool RemoveDroppedItems;
@@ -73,6 +87,9 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = false;
+        UnlimitedStamina = true;
+        ShowRoundTimerInName = true;
+        szServerDisplayName = "PeekSeek.net";
         // The bounce is standard kit, the heal has to be earned. One of each at
         // a time so they stay a reward for the next fight rather than a stockpile.
         KillRewards = [
