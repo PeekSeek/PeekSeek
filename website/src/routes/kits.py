@@ -45,6 +45,19 @@ def _weapon_selection(steam64, category, submitted=None):
     return selection
 
 
+def _adjustable_slots(category, selection):
+    """The attachment slots the selected gun actually offers a choice in.
+
+    A slot with a single allowed item is not a choice: melee kits take no
+    attachments at all and snipers take no barrel, so those rows would sit there
+    offering one tile that can never change anything. Leaving them out of the form
+    is safe because _weapon_selection falls back to the slot's only option when the
+    POST carries nothing for it.
+    """
+    gun = kitsConfig["kits"][category][str(selection["gun"])]
+    return [(slot, gun[slot]) for slot in WEAPON_SLOTS if len(gun[slot]) > 1]
+
+
 def _outfit_selection(steam64, submitted=None):
     outfits = kitsConfig["outfits"]
     source = submitted or _saved_kit(steam64, "outfit") or {}
@@ -70,13 +83,15 @@ def kit(request: Request, category: str, steam64: LoggedInSteam64):
     if category not in kitsConfig["kits"]:
         request.session["lastError"] = "Invalid kit name."
         return RedirectResponse("/", status_code=302)
+    selection = _weapon_selection(steam64, category)
     return templates.TemplateResponse(
         request=request,
         name="app/kits.html",
         context={
             "category": category,
             "guns": kitsConfig["kits"][category],
-            "selection": _weapon_selection(steam64, category),
+            "selection": selection,
+            "slots": _adjustable_slots(category, selection),
         },
     )
 
@@ -98,6 +113,7 @@ def save_kit(
             "category": category,
             "guns": kitsConfig["kits"][category],
             "selection": selection,
+            "slots": _adjustable_slots(category, selection),
         },
     )
 

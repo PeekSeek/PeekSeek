@@ -1,6 +1,10 @@
 {#
   Weapon kit editor. Self-contained HTMX island: changing any option re-POSTs the
   whole selection and swaps this element with the server's re-rendered response.
+
+  `slots` only carries the attachment slots this gun offers a real choice in, so
+  the melee kits (no attachments) and the snipers (no barrel) render without the
+  dead rows they used to. See _adjustable_slots in routes/kits.py.
 #}
 <form id="kitEditor" class="mainElement kitEditor"
       hx-post="/me/kit/{{category}}"
@@ -8,74 +12,53 @@
       hx-target="#kitEditor"
       hx-swap="outerHTML">
 
-  <header class="kitHeader">
-    <div class="kitHeaderText">
-      <p class="kitEyebrow">Loadout</p>
-      <h1>Editing <span class="kitCategory">{{ category }}</span></h1>
-      <p class="kitHint">Pick a weapon, then fine-tune its attachments. Changes save instantly.</p>
-    </div>
-    <div class="kitPreview">
-      <div class="kitPreviewFrame">
-        <img src="/static/unturned/{{selection.gun}}.png"
-             alt="Selected gun {{ selection.gun }}">
-      </div>
-      <div class="kitAttachmentStrip">
-        {% for slot in ["sight", "tactical", "grip", "barrel"] %}
-          {% if selection[slot] and selection[slot] != 0 %}
-            <div class="kitChip" title="{{ slot }}">
-              <span class="kitChipLabel">{{ slot }}</span>
-              <img src="/static/unturned/{{selection[slot]}}.png"
-                   alt="{{ slot }} {{ selection[slot] }}">
-            </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-    </div>
-  </header>
+  {# A <header> here would inherit the site bar's own fill and 80px height from the
+     bare `header` rule in default.css, so this stays a div. #}
+  <div class="kitHeader">
+    <h1><span class="kitCategory">{{ category }}</span> kit</h1>
+    <p class="kitHint">
+      {% if not slots %}This weapon takes no attachments. {% endif %}Picks save the moment you make them.
+    </p>
+  </div>
 
-  <section class="kitSection">
-    <div class="kitSectionHead">
-      <h2>Weapon</h2>
-      <span class="kitSectionMeta">{{ guns | length }} available</span>
-    </div>
-    <div class="kitSelector kitGunGrid">
+  <section class="kitSlot">
+    <h2 class="kitSlotName">Weapon</h2>
+    <div class="kitGrid wide">
       {% for gunId in guns %}
-        <label class="option kitGunOption{% if gunId | int == selection.gun %} optionselected{% endif %}">
-          <input type="radio" name="gun" value="{{ gunId }}" hidden
+        {# The id is what htmx restores focus to after it swaps this form out, so
+           arrowing through a row with the keyboard keeps working past the save. #}
+        <label class="kitOption{% if gunId | int == selection.gun %} kitOptionSelected{% endif %}">
+          <input type="radio" id="gun-{{ gunId }}" name="gun" value="{{ gunId }}"
                  {% if gunId | int == selection.gun %}checked{% endif %}>
-          <img src="/static/unturned/{{gunId}}.png"
-               alt="Gun {{ gunId }}">
+          <img class="itemIcon" src="/static/unturned/{{gunId}}.png"
+               alt="Weapon option {{ loop.index }}">
         </label>
       {% endfor %}
     </div>
   </section>
 
-  <section class="kitSection kitAttachments">
-    <div class="kitSectionHead">
-      <h2>Attachments</h2>
-      <span class="kitSectionMeta">sight · tactical · grip · barrel</span>
-    </div>
-    <div class="kitAttachmentGrid">
-      {% for slot in ["sight", "tactical", "grip", "barrel"] %}
-        <div class="kitSlot">
-          <div class="kitSlotTitle">{{ slot }}</div>
-          <div class="kitSelector kitSlotOptions">
-            {% for itemId in guns[selection.gun | string][slot] %}
-              <label class="option kitAttachOption{% if itemId == selection[slot] %} optionselected{% endif %}{% if itemId == 0 %} kitEmptyOption{% endif %}">
-                <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
-                       {% if itemId == selection[slot] %}checked{% endif %}>
-                {% if itemId == 0 %}
-                  <span class="kitNone">None</span>
-                {% else %}
-                  <img src="/static/unturned/{{itemId}}.png"
-                       alt="{{ slot }} {{ itemId }}">
-                {% endif %}
-              </label>
-            {% endfor %}
-          </div>
-        </div>
-      {% endfor %}
-    </div>
-  </section>
+  {% for slot, options in slots %}
+    <section class="kitSlot">
+      <h2 class="kitSlotName">{{ slot }}</h2>
+      <div class="kitGrid">
+        {% for itemId in options %}
+          {# A negative id is the same attachment at 0% durability (metagun.setAttach
+             reads the sign and breaks the barrel), which its icon already stamps
+             with "0%" -- the title just says it in words on hover. #}
+          <label class="kitOption{% if itemId == selection[slot] %} kitOptionSelected{% endif %}"
+                 {% if itemId < 0 %}title="0% durability"{% endif %}>
+            <input type="radio" id="{{ slot }}-{{ itemId }}" name="{{ slot }}" value="{{ itemId }}"
+                   {% if itemId == selection[slot] %}checked{% endif %}>
+            {% if itemId == 0 %}
+              <span class="kitNone">None</span>
+            {% else %}
+              <img class="itemIcon" src="/static/unturned/{{itemId}}.png"
+                   alt="{{ slot }} option {{ loop.index }}">
+            {% endif %}
+          </label>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
 
 </form>

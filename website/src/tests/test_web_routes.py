@@ -364,3 +364,64 @@ def test_match_page_never_shows_a_kit_or_powerup_as_pre_selected(client, login, 
     # means no tile renders as selected until the player actually clicks one.
     assert '"currentkit": null' in r.text
     assert '"currentpowerup": null' in r.text
+
+def test_layout_scripts_are_actually_served(client):
+    """Every script the layout pulls in has to exist on disk.
+
+    htmx.min.js went missing from public/assets while layout.html kept asking
+    for it, and since the loadout editors are the only htmx on the site, the kit
+    and outfit pages quietly stopped saving anything at all.
+    """
+    import re
+
+    from src.core.settings import settings
+
+    layout = (settings.root / "templates" / "layout.html").read_text(encoding="utf-8")
+    sources = re.findall(r'<script src="(/static/[^"]+)"', layout)
+
+    assert sources
+    for source in sources:
+        assert client.get(source).status_code == 200, source
+
+
+def test_kit_editor_leaves_out_the_barrel_row_for_a_sniper(client, login, user_factory):
+    """A sniper's barrel list holds one item, which is not a choice, so the row is
+    left out rather than rendered as a lone tile that can never change anything."""
+    login(client, user_factory())
+    r = client.get("/me/kit/sniper")
+
+    assert r.status_code == 200
+    assert 'name="sight"' in r.text
+    assert 'name="barrel"' not in r.text
+
+
+def test_melee_kit_editor_offers_no_attachments(client, login, user_factory):
+    login(client, user_factory())
+    r = client.get("/me/kit/melee")
+
+    assert r.status_code == 200
+    for slot in ("sight", "tactical", "grip", "barrel"):
+        assert f'name="{slot}"' not in r.text
+    assert "takes no attachments" in r.text
+
+
+def test_kit_editor_saves_a_pick_and_returns_it_selected(client, login, user_factory):
+    import re
+
+    from src.core import models as data
+    from src.core.settings import settings
+
+    player = user_factory()
+    login(client, player)
+
+    guns = settings.kits["kits"]["meta"]
+    gunId = list(guns)[1]
+    sight = guns[gunId]["sight"][2]
+
+    r = client.post("/me/kit/meta", data={"gun": gunId, "sight": sight})
+
+    assert r.status_code == 200
+    assert data.Kit.publicData(player.steam64)["meta"]["items"][0][0] == int(gunId)
+    # The swapped-in response is the only feedback a player gets that their click
+    # landed, so the tile it comes back with has to be the one they picked.
+    assert re.search(rf'id="sight-{sight}"[^>]*\bchecked\b', r.text, re.S)

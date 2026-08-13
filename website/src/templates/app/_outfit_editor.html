@@ -1,6 +1,7 @@
 {#
-  Outfit editor. Same HTMX pattern as the kit editor: any change re-POSTs the whole
-  outfit and swaps this element with the server's re-rendered response.
+  Outfit editor. Same HTMX pattern and the same tile components as the kit editor:
+  any change re-POSTs the whole outfit and swaps this element with the server's
+  re-rendered response.
 #}
 <form id="outfitEditor" class="mainElement kitEditor"
       hx-post="/me/outfit"
@@ -8,32 +9,29 @@
       hx-target="#outfitEditor"
       hx-swap="outerHTML">
 
-  <header class="kitHeader">
-    <div class="kitHeaderText">
-      <p class="kitEyebrow">Loadout</p>
-      <h1>Editing <span class="kitCategory">outfit</span></h1>
-      <p class="kitHint">Choose gear for each slot. This outfit is used in every match and saves instantly.</p>
-    </div>
-  </header>
+  {# A <header> here would inherit the site bar's own fill and 80px height from the
+     bare `header` rule in default.css, so this stays a div. #}
+  <div class="kitHeader">
+    <h1><span class="kitCategory">outfit</span></h1>
+    <p class="kitHint">Worn in every match, whichever kit you take. Picks save the moment you make them.</p>
+  </div>
 
-  <section class="kitSection">
-    <div class="outfitselectorgrid">
-      {% for slot, options in outfits.items() %}
-        <div class="kitSlot outfitSlot">
-          <div class="kitSlotTitle">{{ slot }}</div>
-          <div class="row kitSelector">
-            {% for itemId in options %}
-              <label class="option kitGunOption{% if itemId == selection[slot] %} optionselected{% endif %}">
-                <input type="radio" name="{{ slot }}" value="{{ itemId }}" hidden
-                       {% if itemId == selection[slot] %}checked{% endif %}>
-                <img src="/static/unturned/{{itemId}}.png"
-                     alt="{{ slot }} {{ itemId }}">
-              </label>
-            {% endfor %}
-          </div>
-        </div>
-      {% endfor %}
-    </div>
-  </section>
+  {% for slot, options in outfits.items() %}
+    <section class="kitSlot">
+      <h2 class="kitSlotName">{{ slot }}</h2>
+      <div class="kitGrid">
+        {% for itemId in options %}
+          {# The id is what htmx restores focus to after it swaps this form out, so
+             arrowing through a row with the keyboard keeps working past the save. #}
+          <label class="kitOption{% if itemId == selection[slot] %} kitOptionSelected{% endif %}">
+            <input type="radio" id="{{ slot }}-{{ itemId }}" name="{{ slot }}" value="{{ itemId }}"
+                   {% if itemId == selection[slot] %}checked{% endif %}>
+            <img class="itemIcon" src="/static/unturned/{{itemId}}.png"
+                 alt="{{ slot }} option {{ loop.index }}">
+          </label>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
 
 </form>

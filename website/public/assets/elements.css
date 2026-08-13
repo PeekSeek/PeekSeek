@@ -178,326 +178,139 @@
   border-radius: 10px;
 }
 
-.outfitselectorgrid {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
-}
+/* Loadout editors. The weapon-kit picker and the outfit picker are the same UI and
+   share every component below.
 
-.outfitselectorgrid .row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.outfitselectorgrid .option, .kitSelector .option {
-  background-color: #141414;
-  border: 1px solid #ffffff0f;
-  padding: 12px;
-  border-radius: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color .15s ease, background-color .15s ease, transform .15s ease, box-shadow .15s ease;
-} .outfitselectorgrid .option:hover, .kitSelector .option:hover {
-  border-color: #ff666655;
-  background-color: #1b1212;
-  transform: translateY(-1px);
-} .outfitselectorgrid .optionselected, .kitSelector .optionselected {
-  background: linear-gradient(180deg, #2a1515 0%, #1a1010 100%);
-  border-color: #f66;
-  box-shadow: 0 0 0 1px #ff666633, 0 8px 24px #00000055;
-  cursor: default;
-  transform: none;
-}
-
-.outfitselectorgrid img, .kitSelector .option img {
-  max-width: 64px;
-  max-height: 64px;
+   Unturned draws weapon parts near-black on a transparent background, so against
+   this page's near-black panels a sight or a barrel was simply invisible. Shape
+   alone can't carry the distinction either -- the tactical slot is a red laser
+   against a tan light, and each clothing slot is one garment in four colours -- so
+   icons keep their own colours and earn their contrast from a white outline
+   instead of being flattened into silhouettes. */
+.itemIcon {
+  max-width: 100%;
+  max-height: 46px;
   object-fit: contain;
-  image-rendering: auto;
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff);
 }
 
-/* Kit / outfit editor layout */
 .kitEditor {
-  gap: 28px;
-  align-items: stretch;
-  min-height: 0;
-  padding: 28px;
-  background:
-    radial-gradient(ellipse 80% 50% at 100% 0%, #3a101055 0%, transparent 55%),
-    linear-gradient(180deg, #121212 0%, #0a0a0a 100%);
-  border: 1px solid #ffffff0a;
+  justify-content: flex-start;
+  gap: 24px;
 }
 
 .kitHeader {
   display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  justify-content: space-between;
-  align-items: stretch;
-}
-
-.kitHeaderText {
-  display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: min(100%, 260px);
-  flex: 1;
+  gap: 4px;
 }
 
-.kitEyebrow {
-  color: #f668;
-  font-size: 12px;
+.kitHeader h1 {
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-}
-
-.kitHeaderText h1 {
-  font-size: clamp(22px, 3vw, 30px);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
 }
 
 .kitCategory {
-  text-transform: uppercase;
   color: #f66;
-  background: linear-gradient(90deg, #ff7777, #ff4444);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  text-transform: uppercase;
 }
 
 .kitHint {
   color: #888;
   font-size: 14px;
-  max-width: 420px;
-  line-height: 1.45;
-}
-
-.kitPreview {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  min-width: min(100%, 280px);
-}
-
-.kitPreviewFrame {
-  width: min(100%, 280px);
-  min-height: 140px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 18px 24px;
-  border-radius: 16px;
-  background:
-    radial-gradient(circle at 50% 30%, #ff444418 0%, transparent 60%),
-    #0d0d0d;
-  border: 1px solid #ffffff10;
-  box-shadow: inset 0 1px 0 #ffffff08;
-}
-
-.kitPreviewFrame img {
-  max-width: 100%;
-  max-height: 150px;
-  width: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 10px 18px #000000aa);
-}
-
-.kitAttachmentStrip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  max-width: 280px;
-}
-
-.kitChip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: #161616;
-  border: 1px solid #ffffff0d;
-  min-width: 56px;
-}
-
-.kitChipLabel {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: #666;
-}
-
-.kitChip img {
-  max-width: 28px;
-  max-height: 28px;
-  object-fit: contain;
-}
-
-.kitSection {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.kitSectionHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #ffffff0d;
-}
-
-.kitSectionHead h2 {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: #ccc;
-}
-
-.kitSectionMeta {
-  font-size: 12px;
-  color: #555;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-}
-
-.kitGunGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: flex-start;
-}
-
-.kitGunOption {
-  min-width: 120px;
-  min-height: 88px;
-  padding: 14px 16px !important;
-}
-
-.kitGunOption img {
-  max-width: 140px !important;
-  max-height: 72px !important;
-}
-
-.kitAttachmentGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
 }
 
 .kitSlot {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 14px;
-  background: #0f0f0f;
-  border: 1px solid #ffffff0a;
-  min-height: 100%;
-}
-
-.outfitSlot {
-  padding: 16px;
-}
-
-.kitSlotTitle {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  color: #777;
-}
-
-.kitSlotOptions {
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  align-items: stretch;
 }
 
-.kitAttachOption {
-  min-height: 48px;
-  padding: 10px !important;
-  width: 100%;
-  box-sizing: border-box;
+/* Item ids are the only names this data carries, so a tile can never label itself.
+   The slot is the one real name there is: say what the row is, above the row. */
+.kitSlotName {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a8a8a;
 }
 
-.kitAttachOption img {
-  max-width: 36px !important;
-  max-height: 36px !important;
+/* auto-fill rather than auto-fit so a two-option row (grip) keeps the same tile
+   size as a ten-option row (sight) instead of stretching to fill the panel. */
+.kitGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
 }
 
-.kitEmptyOption,
+.kitGrid.wide {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.kitOption {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 68px;
+  padding: 10px;
+  background-color: #1a1a1a;
+  border: 1px solid #3334;
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+
+.kitGrid.wide .kitOption {
+  min-height: 92px;
+}
+
+.kitGrid.wide .itemIcon {
+  max-height: 64px;
+}
+
+.kitOption:hover {
+  background-color: #222;
+}
+
+/* The red the sidebar marks the current page with, so "this is the one you're on"
+   reads the same way across the site. */
+.kitOptionSelected, .kitOptionSelected:hover {
+  background-color: #411;
+  border-color: #f66;
+  cursor: default;
+}
+
+/* These radios used to be `hidden`, which took the entire editor out of the tab
+   order -- a picker built from labels is only operable if its inputs still are.
+   Keep them focusable and out of sight; the tile is what mouse and eye use. */
+.kitOption input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* :has(:focus-visible) rather than :focus-within, so the ring is a keyboard
+   affordance and doesn't linger on whatever tile the mouse last clicked. */
+.kitOption:has(input:focus-visible) {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 .kitNone {
-  color: #555;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.kitAttachOption.optionselected .kitNone {
-  color: #f99;
-}
-
-@media (max-width: 900px) {
-  .kitAttachmentGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  color: #888;
 }
 
 @media (max-width: 560px) {
-  .kitEditor {
-    padding: 18px;
+  .kitGrid.wide {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   }
-
-  .kitAttachmentGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .kitGunOption {
-    min-width: calc(50% - 8px);
-    flex: 1 1 calc(50% - 8px);
-  }
-}
-
-/* A row of picker tiles with no name to show for what's in it (item names aren't
-   in the data, only ids) is just a label problem — say what the row itself is, in
-   the one place we do have a real name: the slot. */
-.slotLabel {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #8a8a8a;
-  text-align: center;
-  margin: 16px 0 8px;
-} .slotLabel:first-of-type {
-  margin-top: 4px;
-}
-
-/* Attachment rows (4 slots side by side) get a smaller tile than the primary
-   weapon/outfit-piece picker so four rows still fit without a scrollbar — still
-   nearly 3x the 14px the attachment icons used to render at. */
-.kitSelector .option.small {
-  padding: 8px;
-} .kitSelector .option.small img {
-  max-width: 40px;
-  max-height: 40px;
 }
 
 .centerflex {
