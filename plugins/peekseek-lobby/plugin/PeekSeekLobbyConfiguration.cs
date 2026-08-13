@@ -64,7 +64,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         szRegion = "paris";
         GamemodeBitmask = 1;
         HeartbeatIntervalSeconds = 5f;
-        SpawnProtectionSeconds = 3f;
+        SpawnProtectionSeconds = 5f;
         RespawnDelaySeconds = 10f;
         RespawnCountdownAtSecondsRemaining = [10, 5, 3, 2, 1];
         BloodBagItemID = 395;
