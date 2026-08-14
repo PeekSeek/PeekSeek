@@ -18,12 +18,37 @@
     <link rel="stylesheet" href="/static/assets/overlay.css" crossorigin="anonymous"></link>
   </head>
   <body>
-    <div id="notStarted">
-      <img src="/static/img/cmw.png" style="height:10vh;">
+    <!-- What fills the gap before the first round. Two faces, swapped by class on
+         #notStarted: "waiting" while there is no match to describe yet, and
+         "intermission" once there is a roster to read. Both are built here rather than
+         by script so the markup can be styled and checked without a live match. -->
+    <div id="notStarted" class="waiting">
+      <div class="splash">
+        <img src="/static/img/cmw.png" style="height:10vh;">
+        <h1>Starting soon</h1>
+        <span id="notStartedText">Loading teams…</span>
+      </div>
 
-      <h1 style="font-size:20vh;">Starting soon</h1>
+      <div class="intermission">
+        <div class="notch flat">
+          <svg class="flare l" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0 L10 0 L10 10 A10 10 0 0 0 0 0 Z"/></svg>
+          <span class="tn" id="imLeftName"></span>
+          <span class="mid" id="imClock"></span>
+          <span class="tn" id="imRightName"></span>
+          <svg class="flare r" viewBox="0 0 10 10" aria-hidden="true"><path d="M10 0 L0 0 L0 10 A10 10 0 0 1 10 0 Z"/></svg>
+        </div>
 
-      <span id="notStartedText" style="font-size:8vh;">Loading teams...</span>
+        <div class="imcaption">
+          <span class="mode" id="imMode"></span>
+          <span class="rules" id="imRules"></span>
+        </div>
+
+        <div class="rosters">
+          <div class="col l" id="imLeft"></div>
+          <span class="vs">VS</span>
+          <div class="col r" id="imRight"></div>
+        </div>
+      </div>
     </div>
 
     <div id="hud"></div>

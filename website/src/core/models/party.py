@@ -74,6 +74,24 @@ class UserHB(SQLModel, table=True):
         return fresh
 
     @staticmethod
+    def countFresh(region: str | None) -> int:
+        """How many players are waiting for a match in one region right now.
+
+        Reported back to game servers so "nothing happened" can be told apart from
+        "nobody is queueing here" without reading the database.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            return len(
+                [
+                    heartbeat
+                    for heartbeat in UserHB.freshInQueue(db)
+                    if heartbeat.region == region
+                ]
+            )
+
+    @staticmethod
     def dequeue(steam64s) -> None:
         from src.core.db import open
 
