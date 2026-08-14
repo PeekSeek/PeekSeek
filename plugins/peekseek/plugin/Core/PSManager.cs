@@ -395,6 +395,15 @@ internal abstract class PSManager {
                 player.inventory.forceAddItem(new Item(item.ItemID, true) { state = item.State }, true);
             }
         }
+
+        // Full health with the kit, because passive regen is off here on purpose and
+        // nothing else would ever give it back. Players arrive relayed from the
+        // warm-up lobby on whatever health they left it with — 90 after a fight they
+        // won — and would otherwise start a ranked round already down and with no way
+        // up. Kitting someone is the one moment that means "you are about to fight",
+        // so it is the moment worth topping them up, and it covers both joining and
+        // respawning between rounds.
+        player.life.serverModifyHealth(100);
     }
 
     private static void AssignPlayerGroup(Player player) {
