@@ -205,6 +205,31 @@ def test_a_party_nobody_has_looked_at_disbands(client, login, user_factory):
         assert s.query(data.Party).count() == 0
 
 
+def test_expiring_a_party_takes_its_queue_heartbeats_with_it(
+    client, login, user_factory
+):
+    """UserHB.partyId is a foreign key, so leaving the heartbeats behind makes the
+    disband fail outright on Postgres. Stale rows can outlive the party whenever no
+    game server has polled the queue for a while."""
+    leader, member = _duo(client, login, user_factory)
+    partyId = _first_party_id()
+
+    login(client, leader)
+    client.get("/queue/heartbeat", params={"gamemode": DUO_BIT, "region": "paris"})
+    with Session(core_db.engine) as s:
+        assert s.query(data.UserHB).count() == 2
+        party = s.query(data.Party).where(data.Party.id == partyId).first()
+        party.lastSeen = int(time()) - settings.party_timeout - 1
+        s.add(party)
+        s.commit()
+
+    assert client.get("/party/").status_code == 200
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Party).count() == 0
+        assert s.query(data.UserHB).count() == 0
+
+
 def test_looking_at_a_party_keeps_it_alive(client, login, user_factory):
     leader, member = _duo(client, login, user_factory)
     partyId = _first_party_id()

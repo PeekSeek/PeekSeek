@@ -45,6 +45,11 @@ class Party(SQLModel, table=True):
         for party in db.query(Party).all():
             party.lastSeen = party.lastSeen or now
             if now - party.lastSeen > settings.party_timeout:
+                # Heartbeats carry the party's id as a foreign key, so they go
+                # first or Postgres refuses the delete. Nothing is lost by it: a
+                # party nobody has looked at in ten minutes has no business still
+                # sitting in the queue under someone else's name.
+                db.query(UserHB).where(UserHB.partyId == party.id).delete()
                 db.delete(party)
                 continue
             if steam64 in party.data.get("members", []):
