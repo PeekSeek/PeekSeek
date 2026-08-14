@@ -114,7 +114,7 @@ def session(server: GameServer, serverCode: str = "0", matchId: int = 0):
     if matchId:
         answer = _answerAboutHeldMatch(matchId, serverCode)
         data.Match.cancelStranded()
-        return answer
+        return _stamped(answer, server)
 
     data.Match.releaseAbandoned(serverCode)
     data.Match.resolveExpiredPicks()
@@ -124,7 +124,23 @@ def session(server: GameServer, serverCode: str = "0", matchId: int = 0):
     match = matchmaking.matchForServer(server.region, serverCode)
     data.Match.cancelStranded()
 
-    return _hostOrWait(match) if match else {"action": "idle"}
+    answer = _hostOrWait(match) if match else {"action": "idle"}
+    return _stamped(answer, server)
+
+
+def _stamped(answer: dict, server: data.AuthorizedServer) -> dict:
+    """Every answer carries the region this server is registered in, and how many
+    players are queued there.
+
+    A server only ever gets matches from its own region, and that region is set in the
+    database rather than by the server itself — so a mismatch is invisible from the
+    server's side and looks exactly like "nobody is queueing". Saying both here turns a
+    silent no-op into something an operator can read straight off the console.
+    """
+    return answer | {
+        "region": server.region,
+        "queuedInRegion": data.UserHB.countFresh(server.region),
+    }
 
 
 def _answerAboutHeldMatch(matchId: int, serverCode: str) -> dict:

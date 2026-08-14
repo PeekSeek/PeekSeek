@@ -74,7 +74,23 @@ def test_unknown_ip_is_rejected(client):
 
 
 def test_a_free_server_with_an_empty_queue_is_told_to_idle(gameserver):
-    assert poll(gameserver) == {"action": "idle"}
+    assert poll(gameserver) == {
+        "action": "idle",
+        "region": "paris",
+        "queuedInRegion": 0,
+    }
+
+
+def test_every_answer_says_which_region_the_server_is_in(gameserver, user_factory):
+    """A server only gets matches from its own region, and that region is set in the
+    database rather than by the server — so a mismatch looks exactly like nobody
+    queueing unless the answer says so."""
+    queue(user_factory(), region="utah")
+
+    answer = poll(gameserver)
+
+    assert answer["region"] == "paris"
+    assert answer["queuedInRegion"] == 0, "the utah player is not in this region"
 
 
 def test_a_free_server_makes_the_match_that_the_queue_could_not(
@@ -140,8 +156,8 @@ def test_a_match_is_only_ever_handed_over_once(gameserver, user_factory):
     endSelection(matchId)
 
     assert poll(gameserver, matchId)["action"] == "host"
-    assert poll(gameserver, matchId) == {"action": "idle"}
-    assert poll(gameserver, matchId) == {"action": "idle"}
+    assert poll(gameserver, matchId)["action"] == "idle"
+    assert poll(gameserver, matchId)["action"] == "idle"
 
 
 def test_a_busy_server_is_never_given_a_second_match(gameserver, user_factory):
@@ -165,7 +181,9 @@ def test_a_finished_match_is_aborted(gameserver, user_factory):
 
     answer = poll(gameserver, match.id)
 
-    assert answer == {"action": "abort", "matchId": match.id, "reason": "matchOver"}
+    assert answer["action"] == "abort"
+    assert answer["matchId"] == match.id
+    assert answer["reason"] == "matchOver"
 
 
 def test_an_unknown_match_is_aborted(gameserver):
@@ -515,6 +533,9 @@ def test_match_status_reports_where_to_send_players(gameserver, user_factory):
         "status": "picking",
         "relayTo": None,
     }
+    assert gameserver.get(f"/server/v1/players/{first.steam64}").json()["matchId"] == (
+        matchId
+    )
 
     endSelection(matchId)
     poll(gameserver, matchId)
