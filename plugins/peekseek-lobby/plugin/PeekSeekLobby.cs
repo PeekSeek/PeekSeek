@@ -80,6 +80,11 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "kit_invalid", "\"{0}\" isn't a kit you can use. Available: <color=white>{1}</color>" },
         { "kit_switched", "Switched to your <color=white>{0}</color> kit." },
         { "discord_prompt", "Join the PeekSeek Discord for matches, tournaments and updates!" },
+        // Said the moment a match lands, then counted down, so nobody is teleported
+        // out of a fight without warning and without knowing why.
+        { "match_found_warning", "<color=white>Match found.</color> Finish up — you are out of the arena in <color=white>{0}s</color>." },
+        { "match_countdown", "Leaving for your match in <color=white>{0}</color>..." },
+
         { "match_found", "<color=white>Match found.</color> Open the page that just appeared to log in and pick your kit." },
         { "match_found_browser", "Open this and log in to select your kit and start your match" },
         { "match_started", "Your match is <color=white>ready</color>. Sending you to the server now." },

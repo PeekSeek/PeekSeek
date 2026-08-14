@@ -40,6 +40,42 @@ class Match(SQLModel, table=True):
         ),
     )
 
+    # What a team name is cut to. Long enough to recognise, short enough for the
+    # game server to show beside a score.
+    NAME_LIMIT: ClassVar[int] = 15
+
+    @staticmethod
+    def _withDistinctNames(teams: list) -> list:
+        """The same teams, with names guaranteed to differ from one another.
+
+        The game server groups players by team name, so two teams called the same
+        thing are not two teams — everyone lands in one group, nobody can damage
+        anybody, and the match cannot be won or lost. That has happened: a match
+        between two players the Steam lookup had failed for, who both came back as
+        "Nameless", so both sides were built as "team_Nameless".
+
+        Truncation is the other way in. Names are cut to fit, and two different long
+        names that start alike cut to the same string, so the cut has to happen
+        before the comparison rather than after it.
+        """
+        seen: set[str] = set()
+        distinct = []
+
+        for index, team in enumerate(teams):
+            wanted = (team.get("name") or f"team_{index + 1}")[: Match.NAME_LIMIT]
+
+            # Whoever got there first keeps the readable name; later duplicates take
+            # a suffix. The counter only ever grows, so this always terminates.
+            name, suffix = wanted, 2
+            while name in seen:
+                name = f"{wanted[: Match.NAME_LIMIT - 3]}_{suffix}"
+                suffix += 1
+
+            seen.add(name)
+            distinct.append(team | {"name": name})
+
+        return distinct
+
     def __init__(
         self,
         gamemode: int,
@@ -61,7 +97,7 @@ class Match(SQLModel, table=True):
         self.time = int(time())
         self.gamemode = gamemode
         self.meta = {"userData": {}}
-        self.teams = teams
+        self.teams = Match._withDistinctNames(teams)
         self.livedata = {}
         self.finished = False
         self.region = region

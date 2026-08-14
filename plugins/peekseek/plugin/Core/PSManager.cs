@@ -36,6 +36,15 @@ internal abstract class PSManager {
     internal static float MatchReady;
     private static List<GroupInfoEx> GroupInfos;
 
+    /// When this server came up, and whether it has decided it wants to go down again.
+    /// Restarting is how a server picks up a new game build and new plugins, and the
+    /// only safe time to do it is while it is holding nothing.
+    private static float StartedAt;
+    private static bool WantsRestart;
+
+    /// When it stopped asking the site for work. Zero while it is still asking.
+    private static float DrainingSince;
+
     private const float UpdateIntervalSeconds = 1f;
     private static float LastUpdateSent;
 
@@ -63,6 +72,8 @@ internal abstract class PSManager {
     private static Harmony Instrument;
 
     internal static void Init() {
+        StartedAt = Time.realtimeSinceStartup;
+
         Provider.onCheckValidWithExplanation += OnCheckValidWithExplanation;
         Provider.onServerConnected += OnClientConnected;
         Provider.onServerDisconnected += OnClientDisconnected;
@@ -661,6 +672,55 @@ internal abstract class PSManager {
         });
     }
 
+    /// Notes that this server would like to go down. Nothing happens immediately —
+    /// TickRestart decides when it is actually safe.
+    private static void WantRestart(string why) {
+        if (WantsRestart) return;
+
+        WantsRestart = true;
+        Logger.Log($"Restart wanted ({why}). Going down once this server is holding nothing.");
+    }
+
+    /// Takes the server down for updates, but only ever while it is holding nothing.
+    ///
+    /// Two conditions have to hold and keep holding. The status must be READY with no
+    /// HeldMatchId — a held match, including a finished one whose result the site has
+    /// not accepted yet, means somebody is still waiting on this server. And it must
+    /// have spent DrainSeconds not asking for work, because a poll already in flight
+    /// when the decision was made can still come back holding a match; if one does,
+    /// the restart is abandoned and the server goes back to asking.
+    private static void TickRestart(float now) {
+        if (!PeekSeek.Config.RestartWhenIdle) return;
+
+        if (!WantsRestart && now - StartedAt >= PeekSeek.Config.MaxUptimeMinutes * 60f) {
+            WantRestart($"it has been up {PeekSeek.Config.MaxUptimeMinutes} minutes");
+        }
+        if (!WantsRestart) return;
+
+        bool idle = Status == EPSStatus.READY && HeldMatchId == 0;
+        if (!idle) {
+            // Took one after all, so this is no longer a moment to go.
+            if (DrainingSince != 0) {
+                DrainingSince = 0;
+                RemoteAPI.ResumeAskingForWork();
+                Logger.Log("Restart put off — this server was handed a match while draining.");
+            }
+            return;
+        }
+
+        if (DrainingSince == 0) {
+            DrainingSince = now;
+            RemoteAPI.StopAskingForWork();
+            Logger.Log($"Draining: no longer asking for matches, going down in {PeekSeek.Config.DrainSeconds}s.");
+            return;
+        }
+
+        if (now - DrainingSince < PeekSeek.Config.DrainSeconds) return;
+
+        Logger.Log("Shutting down to come back on the current build.");
+        Provider.shutdown();
+    }
+
     private static void EndMatch(string winningTeam) {
         SendResults(winningTeam);
         ClearMatch();
@@ -671,6 +731,11 @@ internal abstract class PSManager {
         ResetMatchState();
         RelayAllClients();
         UpdateStatus(EPSStatus.READY);
+
+        // The gap after a match is the only moment this server is both empty and
+        // certain to be empty, which makes it the one safe moment to go down and
+        // come back on whatever the current build is.
+        WantRestart("a match finished");
     }
 
     /// Everything a finished match leaves behind. HeldMatchId deliberately survives:
@@ -845,6 +910,10 @@ internal abstract class PSManager {
     /// its own shorter interval — waiting a full second to notice someone came into view
     /// would make the numbers meaningless.
     internal static void Tick() {
+        // Ahead of the Data guard: a server with no match is exactly the one that
+        // should be thinking about going down for updates.
+        TickRestart(Time.realtimeSinceStartup);
+
         if (Data == null) return;
 
         if (Time.realtimeSinceStartup - LastVisibilityCheck >= VisibilityIntervalSeconds) {

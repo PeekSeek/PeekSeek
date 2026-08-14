@@ -76,13 +76,31 @@ internal static class RemoteAPI {
         while (!token.IsCancellationRequested) {
             await ReportOutstandingResult(token);
 
-            PSSessionAnswer answer = await Poll(token);
+            // Draining still reports a result it owes, but stops asking for work.
+            // Asking is the only way a match is ever handed over — matchmaking runs
+            // from this poll — so not asking is the whole of the claim being given
+            // up, and there is no window in which the site can assign to a server
+            // that has already decided to go.
+            PSSessionAnswer answer = Draining ? null : await Poll(token);
             if (answer != null) {
                 TaskDispatcher.QueueOnMainThread(() => PSManager.Apply(answer));
             }
 
             await Task.Delay(answer == null ? BackoffMs : PollIntervalMs, token);
         }
+    }
+
+    private static volatile bool Draining;
+
+    /// Stop asking the site for matches, so this server can be taken down without
+    /// stranding one. Reversible: a server that finds itself holding a match after
+    /// all goes straight back to asking.
+    internal static void StopAskingForWork() {
+        Draining = true;
+    }
+
+    internal static void ResumeAskingForWork() {
+        Draining = false;
     }
 
     /// The match this server is responsible for as far as the site is concerned: the one

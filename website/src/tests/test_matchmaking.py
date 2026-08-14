@@ -650,3 +650,64 @@ def test_changing_one_player_is_not_enough_to_beat_the_cooldown(user_factory):
         data.User.addToQueue(player.steam64, DUO_BIT, partyId=None, region="paris")
 
     assert matchmaking.matchForServer("paris", SERVER_CODE) is None
+
+
+def test_two_unresolvable_players_do_not_get_the_same_team_name(user_factory):
+    """The bug this exists for: a match between two players whose Steam lookup fails
+    comes back as "Nameless" twice, both teams get built as "team_Nameless", the game
+    server groups them as one team, and nobody can shoot anybody."""
+    first, second = user_factory(), user_factory()
+    data.User.addToQueue(first.steam64, GAMEMODE_BIT, region="paris")
+    data.User.addToQueue(second.steam64, GAMEMODE_BIT, region="paris")
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
+
+    with Session(core_db.engine) as s:
+        match = s.query(data.Match).first()
+        names = [team["name"] for team in match.teams]
+        assert len(set(names)) == len(names), names
+
+
+def test_team_names_are_made_distinct_however_they_arrive():
+    """Enforced on Match itself rather than at one call site, so no creation path —
+    matchmaking, a custom match, an event pairing — can get around it."""
+    match = data.Match(
+        gamemode=0,
+        teams=[
+            {"name": "team_Nameless", "users": ["1"]},
+            {"name": "team_Nameless", "users": ["2"]},
+            {"name": "team_Nameless", "users": ["3"]},
+        ],
+    )
+    names = [team["name"] for team in match.teams]
+
+    assert names[0] == "team_Nameless", "the first one keeps the readable name"
+    assert len(set(names)) == 3, names
+    assert all(len(n) <= data.Match.NAME_LIMIT for n in names), names
+
+
+def test_long_names_that_truncate_alike_still_end_up_distinct():
+    """Cutting to length is itself a way to collide, so the cut has to happen before
+    the comparison, not after it."""
+    match = data.Match(
+        gamemode=0,
+        teams=[
+            {"name": "team_Christopher_Alpha", "users": ["1"]},
+            {"name": "team_Christopher_Beta", "users": ["2"]},
+        ],
+    )
+    names = [team["name"] for team in match.teams]
+
+    assert len(set(names)) == 2, names
+    assert all(len(n) <= data.Match.NAME_LIMIT for n in names), names
+
+
+def test_a_team_with_no_name_still_gets_one():
+    match = data.Match(
+        gamemode=0,
+        teams=[{"name": "", "users": ["1"]}, {"users": ["2"]}],
+    )
+    names = [team["name"] for team in match.teams]
+
+    assert all(names), names
+    assert len(set(names)) == 2, names

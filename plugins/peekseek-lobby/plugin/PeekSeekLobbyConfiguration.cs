@@ -20,6 +20,11 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// pause is a breather between lives, not a death screen.
     public float RespawnDelaySeconds;
 
+    /// How long a matched player is warned and counted down for before the lobby
+    /// takes them out of the arena. Long enough to finish the fight they are in;
+    /// short enough that the match is not kept waiting on them.
+    public float MatchWarningSeconds;
+
     public List<LobbySpawn> Spawns;
 
     /// How many spare magazines a player carries, whatever the kit itself asks
@@ -100,6 +105,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;
         RespawnDelaySeconds = 10f;
+        MatchWarningSeconds = 5f;
         SpareMagazines = 1;
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = true;

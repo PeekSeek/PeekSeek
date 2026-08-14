@@ -62,6 +62,18 @@ internal abstract class LobbyManager {
         /// can be taken back the moment it leaves the gun. Zero when they have none.
         internal ushort StreakMagItemId;
 
+        /// When Tick should pull this player out of the arena and into their match.
+        /// Zero when they have no match waiting, or have already been pulled.
+        ///
+        /// Being yanked out of a firefight mid-burst reads as a crash rather than a
+        /// match, so the pull is announced and counted down first: they get to finish
+        /// what they were doing and they know why the floor is about to move.
+        internal float PullAt;
+
+        /// The last whole second already counted out loud, so each number is said
+        /// once however many times Tick runs inside that second.
+        internal int LastCountdownSecond;
+
         /// Whether this player cannot be hurt right now. One timer covers a life's
         /// whole grace — the wait at the standard spawn and the seconds after being
         /// deployed into the arena — so there is one thing to set, one to clear, and
@@ -698,6 +710,49 @@ internal abstract class LobbyManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
+        // Warned and counted down rather than moved on the spot: being teleported out
+        // of a firefight the instant a match lands reads as the server breaking. This
+        // gives them the end of the fight they are already in, and tells them why the
+        // ground is about to move.
+        float warning = PeekSeekLobby.Config.MatchWarningSeconds;
+        state.PullAt = Time.realtimeSinceStartup + warning;
+        state.LastCountdownSecond = 0;
+
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
+            "match_found_warning", Mathf.RoundToInt(warning)));
+    }
+
+    /// Says each remaining second once, then pulls them in when it runs out. Counting
+    /// out loud rather than waiting silently is the point: a number ticking down in
+    /// chat is what makes somebody stop pushing a fight they are about to be taken out
+    /// of, and it is the difference between being moved and being interrupted.
+    private static void CountDownToMatch(CSteamID steamID, PlayerState state, float now) {
+        int remaining = Mathf.CeilToInt(state.PullAt - now);
+
+        if (remaining <= 0) {
+            state.PullAt = 0;
+            PullIntoMatch(steamID, state);
+            return;
+        }
+
+        if (remaining == state.LastCountdownSecond) return;
+        state.LastCountdownSecond = remaining;
+
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null) return;
+
+        Whisper(player.channel.owner,
+            PeekSeekLobby.Instance.Translate("match_countdown", remaining));
+    }
+
+    /// The end of the countdown: out of the arena, onto a spawn point, and handed the
+    /// link that logs them in and lands them on their match page. Hitting /match while
+    /// logged out is itself what records it as the page to return to, so the site sends
+    /// them back there after login without needing a redirect parameter.
+    private static void PullIntoMatch(CSteamID steamID, PlayerState state) {
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null) return;
+
         // Being pulled out for a match ends the wait between lives — a deploy still
         // pending would otherwise drop them back into the arena moments later.
         state.DeployAt = 0;
@@ -714,6 +769,9 @@ internal abstract class LobbyManager {
     /// same relay the match plugin uses to send everyone back here when a match ends.
     private static void RelayToMatch(ulong steam64, PlayerState state, string serverCode) {
         if (state.MatchId == 0) return;
+        // A server that was ready before the countdown finished still waits for it.
+        // Relaying mid-count would take away the warning the count exists to give.
+        if (state.PullAt > 0) return;
         if (!ulong.TryParse(serverCode, out ulong serverId) || serverId == 0) return;
 
         Player player = PlayerTool.getPlayer(new CSteamID(steam64));
@@ -768,6 +826,8 @@ internal abstract class LobbyManager {
             // reloading a drum away and having it taken back is the window in which
             // it could be reloaded straight back in.
             if (state.StreakMagItemId != 0) TakeBackSpentStreakMagazine(steamID, state);
+
+            if (state.PullAt > 0) CountDownToMatch(steamID, state, now);
 
             if (state.DeployAt > 0 && now >= state.DeployAt) {
                 state.DeployAt = 0;

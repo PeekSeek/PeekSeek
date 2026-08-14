@@ -231,7 +231,9 @@ def _createMatch(
     match = data.Match(
         gamemode=gamemode,
         teams=[
-            {"name": f"team_{data.User.getSteamData(t[0]).name}"[:15], "users": t}
+            # Cut to length and made distinct by Match itself, so no caller can
+            # produce two teams that the game server would read as one.
+            {"name": f"team_{data.User.getSteamData(t[0]).name}", "users": t}
             for t in teams
         ],
         region=region,
