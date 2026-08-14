@@ -41,7 +41,7 @@
         <div class="statcard"><span class="label">Elo</span><span class="value">{{stat.elo}}</span></div>
         <div class="statcard"><span class="label">Win %</span><span class="value">{{round(stat.wins / max(stat.losses + stat.wins, 1) * 100, 1)}}</span></div>
         <div class="statcard"><span class="label">K / D</span><span class="value">{{round(stat.kills / max(stat.deaths, 1), 2)}}</span></div>
-        <div class="statcard"><span class="label">HS %</span><span class="value">{{round(stat.headshots / max(stat.kills, 1) * 100, 1)}}</span></div>
+        <div class="statcard"><span class="label">HS %</span><span class="value">{{stat.headshotPercent}}</span></div>
         <div class="statcard"><span class="label">Dmg / match</span><span class="value">{{round(stat.damageDealt / max(stat.wins + stat.losses, 1))}}</span></div>
       </div>
       {% endfor %}

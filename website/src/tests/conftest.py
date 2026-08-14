@@ -84,7 +84,10 @@ def login():
         signer = TimestampSigner(settings.secret_key)
         encoded = base64.b64encode(json.dumps(payload).encode())
         client.cookies.set(
-            "session", signer.sign(encoded).decode(), domain="testserver.local", path="/"
+            "session",
+            signer.sign(encoded).decode(),
+            domain="testserver.local",
+            path="/",
         )
 
     return _login

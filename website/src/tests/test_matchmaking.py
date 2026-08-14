@@ -263,10 +263,7 @@ def test_expired_pick_clears_the_deadline_once_everything_is_decided(user_factor
         db.flush()
         matchId = match.id
         db.query(data.Match).where(data.Match.id == matchId).update(
-            {
-                "meta": match.meta
-                | {"pickDeadline": time() - 1, "ballistics": True}
-            }
+            {"meta": match.meta | {"pickDeadline": time() - 1, "ballistics": True}}
         )
 
     with Session(core_db.engine) as s:

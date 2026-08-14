@@ -416,7 +416,9 @@ class Match(SQLModel, table=True):
         if deadline is None or time() < deadline:
             return None
 
-        not_picked = [o for o in ["ballistics", "map", "movement"] if self.meta[o] is None]
+        not_picked = [
+            o for o in ["ballistics", "map", "movement"] if self.meta[o] is None
+        ]
         if not not_picked:
             return None
 
@@ -607,20 +609,20 @@ class MatchResult(SQLModel, table=True):
 
     @staticmethod
     def latestFor(steam64, limit: int = 10) -> list["MatchResult"]:
-        """Every match this player has a final line in, most recent first. Uses the same
-        ->/->> JSON path operators as Match.findLastCreatedBy — supported by both Postgres
-        and the SQLite the tests run against, unlike Postgres-only JSONB operators."""
+        """Every match this player has a final line in, most recent first.
+
+        Filtered in Python rather than with a JSON path operator in SQL. The `->`/`->>`
+        pair this used to use is not portable enough to rely on: it reads the row on
+        Postgres and on a recent SQLite, and silently matches nothing on an older one,
+        which is exactly what it did on CI — every profile page rendered as though the
+        player had never played a ranked match. A profile only ever wants the last
+        handful of rows, so the scan costs less than a result that depends on which
+        SQLite the host happens to ship.
+        """
         from src.core.db import open
 
+        key = str(steam64)
         with open() as db:
-            return (
-                db.query(MatchResult)
-                .filter(
-                    MatchResult.data.op("->")("results")
-                    .op("->>")(str(steam64))
-                    .isnot(None)
-                )
-                .order_by(desc(MatchResult.endTime))
-                .limit(limit)
-                .all()
-            )
+            rows = db.query(MatchResult).order_by(desc(MatchResult.endTime)).all()
+
+        return [row for row in rows if key in (row.data.get("results") or {})][:limit]

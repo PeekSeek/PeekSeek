@@ -63,9 +63,7 @@ def endSelection(matchId, secondsAgo=1):
         db.query(data.Match).where(data.Match.id == matchId).update(
             {
                 "time": int(time()) - settings.mmconfig["selectKitsTime"] - secondsAgo,
-                "meta": {
-                    k: v for k, v in match.meta.items() if k != "pickDeadline"
-                }
+                "meta": {k: v for k, v in match.meta.items() if k != "pickDeadline"}
                 | DECIDED,
             }
         )
@@ -195,9 +193,7 @@ def test_a_server_that_reports_itself_free_releases_the_match_it_abandoned(
     with opendb() as db:
         assert db.query(data.Match).where(data.Match.id == match.id).one().finished
         result = (
-            db.query(data.MatchResult)
-            .where(data.MatchResult.matchId == match.id)
-            .one()
+            db.query(data.MatchResult).where(data.MatchResult.matchId == match.id).one()
         )
         assert result.data["unscored"] == "abandoned"
     assert data.User.getCurrentMatchId(first.steam64) is None
@@ -333,9 +329,7 @@ def test_a_match_nobody_turned_up_for_scores_nothing(gameserver, user_factory):
     assert data.Stat.getElo(first.steam64) == data.Stat.getElo(second.steam64)
     with opendb() as db:
         stored = (
-            db.query(data.MatchResult)
-            .where(data.MatchResult.matchId == match.id)
-            .one()
+            db.query(data.MatchResult).where(data.MatchResult.matchId == match.id).one()
         )
     assert stored.data["unscored"] == "notPlayed"
 
@@ -388,9 +382,7 @@ def test_kills_append_to_the_match_result(gameserver, user_factory):
     assert r.status_code == 200
     with opendb() as db:
         stored = (
-            db.query(data.MatchResult)
-            .where(data.MatchResult.matchId == match.id)
-            .one()
+            db.query(data.MatchResult).where(data.MatchResult.matchId == match.id).one()
         )
     assert len(stored.data["kills"]) == 1
 
@@ -437,7 +429,9 @@ def test_a_player_is_only_relayed_once_their_match_is_live(gameserver, user_fact
     queue(first, second)
     matchId = poll(gameserver)["matchId"]
 
-    assert gameserver.get(f"/server/v1/players/{first.steam64}").json()["relayTo"] is None
+    assert (
+        gameserver.get(f"/server/v1/players/{first.steam64}").json()["relayTo"] is None
+    )
 
     endSelection(matchId)
     poll(gameserver, matchId)

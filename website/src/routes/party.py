@@ -23,16 +23,18 @@ def party_status(steam64: ApiSteam64):
         invites = data.Party.pendingInvites(db, steam64)
         return {
             "matchId": data.User.getCurrentMatchId(steam64),
-            "party": None
-            if not party
-            else {
-                "id": party.id,
-                "isOwner": str(party.steam64) == str(steam64),
-                "members": [
-                    data.User.getSteamData(int(s)).toDict() | {"steam64": s}
-                    for s in party.data.get("members", [])
-                ],
-            },
+            "party": (
+                None
+                if not party
+                else {
+                    "id": party.id,
+                    "isOwner": str(party.steam64) == str(steam64),
+                    "members": [
+                        data.User.getSteamData(int(s)).toDict() | {"steam64": s}
+                        for s in party.data.get("members", [])
+                    ],
+                }
+            ),
             "invites": [
                 {"id": p.id, "from": data.User.getSteamData(p.steam64).toDict()}
                 for p in invites
