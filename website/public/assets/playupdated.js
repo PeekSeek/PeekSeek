@@ -7,10 +7,20 @@ function countOnes(n) {
     return count;
 }
 
+/* Matchmaking will not split a party across two teams, so a mode with fewer seats
+   per team than the party has members can never take them — it would just queue
+   and never match. Same rule /queue/heartbeat enforces, applied before the button
+   is pressed. Event tiles carry no seat count and are never ruled out here. */
+function fitsParty(option) {
+    const perTeam = parseInt(option.dataset.perTeam);
+    return !perTeam || perTeam >= (window.partySize || 1);
+}
+
 function bindQgridClicks() {
     for (let i = 0; i < options.length; i++) {
         options.item(i).addEventListener("click", () => {
             if (isQueing) return;
+            if (!fitsParty(options.item(i))) return;
 
             const eventId = document.getElementById("game").value;
             if (selected & 2 ** i) {
@@ -27,10 +37,19 @@ function bindQgridClicks() {
 }
 
 function updateOptions() {
-    if (document.getElementById("game").value === "matchmaking") setCookie("mmoptions", selected);
     for (let i = 0; i < options.length; i++) {
-        options.item(i).classList.toggle("isSelected", (selected & 2 ** i) === 2 ** i);
+        const option = options.item(i);
+        const tooBig = !fitsParty(option);
+
+        // Dropped rather than just dimmed: a mode left selected under a party that
+        // outgrew it would be silently stripped by the server anyway, and the
+        // cookie below would hand it back on the next visit.
+        if (tooBig) selected &= ~(2 ** i);
+
+        option.classList.toggle("partyTooBig", tooBig);
+        option.classList.toggle("isSelected", (selected & 2 ** i) === 2 ** i);
     }
+    if (document.getElementById("game").value === "matchmaking") setCookie("mmoptions", selected);
 }
 updateOptions();
 

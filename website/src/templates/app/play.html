@@ -9,6 +9,21 @@
 
 {% block addheader %}
 <style>
+  /* The queue is the page; the party is who you bring to it. Side by side so
+     picking gamemodes and picking people read as one decision, and the roster
+     stays in view while the timer runs instead of scrolling off the top. */
+  .playColumns {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    align-items: start;
+    gap: 20px;
+  }
+  @media (max-width: 1100px) {
+    .playColumns {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .partyPanel {
     gap: 10px;
   } .partyPanel h1 {
@@ -60,6 +75,14 @@
     padding: 5px 10px;
     cursor: pointer;
   }
+
+  /* A mode with fewer seats per team than your party has members can never take
+     you all together. Saying so on the tile is what stops someone picking it and
+     waiting out a queue matchmaking had already decided to skip. */
+  .qgridoption.partyTooBig {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
 </style>
 {% endblock %}
 
@@ -75,52 +98,54 @@
 </a>
 {% endif %}
 
-<div class="mainElement partyPanel" id="partyPanel">
-  <h1>Party</h1>
-  <span class="partyNotice" id="partyNotice">Your party leader starts the queue for everyone.</span>
-  <div class="partyMembers" id="partyMembers"></div>
-  <div id="partyInvitesIncoming"></div>
-  <div class="partyInviteRow" id="partyInviteRow">
-    <input type="text" id="partyInviteInput" placeholder="Invite by Steam64" aria-label="Steam64 to invite">
-    <button type="button" onclick="invitePartyMember()">Invite</button>
-  </div>
-  <button type="button" class="partyLeave" id="partyLeave" style="display:none;" onclick="leaveParty()">Leave party</button>
-</div>
+<div class="playColumns">
+  <div class="mainElement queue">
+    <h1>Match Making</h1>
+    Select your gamemodes below and queue online Unturned matches.
 
-<div class="mainElement queue">
-  <h1>Match Making</h1>
-  Select your gamemodes below and queue online Unturned matches.
+    <div class="qbackground">
+      <div class="qgrid">
 
-  <div class="qbackground">
-    <div class="qgrid">
-
-      {% for x in mmconfig["gamemodes"] %}
-        <div class="qgridoption">
-          <h1>{% if x["usesElo"] %}<b>Ranked</b>{% endif %}{{x["name"]}}</h1>
-          <span>{{(", ".join(x["kitsAllowed"])).upper()}}</span>
-          <span>{{("{}v".format(x["playersPerTeam"]) * x["teams"]).rstrip("v")}}</span>
-        </div>
-      {% endfor %}
-
-    </div>
-
-    <div class="controls">
-      <select name="game" id="game">
-        <option value="matchmaking">Matchmaking</option>
-        {% for event in events %}
-        <option value="{{event['event'].id}}">{{event["event"].name[0].upper() + event["event"].name[1:]}}</option>
+        {% for x in mmconfig["gamemodes"] %}
+          <div class="qgridoption" data-per-team="{{x['playersPerTeam']}}">
+            <h1>{% if x["usesElo"] %}<b>Ranked</b>{% endif %}{{x["name"]}}</h1>
+            <span>{{(", ".join(x["kitsAllowed"])).upper()}}</span>
+            <span>{{("{}v".format(x["playersPerTeam"]) * x["teams"]).rstrip("v")}}</span>
+          </div>
         {% endfor %}
-      </select>
-      <button type="button" name="button" id="q" onclick="queue()">FIND MATCH</button>
-      <select name="region" id="region">
-        <option value="paris">EU-West</option>
-        <option value="singapore">AS-South</option>
-        <option value="utah">US-West</option>
-        <option value="brazil">SA-East</option>
-      </select>
+
+      </div>
+
+      <div class="controls">
+        <select name="game" id="game">
+          <option value="matchmaking">Matchmaking</option>
+          {% for event in events %}
+          <option value="{{event['event'].id}}">{{event["event"].name[0].upper() + event["event"].name[1:]}}</option>
+          {% endfor %}
+        </select>
+        <button type="button" name="button" id="q" onclick="queue()">FIND MATCH</button>
+        <select name="region" id="region">
+          <option value="paris">EU-West</option>
+          <option value="singapore">AS-South</option>
+          <option value="utah">US-West</option>
+          <option value="brazil">SA-East</option>
+        </select>
+      </div>
     </div>
+    <span style="color:#333">Please note that by closing this tab you will stop queue'ing.</span>
   </div>
-  <span style="color:#333">Please note that by closing this tab you will stop queue'ing.</span>
+
+  <div class="mainElement partyPanel" id="partyPanel">
+    <h1>Party</h1>
+    <span class="partyNotice" id="partyNotice">Your party leader starts the queue for everyone.</span>
+    <div class="partyMembers" id="partyMembers"></div>
+    <div id="partyInvitesIncoming"></div>
+    <div class="partyInviteRow" id="partyInviteRow">
+      <input type="text" id="partyInviteInput" placeholder="Invite by Steam64" aria-label="Steam64 to invite">
+      <button type="button" onclick="invitePartyMember()">Invite</button>
+    </div>
+    <button type="button" class="partyLeave" id="partyLeave" style="display:none;" onclick="leaveParty()">Leave party</button>
+  </div>
 </div>
 
 <script type="text/javascript">

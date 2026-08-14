@@ -7,6 +7,11 @@ let partyRedirected = false;
 function renderParty(state) {
     window.partyBlocksQueue = !!(state.party && !state.party.isOwner);
 
+    // playupdated.js owns the gamemode tiles and reads this to rule out the modes
+    // that can't seat the whole party. Guarded because this file is loaded first.
+    window.partySize = state.party ? state.party.members.length : 1;
+    if (typeof updateOptions === "function") updateOptions();
+
     const membersEl = document.getElementById("partyMembers");
     const inviteRow = document.getElementById("partyInviteRow");
     const leaveBtn = document.getElementById("partyLeave");

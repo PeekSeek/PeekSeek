@@ -30,6 +30,7 @@ class Settings:
 
         self.queue_timeout: int = toml["matchmaking"]["queue_timeout"]
         self.claim_timeout: int = toml["matchmaking"]["claim_timeout"]
+        self.party_timeout: int = toml["matchmaking"]["party_timeout"]
 
         self.discord_client_id: str = toml["discord"]["client_id"]
         self.discord_invite_url: str = toml["discord"]["invite_url"]

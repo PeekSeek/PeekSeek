@@ -8,6 +8,7 @@ build = "develop"
 [matchmaking]
 queue_timeout = 60   # seconds without a heartbeat before a player drops from queue
 claim_timeout = 300  # seconds an unclaimed match waits for a server before cancelling
+party_timeout = 600  # seconds with nobody looking at a party before it disbands
 
 [data_files]
 # Big machine-shaped datasets stay JSON; these paths are relative to this file.
