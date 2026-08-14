@@ -2,7 +2,7 @@ name: utelemetry
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths: ["plugins/utelemetry/**", ".github/workflows/utelemetry.yml"]
   pull_request:
     branches: [main]
@@ -39,7 +39,9 @@ jobs:
       - run: dotnet test tests/tests.csproj --no-build --configuration Release --logger "console;verbosity=normal"
 
   release:
-    if: github.event_name == 'push'
+    # Releases are cut from main only. develop runs the same lint and tests,
+    # but a staging push must never tag or publish.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: windows-latest
     steps:
