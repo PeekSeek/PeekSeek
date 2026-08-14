@@ -547,3 +547,51 @@ def test_match_status_reports_where_to_send_players(gameserver, user_factory):
 
 def test_an_unknown_match_404s(gameserver):
     assert gameserver.get("/server/v1/matches/4242").status_code == 404
+
+
+def test_queueing_a_player_the_site_has_never_seen(gameserver):
+    """The common case in a warm-up lobby, not an edge one: most people standing in
+    it have never opened the website, so there is no Users row for them. Queue
+    heartbeats carry steam64 as a foreign key onto Users, so without creating that
+    row first this is a 500 and the player is never queued at all."""
+    stranger = 76561198000000077
+
+    r = gameserver.put(f"/server/v1/players/{stranger}/queue", params={"gamemodes": 1})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["steam64"] == str(stranger)
+    assert r.json()["elo"] == 300, "an unranked stranger starts at the floor"
+    with opendb() as db:
+        assert db.query(data.UserHB).where(data.UserHB.steam64 == stranger).count() == 1
+        assert db.query(data.User).where(data.User.steam64 == stranger).count() == 1
+
+
+def test_a_stranger_can_be_matched_and_scored_like_anyone_else(
+    gameserver, user_factory
+):
+    """End to end for a player with no account: queued by the lobby, picked up by a
+    free server, and scored — the path every new player takes on their first match."""
+    known = user_factory()
+    stranger = 76561198000000078
+
+    gameserver.put(f"/server/v1/players/{stranger}/queue", params={"gamemodes": 1})
+    queue(known)
+
+    answer = poll(gameserver)
+    assert answer["action"] in ("wait", "host"), answer
+    matchId = answer.get("matchId") or answer["match"]["id"]
+
+    r = gameserver.post(
+        f"/server/v1/matches/{matchId}/result",
+        json={
+            "played": True,
+            "winningTeam": None,
+            "players": [
+                {"steam64": str(stranger), "kills": 3, "deaths": 1, "win": True},
+                {"steam64": str(known.steam64), "kills": 1, "deaths": 3, "win": False},
+            ],
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "recorded"
+    assert data.Stat.getElo(stranger) != 300, "the stranger's Elo moved"

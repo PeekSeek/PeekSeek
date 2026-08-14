@@ -61,6 +61,28 @@ internal abstract class LobbyManager {
         /// The magazine a streak fitted into this player's gun, remembered so it
         /// can be taken back the moment it leaves the gun. Zero when they have none.
         internal ushort StreakMagItemId;
+
+        /// Whether this player cannot be hurt right now. One timer covers a life's
+        /// whole grace — the wait at the standard spawn and the seconds after being
+        /// deployed into the arena — so there is one thing to set, one to clear, and
+        /// no state in which two of them disagree.
+        internal bool IsProtectedAt(float now) => SpawnProtectedUntil > now;
+
+        /// Books this life's deploy and the protection wrapped around it, and says
+        /// whether it was this call that did it.
+        ///
+        /// False when a deploy is already pending, which is the guard that matters:
+        /// OnLifeUpdated fires for as long as a player is dead and the still-dead
+        /// sweep calls in behind it, so without it every pass pushed the deploy
+        /// another respawnDelay into the future — a wait that reset faster than it
+        /// ran down — and whispered the countdown again while it did.
+        internal bool ScheduleDeploy(float now, float respawnDelay, float protection) {
+            if (DeployAt > 0) return false;
+
+            DeployAt = now + respawnDelay;
+            SpawnProtectedUntil = now + respawnDelay + protection;
+            return true;
+        }
     }
 
     private static readonly Dictionary<ulong, PlayerState> Players = [];
@@ -78,6 +100,15 @@ internal abstract class LobbyManager {
     private static float LastStaminaTopUp;
     private static float LastHudUpdate;
     private const int LeaderboardPlaces = 5;
+
+    /// Stamina is a byte out of 100. Refilling from just under full would send a
+    /// packet for a sliver nobody can see move, so it waits until some is genuinely
+    /// gone — still far faster than a sprint can empty it.
+    private const byte StaminaTopUpThreshold = 90;
+
+    /// The player count the arena HUD was last told about. -1 so the first tick
+    /// always sends, and so a connect can force a resend by putting it back.
+    private static int LastLevelNumberSent = -1;
 
     private static readonly Dictionary<ulong, float> LastProtectedNotice = [];
 
@@ -111,28 +142,43 @@ internal abstract class LobbyManager {
         if (PeekSeekLobby.Config.RemoveDroppedItems) shouldAllow = false;
     }
 
-    /// Spawn protection already stops the damage; without this the shooter just
-    /// sees their hits do nothing and assumes the server is broken. Throttled per
-    /// shooter, since this fires once per bullet.
+    /// Refusing the damage outright *is* the spawn protection.
+    ///
+    /// It used to be Rocket's Features.GodMode, which heals the player to full on
+    /// every FixedUpdate — fifty replicated health, food, water and virus updates a
+    /// second, for every protected player, in a lobby where a ten second respawn
+    /// wait and five seconds of cover mean somebody nearly always is one. It also
+    /// had to be switched back off by a call that returned false whenever the
+    /// player object could not be resolved that frame, which is how people ended up
+    /// invincible for an entire session. A bool on a damage request costs nothing,
+    /// cannot half-fail, and ends the instant the timer says so.
+    ///
+    /// Environmental damage is refused too: teleporting someone to a spawn point
+    /// with teleportToLocationUnsafe can land them hard enough to hurt, and dying
+    /// to the deploy that was meant to save you is not a lobby anyone enjoys.
     private static void OnDamagePlayerRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
         CSteamID victimID = parameters.player.channel.owner.playerID.steamID;
         CSteamID attacker = parameters.killer;
+        float now = Time.realtimeSinceStartup;
 
-        // Throwing a punch is giving up your own protection. Shooting out of it
-        // while nothing can touch you is the one thing it must never buy, so this
-        // runs before anything else and covers the pre-deploy wait too, where the
-        // timer is zero but god mode is still on.
+        // Throwing a punch is giving up your own protection. Shooting out from
+        // behind it while nothing can touch you is the one thing it must never buy.
         if (attacker != CSteamID.Nil && attacker != victimID
                 && Players.TryGetValue(attacker.m_SteamID, out PlayerState attackerState)
-                && (attackerState.SpawnProtectedUntil > 0 || attackerState.DeployAt > 0)) {
+                && attackerState.IsProtectedAt(now)) {
             EndSpawnProtection(attacker, attackerState);
         }
 
         if (!Players.TryGetValue(victimID.m_SteamID, out PlayerState victimState)) return;
-        if (victimState.SpawnProtectedUntil <= Time.realtimeSinceStartup) return;
+        if (!victimState.IsProtectedAt(now)) return;
+
+        shouldAllow = false;
+
+        // Without a word for it the shooter just sees their hits do nothing and
+        // assumes the server is broken. Throttled per shooter — this runs once per
+        // bullet, and an automatic weapon would otherwise fill their chat.
         if (attacker == CSteamID.Nil || attacker == victimID) return;
 
-        float now = Time.realtimeSinceStartup;
         if (LastProtectedNotice.TryGetValue(attacker.m_SteamID, out float last)
                 && now - last < ProtectedNoticeIntervalSeconds) return;
         LastProtectedNotice[attacker.m_SteamID] = now;
@@ -164,6 +210,10 @@ internal abstract class LobbyManager {
         bool queueing = PeekSeekLobby.Config.EnableQueue;
         PlayerState state = new() { KitCategory = DefaultKitCategory(), Queueing = queueing };
         Players[steamID.m_SteamID] = state;
+
+        // Someone arriving as someone else leaves keeps the count identical, and the
+        // new player would never be sent a number they have not seen before.
+        LastLevelNumberSent = -1;
 
         ForceSolo(player);
         SpawnPlayer(steamID, state);
@@ -400,7 +450,6 @@ internal abstract class LobbyManager {
         TeleportToSpawn(player);
 
         state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
-        SetGodMode(steamID, true);
 
         EquipRealKit(player, steamID, state);
     }
@@ -422,15 +471,15 @@ internal abstract class LobbyManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
+        // The one part worth doing on every pass — a respawn that did not land is
+        // simply retried. Everything after it happens once a life.
         player.life.ServerRespawn(false);
 
-        // God mode is held for the whole wait rather than started at deploy: the
-        // standard spawn is one fixed, well-known spot, and standing there unable
-        // to fight back is exactly what a camper wants. Zeroing the timer is what
-        // stops Tick expiring the protection before the deploy lands.
-        state.SpawnProtectedUntil = 0;
-        SetGodMode(steamID, true);
-        state.DeployAt = Time.realtimeSinceStartup + PeekSeekLobby.Config.RespawnDelaySeconds;
+        bool scheduled = state.ScheduleDeploy(
+            Time.realtimeSinceStartup,
+            PeekSeekLobby.Config.RespawnDelaySeconds,
+            PeekSeekLobby.Config.SpawnProtectionSeconds);
+        if (!scheduled) return;
 
         Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
             "deploying_in", Mathf.RoundToInt(PeekSeekLobby.Config.RespawnDelaySeconds)));
@@ -463,24 +512,12 @@ internal abstract class LobbyManager {
         }
     }
 
-    /// Reports whether it actually landed. The player object is not resolvable on
-    /// every frame, and a caller turning protection off has to know the difference
-    /// between "done" and "silently skipped".
-    private static bool SetGodMode(CSteamID steamID, bool enabled) {
-        UnturnedPlayer player = UnturnedPlayer.FromCSteamID(steamID);
-        if (player == null) return false;
-
-        player.Features.GodMode = enabled;
-        return true;
-    }
-
-    /// The timer is cleared only once god mode is really off. Zeroing it first and
-    /// letting the call quietly fail is what left players permanently invincible:
-    /// nothing was scheduled to ever try again, because as far as Tick could tell
-    /// the protection had already ended.
+    /// Clearing the timer is the whole of it, so this cannot half-succeed the way
+    /// switching god mode off could. A pending deploy is deliberately left alone:
+    /// someone who shot their way out of protection still has to be put into the
+    /// arena, they just arrive able to be shot back at.
     private static void EndSpawnProtection(CSteamID steamID, PlayerState state) {
-        if (!SetGodMode(steamID, false)) return;
-
+        if (state.SpawnProtectedUntil == 0) return;
         state.SpawnProtectedUntil = 0;
 
         Player player = PlayerTool.getPlayer(steamID);
@@ -666,7 +703,6 @@ internal abstract class LobbyManager {
         state.DeployAt = 0;
         TeleportToSpawn(player);
         state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
-        SetGodMode(steamID, true);
 
         Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_found"));
         player.sendBrowserRequest(
@@ -738,7 +774,8 @@ internal abstract class LobbyManager {
                 SpawnPlayer(steamID, state);
             }
 
-            // Retried every tick until it lands, rather than assumed done.
+            // Only to say so — the protection itself stopped applying the moment
+            // the timer passed, because that is the one thing anything checks.
             if (state.SpawnProtectedUntil > 0 && now >= state.SpawnProtectedUntil) {
                 EndSpawnProtection(steamID, state);
             }
@@ -847,9 +884,15 @@ internal abstract class LobbyManager {
     /// Topped back up rather than disabled outright: there is no switch for
     /// infinite stamina, and refilling faster than it can visibly drain is
     /// indistinguishable from having none.
+    ///
+    /// Only for whoever has actually spent some. serverModifyStamina replicates, so
+    /// topping up a bar that is already full is a packet per player, twice a second,
+    /// for the entire life of the server, that changes nothing on the receiving end.
     private static void RefillStamina() {
         foreach (SteamPlayer client in Provider.clients) {
             if (client?.player == null || client.player.life.isDead) continue;
+            if (client.player.life.stamina >= StaminaTopUpThreshold) continue;
+
             client.player.life.serverModifyStamina(byte.MaxValue);
         }
     }
@@ -857,11 +900,20 @@ internal abstract class LobbyManager {
     /// The arena HUD draws the level number under the server name, so it is made to
     /// carry how many people are actually here. The server name itself is left
     /// exactly as the server set it — it is the server's name, not a scoreboard.
+    ///
+    /// Sent only when the number changes. It used to go out to every client every
+    /// second for the life of the server, gathering a fresh connection list each
+    /// time, to say what it had already said — for a figure that moves when somebody
+    /// joins or leaves and at no other time.
     private static void UpdateArenaHud() {
+        int here = Mathf.Min(Provider.clients.Count, byte.MaxValue);
+        if (here == LastLevelNumberSent) return;
+        LastLevelNumberSent = here;
+
         LevelManager.SendLevelNumber.InvokeAndLoopback(
             ENetReliability.Unreliable,
             Provider.GatherRemoteClientConnections(),
-            (byte)Mathf.Min(Provider.clients.Count, byte.MaxValue));
+            (byte)here);
     }
 
     /// Unturned adjusts reputation itself when players kill each other, so this keeps

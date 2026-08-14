@@ -29,18 +29,19 @@ def test_two_queued_players_get_matched(user_factory):
         assert s.query(data.UserHB).count() == 0, "players must leave the queue"
 
 
-def test_party_members_land_on_the_same_team(user_factory):
+def test_party_members_land_on_the_same_team(user_factory, party_factory):
     """Casual Duo is 2 teams of 2 — a partied pair queueing under the same partyId
     must end up on one team together, never split across both."""
     DUO_GAMEMODE = 3
     DUO_BIT = 2**DUO_GAMEMODE
     partyA = [user_factory(), user_factory()]
     partyB = [user_factory(), user_factory()]
+    idA, idB = party_factory(*partyA), party_factory(*partyB)
 
     for player in partyA:
-        data.User.addToQueue(player.steam64, DUO_BIT, partyId=101, region="paris")
+        data.User.addToQueue(player.steam64, DUO_BIT, partyId=idA, region="paris")
     for player in partyB:
-        data.User.addToQueue(player.steam64, DUO_BIT, partyId=202, region="paris")
+        data.User.addToQueue(player.steam64, DUO_BIT, partyId=idB, region="paris")
 
     assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
 
@@ -52,13 +53,14 @@ def test_party_members_land_on_the_same_team(user_factory):
         assert str(partyB[0].steam64) not in teamA["users"]
 
 
-def test_oversized_party_never_matches(user_factory):
+def test_oversized_party_never_matches(user_factory, party_factory):
     """A 3-person party can't fit Casual Duo's 2-per-team cap — it must simply wait
     forever rather than ever being split across teams to make it fit."""
     DUO_BIT = 2**3
     trio = [user_factory(), user_factory(), user_factory()]
+    trioId = party_factory(*trio)
     for player in trio:
-        data.User.addToQueue(player.steam64, DUO_BIT, partyId=101, region="paris")
+        data.User.addToQueue(player.steam64, DUO_BIT, partyId=trioId, region="paris")
     # Enough solo players queued alongside to fill both teams if the trio were
     # (wrongly) allowed to split.
     solo = [user_factory() for _ in range(2)]

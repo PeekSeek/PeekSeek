@@ -16,6 +16,19 @@ if settings.db_url.startswith("sqlite"):
 
 engine = create_engine(settings.db_url, **_engine_kwargs)
 
+if settings.db_url.startswith("sqlite"):
+    # SQLite ignores foreign keys unless asked to enforce them, per connection.
+    # Production is Postgres, which always does, so without this the tests are
+    # forgiving in exactly the way production is not: inserting a queue heartbeat
+    # for a player with no Users row passed every test and 500'd on the server.
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _enforce_foreign_keys(connection, _record):
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 
 class open:
     """Context manager that yields a SQLModel Session with auto-commit/rollback."""

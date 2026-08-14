@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -61,7 +62,21 @@ internal static class RemoteAPI {
         Send(HttpMethod.Get, $"{Base}/players/{steam64}", steam64);
     }
 
+    /// Who already has a refresh out. The lobby asks again for every player every few
+    /// seconds regardless of what happened to the last ask, so a site that has gone
+    /// slow — or a request sitting out its ten second timeout — would otherwise leave
+    /// a growing pile of identical requests per player, each holding a socket and
+    /// each landing on the same state moments after the one before it.
+    ///
+    /// Skipping is safe: whichever request is still out refreshes the queue heartbeat
+    /// when it lands, and the queue only forgets somebody after a full minute.
+    private static readonly HashSet<ulong> InFlight = [];
+
     private static void Send(HttpMethod method, string url, ulong steam64) {
+        lock (InFlight) {
+            if (!InFlight.Add(steam64)) return;
+        }
+
         Task.Run(async () => {
             try {
                 HttpResponseMessage response = await Client.SendAsync(new HttpRequestMessage(method, url));
@@ -81,6 +96,10 @@ internal static class RemoteAPI {
                 TaskDispatcher.QueueOnMainThread(() => LobbyManager.ApplyPlayerState(steam64, state, eloKnown));
             } catch (Exception ex) {
                 ReportFailure(ex.Message);
+            } finally {
+                lock (InFlight) {
+                    InFlight.Remove(steam64);
+                }
             }
         });
     }

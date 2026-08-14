@@ -91,3 +91,29 @@ def login():
         )
 
     return _login
+
+
+@pytest.fixture
+def party_factory():
+    """A real Parties row, returning its id.
+
+    Queue heartbeats carry partyId as a foreign key, so a made-up number is a row
+    the database will not accept — and since these ids only ever come from a party
+    the site actually created, a test using one it invented is testing a state that
+    cannot happen.
+    """
+
+    def _make(*members):
+        from time import time
+
+        with Session(core_db.engine) as s:
+            party = data.Party(
+                steam64=members[0].steam64,
+                lastSeen=int(time()),
+                data={"members": [str(m.steam64) for m in members], "invites": []},
+            )
+            s.add(party)
+            s.commit()
+            return party.id
+
+    return _make
