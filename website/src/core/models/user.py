@@ -143,15 +143,48 @@ class User(SQLModel, table=True):
         Users by foreign key is refused outright by Postgres until the row exists.
         Stat.append has always done this for match results; the queue did not, so
         every one of those players 500'd the moment the lobby tried to queue them.
+
+        The account is created with their Steam name and avatar already on it. That
+        has to happen here, before the insert, because steam._persist_steam_data
+        writes with an UPDATE: a lookup made while there is no row to update stores
+        nothing and reports nothing wrong. That is how a player who joined a game
+        server got an account with no name, and then showed up as "Nameless"
+        everywhere the site drew them.
         """
         if db.query(User).where(User.steam64 == steam64).first():
             return
 
+        from datetime import datetime, timezone
         from uuid import uuid4
 
-        db.add(User(steam64=steam64, uuid=str(uuid4())))
+        db.add(
+            User(
+                steam64=steam64,
+                uuid=str(uuid4()),
+                steam_data=User._steamProfile(steam64),
+                steam_fetched_at=datetime.now(timezone.utc),
+            )
+        )
         # Before the caller's own insert, which is the one with the foreign key.
         db.flush()
+
+    @staticmethod
+    def _steamProfile(steam64) -> dict | None:
+        """This player's name and avatar from Steam, or None if Steam would not say.
+
+        None rather than a placeholder on purpose: storing "Nameless" would make the
+        fallback permanent, since every later read finds stored data and stops asking.
+        Leaving it empty means the next lookup fills it in — and by then there is a
+        row for it to fill.
+        """
+        from src.core import steam
+
+        try:
+            raw = steam.get_steam_user_data(steam64)
+        except Exception:
+            return None
+
+        return {"name": raw.get("personaname"), "avatar": raw.get("avatarfull")}
 
     @staticmethod
     def addToQueue(

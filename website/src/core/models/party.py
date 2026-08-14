@@ -118,10 +118,22 @@ class UserHB(SQLModel, table=True):
             )
 
     @staticmethod
-    def dequeue(steam64s) -> None:
+    def dequeue(steam64s, db=None) -> None:
+        """Take these players out of the queue.
+
+        Pass an open session to make the dequeue part of the caller's transaction.
+        Creating a match and dequeuing the players on it has to be one step: done in
+        two, there is a window where the match already exists but its players still
+        look queued, and a second game server polling inside that window builds a
+        second match out of the same people. That is not hypothetical — it happens
+        whenever more than one free server polls the same region, which is the normal
+        case.
+        """
+        from contextlib import nullcontext
+
         from src.core.db import open
 
-        with open() as db:
-            db.query(UserHB).where(
+        with nullcontext(db) if db is not None else open() as session:
+            session.query(UserHB).where(
                 UserHB.steam64.in_([int(s) for s in steam64s])
             ).delete()

@@ -245,10 +245,15 @@ def _createMatch(
     with open() as db:
         db.add(match)
         db.flush()
+        # In the same transaction as the insert. Committing the match and dequeuing
+        # afterwards leaves a moment where the match exists and its players still
+        # look queued, and a second free server polling inside that moment forms the
+        # very same pairing again — two matches, one set of players. Nothing outside
+        # this transaction ever sees one without the other.
+        data.UserHB.dequeue(players, db)
         db.refresh(match)
         db.expunge(match)
 
-    data.UserHB.dequeue(players)
     return match
 
 

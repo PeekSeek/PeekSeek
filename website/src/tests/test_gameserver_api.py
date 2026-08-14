@@ -595,3 +595,73 @@ def test_a_stranger_can_be_matched_and_scored_like_anyone_else(
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "recorded"
     assert data.Stat.getElo(stranger) != 300, "the stranger's Elo moved"
+
+
+def test_a_second_server_polling_cannot_form_the_same_pairing_twice(gameserver):
+    """Two free servers in one region both poll for work; the players must end up in
+    exactly one match, with the second server told to idle.
+
+    This covers the sequential case only. The bug that produced two matches for one
+    pairing is a race between the two polls, and it cannot be reproduced here: these
+    run one after the other, and the SQLite the tests use serialises writes through a
+    single connection anyway. What fixes the race is that the dequeue now shares the
+    transaction that inserts the match, so no reader can ever see one without the
+    other — that is a property of the code, not something this test proves.
+    """
+    first, second = 76561198000000201, 76561198000000202
+    for steam64 in (first, second):
+        gameserver.put(f"/server/v1/players/{steam64}/queue", params={"gamemodes": 1})
+
+    firstAnswer = poll(gameserver, serverCode="90071992547409931")
+    secondAnswer = poll(gameserver, serverCode="90071992547409932")
+
+    assert firstAnswer["action"] in ("wait", "host"), firstAnswer
+    assert secondAnswer["action"] == "idle", secondAnswer
+    with opendb() as db:
+        assert db.query(data.Match).count() == 1
+        assert db.query(data.UserHB).count() == 0
+
+
+def test_a_player_the_site_has_never_seen_gets_a_real_account(gameserver, monkeypatch):
+    """Not just a row: the name and avatar too. The Steam lookup has to happen before
+    the insert, because it is persisted with an UPDATE — done after, it silently
+    stores nothing and the player is "Nameless" everywhere forever."""
+    from src.core import steam
+
+    stranger = 76561198000000203
+    monkeypatch.setattr(
+        steam,
+        "get_steam_user_data",
+        lambda s: {"personaname": "RandomJoiner", "avatarfull": "https://av/x.jpg"},
+    )
+
+    r = gameserver.put(f"/server/v1/players/{stranger}/queue", params={"gamemodes": 1})
+    assert r.status_code == 200, r.text
+
+    with opendb() as db:
+        user = db.query(data.User).where(data.User.steam64 == stranger).first()
+        assert user is not None
+        assert user.steam_data["name"] == "RandomJoiner"
+    assert data.User.getSteamData(stranger).name == "RandomJoiner"
+
+
+def test_an_account_is_still_made_when_steam_will_not_answer(gameserver, monkeypatch):
+    """Steam being down must not stop somebody playing. The account is created with
+    no profile rather than with a placeholder, so the next lookup can still fill it
+    in — a stored "Nameless" would never be asked about again."""
+    from src.core import steam
+
+    stranger = 76561198000000204
+    monkeypatch.setattr(
+        steam,
+        "get_steam_user_data",
+        lambda s: (_ for _ in ()).throw(RuntimeError("down")),
+    )
+
+    r = gameserver.put(f"/server/v1/players/{stranger}/queue", params={"gamemodes": 1})
+    assert r.status_code == 200, r.text
+
+    with opendb() as db:
+        user = db.query(data.User).where(data.User.steam64 == stranger).first()
+        assert user is not None
+        assert not user.steam_data
