@@ -276,6 +276,18 @@ def test_a_party_keeps_only_the_picked_modes_it_fits(client, login, user_factory
         assert {hb.gamemode for hb in s.query(data.UserHB).all()} == {DUO_BIT}
 
 
+def test_queueing_with_no_gamemode_is_refused_in_its_own_words(
+    client, login, user_factory
+):
+    """Not the party message — a solo player who picked nothing is not too big for
+    anything, and an empty bitmask used to reach addToQueue as a NULL gamemode."""
+    login(client, user_factory())
+    r = client.get("/queue/heartbeat", params={"region": "paris"})
+
+    assert r.status_code == 400
+    assert "Pick a gamemode" in r.text
+
+
 def test_a_solo_player_may_still_queue_a_one_per_team_mode(client, login, user_factory):
     login(client, user_factory())
     r = client.get("/queue/heartbeat", params={"gamemode": SOLO_BIT, "region": "paris"})
