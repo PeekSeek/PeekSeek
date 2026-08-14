@@ -135,6 +135,25 @@ class User(SQLModel, table=True):
                 user.permissions |= bit
 
     @staticmethod
+    def ensure(db, steam64) -> None:
+        """A Users row for this steam64, created if the site has never seen them.
+
+        Game servers report players the website has no account for — most people
+        standing in a warm-up lobby have never opened it — and everything hung off
+        Users by foreign key is refused outright by Postgres until the row exists.
+        Stat.append has always done this for match results; the queue did not, so
+        every one of those players 500'd the moment the lobby tried to queue them.
+        """
+        if db.query(User).where(User.steam64 == steam64).first():
+            return
+
+        from uuid import uuid4
+
+        db.add(User(steam64=steam64, uuid=str(uuid4())))
+        # Before the caller's own insert, which is the one with the foreign key.
+        db.flush()
+
+    @staticmethod
     def addToQueue(
         steam64,
         gamemode: int,
@@ -149,6 +168,7 @@ class User(SQLModel, table=True):
         if isinstance(steam64, User):
             steam64 = steam64.steam64
         with open() as db:
+            User.ensure(db, steam64)
             db.query(UserHB).where(UserHB.steam64 == steam64).delete()
             db.add(
                 UserHB(
