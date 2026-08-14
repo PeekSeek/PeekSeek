@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -24,6 +25,11 @@ internal abstract class LobbyManager {
         internal byte Deaths;
         internal byte Headshots;
         internal float SpawnProtectedUntil;
+
+        /// When Tick should deploy this player from the standard spawn into the
+        /// arena. Zero once they are fighting, which is also what everyone who
+        /// joined without dying starts on.
+        internal float DeployAt;
 
         /// Which kits.json category (from AllowedKitCategories) this player is
         /// currently equipped with — set on join, changed with /kit.
@@ -110,10 +116,20 @@ internal abstract class LobbyManager {
     /// shooter, since this fires once per bullet.
     private static void OnDamagePlayerRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
         CSteamID victimID = parameters.player.channel.owner.playerID.steamID;
+        CSteamID attacker = parameters.killer;
+
+        // Throwing a punch is giving up your own protection. Shooting out of it
+        // while nothing can touch you is the one thing it must never buy, so this
+        // runs before anything else and covers the pre-deploy wait too, where the
+        // timer is zero but god mode is still on.
+        if (attacker != CSteamID.Nil && attacker != victimID
+                && Players.TryGetValue(attacker.m_SteamID, out PlayerState attackerState)
+                && (attackerState.SpawnProtectedUntil > 0 || attackerState.DeployAt > 0)) {
+            EndSpawnProtection(attacker, attackerState);
+        }
+
         if (!Players.TryGetValue(victimID.m_SteamID, out PlayerState victimState)) return;
         if (victimState.SpawnProtectedUntil <= Time.realtimeSinceStartup) return;
-
-        CSteamID attacker = parameters.killer;
         if (attacker == CSteamID.Nil || attacker == victimID) return;
 
         float now = Time.realtimeSinceStartup;
@@ -167,7 +183,7 @@ internal abstract class LobbyManager {
 
         Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
             queueing ? "welcome_what_queue" : "welcome_what",
-            Mathf.RoundToInt(config.SpawnProtectionSeconds)));
+            Mathf.RoundToInt(config.RespawnDelaySeconds), Mathf.RoundToInt(config.SpawnProtectionSeconds)));
 
         string kits = string.Join("|", config.AllowedKitCategories ?? []);
         string queueHint = queueing ? " <color=white>/noqueue</color> leave the queue." : string.Empty;
@@ -397,12 +413,27 @@ internal abstract class LobbyManager {
         player.teleportToLocationUnsafe(spawn.Position.ToVector3(), player.look.yaw);
     }
 
+    /// Respawning the moment the life updates is what keeps a death screen off the
+    /// player's display, but it puts them on Unturned's own spawn point rather than
+    /// back in the fight. Deploying to a lobby spawn is left to Tick, so the wait
+    /// between lives is spent standing somewhere safe instead of staring at a
+    /// death screen.
     private static void Respawn(CSteamID steamID, PlayerState state) {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
         player.life.ServerRespawn(false);
-        SpawnPlayer(steamID, state);
+
+        // God mode is held for the whole wait rather than started at deploy: the
+        // standard spawn is one fixed, well-known spot, and standing there unable
+        // to fight back is exactly what a camper wants. Zeroing the timer is what
+        // stops Tick expiring the protection before the deploy lands.
+        state.SpawnProtectedUntil = 0;
+        SetGodMode(steamID, true);
+        state.DeployAt = Time.realtimeSinceStartup + PeekSeekLobby.Config.RespawnDelaySeconds;
+
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
+            "deploying_in", Mathf.RoundToInt(PeekSeekLobby.Config.RespawnDelaySeconds)));
     }
 
     /// The one thing that actually puts people back on their feet, copied from the
@@ -432,9 +463,30 @@ internal abstract class LobbyManager {
         }
     }
 
-    private static void SetGodMode(CSteamID steamID, bool enabled) {
+    /// Reports whether it actually landed. The player object is not resolvable on
+    /// every frame, and a caller turning protection off has to know the difference
+    /// between "done" and "silently skipped".
+    private static bool SetGodMode(CSteamID steamID, bool enabled) {
         UnturnedPlayer player = UnturnedPlayer.FromCSteamID(steamID);
-        if (player != null) player.Features.GodMode = enabled;
+        if (player == null) return false;
+
+        player.Features.GodMode = enabled;
+        return true;
+    }
+
+    /// The timer is cleared only once god mode is really off. Zeroing it first and
+    /// letting the call quietly fail is what left players permanently invincible:
+    /// nothing was scheduled to ever try again, because as far as Tick could tell
+    /// the protection had already ended.
+    private static void EndSpawnProtection(CSteamID steamID, PlayerState state) {
+        if (!SetGodMode(steamID, false)) return;
+
+        state.SpawnProtectedUntil = 0;
+
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null) return;
+
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("spawn_protection_over"));
     }
 
     private static string DefaultKitCategory() {
@@ -540,6 +592,41 @@ internal abstract class LobbyManager {
         return Players.TryGetValue(steamID.m_SteamID, out state);
     }
 
+    /// Rocket's UnturnedPlayer.FromName cannot be JIT-compiled by the Mono build
+    /// the live server runs: calling it throws BadImageFormatException("Method has
+    /// zero rva"), which Rocket catches and logs, so the player just gets silence.
+    /// Only the commands that took a name argument ever reached it, which is why
+    /// /stats and /ms worked bare and died the moment you named someone.
+    ///
+    /// Resolving here costs one pass over the client list and owes Rocket nothing.
+    /// Steam IDs are matched before names so an exact ID never loses to somebody
+    /// whose name happens to contain those digits.
+    internal static SteamPlayer FindPlayer(string query) {
+        if (string.IsNullOrEmpty(query)) return null;
+
+        if (ulong.TryParse(query, out ulong steam64)) {
+            foreach (SteamPlayer client in Provider.clients) {
+                if (client?.playerID.steamID.m_SteamID == steam64) return client;
+            }
+        }
+
+        foreach (SteamPlayer client in Provider.clients) {
+            if (client == null) continue;
+            if (NameMatches(client.playerID.characterName, query)) return client;
+            if (NameMatches(client.playerID.playerName, query)) return client;
+        }
+        return null;
+    }
+
+    /// The same forgiving substring rule Unturned's own NameTool applies, so /stats
+    /// rio still finds RioDash. Ordinal because a player name is a label rather than
+    /// prose, and matching it has no business depending on the server's locale.
+    ///
+    /// Pure, and kept that way so it can be tested without a live Unturned host.
+    internal static bool NameMatches(string name, string query) {
+        return name != null && name.IndexOf(query, StringComparison.OrdinalIgnoreCase) != -1;
+    }
+
     /// Everything the site said about one player, acted on in one place.
     ///
     /// Reads top to bottom as the player's journey: rank first, then "you have a
@@ -574,6 +661,9 @@ internal abstract class LobbyManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
+        // Being pulled out for a match ends the wait between lives — a deploy still
+        // pending would otherwise drop them back into the arena moments later.
+        state.DeployAt = 0;
         TeleportToSpawn(player);
         state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
         SetGodMode(steamID, true);
@@ -627,9 +717,10 @@ internal abstract class LobbyManager {
         );
     }
 
-    /// Everyone still queueing gets pinged on a timer and spawn protection expires
-    /// on its own clock. Nothing here waits on the dead: respawning happens in the
-    /// death event itself.
+    /// Everyone still queueing gets pinged on a timer, spawn protection expires on
+    /// its own clock, and anyone waiting out a respawn is deployed into the arena
+    /// once their timer is up. Nobody is ever dead here — the respawn itself
+    /// happens the moment the life updates.
     internal static void Tick() {
         float now = Time.realtimeSinceStartup;
 
@@ -642,15 +733,14 @@ internal abstract class LobbyManager {
             // it could be reloaded straight back in.
             if (state.StreakMagItemId != 0) TakeBackSpentStreakMagazine(steamID, state);
 
-            if (state.SpawnProtectedUntil > 0 && now >= state.SpawnProtectedUntil) {
-                state.SpawnProtectedUntil = 0;
-                SetGodMode(steamID, false);
+            if (state.DeployAt > 0 && now >= state.DeployAt) {
+                state.DeployAt = 0;
+                SpawnPlayer(steamID, state);
+            }
 
-                Player protectedPlayer = PlayerTool.getPlayer(steamID);
-                if (protectedPlayer != null) {
-                    Whisper(protectedPlayer.channel.owner,
-                        PeekSeekLobby.Instance.Translate("spawn_protection_over"));
-                }
+            // Retried every tick until it lands, rather than assumed done.
+            if (state.SpawnProtectedUntil > 0 && now >= state.SpawnProtectedUntil) {
+                EndSpawnProtection(steamID, state);
             }
         }
 
@@ -816,6 +906,9 @@ internal abstract class LobbyManager {
             Player player = PlayerTool.getPlayer(steamID);
             if (player == null) continue;
 
+            // A reset puts everyone straight back in, so anyone still waiting out a
+            // respawn skips the rest of it rather than being deployed a second time.
+            state.DeployAt = 0;
             if (player.life.isDead) player.life.ServerRespawn(false);
             SpawnPlayer(steamID, state);
         }

@@ -45,11 +45,28 @@ body {
     align-items: center;
     justify-content: center;
 
-    background-image: url("/av.png");
+    background-image: url("/static/img/av.png");
     background-size: cover;
     background-position: center;
 
     color: var(--ink);
+}
+
+/* Darkens top and bottom so the notch and the caption stay legible over whatever
+   part of the map sits behind them — Alpha Valley's sky is bright enough that
+   muted grey on it reads as nothing at all — without flattening the background
+   to black and wasting the picture. */
+#notStarted::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        rgba(4, 4, 5, 0.82) 0%,
+        rgba(4, 4, 5, 0.32) 24%,
+        rgba(4, 4, 5, 0.32) 76%,
+        rgba(4, 4, 5, 0.86) 100%
+    );
+    pointer-events: none;
 }
 
 /* Two faces, one element. `waiting` is the bare splash for when there is no match to
@@ -61,6 +78,9 @@ body {
 #notStarted.intermission .intermission { display: flex; }
 
 #notStarted .splash {
+    /* Positioned only so it paints on top of the scrim rather than under it —
+       it is the one face that isn't absolute. */
+    position: relative;
     flex-direction: column;
     align-items: center;
     gap: 20px;
@@ -106,13 +126,17 @@ body {
     color: var(--muted);
 }
 
+/* Rosters at the frame's edges, not huddled in the middle — that is what leaves
+   the map behind them visible and doing the work a background is for. Vertically
+   centred, so the empty middle is the picture rather than dead space. */
 .rosters {
     margin: auto 0;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 3.2vw;
+    justify-content: space-between;
+    padding: 0 3vw;
     width: 100%;
+    box-sizing: border-box;
 }
 
 .rosters .col {
@@ -262,7 +286,12 @@ body {
 .notch .mid.hot { color: var(--red); }
 
 /* ---- Columns ---------------------------------------------------------- */
-.col {
+/* Scoped to #hud. The intermission reuses .col for its roster columns, and while
+   it overrides the width and gap it declares no position of its own — so an
+   unscoped rule here pinned both rosters to the bottom corners of the frame
+   instead of letting .rosters place them, which is how the intermission shipped
+   looking nothing like the concept it was built from. */
+#hud .col {
     position: absolute;
     bottom: 1.2vw;
     display: flex;
@@ -271,8 +300,8 @@ body {
     width: 19.5vw;
 }
 
-.col.l { left: 1.2vw; }
-.col.r { right: 1.2vw; }
+#hud .col.l { left: 1.2vw; }
+#hud .col.r { right: 1.2vw; }
 
 .group { display: flex; flex-direction: column; gap: 0.22vw; }
 

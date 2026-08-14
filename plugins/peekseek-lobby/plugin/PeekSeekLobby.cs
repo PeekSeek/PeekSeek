@@ -10,7 +10,20 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
 
     public static PeekSeekLobbyConfiguration Config { get => Instance.Configuration.Instance; }
 
+    /// Rocket loads every DLL under Plugins/, subfolders included, so a stale copy
+    /// left next to the current one comes up as a second plugin — and since both
+    /// carry the same assembly name, that second instance shares LobbyManager's
+    /// statics. Letting it run would subscribe every event twice and tick twice a
+    /// frame: two heartbeats per player, two welcome messages, two of every kill
+    /// feed line. Whoever loads first owns the lobby; the rest do nothing at all.
     protected override void Load() {
+        if (Instance != null) {
+            Logger.LogWarning(
+                "PeekSeekLobby is already loaded — ignoring this copy. Look for a "
+                + "leftover PeekSeekLobby.dll elsewhere under Rocket/Plugins.");
+            return;
+        }
+
         Instance = this;
         Logger.Log($"PeekSeekLobby {Assembly.GetName().Version} is now loaded.");
 
@@ -21,12 +34,16 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
     /// drives its match loop from — LobbyManager decides how often that's worth
     /// acting on.
     private void FixedUpdate() {
+        if (Instance != this) return;
         LobbyManager.Tick();
     }
 
     protected override void Unload() {
+        if (Instance != this) return;
+
         Logger.Log("PeekSeekLobby is now unloaded.");
         LobbyManager.Shutdown();
+        Instance = null;
     }
 
     /// Highlighting is <color=white> against the grey base chat colour, matching
@@ -35,8 +52,8 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
     public override TranslationList DefaultTranslations => new TranslationList() {
         // Front-loaded on purpose: what the server is and the loop you're in
         // first, then the controls, then the things that can wait.
-        { "welcome_what", "<color=white>PeekSeek warm-up lobby.</color> Free-for-all deathmatch. Death respawns you <color=white>instantly</color> with <color=white>{0}s</color> spawn protection." },
-        { "welcome_what_queue", "<color=white>PeekSeek warm-up lobby.</color> You are <color=white>in queue</color>, fight while you wait. Death respawns you <color=white>instantly</color> with <color=white>{0}s</color> spawn protection." },
+        { "welcome_what", "<color=white>PeekSeek warm-up lobby.</color> Free-for-all deathmatch. Death sends you to spawn, then back into the fight after <color=white>{0}s</color> with <color=white>{1}s</color> protection." },
+        { "welcome_what_queue", "<color=white>PeekSeek warm-up lobby.</color> You are <color=white>in queue</color>, fight while you wait. Death sends you to spawn, then back into the fight after <color=white>{0}s</color> with <color=white>{1}s</color> protection." },
         { "welcome_commands", "<color=white>/kit {0}</color> switch loadout. <color=white>/stats</color> your score. <color=white>/ping</color> your latency.{1}" },
         { "welcome_extra", "Every kill earns a <color=white>heal</color>. Kills in a row earn <color=white>more</color>. Arena and scores reset every <color=white>{0} min</color>. Discord: <color=white>peekseek.net/discord</color>" },
 
@@ -45,6 +62,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "kill_feed_streak", "<color=white>{0}</color> killed <color=white>{1}</color> with {2}. <color=white>{3} streak</color>." },
         { "kill_feed_headshot_streak", "<color=white>{0}</color> headshot <color=white>{1}</color> with {2}. <color=white>{3} streak</color>." },
 
+        { "deploying_in", "Back into the fight in <color=white>{0}s</color>." },
         { "spawn_protection_over", "Spawn protection <color=white>ended</color>. You can be hurt now." },
         { "target_protected", "<color=white>{0}</color> still has spawn protection." },
 

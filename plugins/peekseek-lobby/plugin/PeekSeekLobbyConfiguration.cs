@@ -14,6 +14,12 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public ushort GamemodeBitmask;
     public float HeartbeatIntervalSeconds;
     public float SpawnProtectionSeconds;
+
+    /// How long a player waits at the standard spawn before being deployed to a
+    /// lobby spawn point. They are alive and protected for the whole wait — the
+    /// pause is a breather between lives, not a death screen.
+    public float RespawnDelaySeconds;
+
     public List<LobbySpawn> Spawns;
 
     /// How many spare magazines a player carries, whatever the kit itself asks
@@ -93,6 +99,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         GamemodeBitmask = 1;
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;
+        RespawnDelaySeconds = 10f;
         SpareMagazines = 1;
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = true;

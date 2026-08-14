@@ -17,20 +17,46 @@ class Party(SQLModel, table=True):
         sa_column=Column(BigInteger, ForeignKey("Users.steam64"), nullable=False)
     )
     data: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    # Nullable because parties that predate this column have no honest value for
+    # it; find() backfills those with the time it first sees them.
+    lastSeen: Optional[int] = Field(
+        default=None, sa_column=Column(BigInteger, nullable=True)
+    )
 
     user: User = Relationship(back_populates="parties")
     heartbeats: UserHB = Relationship(back_populates="party")
 
     @staticmethod
     def find(db, steam64) -> "Party | None":
-        """The party this player currently belongs to, if any. Scans every party
-        rather than indexing membership — the same "small table, filter in Python"
-        approach User.getCurrentMatchId already takes over Matches."""
+        """The party this player currently belongs to, if any, disbanding any that
+        has gone quiet. Scans every party rather than indexing membership — the same
+        "small table, filter in Python" approach User.getCurrentMatchId already takes
+        over Matches.
+
+        Being looked up *is* the liveness signal. The play page polls /party/ every
+        few seconds and the queue heartbeat looks its own party up, so a party lasts
+        exactly as long as somebody still has it on screen — close every tab and it
+        disbands on its own instead of following its members into next week.
+        """
         steam64 = str(steam64)
+        now = int(time())
+        mine = None
+
         for party in db.query(Party).all():
+            party.lastSeen = party.lastSeen or now
+            if now - party.lastSeen > settings.party_timeout:
+                # Heartbeats carry the party's id as a foreign key, so they go
+                # first or Postgres refuses the delete. Nothing is lost by it: a
+                # party nobody has looked at in ten minutes has no business still
+                # sitting in the queue under someone else's name.
+                db.query(UserHB).where(UserHB.partyId == party.id).delete()
+                db.delete(party)
+                continue
             if steam64 in party.data.get("members", []):
-                return party
-        return None
+                party.lastSeen = now
+                mine = party
+
+        return mine
 
     @staticmethod
     def pendingInvites(db, steam64) -> list["Party"]:

@@ -3,6 +3,8 @@ happens in /queue/heartbeat (index.py), which looks the caller's party up itself
 this router only manages who's in one.
 """
 
+from time import time
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 
@@ -56,7 +58,9 @@ def party_invite(steam64: ApiSteam64, target: int):
 
         if not party:
             party = data.Party(
-                steam64=steam64, data={"members": [str(steam64)], "invites": []}
+                steam64=steam64,
+                data={"members": [str(steam64)], "invites": []},
+                lastSeen=int(time()),
             )
             db.add(party)
             db.flush()

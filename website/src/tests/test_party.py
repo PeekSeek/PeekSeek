@@ -1,12 +1,16 @@
 """Party membership and party-aware matchmaking."""
 
+from time import time
+
 from sqlmodel import Session
 
 from src.core import db as core_db
 from src.core import models as data
+from src.core.settings import settings
 
 DUO_BIT = 2**3  # gamemode 3, "Casual Duo" — playersPerTeam=2, the one mode two
 # people can actually stay together on a single team for.
+SOLO_BIT = 2**0  # gamemode 0, "Competitive" — playersPerTeam=1.
 
 
 def test_invite_creates_a_party_and_adds_the_invite(client, login, user_factory):
@@ -180,6 +184,128 @@ def test_party_queues_together_via_the_leaders_heartbeat(client, login, user_fac
         heartbeats = {hb.steam64: hb.partyId for hb in s.query(data.UserHB).all()}
         assert heartbeats[leader.steam64] == partyId
         assert heartbeats[member.steam64] == partyId
+
+
+def test_a_party_nobody_has_looked_at_disbands(client, login, user_factory):
+    """Everyone closing their tab has to end the party, or a player is still stuck
+    in yesterday's group the next time they open /play."""
+    leader, member = _duo(client, login, user_factory)
+    partyId = _first_party_id()
+
+    with Session(core_db.engine) as s:
+        party = s.query(data.Party).where(data.Party.id == partyId).first()
+        party.lastSeen = int(time()) - settings.party_timeout - 1
+        s.add(party)
+        s.commit()
+
+    login(client, member)
+    assert client.get("/party/").json()["party"] is None
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Party).count() == 0
+
+
+def test_expiring_a_party_takes_its_queue_heartbeats_with_it(
+    client, login, user_factory
+):
+    """UserHB.partyId is a foreign key, so leaving the heartbeats behind makes the
+    disband fail outright on Postgres. Stale rows can outlive the party whenever no
+    game server has polled the queue for a while."""
+    leader, member = _duo(client, login, user_factory)
+    partyId = _first_party_id()
+
+    login(client, leader)
+    client.get("/queue/heartbeat", params={"gamemode": DUO_BIT, "region": "paris"})
+    with Session(core_db.engine) as s:
+        assert s.query(data.UserHB).count() == 2
+        party = s.query(data.Party).where(data.Party.id == partyId).first()
+        party.lastSeen = int(time()) - settings.party_timeout - 1
+        s.add(party)
+        s.commit()
+
+    assert client.get("/party/").status_code == 200
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Party).count() == 0
+        assert s.query(data.UserHB).count() == 0
+
+
+def test_looking_at_a_party_keeps_it_alive(client, login, user_factory):
+    leader, member = _duo(client, login, user_factory)
+    partyId = _first_party_id()
+
+    with Session(core_db.engine) as s:
+        stale = int(time()) - settings.party_timeout + 5
+        party = s.query(data.Party).where(data.Party.id == partyId).first()
+        party.lastSeen = stale
+        s.add(party)
+        s.commit()
+
+    login(client, leader)
+    assert client.get("/party/").json()["party"]["id"] == partyId
+
+    with Session(core_db.engine) as s:
+        party = s.query(data.Party).where(data.Party.id == partyId).first()
+        assert party.lastSeen > stale
+
+
+def test_a_party_too_big_for_every_picked_mode_is_refused(client, login, user_factory):
+    """Without this the pair queues happily and simply never matches — matchmaking
+    skips a party that can't fit on one team, so nothing ever tells them why."""
+    leader, member = _duo(client, login, user_factory)
+
+    login(client, leader)
+    r = client.get("/queue/heartbeat", params={"gamemode": SOLO_BIT, "region": "paris"})
+
+    assert r.status_code == 400
+    assert "too big" in r.text
+    with Session(core_db.engine) as s:
+        assert s.query(data.UserHB).count() == 0
+
+
+def test_a_party_keeps_only_the_picked_modes_it_fits(client, login, user_factory):
+    leader, member = _duo(client, login, user_factory)
+
+    login(client, leader)
+    r = client.get(
+        "/queue/heartbeat", params={"gamemode": SOLO_BIT | DUO_BIT, "region": "paris"}
+    )
+
+    assert r.status_code == 200
+    with Session(core_db.engine) as s:
+        assert {hb.gamemode for hb in s.query(data.UserHB).all()} == {DUO_BIT}
+
+
+def test_queueing_with_no_gamemode_is_refused_in_its_own_words(
+    client, login, user_factory
+):
+    """Not the party message — a solo player who picked nothing is not too big for
+    anything, and an empty bitmask used to reach addToQueue as a NULL gamemode."""
+    login(client, user_factory())
+    r = client.get("/queue/heartbeat", params={"region": "paris"})
+
+    assert r.status_code == 400
+    assert "Pick a gamemode" in r.text
+
+
+def test_a_solo_player_may_still_queue_a_one_per_team_mode(client, login, user_factory):
+    login(client, user_factory())
+    r = client.get("/queue/heartbeat", params={"gamemode": SOLO_BIT, "region": "paris"})
+
+    assert r.status_code == 200
+    with Session(core_db.engine) as s:
+        assert s.query(data.UserHB).count() == 1
+
+
+def _duo(client, login, user_factory):
+    """A leader and one accepted member, both logged out again at the end."""
+    leader, member = user_factory(), user_factory()
+    login(client, leader)
+    client.post("/party/invite", params={"target": member.steam64})
+    partyId = _first_party_id()
+    login(client, member)
+    client.post("/party/accept", params={"partyId": partyId})
+    return leader, member
 
 
 def _first_party_id() -> int:

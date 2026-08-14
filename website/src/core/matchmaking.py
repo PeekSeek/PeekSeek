@@ -63,6 +63,21 @@ def _matchFromQueue(region: str, serverCode: str) -> "data.Match | None":
     return None
 
 
+def modesFittingParty(gamemode: int, partySize: int) -> int:
+    """The selected modes a party this size can actually be matched in.
+
+    _playersForMatch refuses to split a party across two teams, so a party larger
+    than one team of a mode can never fill it — leaving that mode selected only
+    buys them a queue they never come out of. Dropping it here is what turns that
+    silent wait into either a queue that can match or an outright refusal.
+    """
+    return sum(
+        2**gid
+        for gid, mode in enumerate(mmconfig["gamemodes"])
+        if gamemode & (2**gid) and mode["playersPerTeam"] >= partySize
+    )
+
+
 def _partyGroups(heartbeats: list) -> list[list[int]]:
     """Queued players grouped by party — a solo player is a group of one — ordered by
     the earliest heartbeat in the group, so queueing together doesn't jump a party

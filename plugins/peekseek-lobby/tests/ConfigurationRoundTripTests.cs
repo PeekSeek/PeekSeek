@@ -38,6 +38,8 @@ public class ConfigurationRoundTripTests {
         Assert.Equal(config.szMatchURL, loaded.szMatchURL);
         Assert.Equal(config.ResetIntervalSeconds, loaded.ResetIntervalSeconds);
         Assert.Equal(config.StreakWindowSeconds, loaded.StreakWindowSeconds);
+        Assert.Equal(config.SpawnProtectionSeconds, loaded.SpawnProtectionSeconds);
+        Assert.Equal(config.RespawnDelaySeconds, loaded.RespawnDelaySeconds);
     }
 
     /// Matchmaking is on, and stays switchable — the lobby is live, but a server

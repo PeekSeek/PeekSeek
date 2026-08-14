@@ -93,9 +93,23 @@ def queue_heartbeat(
             status_code=403, detail="Only your party leader can start the queue."
         )
 
-    _ping_if_queueing_alone(region)
+    # The play page blocks this itself, so reaching it means something else called
+    # us — and an empty bitmask reached addToQueue as a NULL gamemode and 500'd.
+    if not gamemode:
+        raise HTTPException(status_code=400, detail="Pick a gamemode before queueing.")
 
     partyMembers = party.data.get("members", []) if party else [str(steam64)]
+    # Refusing here is the whole point: a party too big for every mode it picked
+    # would otherwise sit in a queue matchmaking has already decided to skip.
+    gamemode = matchmaking.modesFittingParty(gamemode, len(partyMembers))
+    if not gamemode:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A party of {len(partyMembers)} is too big for the gamemodes you picked.",
+        )
+
+    _ping_if_queueing_alone(region)
+
     for member in partyMembers:
         data.User.addToQueue(
             int(member), gamemode, partyId=(party.id if party else None), region=region
