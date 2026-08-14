@@ -33,7 +33,6 @@
 
     <br>
 
-    <h2>Player Statistics</h2>
     {% if not statsData %}
       <span>User has no statistics.</span>
     {% else %}
@@ -48,20 +47,11 @@
       {% endfor %}
     {% endif %}
 
-    <h2>Performance</h2>
     {% if eloHistory|length < 2 %}
       <span>Not enough ranked matches yet to show a trend.</span>
     {% else %}
-      <div class="formstrip">
-        {% for match in matches[:10] | reverse %}
-          {% set r = match.data.get("results", {}).get(steam64Str, {}) %}
-          <span class="formpill {{ 'win' if r.get('Won') else 'loss' }}" title="{{ match.data.get('map') or 'Unknown map' }}">{{ 'W' if r.get('Won') else 'L' }}</span>
-        {% endfor %}
-      </div>
       <div class="eloChartWrap"><canvas id="eloChart" height="90"></canvas></div>
     {% endif %}
-
-    <h2>Recent Matches</h2>
     {% if not matches %}
       <span>No matches played yet.</span>
     {% else %}
@@ -71,49 +61,32 @@
         {% set won = r.get("Won") %}
         {% set kills = r.get("Kills", 0) %}
         <a class="matchrow {{ 'win' if won else 'loss' }}" href="/match/{{match.matchId}}">
-          <span class="stripe"></span>
+          <span class="elo {{ 'pos' if r.get('Elo Change', 0) >= 0 else 'neg' }}">{{ "+" if r.get("Elo Change", 0) >= 0 else "" }}{{r.get("Elo Change")}}</span>
           <span class="map">
             <span class="name">{{match.data.get("map") or "Unknown map"}}</span>
             <span class="when">{{match.endTime.strftime("%d/%m %H:%M")}}</span>
           </span>
           <span class="kd"><b>{{kills}}</b>K <b>{{r.get("Deaths", 0)}}</b>D</span>
           <span class="hs">{{round(r.get("Headshots", 0) / max(kills, 1) * 100, 1)}}% HS</span>
-          {% if "Elo Change" in r %}
-          <span class="elo {{ 'pos' if r.get('Elo Change', 0) >= 0 else 'neg' }}">{{ "+" if r.get("Elo Change", 0) >= 0 else "" }}{{r.get("Elo Change")}}</span>
-          {% else %}
-          <span class="elo"></span>
-          {% endif %}
-          <span class="result">{{ "Win" if won else "Loss" }}</span>
         </a>
         {% endfor %}
       </div>
     {% endif %}
 
-    <h2>Kits</h2>
     {% if not kitData %}
       <span>User has no kit data.</span>
     {% else %}
-      <table class="kitTable">
-        <tr>
-          <th>Kit</th>
-          <th>Items</th>
-          {% if user %}
-          <th></th>
-          {% endif %}
-        </tr>
-      {% for kit in kitData %}
-        <tr>
-          <td>{{kit.category.upper()}}</td>
-          <td>{% for _, item in kit.data.items() %}
-            <img src="/public/unturned/{{item}}.png" alt="" height="20px">
-          {% endfor %}</td>
-          
-          {% if user %}
-          <td><button class="copyButton" onclick="copyApi({% if kit.category == "outfit" %}'outfit'{% else %}'kit/{{kit.category}}'{% endif %}, '{% for n, v in kit.data.items() %}&{{n}}={{v}}{% endfor %}')">Copy</button></td>
-          {% endif %}
-        </tr>
-      {% endfor %}
-      </table>
+      <div class="statcards">
+      {% for kit in kitData %}{% if not kit.category in ["outfit"] %}
+
+        <div class="statcard kitcard"><span class="label">{{kit.category}}</span><span class="value">
+          {% for _, item in kit.data.items() %}{% if item != 0 %}
+            <img class="kitimg" src="/static/unturned/{{item}}.png" alt="">
+          {% endif %}{% endfor %}
+        </span></div>
+
+      {%endif %}{% endfor %}
+      </div>
     {% endif %}
   </div>
 </div>
@@ -282,23 +255,14 @@
     margin: 5px 0;
   } .matchrow {
     display: grid;
-    grid-template-columns: 4px 1fr auto auto auto auto;
+    grid-template-columns: auto 1fr auto auto auto;
     align-items: center;
     gap: 14px;
-    background-color: #0a0a0a;
     border-radius: 6px;
     padding: 10px 14px;
     text-decoration: none;
     transition: background-color 0.15s ease;
-  } .matchrow:hover {
     background-color: #151515;
-  } .matchrow .stripe {
-    width: 3px;
-    height: 24px;
-    border-radius: 2px;
-    background-color: #ff4444;
-  } .matchrow.loss .stripe {
-    background-color: #444;
   } .matchrow .map {
     display: flex;
     flex-direction: column;
@@ -319,8 +283,6 @@
   } .matchrow .elo {
     font-size: 13px;
     font-weight: 700;
-    min-width: 40px;
-    text-align: right;
   } .matchrow .elo.pos {
     color: #7ee08a;
   } .matchrow .elo.neg {
@@ -333,6 +295,20 @@
     color: #ff4444;
   } .matchrow.loss .result {
     color: #8a8a8a;
-  }
+  } .statcard span .kitimg {
+    width: 20%;
+    height: 20px;
+    object-fit: contain;
+}
+
+.statcard span .kitimg:first-child {
+    width: 100%;
+    height: 80px;
+}
+.kitcard .value {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 </style>
 {% endblock %}
