@@ -5,9 +5,9 @@ using Newtonsoft.Json.Linq;
 
 namespace PeekSeekLobby.Core.Models;
 
-/// One [itemId, amount, state] entry from the website's /kit/{steam64} response —
-/// the same wire shape the main PeekSeek plugin's PSItemConverter reads out of a
-/// live match's kit data, reused here since the site emits it identically.
+/// One item from the site's kit data: `{"itemId": 363, "amount": 1, "state": [1, 2]}`.
+/// Self-describing rather than a positional triple, so nothing here has to know that
+/// the third slot used to be a comma-separated string of state bytes.
 [UsedImplicitly]
 internal class PSItem {
     internal ushort ItemID;
@@ -16,11 +16,9 @@ internal class PSItem {
 
     internal static PSItem Parse(JToken entry) {
         return new PSItem {
-            ItemID = (ushort)entry[0],
-            Amount = (byte)entry[1],
-            State = string.IsNullOrEmpty(entry[2]?.ToString())
-                ? []
-                : entry[2].ToString().Split(',').Select(byte.Parse).ToArray()
+            ItemID = (ushort)entry["itemId"],
+            Amount = (byte)entry["amount"],
+            State = entry["state"] is JArray state ? state.Select(b => (byte)b).ToArray() : []
         };
     }
 

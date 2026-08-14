@@ -35,7 +35,9 @@ class Party(SQLModel, table=True):
     @staticmethod
     def pendingInvites(db, steam64) -> list["Party"]:
         steam64 = str(steam64)
-        return [p for p in db.query(Party).all() if steam64 in p.data.get("invites", [])]
+        return [
+            p for p in db.query(Party).all() if steam64 in p.data.get("invites", [])
+        ]
 
 
 class UserHB(SQLModel, table=True):

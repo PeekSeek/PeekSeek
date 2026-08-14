@@ -16,12 +16,13 @@
 ---
 
 Three deployables live here. The website is the backend the plugins talk to, which is
-why they share a repo: a change to the `/unt/*` endpoints and the plugin call that hits
-them lands in one commit.
+why they share a repo: a change to the `/server/v1/*` API and the plugin call that hits
+it lands in one commit. That contract is written down in
+[website/API.md](website/API.md).
 
 | Component | What it is | Language |
 | --- | --- | --- |
-| [website/](website/) | The whole site and API: pages, JSON endpoints, and the `/unt/*` endpoints game servers call | FastAPI, Python 3.12 |
+| [website/](website/) | The whole site and API: pages, JSON endpoints, and the `/server/v1/*` API game servers run on | FastAPI, Python 3.12 |
 | [plugins/peekseek/](plugins/peekseek/) | RocketMod plugin that runs matches: lobby lifecycle, match state, ping-based damage scaling | C#, net48 |
 | [plugins/utelemetry/](plugins/utelemetry/) | RocketMod plugin for PvP telemetry beyond kill counts | C#, net48 |
 

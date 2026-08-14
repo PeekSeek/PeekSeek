@@ -10,18 +10,18 @@ namespace PeekSeek.Core;
 /// live server each time rather than accumulated, so the overlay cannot drift out of
 /// sync with the match no matter how many updates are lost on the way to the backend.
 internal static class LiveState {
-    internal static PSUpdateState Build(PSData data, PSUpdateEvent latestEvent, List<PSUpdateKill> feed) {
+    internal static PSUpdateState Build(PSMatch data, PSUpdateEvent latestEvent, List<PSUpdateKill> feed) {
         int roundsPlayed = StatService.GetTotalPlayedRounds();
 
         PSUpdateState state = new() {
             Round = roundsPlayed + 1,
-            RoundsToWin = data.Meta.Rounds,
+            RoundsToWin = data.RoundsToWin,
             Event = latestEvent,
             Feed = [.. feed]
         };
 
         foreach (PSTeam team in data.Teams) {
-            byte wins = StatService.GetStatWins(new CSteamID(team.Users.First()));
+            byte wins = StatService.GetStatWins(new CSteamID(team.Players.First()));
 
             PSUpdateTeam updateTeam = new() {
                 TeamName = team.Name,
@@ -29,7 +29,7 @@ internal static class LiveState {
                 Losses = roundsPlayed - wins
             };
 
-            foreach (ulong user in team.Users) {
+            foreach (ulong user in team.Players) {
                 updateTeam.Users.Add(user.ToString(), BuildUser(new CSteamID(user)));
             }
 

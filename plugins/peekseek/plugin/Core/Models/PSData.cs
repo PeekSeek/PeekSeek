@@ -1,37 +1,45 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace PeekSeek.Core.Models;
 
+/// The shapes `/server/v1/session` answers with. Field names are the API's, spelled
+/// out with [JsonProperty] rather than relying on a naming convention, so a rename on
+/// either side is a compile-time edit here instead of a field that silently reads null.
 [UsedImplicitly]
 internal class PSSettings {
     [JsonProperty("ballistics")]
-    internal bool Ballistics = false;
+    internal bool Ballistics;
+
     [JsonProperty("movement")]
-    internal bool Movement = false;
+    internal bool Movement;
+
     [JsonProperty("map")]
     internal string Map = null!;
 }
 
+/// One item in a kit, already resolved by the site — id, how many, and the attachment
+/// state bytes to stamp onto it.
 [UsedImplicitly]
 internal class PSItem {
+    [JsonProperty("itemId")]
+    internal ushort ItemID;
 
-    internal ushort ItemID = 0;
-    internal byte Amount = 0;
+    [JsonProperty("amount")]
+    internal byte Amount;
+
+    [JsonProperty("state")]
     internal byte[] State = [];
 }
 
 [UsedImplicitly]
-internal class PSUser {
-    [JsonProperty("userId")]
-    internal ulong UserID = ulong.MinValue;
+internal class PSPlayer {
+    [JsonProperty("steam64")]
+    internal ulong Steam64;
 
     [JsonProperty("kit")]
-    [JsonConverter(typeof(PSItemConverter))]
     internal List<PSItem> Kit = [];
 }
 
@@ -39,53 +47,83 @@ internal class PSUser {
 internal class PSTeam {
     [JsonProperty("name")]
     internal string Name = null!;
-    [JsonProperty("users")]
-    internal List<ulong> Users = [];
+
+    [JsonProperty("players")]
+    internal List<ulong> Players = [];
 }
 
 [UsedImplicitly]
-internal class PSMeta {
-    [JsonProperty("rounds")]
-    internal byte Rounds = 0;
+internal class PSGamemode {
+    [JsonProperty("id")]
+    internal int Id;
+
+    [JsonProperty("name")]
+    internal string Name = null!;
 }
 
 [UsedImplicitly]
-internal class PSData {
-    [JsonProperty("matchid")]
-    internal int MatchID = 0;
-    [JsonProperty("head")]
-    internal string Head = null!;
+internal class PSMatch {
+    [JsonProperty("id")]
+    internal int Id;
+
+    [JsonProperty("region")]
+    internal string Region = null!;
+
+    [JsonProperty("gamemode")]
+    internal PSGamemode Gamemode = null!;
+
+    [JsonProperty("roundsToWin")]
+    internal byte RoundsToWin = 3;
+
     [JsonProperty("settings")]
     internal PSSettings Settings = null!;
-    [JsonProperty("users")]
-    internal List<PSUser> Users = null!;
-    [JsonProperty("meta")]
-    internal PSMeta Meta = null!;
+
     [JsonProperty("teams")]
     internal List<PSTeam> Teams = null!;
+
+    [JsonProperty("players")]
+    internal List<PSPlayer> Players = null!;
+
     [JsonProperty("spectators")]
-    internal List<ulong> Spectators = null!;
+    internal List<ulong> Spectators = [];
+
+    /// The kit the site resolved for this player, or an empty list for someone not on
+    /// the roster — a spectator, or a player the site did not send one for.
+    internal List<PSItem> KitFor(ulong steam64) {
+        return Players?.FirstOrDefault(p => p.Steam64 == steam64)?.Kit ?? [];
+    }
+
+    /// Whether this match lists the player at all, on any team.
+    internal bool HasPlayer(ulong steam64) {
+        return Teams != null && Teams.Any(team => team.Players.Contains(steam64));
+    }
 }
 
-internal class PSItemConverter : JsonConverter {
-    public override bool CanConvert(Type objectType) {
-        return objectType == typeof(List<PSItem>);
-    }
+/// One answer to one session poll. Exactly one `action` comes back, and everything
+/// else on this object is whatever that action carries.
+[UsedImplicitly]
+internal class PSSessionAnswer {
+    internal const string Idle = "idle";
+    internal const string Wait = "wait";
+    internal const string Host = "host";
+    internal const string Abort = "abort";
 
-    public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer) {
-        var kitArray = JArray.Load(reader);
+    [JsonProperty("action")]
+    internal string Action = Idle;
 
-        return kitArray.Select(itemArray => new PSItem {
-            ItemID = (ushort)itemArray[0],
-            Amount = (byte)itemArray[1],
-            State = string.IsNullOrEmpty(itemArray[2]?.ToString())
-                    ? []
-                    : itemArray[2].ToString().Split(',').Select(byte.Parse).ToArray()
-        })
-            .ToList();
-    }
+    [JsonProperty("matchId")]
+    internal int MatchId;
 
-    public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
-        throw new NotImplementedException("Serialization not implemented.");
-    }
+    [JsonProperty("match")]
+    internal PSMatch Match;
+
+    /// Steam64s the site is still waiting on a pick from, for the wait action.
+    [JsonProperty("waitingOn")]
+    internal List<string> WaitingOn = [];
+
+    [JsonProperty("selectionEndsAt")]
+    internal long SelectionEndsAt;
+
+    [JsonProperty("reason")]
+    internal string Reason;
 }

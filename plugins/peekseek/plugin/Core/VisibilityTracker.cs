@@ -29,7 +29,7 @@ internal static class VisibilityTracker {
     internal static void Tick(List<PSTeam> teams) {
         List<Player> alive = [];
         foreach (PSTeam team in teams) {
-            foreach (ulong user in team.Users) {
+            foreach (ulong user in team.Players) {
                 Player p = PlayerTool.getPlayer(new CSteamID(user));
                 if (p != null && !p.life.isDead && !p.movement.isSafe) alive.Add(p);
             }
@@ -77,7 +77,7 @@ internal static class VisibilityTracker {
 
     private static string TeamOf(List<PSTeam> teams, ulong steamID) {
         foreach (PSTeam team in teams) {
-            if (team.Users.Contains(steamID)) return team.Name;
+            if (team.Players.Contains(steamID)) return team.Name;
         }
         return null;
     }

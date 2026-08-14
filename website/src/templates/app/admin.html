@@ -16,7 +16,7 @@
     <div class = "matchGrid">
     {% for match in matches %}
 
-        <div class="matchGridElement {% if match.claimed not in (None, "0") %}clickable" href="steam://run/304930//+connect {{match.claimed}}"{% else %}"{% endif %}><div class="matchGridInner">
+        <div class="matchGridElement {% if match.connectCode() %}clickable" href="steam://run/304930//+connect {{match.connectCode()}}"{% else %}"{% endif %}><div class="matchGridInner">
 
             <span>Match.<b style="color:#20a0f0;">{{match.id}}</b></span>
             
@@ -37,13 +37,11 @@
 
             <button class="settingsButton" style="background-color:#faa;" onclick="forceStopMatch({{match.id}})"><img src="/static/img/stop.png" height="20" style="filter: invert(1);">Force stop</button>
 
-            {% if match.claimed not in (None, "0") %}
-            <button class="settingsButton" style="background-color:#aab;" onclick="window.location.href = 'steam://run/304930//+connect {{match.claimed}}'"><img src="/static/img/spectate.png" height="20" style="filter: invert(1);">Click to spectate</button>
+            {% if match.connectCode() %}
+            <button class="settingsButton" style="background-color:#aab;" onclick="window.location.href = 'steam://run/304930//+connect {{match.connectCode()}}'"><img src="/static/img/spectate.png" height="20" style="filter: invert(1);">Click to spectate</button>
             {% endif %}
 
-            <span style="color:#333;font-size:12px;">{% if match.claimed == None %}
-            Not started • 
-            {% endif %} {{fromTimestamp(match.time).strftime("%d/%m/%Y @ %H:%M:%S")}}</span> 
+            <span style="color:#333;font-size:12px;">{{match.statusLabel}} • {{fromTimestamp(match.time).strftime("%d/%m/%Y @ %H:%M:%S")}}</span> 
           
         </div></div>
         {% endfor %}

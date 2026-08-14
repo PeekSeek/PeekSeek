@@ -1,7 +1,7 @@
 """The PeekSeek FastAPI app — session middleware, routers, and error pages.
 
 One app serves everything: server-rendered pages, the browser JSON endpoints the
-site's own scripts call, and the `/unt/*` endpoints the Unturned game servers hit.
+site's own scripts call, and the `/server/v1/*` API the game servers run on.
 """
 
 from fastapi import Depends, FastAPI, Request
@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from src.core.settings import settings
 from src.dependencies import ActiveBan, LoginRedirect, load_user, templates
-from src.routes import admin, auth, esports, index, kits, pages, party, unturned, user
+from src.routes import admin, auth, esports, gameserver, index, kits, pages, party, user
 
 app = FastAPI(title="PeekSeek", dependencies=[Depends(load_user)])
 app.add_middleware(
@@ -23,7 +23,7 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=settings.public), name="static")
 
-for module in (index, pages, auth, user, kits, admin, esports, unturned, party):
+for module in (index, pages, auth, user, kits, admin, esports, gameserver, party):
     app.include_router(module.router)
 
 

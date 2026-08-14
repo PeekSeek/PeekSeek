@@ -35,8 +35,8 @@ internal abstract class LobbyManager {
         internal ushort SpareMagItemId;
         internal byte SpareMagFullStock;
 
-        /// Non-zero once matchmaking has paired this player up, until the match's
-        /// server claims it and they get relayed over.
+        /// Non-zero once matchmaking has paired this player up, until their match is
+        /// actually being hosted and they get relayed over to it.
         internal int MatchId;
 
         /// The player's Elo, re-asserted as their reputation on a timer because
@@ -48,7 +48,6 @@ internal abstract class LobbyManager {
         /// whose lookup has not landed has to be asked again rather than silently
         /// left without a rank for the rest of their session.
         internal bool EloKnown;
-        internal float EloRequestedAt;
 
         /// Kills in a row and the cooldowns on what they have already earned.
         internal readonly KillStreak Streak = new();
@@ -59,14 +58,13 @@ internal abstract class LobbyManager {
     }
 
     private static readonly Dictionary<ulong, PlayerState> Players = [];
-    private static float LastHeartbeatSent;
+    private static float LastRefreshSent;
     private static float LastMagazineCheck;
     private static float LastReputationSync;
     private static float LastArenaReset;
 
     private const float MagazineCheckIntervalSeconds = 2f;
     private const float ReputationSyncIntervalSeconds = 5f;
-    private const float EloRetryIntervalSeconds = 15f;
     private const float ProtectedNoticeIntervalSeconds = 3f;
     private const float StaminaTopUpIntervalSeconds = 0.5f;
     private const float HudIntervalSeconds = 1f;
@@ -153,10 +151,8 @@ internal abstract class LobbyManager {
 
         ForceSolo(player);
         SpawnPlayer(steamID, state);
-        RequestElo(steamID.m_SteamID, state, Time.realtimeSinceStartup);
-        if (queueing) {
-            RemoteAPI.SendHeartbeat(steamID.m_SteamID, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
-        }
+        if (queueing) RemoteAPI.RefreshQueued(steamID.m_SteamID);
+        else RemoteAPI.Refresh(steamID.m_SteamID);
 
         SendWelcome(player, queueing);
 
@@ -188,7 +184,7 @@ internal abstract class LobbyManager {
             return;
         }
         if (Players.Remove(steamID.m_SteamID)) {
-            RemoteAPI.SendQuit(steamID.m_SteamID);
+            RemoteAPI.LeaveQueue(steamID.m_SteamID);
         }
     }
 
@@ -535,11 +531,8 @@ internal abstract class LobbyManager {
         if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
 
         state.Queueing = !state.Queueing;
-        if (state.Queueing) {
-            RemoteAPI.SendHeartbeat(steamID.m_SteamID, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
-        } else {
-            RemoteAPI.SendQuit(steamID.m_SteamID);
-        }
+        if (state.Queueing) RemoteAPI.RefreshQueued(steamID.m_SteamID);
+        else RemoteAPI.LeaveQueue(steamID.m_SteamID);
         return state.Queueing;
     }
 
@@ -547,20 +540,33 @@ internal abstract class LobbyManager {
         return Players.TryGetValue(steamID.m_SteamID, out state);
     }
 
-    /// A matched player stops fighting: back to a spawn point, out of the queue
-    /// so the lobby stops heartbeating for them, and handed the link that logs
-    /// them in and lands them on their match page. Hitting /match while logged
-    /// out is itself what records it as the page to return to, so the site sends
-    /// them back there after login without needing a redirect parameter.
+    /// Everything the site said about one player, acted on in one place.
     ///
-    /// Having a match is what matters here, not being in this lobby's queue — a
-    /// match made on the site or in a party has to pull someone out of the arena
-    /// just the same, or they fight on unaware their match is waiting.
-    internal static void SendToMatch(ulong steam64, int matchId) {
+    /// Reads top to bottom as the player's journey: rank first, then "you have a
+    /// match", then "your match is ready, go". Each step only fires once because the
+    /// step before it moves the player's own state on.
+    internal static void ApplyPlayerState(ulong steam64, RemoteAPI.PlayerState remote, bool eloKnown) {
         if (!Players.TryGetValue(steam64, out PlayerState state)) return;
-        // A heartbeat or poll already in flight when the first one matched would
-        // otherwise teleport them a second time.
-        if (state.MatchId != 0) return;
+
+        if (eloKnown) {
+            state.Elo = remote.Elo;
+            state.EloKnown = true;
+        }
+
+        if (remote.MatchId != 0 && state.MatchId == 0) SendToMatch(steam64, state, remote.MatchId);
+        if (remote.RelayTo != null) RelayToMatch(steam64, state, remote.RelayTo);
+    }
+
+    /// A matched player stops fighting: back to a spawn point, out of the queue so the
+    /// lobby stops queueing for them, and handed the link that logs them in and lands
+    /// them on their match page. Hitting /match while logged out is itself what records
+    /// it as the page to return to, so the site sends them back there after login
+    /// without needing a redirect parameter.
+    ///
+    /// Having a match is what matters here, not being in this lobby's queue — a match
+    /// made on the site or in a party has to pull someone out of the arena just the
+    /// same, or they fight on unaware their match is waiting.
+    private static void SendToMatch(ulong steam64, PlayerState state, int matchId) {
         state.Queueing = false;
         state.MatchId = matchId;
 
@@ -577,14 +583,12 @@ internal abstract class LobbyManager {
             PeekSeekLobby.Instance.Translate("match_found_browser"), PeekSeekLobby.Config.szMatchURL);
     }
 
-    /// Once a game server has claimed the match it's ready to be played, so the
-    /// waiting player is handed over to it — the same relay the main plugin uses
-    /// to send everyone back here when a match ends. "0" is what a server too old
-    /// to report its own code claims with, and relaying there would drop them.
-    internal static void RelayToMatch(ulong steam64, string serverCode) {
-        if (!Players.TryGetValue(steam64, out PlayerState state) || state.MatchId == 0) return;
-        if (string.IsNullOrEmpty(serverCode) || serverCode == "0") return;
-        if (!ulong.TryParse(serverCode, out ulong serverId)) return;
+    /// The site only fills in a server code once the match is genuinely being hosted, so
+    /// this is the moment the player can be handed over and be sure of getting in — the
+    /// same relay the match plugin uses to send everyone back here when a match ends.
+    private static void RelayToMatch(ulong steam64, PlayerState state, string serverCode) {
+        if (state.MatchId == 0) return;
+        if (!ulong.TryParse(serverCode, out ulong serverId) || serverId == 0) return;
 
         Player player = PlayerTool.getPlayer(new CSteamID(steam64));
         if (player == null) return;
@@ -677,9 +681,9 @@ internal abstract class LobbyManager {
             TopUpMagazines();
         }
 
-        if (now - LastHeartbeatSent < PeekSeekLobby.Config.HeartbeatIntervalSeconds) return;
-        LastHeartbeatSent = now;
-        SendHeartbeats();
+        if (now - LastRefreshSent < PeekSeekLobby.Config.HeartbeatIntervalSeconds) return;
+        LastRefreshSent = now;
+        RefreshPlayers();
     }
 
     private static void TopUpMagazines() {
@@ -770,43 +774,25 @@ internal abstract class LobbyManager {
             (byte)Mathf.Min(Provider.clients.Count, byte.MaxValue));
     }
 
-    /// Unturned adjusts reputation itself when players kill each other, so this
-    /// keeps putting it back — the number over someone's head is their Elo and
-    /// nothing else. Players the site hasn't answered for yet are asked again on
-    /// the way past, since without an Elo there is nothing to assert.
+    /// Unturned adjusts reputation itself when players kill each other, so this keeps
+    /// putting it back — the number over someone's head is their Elo and nothing else.
+    /// A player the site has not answered for yet is skipped rather than stamped with a
+    /// zero; every refresh carries their Elo, so one blip no longer costs somebody their
+    /// rank for a whole session the way a single lookup on connect did.
     private static void SyncReputations() {
         if (!PeekSeekLobby.Config.ShowEloAsReputation) return;
 
-        float now = Time.realtimeSinceStartup;
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
             PlayerState state = entry.Value;
-
-            if (!state.EloKnown) {
-                if (now - state.EloRequestedAt >= EloRetryIntervalSeconds) RequestElo(entry.Key, state, now);
-                continue;
-            }
+            if (!state.EloKnown) continue;
 
             Player player = PlayerTool.getPlayer(new CSteamID(entry.Key));
             if (player == null) continue;
 
             // Asserted negative: a 300-Elo player carries -300 reputation in game.
-            int target = -state.Elo;
-            int drift = target - player.skills.reputation;
+            int drift = -state.Elo - player.skills.reputation;
             if (drift != 0) player.skills.askRep(drift);
         }
-    }
-
-    /// Asked for again until the site answers. A single fire-and-forget lookup on
-    /// connect meant one blip — a site restart, a timeout, a request that landed
-    /// before the site was up — left a player's Elo unknown for their whole
-    /// session, and since an unknown Elo has nothing to assert, their rank simply
-    /// never appeared and nothing said why.
-    private static void RequestElo(ulong steam64, PlayerState state, float now) {
-        state.EloRequestedAt = now;
-        RemoteAPI.FetchElo(steam64, elo => {
-            state.Elo = elo;
-            state.EloKnown = true;
-        });
     }
 
     /// Wipes the arena back to how it started: nothing left on the ground,
@@ -865,26 +851,20 @@ internal abstract class LobbyManager {
         }
     }
 
-    private static void SendHeartbeats() {
-        if (!PeekSeekLobby.Config.EnableQueue) return;
-
+    /// One request per player, every tick. Whether it queues them or only asks about
+    /// them is the only difference — both come back with the same answer, so there is no
+    /// second round trip between "you have a match" and "here is where it is".
+    private static void RefreshPlayers() {
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
-            // Already matched: stop asking for a match and start watching for the
-            // server that will host it, so they get relayed the moment it claims.
-            if (entry.Value.MatchId != 0) {
-                RemoteAPI.PollMatchStart(entry.Key, entry.Value.MatchId);
-                continue;
-            }
-            if (entry.Value.Queueing) {
-                RemoteAPI.SendHeartbeat(entry.Key, PeekSeekLobby.Config.GamemodeBitmask, PeekSeekLobby.Config.szRegion);
-                continue;
-            }
+            // Queueing has a side effect, so it is only ever used for someone who
+            // actually wants a match: asking with it would quietly undo a /noqueue, and
+            // would put a player who already has a match back in the queue for another.
+            bool wantsAMatch = PeekSeekLobby.Config.EnableQueue
+                && entry.Value.Queueing
+                && entry.Value.MatchId == 0;
 
-            // Out of this lobby's queue, but a match can still reach them from the
-            // site or a party, and that has to pull them out of the arena too.
-            // Heartbeating can't be used to ask: it enqueues as a side effect,
-            // which would quietly undo their /noqueue.
-            RemoteAPI.PollExistingMatch(entry.Key);
+            if (wantsAMatch) RemoteAPI.RefreshQueued(entry.Key);
+            else RemoteAPI.Refresh(entry.Key);
         }
     }
 }
