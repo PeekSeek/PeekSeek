@@ -25,8 +25,29 @@ class Stat(SQLModel, table=True):
     headshots: int = Field(default=0, nullable=False)
     damageDealt: int = Field(default=0, nullable=False)
     damageTaken: int = Field(default=0, nullable=False)
+    # Every shot that connected, and how many of those hit the head. Headshot *kills*
+    # (`headshots` above) are a far rarer thing than what a shooter means by "HS%": a
+    # kill only counts as one when the final blow of the fight happened to land on the
+    # skull, so in a mode where nothing dies to a single bullet that number sits at zero
+    # for players who hit heads constantly. HS% is derived from these two instead.
+    hits: int = Field(default=0, nullable=False)
+    headshotHits: int = Field(default=0, nullable=False)
 
     user: User = Relationship(back_populates="stats")
+
+    @property
+    def headshotPercent(self) -> float:
+        """Share of landed shots that hit the head, to one decimal.
+
+        Falls back to headshot kills over kills for players whose record predates hit
+        tracking, so an old profile still shows the number it always showed rather than
+        dropping to zero.
+        """
+        if self.hits:
+            return round(self.headshotHits / self.hits * 100, 1)
+        if self.kills:
+            return round(self.headshots / self.kills * 100, 1)
+        return 0.0
 
     @staticmethod
     def append(steam64, game: str, **kwargs) -> None:
@@ -46,13 +67,15 @@ class Stat(SQLModel, table=True):
                 stats = Stat(steam64=steam64, game=game, elo=300)
                 db.add(stats)
 
-            db.query(Stat).where(Stat.steam64 == steam64).update(
-                {
-                    k: (getattr(stats, k, 0) or 0) + v
-                    for k, v in kwargs.items()
-                    if v != 0
-                }
-            )
+            increments = {
+                k: (getattr(stats, k, 0) or 0) + v for k, v in kwargs.items() if v != 0
+            }
+            # An UPDATE with nothing to set is not valid SQL — it raises rather than
+            # doing nothing, which is what a result where every counter happened to be
+            # zero used to do to a whole match report.
+            if not increments:
+                return
+            db.query(Stat).where(Stat.steam64 == steam64).update(increments)
 
     @staticmethod
     def getTop10():

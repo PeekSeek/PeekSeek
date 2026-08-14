@@ -80,3 +80,36 @@ def test_logout_empties_the_whole_session(client, login, user_factory):
     login(client, user_factory(), lastPage="http://testserver/play", lastBanCheck=1)
     client.get("/auth/logout")
     assert client.get("/").status_code == 200
+
+
+def test_logging_in_replaces_the_uuid_a_returning_player_already_had(
+    client, monkeypatch, user_factory
+):
+    """The UUID authenticates on its own via `?uuid=`, so signing in has to mint a new
+    one. Handing back the stored one would leave a leaked token valid forever, and mean
+    signing in revoked nothing."""
+    player = user_factory(steam64=STEAM_ID)
+    _steam_accepts(monkeypatch)
+    _session(client)
+
+    client.get(CALLBACK)
+
+    with Session(core_db.engine) as s:
+        stored = s.query(data.User).where(data.User.steam64 == STEAM_ID).one()
+    assert stored.uuid != player.uuid
+
+    # Cleared so the fresh session cookie stops answering for them: what is under test
+    # is whether the *old* token still opens the door on its own.
+    client.cookies.clear()
+    assert client.get("/play", params={"uuid": player.uuid}).status_code == 302
+    assert client.get("/play", params={"uuid": stored.uuid}).status_code == 200
+
+
+def test_logging_in_the_first_time_creates_the_account(client, monkeypatch):
+    _steam_accepts(monkeypatch)
+    _session(client)
+
+    client.get(CALLBACK)
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.User).where(data.User.steam64 == STEAM_ID).one()

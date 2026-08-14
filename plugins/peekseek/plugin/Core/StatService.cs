@@ -44,6 +44,23 @@ internal static class StatService {
         GetOrCreate(player).Headshots++;
     }
 
+    /// One landed shot. Called from the damage hook rather than the kill hook, so it
+    /// counts what the shooter actually hit rather than only the shots that finished
+    /// somebody off.
+    internal static void RecordHit(CSteamID player, bool headshot) {
+        PSPlayerStat stat = GetOrCreate(player);
+        stat.Hits++;
+        if (headshot) stat.HeadshotHits++;
+    }
+
+    internal static ushort GetStatHits(CSteamID player) {
+        return Find(player)?.Hits ?? 0;
+    }
+
+    internal static ushort GetStatHeadshotHits(CSteamID player) {
+        return Find(player)?.HeadshotHits ?? 0;
+    }
+
     internal static void AddDamageDealt(CSteamID player, float damage) {
         GetOrCreate(player).DamageDealt += damage;
     }

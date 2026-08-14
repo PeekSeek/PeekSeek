@@ -228,11 +228,27 @@ def test_profile_page_renders_the_elo_trend_with_two_ranked_matches(
 
     data.MatchResult.recordFinalResults(
         matchIds[0],
-        {str(player.steam64): {"Kills": 4, "Deaths": 1, "Won": True, "Current Elo": 300, "Elo Change": 12}},
+        {
+            str(player.steam64): {
+                "Kills": 4,
+                "Deaths": 1,
+                "Won": True,
+                "Current Elo": 300,
+                "Elo Change": 12,
+            }
+        },
     )
     data.MatchResult.recordFinalResults(
         matchIds[1],
-        {str(player.steam64): {"Kills": 2, "Deaths": 5, "Won": False, "Current Elo": 312, "Elo Change": -5}},
+        {
+            str(player.steam64): {
+                "Kills": 2,
+                "Deaths": 5,
+                "Won": False,
+                "Current Elo": 312,
+                "Elo Change": -5,
+            }
+        },
     )
 
     r = client.get(f"/u/{player.steam64}")
@@ -243,8 +259,8 @@ def test_profile_page_renders_the_elo_trend_with_two_ranked_matches(
     assert 'id="eloChart"' in r.text
     assert '"elo": 312' in r.text  # 300 + 12, chronologically first
     assert '"elo": 307' in r.text  # 312 - 5, second
-    assert 'class="formpill win"' in r.text
-    assert 'class="formpill loss"' in r.text
+    assert 'class="matchrow win"' in r.text
+    assert 'class="matchrow loss"' in r.text
 
 
 def test_profile_page_with_no_matches_renders(client, user_factory):
@@ -330,7 +346,9 @@ def test_match_page_renders_the_commit_list(client, login, user_factory):
     assert '<button type="button" class="powerupbutton' in r.text
 
 
-def test_match_page_never_shows_a_kit_or_powerup_as_pre_selected(client, login, user_factory):
+def test_match_page_never_shows_a_kit_or_powerup_as_pre_selected(
+    client, login, user_factory
+):
     """A tile carrying .selectedChoice before the player has ever clicked would claim a
     choice was made when the saved pick is still None — the server falls back to the
     first kit/powerup at match time regardless, but the tile UI must not imply that's
@@ -364,6 +382,7 @@ def test_match_page_never_shows_a_kit_or_powerup_as_pre_selected(client, login, 
     # means no tile renders as selected until the player actually clicks one.
     assert '"currentkit": null' in r.text
     assert '"currentpowerup": null' in r.text
+
 
 def test_layout_scripts_are_actually_served(client):
     """Every script the layout pulls in has to exist on disk.

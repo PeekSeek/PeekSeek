@@ -81,16 +81,24 @@ def steam_callback(request: Request):
         return _back(request)
 
     steam64 = int(query.get("openid.claimed_id").split("/")[-1])
+    uuid = str(uuid4())
+
+    # A fresh UUID on every login, never the stored one. The UUID is a bearer token —
+    # `?uuid=` authenticates on its own — so proving ownership of the Steam account has
+    # to be what mints it. Handing back the existing one would mean a leaked or shared
+    # token stays valid no matter how many times its owner signs in, with /me/settings
+    # the only way to ever revoke it. Signing in now revokes every older session by
+    # itself, which is what signing in is expected to do.
     with opendb() as db:
         existing = db.query(data.User).where(data.User.steam64 == steam64).first()
         if existing:
-            request.session["uuid"] = existing.uuid
-            return _back(request)
+            db.query(data.User).where(data.User.steam64 == steam64).update(
+                {"uuid": uuid}
+            )
+        else:
+            db.add(data.User(steam64=steam64, uuid=uuid))
 
-        uuid = str(uuid4())
-        db.add(data.User(steam64=steam64, uuid=uuid))
-        request.session["uuid"] = uuid
-
+    request.session["uuid"] = uuid
     return _back(request)
 
 

@@ -44,16 +44,142 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 20px;
 
     background-image: url("/av.png");
     background-size: cover;
     background-position: center;
 
-    color: #fff;
-} #notStarted * {
+    color: var(--ink);
+}
+
+/* Two faces, one element. `waiting` is the bare splash for when there is no match to
+   describe; `intermission` is the roster read-out once there is. Only ever one at a
+   time, so neither has to know about the other's layout. */
+#notStarted .splash,
+#notStarted .intermission { display: none; }
+#notStarted.waiting .splash { display: flex; }
+#notStarted.intermission .intermission { display: flex; }
+
+#notStarted .splash {
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
     filter: opacity(.8);
 }
+
+#notStarted .splash h1 { font-size: 20vh; margin: 0; }
+#notStarted .splash span { font-size: 8vh; }
+
+/* The intermission owns the whole frame so the notch can sit against the top edge the
+   same way it does in play — a caster switching scenes should not see it jump. */
+#notStarted .intermission {
+    position: absolute;
+    inset: 0;
+    flex-direction: column;
+    align-items: center;
+}
+
+#notStarted .notch { position: absolute; top: 0; }
+
+/* Nothing is racing a round timer here and there are at most a couple of players a
+   side, so the whole screen is set larger than the in-play HUD: it is read from a
+   couch, across a gap where there is otherwise nothing to look at. */
+#notStarted .intermission { --card-text: 1.05vw; }
+
+.imcaption {
+    position: absolute;
+    top: 3.4vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2vw;
+    text-align: center;
+}
+
+.imcaption .mode {
+    font-size: calc(var(--card-text) * 1.05);
+    font-weight: 600;
+}
+
+.imcaption .rules {
+    font-size: calc(var(--card-text) * 0.82);
+    color: var(--muted);
+}
+
+.rosters {
+    margin: auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3.2vw;
+    width: 100%;
+}
+
+.rosters .col {
+    display: flex;
+    flex-direction: column;
+    gap: 1.4vw;
+    width: 26vw;
+}
+
+.rosters .col.r { align-items: flex-end; }
+
+.rosters .group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5vw;
+    width: 100%;
+}
+
+.rosters .tname {
+    font-size: calc(var(--card-text) * 1.15);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.rosters .col.r .tname { text-align: right; }
+
+.rosters .vs {
+    font-size: calc(var(--card-text) * 1.6);
+    color: var(--muted);
+    letter-spacing: 0.12em;
+}
+
+/* Same anatomy as the in-play card — name on one line, loadout on the next — so the
+   two screens read as one system rather than two designs. */
+.rosters .card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35vw;
+    padding: 0.8vw 1vw;
+    border-radius: 0.35vw;
+    width: 100%;
+}
+
+.rosters .card .nm {
+    font-size: var(--card-text);
+    font-weight: 600;
+}
+
+.rosters .card .l2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8vw;
+    font-size: calc(var(--card-text) * 0.86);
+}
+
+.rosters .col.r .card { text-align: right; }
+.rosters .col.r .card .l2 { flex-direction: row-reverse; }
+
+.rosters .kitname { color: var(--ink); }
+.rosters .pw { color: var(--muted); }
+
+/* A player still choosing fades rather than disappearing, the same rule the in-play
+   card uses for someone out of the round: the column must not reflow the moment
+   somebody locks in. */
+.rosters .card.pending { opacity: 0.45; }
+.rosters .waiting { color: var(--muted); font-style: italic; }
 
 #hud {
     color: #fff;

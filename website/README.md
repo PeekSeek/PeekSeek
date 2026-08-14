@@ -17,7 +17,7 @@
 
 PeekSeek is a single FastAPI app (port **8000**) that serves everything: the
 server-rendered pages, the JSON endpoints the site's own scripts call, and the
-`/unt/*` endpoints the Unturned game servers hit.
+`/server/v1/*` API the game servers run on — see [API.md](API.md) for that contract.
 
 ```
 public/               # css/js/images, served at /static
@@ -82,8 +82,8 @@ has never logged in; the Steam callback matches on `steam64`, so the row is reus
 first login rather than duplicated.
 
 `BOOTSTRAP_SERVERS` exists for the same reason on the other side of the contract: every
-`/unt/*` route 401s an IP that is not in `AuthorizedServers`, and nothing in the site adds
-one. Regions come from `[regions.names]` in `config.toml`. Addresses already present are
+`/server/v1/*` route 401s an IP that is not in `AuthorizedServers`, and nothing in the
+site adds one. Regions come from `[regions.names]` in `config.toml`. Addresses already present are
 left alone, so changing a region here does not overwrite the stored one.
 
 Non-secret config lives in [`src/config.toml`](src/config.toml). The three `[app]`

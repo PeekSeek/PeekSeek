@@ -99,12 +99,17 @@ function update() {
         return;
     }
 
+    if (data.status === "finished") {
+        showMatchOver();
+        return;
+    }
+
     document.getElementById("message").style.display = "none";
 
-    // Kits stop changing the instant the match is claimed (that's the snapshot the
-    // server pulls the loadout from), so that's also the moment there's nothing left
-    // to hide: reveal every roster together rather than opponents trickling in.
-    const picksDone = data.claimed !== null;
+    // Kits stop changing the instant the server is handed the match (that's the
+    // snapshot it pulls every loadout from), so that's also the moment there's nothing
+    // left to hide: reveal every roster together rather than opponents trickling in.
+    const picksDone = data.status === "live";
     const myTeam = getTeam(steam64);
     document.getElementById("commitlist").innerHTML = commitListHtml(picksDone, myTeam);
     document.getElementById("matchsettings").innerHTML = matchSettingsHtml();
@@ -114,12 +119,12 @@ function update() {
     document.getElementById("commitcount").innerHTML =
         everyone.length ? `<b>${pickedCount}</b>/${everyone.length} picked` : "";
 
-    // Picking is immediate client-side feedback; the server only claims the match on
-    // its own poll cycle, so there's a real gap between "everyone's picked" and a code
-    // showing up — that gap is what the progress line is for.
+    // Picking is immediate client-side feedback; the server that's holding this match
+    // only acts on its own poll cycle, so there's a real gap between "everyone's
+    // picked" and a code showing up — that gap is what the progress line is for.
     const allPicked = everyone.length > 0 && pickedCount === everyone.length;
     const connectProgress = document.getElementById("connectprogress");
-    if (allPicked && data.claimed === null) {
+    if (allPicked && data.status !== "live") {
         connectProgress.style.display = "flex";
         document.getElementById("connectcaption").innerHTML =
             `<b>Connecting…</b> ${data.params.map || ""}`;
@@ -206,22 +211,37 @@ function update() {
         document.getElementById("commitlist").style.display = "none";
         document.getElementById("connectprogress").style.display = "none";
         document.getElementById("picktimer").style.display = "none";
-        document.getElementById("message").innerHTML = "<h1>Waiting for server...</h1>Your match will start shortly.";
+        document.getElementById("message").innerHTML =
+            "<h1>Starting your match</h1><span>Your server is loading it now. This takes a few seconds.</span>";
         document.getElementById("message").style.display = "flex";
 
-        // "0" means the server that claimed the match is too old to report its
-        // server code, so there is nothing for a player to connect with.
-        if (data.claimed !== null && data.claimed !== "0") {
+        // Null until the server has actually been handed the match and is accepting
+        // players, so this button never appears before there is somewhere to go.
+        if (data.serverCode) {
             if ("users" in data) canInterval = false;
             document.getElementById("message").innerHTML =
-                `<h1>Server found</h1><span>Join the server within 2 minutes.</span>` +
-                `<a href="${connectUrl(data.claimed)}"><button class="mbutton">Connect to server</button></a>` +
-                `<button class="mbutton" onclick="navigator.clipboard.writeText('${data.claimed}')">Copy server code</button>`;
+                `<h1>Your match is ready</h1><span>Unturned should open on its own. Join within 2 minutes or the match is forfeited.</span>` +
+                `<a href="${connectUrl(data.serverCode)}"><button class="mbutton">Connect to server</button></a>` +
+                `<button class="mbutton" onclick="navigator.clipboard.writeText('${data.serverCode}')">Copy server code</button>`;
             document.getElementById("message").style.display = "flex";
             document.getElementById("type").innerHTML = "";
-            launchOnce(data.claimed);
+            launchOnce(data.serverCode);
         }
     }
+}
+
+/// A match can end while this page is open — someone's server went away, nobody
+/// turned up, or it was simply played and scored. Whatever the reason, the page has to
+/// say so and let the player leave, rather than sitting on a countdown forever.
+function showMatchOver() {
+    canInterval = false;
+    for (const id of ["turn", "type", "b1", "b2", "kits", "commitcount", "commitlist", "connectprogress", "picktimer"]) {
+        document.getElementById(id).style.display = "none";
+    }
+    document.getElementById("message").innerHTML =
+        `<h1>This match is over</h1><span>Nothing left to pick. Head back to matchmaking for the next one.</span>` +
+        `<a href="/play"><button class="mbutton">Back to matchmaking</button></a>`;
+    document.getElementById("message").style.display = "flex";
 }
 
 function coreDecide(params) {

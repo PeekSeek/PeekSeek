@@ -1,10 +1,18 @@
-"""Turning queued heartbeats into matches, and match results into stats.
+"""Turning queued players into matches, and match results into stats.
 
-The queue itself lives on UserHB (freshInQueue/dequeue) and stale-match
-cancellation on Match.cancelStaleUnclaimed — this module only orchestrates.
+The queue itself lives on UserHB (freshInQueue/dequeue) and a match's lifecycle on
+Match — this module only orchestrates.
+
+Matchmaking runs when a game server asks for work, never when a player asks for a
+match. A player queueing only ever adds themselves to the queue; the moment a server
+in their region is free, that server's own poll is what scans the queue, forms the
+best match it can, and takes it. That inversion is the whole point: a match cannot be
+created without a server already holding it, so there is no such thing as a match with
+nowhere to be played.
 """
 
 import logging
+from itertools import combinations
 from time import time
 
 from .db import open
@@ -14,33 +22,45 @@ from . import models as data
 mmconfig = settings.mmconfig
 
 
-def attemptCreateMatch(trackSteam64: int | None = None, region: str = "paris") -> bool:
-    """Scan the queue and create a match per gamemode that has enough players.
+def matchForServer(region: str, serverCode: str) -> "data.Match | None":
+    """Find this free server the best match it can host right now, and give it to it.
 
-    Returns True when trackSteam64 was placed into one of them.
+    Tried in order:
+
+    1. A match that already exists and has nobody to host it — a custom match, or an
+       event pairing. Those are made by players rather than by matchmaking, so they are
+       the ones actually waiting on a server.
+    2. A fresh match built out of the queue, created already assigned to this server.
+
+    Returns the match this server is now holding, or None when there is nothing to do.
+    """
+    waiting = data.Match.pendingFor(region)
+    if waiting:
+        return waiting.assignTo(serverCode)
+
+    return _matchFromQueue(region, serverCode)
+
+
+def _matchFromQueue(region: str, serverCode: str) -> "data.Match | None":
+    """The first gamemode in this region with a full complement of queued players, made
+    into a match and handed to the calling server.
+
+    One match per call on purpose: one server can only host one match, and a second
+    match made in the same breath would have no server of its own to go to.
     """
     with open() as db:
-        queued = data.UserHB.freshInQueue(db)
+        queued = [
+            heartbeat
+            for heartbeat in data.UserHB.freshInQueue(db)
+            if heartbeat.region == region
+        ]
 
-    perGamemode: dict[int, list] = {
-        gid: [] for gid in range(len(mmconfig["gamemodes"]))
-    }
-    for heartbeat in queued:
-        if heartbeat.region != region:
-            continue
-        for gid in perGamemode:
-            if heartbeat.gamemode & (2**gid):
-                perGamemode[gid].append(heartbeat)
-
-    tracked_matched = False
-    for gid, queueList in perGamemode.items():
-        players = _playersForMatch(queueList, mmconfig["gamemodes"][gid])
-        if not players:
-            continue
-        _createMatch(gid, players, region)
-        if trackSteam64 and str(trackSteam64) in [str(p) for p in players]:
-            tracked_matched = True
-    return tracked_matched
+    for gamemodeId, gamemode in enumerate(mmconfig["gamemodes"]):
+        candidates = [hb for hb in queued if hb.gamemode & (2**gamemodeId)]
+        players = _playersForMatch(candidates, gamemode)
+        if players:
+            return _createMatch(gamemodeId, players, region, serverCode)
+    return None
 
 
 def modesFittingParty(gamemode: int, partySize: int) -> int:
@@ -73,49 +93,161 @@ def _partyGroups(heartbeats: list) -> list[list[int]]:
     return [g for _, g in sorted(groups.items(), key=lambda kv: earliest[kv[0]])]
 
 
+# How far down the queue to look for a better roster than the one at the front. Every
+# combination of this many groups is tried, so it is a hard cap on the work done per
+# poll: at 8 the very worst case is 70 rosters to score, which is nothing.
+CANDIDATE_GROUPS = 8
+
+
 def _playersForMatch(queueList: list, mode: dict) -> list[int] | None:
-    """Fills every team of the mode at once, keeping each party together on a single
-    team — first-fit over the (small, fixed) number of teams. A party larger than one
-    team can't be matched here at all and just keeps waiting; nothing in this loop
-    ever splits one across two teams."""
+    """The best full roster this queue can currently produce, or None.
+
+    "Best" is the first roster, taken longest-waiting-players first, that clears both
+    of the fairness rules: teams within `max_team_elo_gap` of each other, and nobody
+    facing an opponent they have already played in the last `rematch_cooldown`. Failing
+    both is a real outcome — those players stay queued rather than being handed a
+    one-sided match or the same fixture over and over.
+
+    Parties are never split: a group either goes onto one team whole or waits.
+    """
     perTeam = mode["playersPerTeam"]
+    needed = perTeam * mode["teams"]
     groups = [g for g in _partyGroups(queueList) if len(g) <= perTeam]
+    recentOpponents = _recentOpponentPairs()
 
+    for roster in _rosters(groups[:CANDIDATE_GROUPS], needed):
+        teams = _balancedTeams(roster, mode)
+        if teams is None:
+            continue
+        if _eloGap(teams) > settings.max_team_elo_gap:
+            continue
+        if _wouldRepeatAFixture(teams, recentOpponents):
+            continue
+        return [player for team in teams for player in team]
+    return None
+
+
+def _rosters(groups: list[list[int]], needed: int) -> list[list[list[int]]]:
+    """Every set of party groups that exactly fills the mode, ordered so the ones built
+    from the longest-waiting players come first.
+
+    Combinations rather than a single first-fit pass because the front of the queue is
+    not always a legal or a fair match: sorting by group position keeps waiting time as
+    the tie-breaker while still letting a fair roster be found one player deeper.
+    """
+    matching = [
+        roster
+        for size in range(1, len(groups) + 1)
+        for roster in combinations(list(enumerate(groups)), size)
+        if sum(len(group) for _, group in roster) == needed
+    ]
+    matching.sort(key=lambda roster: [position for position, _ in roster])
+    return [[group for _, group in roster] for roster in matching]
+
+
+def _balancedTeams(groups: list[list[int]], mode: dict) -> list[list[int]] | None:
+    """Split these party groups across the mode's teams as evenly by Elo as they go.
+
+    Biggest groups first onto whichever team is currently weakest and still has room —
+    the standard greedy partition, which is more than enough at these sizes and keeps
+    every party whole. None when the groups simply do not fit the shape of the mode.
+    """
+    perTeam = mode["playersPerTeam"]
     teams: list[list[int]] = [[] for _ in range(mode["teams"])]
-    for group in groups:
-        for team in teams:
-            if len(team) + len(group) <= perTeam:
-                team.extend(group)
-                break
-        if all(len(team) == perTeam for team in teams):
-            break
 
-    if not all(len(team) == perTeam for team in teams):
-        return None
-    return [player for team in teams for player in team]
+    for group in sorted(groups, key=lambda g: (-len(g), -_groupElo(g))):
+        room = [team for team in teams if len(team) + len(group) <= perTeam]
+        if not room:
+            return None
+        min(room, key=_teamElo).extend(group)
+
+    return teams if all(len(team) == perTeam for team in teams) else None
 
 
-def _createMatch(gamemode: int, players: list[int], region: str) -> None:
+def _groupElo(group: list[int]) -> int:
+    return sum(data.Stat.getElo(steam64) for steam64 in group)
+
+
+def _teamElo(team: list[int]) -> float:
+    """A team's strength: the average Elo of the players on it. An average rather than a
+    total so the comparison still means something in a mode where a team can be short a
+    player."""
+    return _groupElo(team) / len(team) if team else 0
+
+
+def _eloGap(teams: list[list[int]]) -> float:
+    strengths = [_teamElo(team) for team in teams]
+    return max(strengths) - min(strengths)
+
+
+def _recentOpponentPairs() -> set[frozenset]:
+    """Every pair of players who have been put on opposing teams recently.
+
+    Read off the matches themselves rather than kept in a table of its own — a match
+    already records who played whom and when, and a second copy of that is a second
+    thing to keep in step. Counts matches that are still being played, not just
+    finished ones, so back-to-back rematches are caught while the first one is live.
+    """
+    cutoff = time() - settings.rematch_cooldown
+    with open() as db:
+        recent = db.query(data.Match).where(data.Match.time >= cutoff).all()
+
+    pairs = set()
+    for match in recent:
+        for index, team in enumerate(match.teams):
+            for opposing in match.teams[index + 1 :]:
+                for player in team["users"]:
+                    for opponent in opposing["users"]:
+                        pairs.add(frozenset((str(player), str(opponent))))
+    return pairs
+
+
+def _wouldRepeatAFixture(
+    teams: list[list[int]], recentOpponents: set[frozenset]
+) -> bool:
+    """Whether this roster puts any two players against each other again too soon.
+
+    One repeated pairing is enough to reject the whole roster, which is what makes
+    (a+b vs c+d) block (a+b vs c+e): a and b would be facing c for a second time even
+    though the fourth player changed.
+    """
+    return any(
+        frozenset((str(player), str(opponent))) in recentOpponents
+        for index, team in enumerate(teams)
+        for opposing in teams[index + 1 :]
+        for player in team
+        for opponent in opposing
+    )
+
+
+def _createMatch(
+    gamemode: int, players: list[int], region: str, serverCode: str
+) -> "data.Match":
     perTeam = mmconfig["gamemodes"][gamemode]["playersPerTeam"]
     teams = [
         [str(s) for s in players[i * perTeam : (i + 1) * perTeam]]
         for i in range(mmconfig["gamemodes"][gamemode]["teams"])
     ]
+    match = data.Match(
+        gamemode=gamemode,
+        teams=[
+            {"name": f"team_{data.User.getSteamData(t[0]).name}"[:15], "users": t}
+            for t in teams
+        ],
+        region=region,
+        # Assigned in the same breath as it is created: a matchmade match is only ever
+        # made for a server that has just said it is free, so it never exists in the
+        # unassigned state the way a custom or event match briefly does.
+        claimed=serverCode,
+    )
     with open() as db:
-        db.add(
-            data.Match(
-                gamemode=gamemode,
-                teams=[
-                    {
-                        "name": f"team_{data.User.getSteamData(t[0]).name}"[:15],
-                        "users": t,
-                    }
-                    for t in teams
-                ],
-                region=region,
-            )
-        )
+        db.add(match)
+        db.flush()
+        db.refresh(match)
+        db.expunge(match)
+
     data.UserHB.dequeue(players)
+    return match
 
 
 def attemptCreateEventMatch(trackSteam64: int, eventId: int) -> bool:
@@ -183,44 +315,72 @@ def _eventTeam(db, heartbeat, event) -> dict | None:
     }
 
 
+def normalizePlayerResult(player: dict) -> dict:
+    """One game server's report of one player, in the shape matchResults works in.
+
+    Accepts both the current server API's field names and the older `/unt/results`
+    ones, so a server that has not been updated yet still scores identically. Every
+    counter defaults, so a build that predates a given stat reports what it has rather
+    than failing the whole match.
+    """
+    return {
+        "steam64": str(player["steam64"]),
+        "won": bool(player.get("won", player.get("win", False))),
+        "kills": int(player.get("kills", 0)),
+        "deaths": int(player.get("deaths", 0)),
+        "headshotKills": int(player.get("headshotKills", player.get("headshots", 0))),
+        "hits": int(player.get("hits", 0)),
+        "headshotHits": int(player.get("headshotHits", 0)),
+        "damageDealt": int(player.get("damageDealt", 0)),
+        "damageTaken": int(player.get("damageTaken", 0)),
+    }
+
+
 def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
     """Record every player's kills/deaths/win and, for ranked modes, their Elo
-    change. Returns the per-player summary and the match's average Elo."""
-    avgElo = sum(data.Stat.getElo(u["steam64"]) for u in users) / len(users)
+    change. Returns the per-player summary and the match's average Elo.
+
+    Every player the server lists is scored, including ones who never fired a shot or
+    who disconnected — the server reports its whole roster, so leaving a match is a
+    loss like any other rather than a way to keep your Elo.
+    """
+    players = [normalizePlayerResult(u) for u in users]
+    avgElo = sum(data.Stat.getElo(p["steam64"]) for p in players) / len(players)
     results: dict = {}
 
-    for user in users:
-        won = bool(user["win"])
-        # .get() with a default so results from a plugin build that predates a given
-        # stat (e.g. the deployed 1.0) don't fail the whole match report.
-        headshots = user.get("headshots", 0)
-        damageDealt = user.get("damageDealt", 0)
-        damageTaken = user.get("damageTaken", 0)
+    for player in players:
+        won = player["won"]
         summary = {
-            "Kills": user["kills"],
-            "Deaths": user["deaths"],
-            "Headshots": headshots,
-            "Won": user["win"],
+            "Kills": player["kills"],
+            "Deaths": player["deaths"],
+            "Headshots": player["headshotKills"],
+            "Hits": player["hits"],
+            "HeadshotHits": player["headshotHits"],
+            "Won": won,
         }
 
         eloDelta = 0
         if gamemodeInfo["usesElo"]:
-            currentElo = data.Stat.getElo(user["steam64"])
-            eloDelta = _eloDelta(currentElo, avgElo, user["kills"], user["deaths"], won)
+            currentElo = data.Stat.getElo(player["steam64"])
+            eloDelta = _eloDelta(
+                currentElo, avgElo, player["kills"], player["deaths"], won
+            )
             summary = {"Elo Change": eloDelta, "Current Elo": currentElo} | summary
 
-        results[user["steam64"]] = summary
+        results[player["steam64"]] = summary
         data.Stat.append(
-            user["steam64"],
+            player["steam64"],
             "unt",
-            kills=user["kills"],
-            deaths=user["deaths"],
+            kills=player["kills"],
+            deaths=player["deaths"],
             wins=int(won),
             losses=int(not won),
             elo=eloDelta,
-            headshots=headshots,
-            damageDealt=damageDealt,
-            damageTaken=damageTaken,
+            headshots=player["headshotKills"],
+            hits=player["hits"],
+            headshotHits=player["headshotHits"],
+            damageDealt=player["damageDealt"],
+            damageTaken=player["damageTaken"],
         )
 
     return results, int(avgElo)
@@ -241,11 +401,13 @@ def _eloDelta(
     return max(delta, 100 - currentElo)
 
 
-def eventResults(eventId: int, matchid: int, *users: dict) -> str:
+def eventResults(eventId: int, matchid: int, *rawUsers: dict) -> str:
     """Bump event scores/matches-played from a finished match and format the
     Discord summary."""
     if not matchid:
         raise ValueError("Invalid Match Id")
+
+    users = [normalizePlayerResult(u) for u in rawUsers]
 
     with open() as db:
         match = db.query(data.Match).where(data.Match.id == matchid).first()
@@ -270,13 +432,13 @@ def eventResults(eventId: int, matchid: int, *users: dict) -> str:
             ownerResult = next((u for u in users if int(u["steam64"]) == owner), None)
             if not ownerResult:
                 continue
-            if ownerResult["win"]:
+            if ownerResult["won"]:
                 signup.score += 1
 
             results.append(
                 {
                     "name": signup.teamname,
-                    "win": ownerResult["win"],
+                    "win": ownerResult["won"],
                     "users": "\n".join(
                         f"**[{u['steam64']}]({settings.profile_url(u['steam64'])})**"
                         f" - [steam profile](https://steamcommunity.com/profiles/{u['steam64']})"

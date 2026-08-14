@@ -29,8 +29,10 @@ class Settings:
         self.region_names: dict[str, str] = dict(toml["regions"]["names"])
 
         self.queue_timeout: int = toml["matchmaking"]["queue_timeout"]
-        self.claim_timeout: int = toml["matchmaking"]["claim_timeout"]
+        self.host_grace: int = toml["matchmaking"]["host_grace"]
         self.party_timeout: int = toml["matchmaking"]["party_timeout"]
+        self.max_team_elo_gap: int = toml["matchmaking"]["max_team_elo_gap"]
+        self.rematch_cooldown: int = toml["matchmaking"]["rematch_cooldown"]
 
         self.discord_client_id: str = toml["discord"]["client_id"]
         self.discord_invite_url: str = toml["discord"]["invite_url"]

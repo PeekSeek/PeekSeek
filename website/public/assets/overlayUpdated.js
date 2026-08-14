@@ -1,10 +1,14 @@
 /* Stream overlay renderer.
  *
  * Polls /match/overlay and draws the live snapshot the game server pushes to
- * /unt/update (see PSUpdateState.cs). The structure is only rebuilt when the
- * roster changes; every other tick patches text and widths in place, because
- * re-creating the DOM twice a second would restart the kill feed and health
- * animations on every poll.
+ * /server/v1/matches/{id}/state (see PSUpdateState.cs). The structure is only rebuilt
+ * when the roster changes; every other tick patches text and widths in place, because
+ * re-creating the DOM twice a second would restart the kill feed and health animations
+ * on every poll.
+ *
+ * Before the first round there is no snapshot to draw, so the pre-match screen takes
+ * over: the intermission roster read-out while a match is being picked, and a bare
+ * splash when there is not even a roster yet.
  */
 
 const POLL_MS = 500;
@@ -331,9 +335,20 @@ function showBanner(event) {
     }, 3200);
 }
 
-function showSplash() {
-    document.getElementById("notStarted").style.display = "flex";
-    document.getElementById("notStartedText").innerHTML = (data.teams || [])
+/* What fills the gap before the first round. A match that has a roster gets the
+   intermission — both teams laid out with what they have picked — and anything else
+   falls back to the bare splash, since there is nothing to read out yet. */
+function showPreMatch() {
+    const screen = document.getElementById("notStarted");
+    screen.style.display = "flex";
+
+    const teams = data.teams || [];
+    const readable = teams.length === 2 && teams.every(t => (t.users || []).length);
+    screen.classList.toggle("intermission", readable);
+    screen.classList.toggle("waiting", !readable);
+
+    if (readable) drawIntermission(teams);
+    else document.getElementById("notStartedText").innerHTML = teams
         .map(t => `<b>${escapeHtml(t.name)}</b>`)
         .join(" <i>vs</i> ");
 
@@ -344,14 +359,83 @@ function showSplash() {
     }
 }
 
+/* Redrawn on every poll rather than patched in place, unlike the in-play HUD. Nothing
+   here animates — there is no kill feed to restart and no health bar to interrupt — so
+   the rebuild costs nothing, and a player locking in a pick shows up immediately. */
+function drawIntermission(teams) {
+    const [left, right] = teams;
+
+    document.getElementById("imLeftName").textContent = left.name;
+    document.getElementById("imRightName").textContent = right.name;
+    document.getElementById("imClock").innerHTML = clockHtml();
+
+    const config = data.config || {};
+    const params = data.params || {};
+    document.getElementById("imMode").textContent =
+        [config.name, params.map].filter(Boolean).join(" · ");
+    document.getElementById("imRules").textContent = rulesText(params);
+
+    document.getElementById("imLeft").innerHTML = groupHtml(left);
+    document.getElementById("imRight").innerHTML = groupHtml(right);
+}
+
+/* Counts down to the moment picking closes. Once it has passed the match is only
+   waiting on its server, and saying "0:00" forever would read as broken. */
+function clockHtml() {
+    const remaining = Math.ceil((data.startsAfter || 0) - Date.now() / 1000);
+    if (remaining <= 0) return "Starting";
+
+    const seconds = String(remaining % 60).padStart(2, "0");
+    return `Starts in <b>${Math.floor(remaining / 60)}:${seconds}</b>`;
+}
+
+/* Undecided settings are named as such rather than guessed at — during picking these
+   are genuinely still open, and showing a default would be a lie the moment somebody
+   picks the other one. */
+function rulesText(params) {
+    const setting = (label, value, on, off) =>
+        value === null || value === undefined ? `${label} undecided` : (value ? on : off);
+
+    return [
+        setting("Bullet drop", params.ballistics, "Bullet drop on", "Bullet drop off"),
+        setting("Movement", params.movement, "Old movement", "New movement")
+    ].join(" · ");
+}
+
+function groupHtml(team) {
+    const cards = (team.users || []).map(cardHtml).join("");
+    return `<div class="group"><span class="tname">${escapeHtml(team.name)}</span>${cards}</div>`;
+}
+
+/* A player who has not picked yet is shown pending rather than left out, so the column
+   is its final height from the first frame and nothing shifts as picks land. */
+function cardHtml(steam64) {
+    const name = (data.users || {})[steam64]?.name || steam64;
+    const picks = (data.params?.userData || {})[steam64] || {};
+
+    const body = picks.kit
+        ? `<span class="kitname">${escapeHtml(titleCase(picks.kit))}</span>` +
+          `<span class="pw">${escapeHtml(picks.powerup || "No powerup")}</span>`
+        : `<span class="waiting">picking…</span>`;
+
+    return `<div class="card flat${picks.kit ? "" : " pending"}">
+      <span class="nm">${escapeHtml(name)}</span>
+      <div class="l2">${body}</div>
+    </div>`;
+}
+
+function titleCase(value) {
+    return String(value).charAt(0).toUpperCase() + String(value).slice(1);
+}
+
 function render() {
     if (data === null) return;
 
     /* livedata starts as {} and is reset to {} when the match ends, so an
        empty snapshot means "not playing" just as much as a missing one. */
-    const state = data.claimed === null ? null : buildState(data);
+    const state = data.status === "live" ? buildState(data) : null;
     if (state === null) {
-        showSplash();
+        showPreMatch();
         return;
     }
 

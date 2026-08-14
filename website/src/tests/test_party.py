@@ -69,7 +69,10 @@ def test_accept_leaves_any_previous_party_first(client, login, user_factory):
     client.post("/party/invite", params={"target": floater.steam64})
     with Session(core_db.engine) as s:
         secondPartyId = (
-            s.query(data.Party).where(data.Party.steam64 == secondLeader.steam64).first().id
+            s.query(data.Party)
+            .where(data.Party.steam64 == secondLeader.steam64)
+            .first()
+            .id
         )
 
     login(client, floater)
@@ -157,9 +160,7 @@ def test_non_owner_member_cannot_start_the_queue(client, login, user_factory):
     login(client, member)
     client.post("/party/accept", params={"partyId": partyId})
 
-    r = client.get(
-        "/queue/heartbeat", params={"gamemode": DUO_BIT, "region": "paris"}
-    )
+    r = client.get("/queue/heartbeat", params={"gamemode": DUO_BIT, "region": "paris"})
     assert r.status_code == 403
 
 

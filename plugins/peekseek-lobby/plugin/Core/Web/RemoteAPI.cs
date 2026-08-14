@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -11,13 +10,20 @@ using Rocket.Core.Utils;
 
 namespace PeekSeekLobby.Core.Web;
 
+/// The lobby's side of the `/server/v1/*` contract.
+///
+/// One call per player per tick answers everything the lobby needs to know about them:
+/// their rank, whether they have a match, and whether that match is ready to be sent
+/// to. It used to take three — queue, then poll for a match, then poll the overlay for
+/// a server code — and each of those was a separate chance to leave somebody standing
+/// in the arena while their match waited for them.
 internal static class RemoteAPI {
-    private static string ApiUrl => PeekSeekLobby.Config.szAPIURL;
+    private static string Base => PeekSeekLobby.Config.szAPIURL.TrimEnd('/') + "/server/v1";
 
     private static HttpClient Client;
 
     internal static void Init() {
-        Client = new HttpClient();
+        Client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         Client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
@@ -26,195 +32,132 @@ internal static class RemoteAPI {
         Client = null;
     }
 
-    /// Fire-and-forget, same as the main PeekSeek plugin's RemoteAPI calls — a
-    /// dropped heartbeat costs nothing, the next tick's heartbeat covers for it.
-    /// A heartbeat that comes back carrying a match id means the player has been
-    /// matched, and the lobby's job is then to hand them over to the server
-    /// hosting it.
-    internal static void SendHeartbeat(ulong steam64, int gamemode, string region) {
+    /// Everything the lobby acts on for one player, as the site sees them.
+    internal class PlayerState {
+        internal int Elo;
+        internal int MatchId;
+
+        /// The server code to hand this player over to, or null while there is nowhere
+        /// to send them yet. Non-null is the site's promise that the match is being
+        /// hosted right now and this player will be let in.
+        internal string RelayTo;
+    }
+
+    /// Queue this player and read back where they stand. Both jobs in one call because
+    /// they are one question: a player standing in the lobby wants a match, and the
+    /// answer is either "not yet" or "here is where to go".
+    internal static void RefreshQueued(ulong steam64) {
+        Send(HttpMethod.Put,
+            $"{Base}/players/{steam64}/queue"
+            + $"?gamemodes={PeekSeekLobby.Config.GamemodeBitmask}&region={PeekSeekLobby.Config.szRegion}",
+            steam64);
+    }
+
+    /// The same read, without queueing them. That side-effect-free version is the whole
+    /// reason it exists: it is what lets the lobby pull someone who used /noqueue out of
+    /// the arena when a match reaches them from the site or from their party, without
+    /// quietly undoing their choice.
+    internal static void Refresh(ulong steam64) {
+        Send(HttpMethod.Get, $"{Base}/players/{steam64}", steam64);
+    }
+
+    private static void Send(HttpMethod method, string url, ulong steam64) {
         Task.Run(async () => {
             try {
-                HttpResponseMessage response = await Client.GetAsync(
-                    $"{ApiUrl}/unt/queue/heartbeat?steam64={steam64}&gamemode={gamemode}&region={region}"
-                );
-                if (!response.IsSuccessStatusCode) {
-                    ReportHeartbeatStatus(response.StatusCode);
-                    return;
-                }
-                ReportHeartbeatStatus(response.StatusCode);
+                HttpResponseMessage response = await Client.SendAsync(new HttpRequestMessage(method, url));
+                ReportStatus(response.StatusCode);
+                if (!response.IsSuccessStatusCode) return;
 
-                int matchId = MatchIdFrom(await ReadJson(response));
-                if (matchId <= 0) return;
+                JObject body = await ReadJson(response);
+                if (body == null) return;
 
-                TaskDispatcher.QueueOnMainThread(() => LobbyManager.SendToMatch(steam64, matchId));
+                PlayerState state = new() {
+                    Elo = Number(body["elo"]) ?? 0,
+                    MatchId = Number(body["matchId"]) ?? 0,
+                    RelayTo = Text(body["relayTo"])
+                };
+                bool eloKnown = body["elo"] != null && body["elo"].Type != JTokenType.Null;
+
+                TaskDispatcher.QueueOnMainThread(() => LobbyManager.ApplyPlayerState(steam64, state, eloKnown));
             } catch (Exception ex) {
-                Logger.LogError($"Failed to send queue heartbeat for {steam64}: {ex.Message}");
+                ReportFailure(ex.Message);
             }
         });
     }
 
-    private static HttpStatusCode? LastHeartbeatStatus;
-
-    /// Every connected player heartbeats every few seconds, so logging each
-    /// result would bury the console — this reports only when the outcome
-    /// changes, which is enough to see "401, the server IP isn't allow-listed"
-    /// or to watch it recover without the noise.
-    private static void ReportHeartbeatStatus(HttpStatusCode status) {
-        if (LastHeartbeatStatus == status) return;
-        LastHeartbeatStatus = status;
-
-        TaskDispatcher.QueueOnMainThread(() => {
-            if (status == HttpStatusCode.OK) {
-                Logger.Log($"Queue heartbeats are being accepted ({(int)status}).");
-                return;
-            }
-            Logger.LogWarning(
-                $"Queue heartbeats are being rejected with {(int)status} {status} — "
-                + $"players will not enter matchmaking. Check {ApiUrl} and that this server's IP is allow-listed.");
-        });
-    }
-
-    /// Null unless the response really is JSON. The endpoint 404s to an HTML
-    /// error page when the site is down or predates this route, and every player
-    /// heartbeats every few seconds — parsing that would bury the console in
-    /// identical parse errors.
+    /// Null unless the response really is JSON. The site answers with an HTML error page
+    /// when it is down or behind a proxy that is, and every player is refreshed every
+    /// few seconds — parsing that would bury the console in identical parse errors.
     private static async Task<JObject> ReadJson(HttpResponseMessage response) {
         if (response.Content.Headers.ContentType?.MediaType != "application/json") return null;
         return JObject.Parse(await response.Content.ReadAsStringAsync());
     }
 
-    private static int MatchIdFrom(JObject body) {
-        JToken matchId = body?["matchid"];
-        return matchId == null || matchId.Type == JTokenType.Null ? 0 : (int)matchId;
+    private static int? Number(JToken token) {
+        return token == null || token.Type == JTokenType.Null ? null : (int)token;
     }
 
-    /// Asks whether this player already has a match, without putting them in a
-    /// queue to get one. That side-effect-free check is the whole point: it's what
-    /// lets the lobby pull someone who has left its queue out of the arena when a
-    /// match reaches them from the site or a party.
-    internal static void PollExistingMatch(ulong steam64) {
+    private static string Text(JToken token) {
+        return token == null || token.Type == JTokenType.Null ? null : token.ToString();
+    }
+
+    internal static void LeaveQueue(ulong steam64) {
         Task.Run(async () => {
             try {
-                HttpResponseMessage response = await Client.GetAsync(
-                    $"{ApiUrl}/unt/queue/match?steam64={steam64}"
-                );
-                if (!response.IsSuccessStatusCode) return;
-
-                int matchId = MatchIdFrom(await ReadJson(response));
-                if (matchId <= 0) return;
-
-                TaskDispatcher.QueueOnMainThread(() => LobbyManager.SendToMatch(steam64, matchId));
-            } catch (Exception ex) {
-                Logger.LogError($"Failed to check for an existing match for {steam64}: {ex.Message}");
-            }
-        });
-    }
-
-    /// A matched player waits in the lobby until a game server claims their
-    /// match; this watches for that and hands them over when it happens.
-    internal static void PollMatchStart(ulong steam64, int matchId) {
-        Task.Run(async () => {
-            try {
-                string code = await FetchMatchServerCode(matchId);
-                if (string.IsNullOrEmpty(code)) return;
-
-                TaskDispatcher.QueueOnMainThread(() => LobbyManager.RelayToMatch(steam64, code));
-            } catch (Exception ex) {
-                Logger.LogError($"Failed to check match {matchId} for {steam64}: {ex.Message}");
-            }
-        });
-    }
-
-    /// The match's `claimed` value — the Unturned server code of whichever server
-    /// picked the match up, which is what a player connects with. Empty while no
-    /// server has claimed it yet, so the next poll can try again.
-    private static async Task<string> FetchMatchServerCode(int matchId) {
-        HttpResponseMessage response = await Client.GetAsync($"{ApiUrl}/match/overlay?id={matchId}");
-        if (!response.IsSuccessStatusCode) return null;
-
-        JObject body = await ReadJson(response);
-        return body?["claimed"]?.ToString();
-    }
-
-    internal static void SendQuit(ulong steam64) {
-        Task.Run(async () => {
-            try {
-                await Client.GetAsync($"{ApiUrl}/unt/queue/quit?steam64={steam64}");
+                await Client.DeleteAsync($"{Base}/players/{steam64}/queue");
             } catch (Exception ex) {
                 Logger.LogError($"Failed to dequeue {steam64}: {ex.Message}");
             }
         });
     }
 
-    /// A player's Elo, mirrored into their in-game reputation. The callback only
-    /// fires on a real answer, so a site that can't be reached leaves reputation
-    /// untouched rather than stamping a wrong number over it — the caller retries
-    /// until it lands.
-    internal static void FetchElo(ulong steam64, Action<int> onFetched) {
-        Task.Run(async () => {
-            try {
-                HttpResponseMessage response = await Client.GetAsync($"{ApiUrl}/reputation/{steam64}");
-                if (!response.IsSuccessStatusCode) {
-                    ReportEloStatus($"{(int)response.StatusCode} {response.StatusCode}");
-                    return;
-                }
-
-                JObject body = await ReadJson(response);
-                if (body?["elo"] == null) {
-                    ReportEloStatus("a reply that wasn't JSON carrying an elo");
-                    return;
-                }
-
-                ReportEloStatus(null);
-                int elo = (int)body["elo"];
-                TaskDispatcher.QueueOnMainThread(() => onFetched(elo));
-            } catch (Exception ex) {
-                ReportEloStatus(ex.Message);
-            }
-        });
-    }
-
-    private static string LastEloFailure = string.Empty;
-
-    /// Reports only when the outcome changes, the same rule the heartbeat status
-    /// uses — every player without an Elo is retried on a timer, so an unreachable
-    /// site would otherwise repeat itself into the console forever. Both failure
-    /// paths used to return in silence, which is exactly why a lobby showing
-    /// nobody's rank gave no hint as to why.
-    private static void ReportEloStatus(string failure) {
-        string current = failure ?? string.Empty;
-        if (LastEloFailure == current) return;
-        LastEloFailure = current;
-
-        TaskDispatcher.QueueOnMainThread(() => {
-            if (failure == null) {
-                Logger.Log("Elo lookups are being answered — reputation is showing rank.");
-                return;
-            }
-            Logger.LogWarning(
-                $"Elo lookups are failing with {failure} — reputation will not show rank. "
-                + $"Check {ApiUrl}/reputation/<steam64>.");
-        });
-    }
-
-    /// The public kit endpoint returns every category the player owns at once;
-    /// this reads out just the one the lobby actually equips people with.
+    /// The player's saved kit for one category, resolved into ready-to-equip items.
     internal static async Task<KitLoadout> FetchKit(ulong steam64, string category) {
         try {
-            HttpResponseMessage response = await Client.GetAsync($"{ApiUrl}/kit/{steam64}");
+            HttpResponseMessage response = await Client.GetAsync($"{Base}/players/{steam64}/kits");
             if (!response.IsSuccessStatusCode) return null;
 
-            string json = await response.Content.ReadAsStringAsync();
-            JObject body = JObject.Parse(json);
-            if (body[category] is not JObject categoryData || categoryData["items"] is not JArray items) return null;
+            JObject body = await ReadJson(response);
+            if (body?[category] is not JObject kit || kit["items"] is not JArray items) return null;
 
             return new KitLoadout {
                 Items = PSItem.ParseArray(items),
-                Magazine = categoryData["magazine"] is JArray magazine ? PSItem.Parse(magazine) : null
+                Magazine = kit["magazine"] is JObject magazine ? PSItem.Parse(magazine) : null
             };
         } catch (Exception ex) {
             Logger.LogError($"Failed to fetch kit for {steam64}: {ex.Message}");
             return null;
         }
+    }
+
+    private static HttpStatusCode? LastStatus;
+    private static string LastFailure;
+
+    /// Every connected player refreshes every few seconds, so logging each result would
+    /// bury the console. This reports only when the outcome changes, which is enough to
+    /// see "401, this server's IP isn't allow-listed" and to watch it recover.
+    private static void ReportStatus(HttpStatusCode status) {
+        if (LastStatus == status) return;
+        LastStatus = status;
+        LastFailure = null;
+
+        TaskDispatcher.QueueOnMainThread(() => {
+            if (status == HttpStatusCode.OK) {
+                Logger.Log($"Talking to {Base} — players are being queued and ranked.");
+                return;
+            }
+            Logger.LogWarning(
+                $"{Base} is answering {(int)status} {status} — players will not be matched, "
+                + "and rank will not show. Check the URL and that this server's IP is allow-listed.");
+        });
+    }
+
+    private static void ReportFailure(string message) {
+        if (LastFailure == message) return;
+        LastFailure = message;
+        LastStatus = null;
+
+        TaskDispatcher.QueueOnMainThread(() =>
+            Logger.LogWarning($"Could not reach {Base}: {message}. Players will not be matched."));
     }
 }
