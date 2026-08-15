@@ -13,6 +13,21 @@ if settings.db_url.startswith("sqlite"):
     if ":memory:" in settings.db_url:
         # One shared connection, or each pool checkout gets its own empty database.
         _engine_kwargs["poolclass"] = StaticPool
+else:
+    # Sized to the threadpool those sync endpoints run in, which is 40 threads wide, so
+    # 40 requests can be asking for a connection at once. SQLAlchemy's default pool is 5
+    # with 10 of overflow, and request 16 onwards simply waited: production filled the
+    # pool and started raising TimeoutError out of load_user, which every route depends
+    # on, so the whole site stalled rather than one page. The timeout is short because a
+    # request that cannot get a connection in ten seconds is better off failing than
+    # holding a thread for half a minute and taking the next one down with it.
+    _engine_kwargs |= {
+        "pool_size": 20,
+        "max_overflow": 20,
+        "pool_timeout": 10,
+        "pool_pre_ping": True,
+        "pool_recycle": 1800,
+    }
 
 engine = create_engine(settings.db_url, **_engine_kwargs)
 

@@ -495,6 +495,12 @@ class Match(SQLModel, table=True):
         `serverCode` is null until there is genuinely something to connect to. They are
         separate on purpose: a match has a server from the moment it is made, so "a
         server exists" stopped being the same question as "the match has started".
+
+        Call this *outside* the session the match was loaded in. It reads Steam for every
+        player, and holding a pooled connection across a call to a third party is what
+        drained the pool: the three routes that build this are the polled ones, so a slow
+        Steam reply took every connection with it and load_user started timing out on
+        every route in the site.
         """
         return {
             "id": self.id,

@@ -20,33 +20,34 @@ mmconfig = settings.mmconfig
 
 @router.get("/match")
 def match(request: Request, steam64: LoggedInSteam64):
+    current_id = data.User.getCurrentMatchId(steam64)
+    if not current_id:
+        request.session["lastError"] = "You are not in a match."
+        return RedirectResponse("/", status_code=302)
+
     with opendb() as db:
-        current_id = data.User.getCurrentMatchId(steam64)
-        if not current_id:
-            request.session["lastError"] = "You are not in a match."
-            return RedirectResponse("/", status_code=302)
-
         current = db.query(data.Match).where(data.Match.id == current_id).first()
-        localJson = current.localJson()
-        userData = current.meta["userData"][str(steam64)]
 
-        # Left as the player's real (possibly still-unmade) choice rather than
-        # defaulting to the first option — the match still falls back to
-        # kitsAllowed[0]/powerups[0] server-side (Kit.getItems, Match.allKitsLocked)
-        # if they never pick, but the tile UI should never claim a choice was made
-        # when it wasn't.
-        localJson["currentkit"] = userData["kit"]
-        localJson["currentpowerup"] = userData["powerup"]
+    localJson = current.localJson()
+    userData = current.meta["userData"][str(steam64)]
 
-        return templates.TemplateResponse(
-            request=request,
-            name="app/match.html",
-            context={
-                "data": json.dumps(localJson),
-                "dataAsDict": localJson,
-                "len": len,
-            },
-        )
+    # Left as the player's real (possibly still-unmade) choice rather than
+    # defaulting to the first option — the match still falls back to
+    # kitsAllowed[0]/powerups[0] server-side (Kit.getItems, Match.allKitsLocked)
+    # if they never pick, but the tile UI should never claim a choice was made
+    # when it wasn't.
+    localJson["currentkit"] = userData["kit"]
+    localJson["currentpowerup"] = userData["powerup"]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="app/match.html",
+        context={
+            "data": json.dumps(localJson),
+            "dataAsDict": localJson,
+            "len": len,
+        },
+    )
 
 
 @router.get("/match/current")
@@ -69,7 +70,7 @@ def match_current(steam64: ApiSteam64, id: int | None = None):
             )
             current.meta = resolved
 
-        return current.localJson()
+    return current.localJson()
 
 
 @router.get("/match/overlay")
@@ -83,9 +84,10 @@ def match_overlay(id: int | None = None, createdBy: int | None = None):
 
     with opendb() as db:
         current = db.query(data.Match).where(data.Match.id == matchid).first()
-        if not current:
-            raise HTTPException(status_code=404, detail="No match found.")
-        return current.localJson()
+
+    if not current:
+        raise HTTPException(status_code=404, detail="No match found.")
+    return current.localJson()
 
 
 @router.post("/match/decide")

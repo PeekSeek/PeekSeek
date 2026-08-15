@@ -182,6 +182,9 @@ class User(SQLModel, table=True):
         try:
             raw = steam.get_steam_user_data(steam64)
         except Exception:
+            raw = None
+
+        if not raw:
             return None
 
         return {"name": raw.get("personaname"), "avatar": raw.get("avatarfull")}

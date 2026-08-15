@@ -11,7 +11,10 @@ DEFAULT_AVATAR = (
     "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg"
 )
 
-_user_cache: TTLCache = TTLCache(maxsize=512, ttl=60)
+# Every page render asks Steam about the signed-in user, so this window is how often a
+# blocking third-party call lands on the critical path of an ordinary page. A persona
+# name or avatar changing five minutes late costs nobody anything.
+_user_cache: TTLCache = TTLCache(maxsize=512, ttl=300)
 _server_cache: TTLCache = TTLCache(maxsize=128, ttl=120)
 _describe_cache: TTLCache = TTLCache(maxsize=64, ttl=60)
 
@@ -42,14 +45,26 @@ def _persist_steam_data(steam64: int, raw: dict) -> None:
 
 
 @cached(_user_cache, key=lambda steam64: hashkey(steam64))
-def get_steam_user_data(steam64: int) -> dict:
-    r = requests.get(
-        f"{STEAM_API}/ISteamUser/GetPlayerSummaries/v2",
-        {"key": settings.steam_api_key, "format": "json", "steamids": [steam64]},
-        timeout=STEAM_TIMEOUT,
-    )
-    r.raise_for_status()
-    data = r.json()["response"]["players"][0]
+def get_steam_user_data(steam64: int) -> dict | None:
+    """What Steam says about a player, or None if it will not say.
+
+    None rather than a raised exception so that a *failure* is cached too, for the same
+    reason Server.describe caches one. A raise is never stored, so while Steam was slow
+    every single page render paid the full timeout again: the signed-in user is looked up
+    on every render, and with the site's threadpool 40 threads wide that is how a slow
+    Steam turned into a slow PeekSeek instead of a page missing its avatars.
+    """
+    try:
+        r = requests.get(
+            f"{STEAM_API}/ISteamUser/GetPlayerSummaries/v2",
+            {"key": settings.steam_api_key, "format": "json", "steamids": [steam64]},
+            timeout=STEAM_TIMEOUT,
+        )
+        r.raise_for_status()
+        data = r.json()["response"]["players"][0]
+    except Exception:
+        return None
+
     _persist_steam_data(steam64, data)
     return data
 
@@ -71,9 +86,13 @@ class User:
     def __init__(self, steam64: int):
         try:
             d = get_steam_user_data(steam64)
-            self.name = d["personaname"]
-            self.avatar = d["avatarfull"]
         except Exception:
+            d = None
+
+        if d:
+            self.name = d.get("personaname", "Nameless")
+            self.avatar = d.get("avatarfull", DEFAULT_AVATAR)
+        else:
             stored = _get_stored_steam_data(steam64)
             if stored:
                 self.name = stored.get("name", "Nameless")
