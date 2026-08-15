@@ -49,7 +49,7 @@ internal class StatsCommand : IRocketCommand {
     /// can run without a live Unturned host in a unit test.
     internal static string Format(string name, byte kills, byte deaths, byte headshots) {
         int hsPercent = kills > 0 ? headshots * 100 / kills : 0;
-        return $"{name} — {kills}K {deaths}D ({hsPercent}% HS)";
+        return $"{name}: {kills}K {deaths}D ({hsPercent}% HS)";
     }
 
     private static void Reply(UnturnedPlayer to, string message) {

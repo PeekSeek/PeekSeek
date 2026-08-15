@@ -59,17 +59,17 @@ public class PeekSeek : RocketPlugin<PeekSeekConfiguration> {
         { "round_start", "<color=white>Round {0}.</color> {1}" },
         { "round_won", "<color=white>{0}</color> won round {1}. {2}" },
         { "match_won", "<color=white>{0}</color> wins the match {1}. Well played." },
-        { "match_forfeit", "<color=white>{0}</color> takes the match — nobody from the other side turned up." },
+        { "match_forfeit", "<color=white>{0}</color> takes the match. Nobody from the other side turned up." },
         { "match_over", "Match over. Sending you back to the lobby." },
 
         { "ace", "<color=white>{0}</color> aced the round." },
-        { "mvp", "MVP <color=white>{0}</color> — <color=white>{1}</color> kills, <color=white>{2}%</color> headshots." },
+        { "mvp", "MVP <color=white>{0}</color>. <color=white>{1}</color> kills, <color=white>{2}%</color> headshots." },
         { "revenge", "Revenge. You got <color=white>{0}</color> back." },
-        { "close_call", "That was close — you finished the round on <color=white>{0} HP</color>." },
+        { "close_call", "You finished the round on <color=white>{0} HP</color>. That was close." },
         { "round_damage", "Your round: {0}" },
         // Ping scaling is invisible otherwise: the shooter just sees their hits do less
         // than they should and concludes the server is broken.
-        { "damage_reduced", "Your damage is <color=white>cut to {0}%</color> — your ping is <color=white>{1}ms</color>." },
+        { "damage_reduced", "Your damage is <color=white>cut to {0}%</color>. Your ping is <color=white>{1}ms</color>." },
 
         { "death_fall", "You fell to your death." },
         { "death_drown", "You drowned." },

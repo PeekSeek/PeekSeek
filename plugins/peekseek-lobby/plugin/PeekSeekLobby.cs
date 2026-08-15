@@ -82,7 +82,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "discord_prompt", "Join the PeekSeek Discord for matches, tournaments and updates!" },
         // Said the moment a match lands, then counted down, so nobody is teleported
         // out of a fight without warning and without knowing why.
-        { "match_found_warning", "<color=white>Match found.</color> Finish up — you are out of the arena in <color=white>{0}s</color>." },
+        { "match_found_warning", "<color=white>Match found.</color> You are out of the arena in <color=white>{0}s</color>. Finish up." },
         { "match_countdown", "Leaving for your match in <color=white>{0}</color>..." },
 
         { "match_found", "<color=white>Match found.</color> Open the page that just appeared to log in and pick your kit." },
