@@ -12,6 +12,8 @@
 
     /* One size for every piece of text on a player card. */
     --card-text: 0.82vw;
+    /* Height of an item icon in a loadout row. */
+    --slot: 1.35vw;
     /* Notch corner radius, reused by the two inverse fillets. */
     --notch-r: 0.7vw;
 }
@@ -405,11 +407,17 @@ body {
     to { transform: translateX(-100%); }
 }
 
-/* One height for every item, gun included — no width constraint, so each icon keeps its
+/* One height for every item, gun included, capped rather than set so each icon keeps its
    own aspect ratio instead of being squashed into a square (which is what made a gun
-   suddenly look like a normal item any time the loadout re-rendered). */
-.slot { position: relative; display: grid; place-items: center; flex: none; height: 1.35vw; }
-.slot img { height: 100%; width: auto; object-fit: contain; display: block; }
+   suddenly look like a normal item any time the loadout re-rendered).
+
+   The cap has to be an absolute length. `height: 100%` here resolved against the slot's
+   own grid row, which is auto-sized, so the percentage counted as auto while that row was
+   being measured and the row grew to the icon's source height instead. Source icons run
+   up to 2048px tall, so every item painted at full size and spilled out of the card,
+   which is what made the loadout row look empty. */
+.slot { position: relative; display: grid; place-items: center; flex: none; height: var(--slot); }
+.slot img { max-height: var(--slot); max-width: calc(var(--slot) * 3); display: block; }
 .col.r .slot.gun img { transform: scaleX(-1); }
 
 .slot .n {

@@ -11,7 +11,7 @@
  * splash when there is not even a roster yet.
  */
 
-const POLL_MS = 500;
+const POLL_MS = 250;
 const KILL_LIFETIME_MS = 6000;
 const ICON_BASE = "/static/unturned/";
 const DEFAULT_ROUNDS_TO_WIN = 3;
@@ -123,7 +123,10 @@ function buildState(payload) {
                         deaths: pick(stats, "deaths", "Deaths") ?? 0,
                         headshots: pick(stats, "headshots", "Headshots") ?? 0,
                         equipped: pick(stats, "equipped", "Equipped") ?? 0,
-                        inventory: pick(stats, "inventory", "Inventory") || [],
+                        inventory: (pick(stats, "inventory", "Inventory") || []).map(item => ({
+                            id: pick(item, "id", "Id"),
+                            amount: pick(item, "amount", "Amount") ?? 1
+                        })),
                         totalAmmo: pick(stats, "totalAmmo", "TotalAmmo") ?? 0
                     };
                 })
@@ -208,7 +211,8 @@ function mount(state) {
             ammo: el.querySelector(".ammo"),
             reveal: el.querySelector(".reveal"),
             gauge: el.querySelector(".hp i"),
-            health: null
+            health: null,
+            loadout: null
         });
     });
 
@@ -262,20 +266,33 @@ function apply(state) {
             `<span><b>${user.kills}</b>K</span>` +
             `<span><b>${user.deaths}</b>D</span>` +
             `<span><b>${hsPercent(user)}</b>%</span>`;
-        c.kit.innerHTML = (user.equipped ? slotHtml({ id: user.equipped, amount: 1 }, "gun") : "") +
-            loadout(user, user.powerupIds).map(item => slotHtml(item)).join("");
+        /* Rewritten only when what they carry actually changes. Rebuilding this row every
+           poll throws away and re-decodes every icon on the card, and the source icons
+           are whole-megapixel PNGs, so it is wasted work that only gets worse the faster
+           this polls. Everything else on the card is patched in place, and this was the
+           one piece that was not. */
+        const carried = loadout(user, user.powerupIds);
+        const kit = [user.equipped, ...carried.map(item => `${item.id}x${item.amount}`)].join(" ");
+        if (c.loadout !== kit) {
+            c.loadout = kit;
+            c.kit.innerHTML = (user.equipped ? slotHtml({ id: user.equipped, amount: 1 }, "gun") : "") +
+                carried.map(item => slotHtml(item)).join("");
+        }
+
         c.ammo.textContent = user.totalAmmo > 0 ? user.totalAmmo : "";
 
         c.reveal.textContent = user.powerup || "";
         c.reveal.classList.toggle("has", !!user.powerup);
-        if (user.state === "dead") {
-            /* Nothing under the cover is worth revealing for someone who is out —
-               leave it in place for the rest of the round. */
+        /* The cover is only ever placed or pulled back at the start of a round. Someone
+           already out keeps it, since there is nothing under it worth revealing, and
+           everyone else gets it slid away. Dying mid-round does not put it back: their
+           loadout is exactly what a caster wants to see once they are down. */
+        if (roundStarted) {
             c.reveal.classList.remove("leaving");
-        } else if (roundStarted) {
-            c.reveal.classList.remove("leaving");
-            void c.reveal.offsetWidth;
-            c.reveal.classList.add("leaving");
+            if (user.state !== "dead") {
+                void c.reveal.offsetWidth;
+                c.reveal.classList.add("leaving");
+            }
         }
 
         /* Flash the card when they lost health since the last poll. */
