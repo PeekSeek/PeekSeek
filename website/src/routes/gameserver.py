@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.core.settings import settings
 from src.core.db import open as opendb
 from src.core import models as data
-from src.core import matchmaking
+from src.core import matchmaking, notify
 from src.core.webhook import Webhook
 from src.dependencies import GameServer, JsonBody, authorized_server
 
@@ -304,6 +304,53 @@ def _score(match: data.Match, payload: dict) -> None:
     Webhook(f"Match.{match.id} ({match.region})").info(
         "Results", f"***Average Elo** {avgElo}*\n\n{lines}"
     )
+    _postResultPublicly(match, result, avgElo)
+
+
+def _postResultPublicly(match: data.Match, result: dict, avgElo: int) -> None:
+    """The same result again, in the channel players actually read.
+
+    Separate from the Webhook call above rather than replacing it: that one goes to
+    the ops log and carries whatever an on-call reader needs, this one is a scoreboard
+    for people deciding whether anything is happening here. Twenty of these on a
+    Friday evening is the cheapest proof the game is alive that we have.
+    """
+    winners = [
+        steam64 for steam64, stats in result.items() if stats.get("Won")
+    ]
+    names = {
+        steam64: data.User.getSteamData(steam64).name for steam64 in result
+    }
+    scoreline = " vs ".join(
+        f"**{names[steam64]}**" if steam64 in winners else names[steam64]
+        for steam64 in result
+    )
+
+    notify.send_discord_channel(
+        settings.queue_log_channel,
+        embed={
+            "title": mmconfig["gamemodes"][match.gamemode]["name"],
+            "url": f"{settings.base_url}/match/{match.id}",
+            "description": scoreline,
+            "color": 0x00FF00,
+            "fields": [
+                {
+                    "name": names[steam64],
+                    "value": (
+                        f"{stats['Kills']}K {stats['Deaths']}D"
+                        + (
+                            f" · {stats['Elo Change']:+} Elo"
+                            if "Elo Change" in stats
+                            else ""
+                        )
+                    ),
+                    "inline": True,
+                }
+                for steam64, stats in result.items()
+            ],
+            "footer": {"text": f"Average Elo {avgElo} · {match.region}"},
+        },
+    )
 
 
 def _roundScore(match: data.Match) -> list:
@@ -339,6 +386,22 @@ def _player(steam64: int) -> dict:
         "matchId": matchId or None,
         "relayTo": relayTo,
     }
+
+
+@router.post("/lobby/population")
+def lobbyPopulation(server: GameServer, payload: JsonBody):
+    """How many players this lobby has in its arena right now.
+
+    Sent once per heartbeat for the whole server rather than per player, because it
+    is one fact about the server and not a fact about anybody in it. Nothing reads
+    the reply — this exists so the site can say how alive the game is somewhere the
+    Unturned browser cannot reach, which today means the Discord counter.
+
+    Body:
+        players  how many are connected to the lobby, arena and queue alike.
+    """
+    data.LobbyPopulation.report(server.address, int(payload.get("players", 0)))
+    return {"status": "recorded"}
 
 
 @router.get("/players/{steam64}")

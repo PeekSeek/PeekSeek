@@ -2,19 +2,16 @@
 
 from time import time
 
-import requests
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 
 from src.core.settings import settings
 from src.core.db import open as opendb
 from src.core import models as data
-from src.core import matchmaking
+from src.core import matchmaking, notify
 from src.dependencies import ApiSteam64, templates
 
 router = APIRouter()
-
-DISCORD_API = "https://discord.com/api/v10"
 
 
 @router.get("/")
@@ -161,24 +158,16 @@ def _ping_if_queueing_alone(region):
         ]
     if recent:
         return
-    try:
-        requests.post(
-            f"{DISCORD_API}/channels/{channel}/messages",
-            headers={
-                "Authorization": f"Bot {settings.bot_token}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "content": (
-                    f"Somebody has started queue'ing all alone in "
-                    f"`{settings.region_names.get(region, 'A region')}`! "
-                    f"Help them [**find a match**](<{settings.base_url}>) "
-                    f"by going to [{settings.domain}](<{settings.base_url}>)."
-                )
-            },
-        )
-    except requests.RequestException:
-        pass
+
+    notify.send_discord_channel(
+        channel,
+        content=(
+            f"Somebody has started queue'ing all alone in "
+            f"`{settings.region_names.get(region, 'A region')}`! "
+            f"Help them [**find a match**](<{settings.base_url}>) "
+            f"by going to [{settings.domain}](<{settings.base_url}>)."
+        ),
+    )
 
 
 @router.get("/queue/quit")

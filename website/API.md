@@ -150,6 +150,33 @@ arena, and asking with `PUT` would quietly put them back in the queue.
 `GET /matches/{id}` answers the same `status` and `relayTo` for one match, for anything
 watching a match it is not hosting.
 
+## Lobby population
+
+| Route | What it does |
+|---|---|
+| `POST /lobby/population` | How many players this server has right now. |
+
+```jsonc
+{"players": 6}
+```
+
+Sent once per heartbeat for the whole server, not once per player: it is a fact about
+the server rather than about anybody in it. Nothing reads the reply.
+
+**Report only the players who are not on a match.** The site counts every roster it
+handed out by itself, so a player standing in the arena picking their kit is already
+counted there. Sending them here too counts them twice. This is what lets the two
+halves add up: lobbies report themselves, match servers are never asked at all.
+
+**The queue is not this number and cannot stand in for it.** A lobby may hold players
+back from queueing to keep its own browser listing worth joining, so a busy arena can
+honestly report nobody queueing at all. Anything that wants to say how alive the game is
+(the Discord counter today) has to ask this, or it will announce an empty server with
+six people fighting in it.
+
+A server that stops reporting drops out after 30 seconds rather than being trusted,
+so a lobby that crashed with eleven people in it stops advertising them.
+
 ## Matchmaking rules
 
 Two rules decide whether a roster is allowed to become a match. Failing them is a real

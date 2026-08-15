@@ -5,10 +5,11 @@ from .kit import Kit
 from .party import Party, UserHB
 from .event import Event, EventSignup
 from .match import Match, MatchResult
-from .server import AuthorizedServer, ServerRequest
+from .server import AuthorizedServer, LobbyPopulation, ServerRequest
 
 __all__ = [
     "AuthorizedServer",
+    "LobbyPopulation",
     "ServerRequest",
     "Stat",
     "Hlwn25",

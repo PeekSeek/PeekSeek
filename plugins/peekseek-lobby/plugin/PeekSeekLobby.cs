@@ -71,6 +71,24 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "leaderboard_empty", "<color=white>Round over.</color> Nobody scored a kill. Arena and scores reset." },
         { "arena_reset", "Arena cleared and scores reset. <color=white>Go.</color>" },
 
+        // The solo range. Said to somebody who is on their own, so it leads with
+        // the fact that they are — being first in is the thing they are deciding
+        // what to do about.
+        { "range_hint", "Nobody else here yet. <color=white>/range</color> puts up a timed target run while you wait." },
+        { "range_started", "<color=white>{0} targets.</color> One hit each. <color=white>Go.</color>" },
+        { "range_hit", "<color=white>{0}</color> left." },
+        { "range_done", "Cleared in <color=white>{0}s</color>. Your best is <color=white>{1}s</color>." },
+        { "range_done_best", "Cleared in <color=white>{0}s</color>. <color=white>New personal best.</color>" },
+        { "range_stopped", "Targets <color=white>cleared</color>." },
+        { "range_not_alone", "The range is for when you are here on your own. There are <color=white>{0}</color> others in the arena to shoot at." },
+        { "range_unavailable", "The range isn't set up on this server." },
+        { "range_ended_players", "<color=white>Somebody joined.</color> Targets cleared, back to the arena." },
+
+        // Framed as warming the arena up rather than as a restriction, because that
+        // is what it is: they are in the queue, this lobby just is not volunteering
+        // them for a match while it is this quiet.
+        { "queue_held", "Warming up the arena first. Matches start once there are <color=white>{0}+</color> here, and you are still in the queue." },
+
         { "queued", "You are back in the matchmaking queue." },
         { "not_queued", "You have <color=white>left the queue</color>. You will not be matched." },
         { "afk_on", "You are <color=white>AFK</color> and stay out of the arena until you type <color=white>/afk</color> again. You are still in the queue." },
