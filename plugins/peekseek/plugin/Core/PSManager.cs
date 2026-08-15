@@ -270,6 +270,11 @@ internal abstract class PSManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
+        if (!BelongsHere(steamID)) {
+            RelayToLobby(player);
+            return;
+        }
+
         if (IsSpectator(steamID)) {
             UnturnedPlayer unturnedPlayer = UnturnedPlayer.FromPlayer(player);
             R.Permissions.GetGroups(unturnedPlayer, true).ForEach(r => R.Permissions.RemovePlayerFromGroup(r.Id, unturnedPlayer));
@@ -320,29 +325,51 @@ internal abstract class PSManager {
         R.Permissions.RemovePlayerFromGroup(PeekSeek.Config.szSpectatorGroup, unturnedPlayer);
     }
 
-    private static void OnCheckValidWithExplanation(ValidateAuthTicketResponse_t callback, ref bool isValid, ref string explanation) {
-        SteamPending pending = Provider.pending.First(
-            x => x.playerID.steamID == callback.m_SteamID
-        );
+    /// Whether this connection is one of the people this server's current match is for.
+    /// Everyone else is a stranger who typed the connect code, or a player whose match
+    /// has since ended, and the funnel sends them to the lobby instead.
+    private static bool BelongsHere(CSteamID steamID) {
+        return Data != null
+            && Status == EPSStatus.IN_PROGRESS
+            && (Data.HasPlayer(steamID.m_SteamID) || IsSpectator(steamID.m_SteamID));
+    }
 
-        ulong ulSteamID = callback.m_SteamID.m_SteamID;
-
-        if (Data == null) {
-            isValid = false;
-            explanation = "This server is not hosting a match!";
+    /// Bounce one player straight back out to the warm-up lobby.
+    ///
+    /// A match server with nothing on it used to refuse the connection outright, which
+    /// left whoever tried it staring at "This server is not hosting a match!" in the
+    /// server browser with nowhere to go. Every one of these servers is now a funnel:
+    /// join one at the wrong moment and you land in the lobby, which is where matches
+    /// are made anyway. The kick is what actually moves them, the relay is what tells
+    /// their client where to reconnect, so the two go together.
+    private static void RelayToLobby(Player player) {
+        if (RelaySteamID == CSteamID.Nil) {
+            Provider.kick(player.channel.owner.playerID.steamID, "This server is not hosting a match!");
             return;
         }
 
-        if (Status != EPSStatus.IN_PROGRESS) {
+        player.sendRelayToServer(RelaySteamID, string.Empty, true);
+        Provider.kick(player.channel.owner.playerID.steamID, "Relay");
+    }
+
+    private static void OnCheckValidWithExplanation(ValidateAuthTicketResponse_t callback, ref bool isValid, ref string explanation) {
+        ulong ulSteamID = callback.m_SteamID.m_SteamID;
+
+        if (BelongsHere(callback.m_SteamID)) return;
+
+        // Someone on this server's match who has arrived before it is ready is the one
+        // case that stays a refusal. The lobby relays them here the moment the site
+        // calls the match live, and this server only agrees a beat later, so funnelling
+        // them back would bounce them between the two servers for that beat.
+        if (Data != null && Data.HasPlayer(ulSteamID)) {
             isValid = false;
             explanation = "The match has not started!";
             return;
         }
 
-        if (Data.HasPlayer(ulSteamID) || IsSpectator(ulSteamID)) return;
-        isValid = false;
-        explanation = "You do not have permission to join this match!";
-        return;
+        // Everyone else is let in and immediately relayed out by OnClientConnected.
+        // Letting them connect is the only way to send them anywhere: sendRelayToServer
+        // needs a Player, and a rejected connection never becomes one.
     }
 
     private static List<GroupInfoEx> CreateGroups(List<PSTeam> teams) {
