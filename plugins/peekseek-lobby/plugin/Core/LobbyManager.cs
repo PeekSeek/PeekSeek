@@ -79,6 +79,24 @@ internal abstract class LobbyManager {
         /// so, which is the whole difference between /afk and /noqueue.
         internal bool Afk;
 
+        /// The moment this player's queue heartbeat is allowed to start. Everyone is in
+        /// the queue by default, but not from the instant they connect: a match found in
+        /// their first second pulls them straight back out of a lobby they have not
+        /// finished loading into, and the first thing they see of PeekSeek is being
+        /// moved twice. Zero once they are queueing, and zero immediately for anyone who
+        /// asked for the queue themselves with /noqueue.
+        internal float QueueFrom;
+
+        /// Whether the site should be asked to queue this player on this tick.
+        ///
+        /// False for someone who opted out, someone already holding a match, and someone
+        /// still inside their arrival grace. All three are the same question to the
+        /// caller, so they are answered in one place rather than three conditions
+        /// repeated at the two call sites that ask.
+        internal bool WantsAMatch(float now) {
+            return Queueing && MatchId == 0 && now >= QueueFrom;
+        }
+
         /// Whether this player cannot be hurt right now. One timer covers a life's
         /// whole grace — the wait at the standard spawn and the seconds after being
         /// deployed into the arena — so there is one thing to set, one to clear, and
@@ -111,6 +129,11 @@ internal abstract class LobbyManager {
     private static float LastMagazineCheck;
     private static float LastReputationSync;
     private static float LastArenaReset;
+
+    /// How long after connecting a player starts being offered matches. Not configurable
+    /// and not announced: it is not a rule anybody needs to know, it is the beat between
+    /// landing in the lobby and the matchmaker being allowed to move you again.
+    private const float QueueGraceSeconds = 10f;
 
     private const float MagazineCheckIntervalSeconds = 2f;
     private const float ReputationSyncIntervalSeconds = 5f;
@@ -229,7 +252,11 @@ internal abstract class LobbyManager {
         if (player == null) return;
 
         bool queueing = PeekSeekLobby.Config.EnableQueue;
-        PlayerState state = new() { KitCategory = DefaultKitCategory(), Queueing = queueing };
+        PlayerState state = new() {
+            KitCategory = DefaultKitCategory(),
+            Queueing = queueing,
+            QueueFrom = Time.realtimeSinceStartup + QueueGraceSeconds,
+        };
         Players[steamID.m_SteamID] = state;
 
         // Someone arriving as someone else leaves keeps the count identical, and the
@@ -238,8 +265,9 @@ internal abstract class LobbyManager {
 
         ForceSolo(player);
         SpawnPlayer(steamID, state);
-        if (queueing) RemoteAPI.RefreshQueued(steamID.m_SteamID);
-        else RemoteAPI.Refresh(steamID.m_SteamID);
+        // Asks about them without queueing them. The queue starts on the tick their
+        // grace runs out, which is Tick's job rather than this one's.
+        RemoteAPI.Refresh(steamID.m_SteamID);
 
         SendWelcome(player, queueing);
 
@@ -641,8 +669,15 @@ internal abstract class LobbyManager {
         if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
 
         state.Queueing = !state.Queueing;
-        if (state.Queueing) RemoteAPI.RefreshQueued(steamID.m_SteamID);
-        else RemoteAPI.LeaveQueue(steamID.m_SteamID);
+        if (state.Queueing) {
+            // Asking for the queue by name skips the arrival grace. That grace exists to
+            // stop a match landing on somebody who has not finished arriving, and
+            // somebody typing the command has plainly arrived.
+            state.QueueFrom = 0;
+            RemoteAPI.RefreshQueued(steamID.m_SteamID);
+        } else {
+            RemoteAPI.LeaveQueue(steamID.m_SteamID);
+        }
         return state.Queueing;
     }
 
@@ -1102,13 +1137,14 @@ internal abstract class LobbyManager {
     /// them is the only difference — both come back with the same answer, so there is no
     /// second round trip between "you have a match" and "here is where it is".
     private static void RefreshPlayers() {
+        float now = Time.realtimeSinceStartup;
+
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
             // Queueing has a side effect, so it is only ever used for someone who
             // actually wants a match: asking with it would quietly undo a /noqueue, and
             // would put a player who already has a match back in the queue for another.
             bool wantsAMatch = PeekSeekLobby.Config.EnableQueue
-                && entry.Value.Queueing
-                && entry.Value.MatchId == 0;
+                && entry.Value.WantsAMatch(now);
 
             if (wantsAMatch) RemoteAPI.RefreshQueued(entry.Key);
             else RemoteAPI.Refresh(entry.Key);
