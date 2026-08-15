@@ -624,7 +624,9 @@ class MatchResult(SQLModel, table=True):
             return bool(result and result.data.get("results"))
 
     @staticmethod
-    def recordFinalResults(matchId: int, results: dict, score: list | None = None) -> None:
+    def recordFinalResults(
+        matchId: int, results: dict, score: list | None = None
+    ) -> None:
         """`results` is matchmaking.matchResults()'s per-player summary, keyed by steam64.
         A match with no kills (a walkover) still gets a row here, since this is also the
         only place a player's final per-match line is kept.

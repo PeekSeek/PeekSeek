@@ -725,11 +725,7 @@ def test_a_queued_player_already_in_a_match_is_never_matched_again(user_factory)
     assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
 
     # Both of the matched players heartbeat again from the lobby they are still in.
-    matched = [
-        int(u)
-        for team in _onlyMatch().teams
-        for u in team["users"]
-    ]
+    matched = [int(u) for team in _onlyMatch().teams for u in team["users"]]
     for steam64 in matched:
         data.User.addToQueue(steam64, GAMEMODE_BIT, region="paris")
 

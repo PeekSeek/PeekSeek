@@ -46,7 +46,11 @@ def _match(first, second, **overrides) -> int:
                 {"name": "team_one", "users": [str(first.steam64)]},
                 {"name": "team_two", "users": [str(second.steam64)]},
             ],
-            matchSettings={"map": "Alpha Valley", "ballistics": True, "movement": False},
+            matchSettings={
+                "map": "Alpha Valley",
+                "ballistics": True,
+                "movement": False,
+            },
         )
         for field, value in overrides.items():
             setattr(match, field, value)

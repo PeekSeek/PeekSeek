@@ -41,7 +41,9 @@ def admin(request: Request, steam64: LoggedInSteam64):
             request.session["lastError"] = "You are not an admin."
             return RedirectResponse("/", status_code=302)
 
-    return templates.TemplateResponse(request=request, name="app/admin.html", context={})
+    return templates.TemplateResponse(
+        request=request, name="app/admin.html", context={}
+    )
 
 
 @router.get("/matches")
