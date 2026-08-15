@@ -54,7 +54,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         // first, then the controls, then the things that can wait.
         { "welcome_what", "<color=white>PeekSeek warm-up lobby.</color> Free-for-all deathmatch. Death sends you to spawn, then back into the fight after <color=white>{0}s</color> with <color=white>{1}s</color> protection." },
         { "welcome_what_queue", "<color=white>PeekSeek warm-up lobby.</color> You are <color=white>in queue</color>, fight while you wait. Death sends you to spawn, then back into the fight after <color=white>{0}s</color> with <color=white>{1}s</color> protection." },
-        { "welcome_commands", "<color=white>/kit {0}</color> switch loadout. <color=white>/stats</color> your score. <color=white>/ping</color> your latency.{1}" },
+        { "welcome_commands", "<color=white>/kit {0}</color> switch loadout. <color=white>/kd</color> your score. <color=white>/ms</color> your latency. <color=white>/afk</color> step out.{1}" },
         { "welcome_extra", "Every kill earns a <color=white>heal</color>. Kills in a row earn <color=white>more</color>. Arena and scores reset every <color=white>{0} min</color>. Discord: <color=white>peekseek.net/discord</color>" },
 
         { "kill_feed", "<color=white>{0}</color> killed <color=white>{1}</color> with {2}." },
@@ -73,6 +73,8 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
 
         { "queued", "You are back in the matchmaking queue." },
         { "not_queued", "You have <color=white>left the queue</color>. You will not be matched." },
+        { "afk_on", "You are <color=white>AFK</color> and stay out of the arena until you type <color=white>/afk</color> again. You are still in the queue." },
+        { "afk_off", "You are <color=white>back</color>. Into the arena in <color=white>{0}s</color>." },
         { "queue_disabled", "Matchmaking is <color=white>disabled</color> on this server right now." },
         { "no_player_found", "No player found matching \"{0}\"." },
         { "no_stats", "That player has no stats recorded yet." },

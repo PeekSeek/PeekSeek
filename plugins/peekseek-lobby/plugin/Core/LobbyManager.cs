@@ -74,11 +74,20 @@ internal abstract class LobbyManager {
         /// once however many times Tick runs inside that second.
         internal int LastCountdownSecond;
 
+        /// Whether this player has stepped away. They keep their queue heartbeat and
+        /// their stats, they are simply never put back into the arena until they say
+        /// so, which is the whole difference between /afk and /noqueue.
+        internal bool Afk;
+
         /// Whether this player cannot be hurt right now. One timer covers a life's
         /// whole grace — the wait at the standard spawn and the seconds after being
         /// deployed into the arena — so there is one thing to set, one to clear, and
         /// no state in which two of them disagree.
-        internal bool IsProtectedAt(float now) => SpawnProtectedUntil > now;
+        ///
+        /// Being AFK holds it open for as long as it lasts. Somebody parked at spawn
+        /// cannot shoot back and cannot walk away, so leaving them killable would make
+        /// /afk a way to farm them rather than a way to step out.
+        internal bool IsProtectedAt(float now) => Afk || SpawnProtectedUntil > now;
 
         /// Books this life's deploy and the protection wrapped around it, and says
         /// whether it was this call that did it.
@@ -637,6 +646,36 @@ internal abstract class LobbyManager {
         return state.Queueing;
     }
 
+    /// Steps this player out of the arena, or puts them back in. Returns whether they
+    /// are now AFK.
+    ///
+    /// Going AFK parks them at a spawn point rather than leaving them standing where
+    /// they were: protection lasts as long as the AFK does, and an untouchable body in
+    /// the middle of a firefight is cover nobody agreed to. Coming back books the same
+    /// deploy a respawn books, so the wait to be let into the arena is the wait
+    /// everybody else serves.
+    ///
+    /// The queue is deliberately untouched. Stepping away from the keyboard is not
+    /// leaving matchmaking, and a match found while AFK still pulls them into it.
+    internal static bool ToggleAfk(CSteamID steamID) {
+        if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
+
+        state.Afk = !state.Afk;
+
+        if (state.Afk) {
+            Player player = PlayerTool.getPlayer(steamID);
+            if (player != null) TeleportToSpawn(player);
+            return true;
+        }
+
+        state.SpawnProtectedUntil = 0;
+        state.ScheduleDeploy(
+            Time.realtimeSinceStartup,
+            PeekSeekLobby.Config.RespawnDelaySeconds,
+            PeekSeekLobby.Config.SpawnProtectionSeconds);
+        return false;
+    }
+
     internal static bool TryGetStats(CSteamID steamID, out PlayerState state) {
         return Players.TryGetValue(steamID.m_SteamID, out state);
     }
@@ -829,14 +868,17 @@ internal abstract class LobbyManager {
 
             if (state.PullAt > 0) CountDownToMatch(steamID, state, now);
 
-            if (state.DeployAt > 0 && now >= state.DeployAt) {
+            // An AFK player's deploy stays booked rather than being cancelled, so
+            // coming back puts them into the arena on the next tick instead of making
+            // them die once more to get there.
+            if (state.DeployAt > 0 && now >= state.DeployAt && !state.Afk) {
                 state.DeployAt = 0;
                 SpawnPlayer(steamID, state);
             }
 
             // Only to say so — the protection itself stopped applying the moment
             // the timer passed, because that is the one thing anything checks.
-            if (state.SpawnProtectedUntil > 0 && now >= state.SpawnProtectedUntil) {
+            if (!state.Afk && state.SpawnProtectedUntil > 0 && now >= state.SpawnProtectedUntil) {
                 EndSpawnProtection(steamID, state);
             }
         }
