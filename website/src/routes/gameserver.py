@@ -315,12 +315,8 @@ def _postResultPublicly(match: data.Match, result: dict, avgElo: int) -> None:
     for people deciding whether anything is happening here. Twenty of these on a
     Friday evening is the cheapest proof the game is alive that we have.
     """
-    winners = [
-        steam64 for steam64, stats in result.items() if stats.get("Won")
-    ]
-    names = {
-        steam64: data.User.getSteamData(steam64).name for steam64 in result
-    }
+    winners = [steam64 for steam64, stats in result.items() if stats.get("Won")]
+    names = {steam64: data.User.getSteamData(steam64).name for steam64 in result}
     scoreline = " vs ".join(
         f"**{names[steam64]}**" if steam64 in winners else names[steam64]
         for steam64 in result

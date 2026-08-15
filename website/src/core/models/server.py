@@ -58,11 +58,15 @@ class LobbyPopulation(SQLModel, table=True):
         from src.core.db import open
 
         with open() as db:
-            row = db.query(LobbyPopulation).where(
-                LobbyPopulation.address == address
-            ).first()
+            row = (
+                db.query(LobbyPopulation)
+                .where(LobbyPopulation.address == address)
+                .first()
+            )
             if row is None:
-                db.add(LobbyPopulation(address=address, players=players, at=int(time())))
+                db.add(
+                    LobbyPopulation(address=address, players=players, at=int(time()))
+                )
                 return
             row.players = players
             row.at = int(time())

@@ -136,9 +136,7 @@ def refresh_player_counter() -> None:
     if not channel or not headers:
         return
 
-    name = _counter_name(
-        data.LobbyPopulation.playingNow(), data.UserHB.countAllFresh()
-    )
+    name = _counter_name(data.LobbyPopulation.playingNow(), data.UserHB.countAllFresh())
     if name == refresh_player_counter.last_name:
         return
 
