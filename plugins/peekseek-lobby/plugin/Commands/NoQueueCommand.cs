@@ -13,7 +13,7 @@ internal class NoQueueCommand : IRocketCommand {
     public string Name => "noqueue";
     public string Help => "Toggles whether you're in the matchmaking queue while you're in the lobby.";
     public string Syntax => "";
-    public List<string> Aliases => ["noq"];
+    public List<string> Aliases => ["noq", "q"];
     public List<string> Permissions => [];
 
     public void Execute(IRocketPlayer caller, string[] command) {

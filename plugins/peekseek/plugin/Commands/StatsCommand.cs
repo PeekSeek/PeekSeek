@@ -15,7 +15,7 @@ internal class StatsCommand : IRocketCommand {
     public string Name => "stats";
     public string Help => "Shows your stats for the current match, or another player's.";
     public string Syntax => "[player]";
-    public List<string> Aliases => [];
+    public List<string> Aliases => ["kd"];
     public List<string> Permissions => [];
 
     public void Execute(IRocketPlayer caller, string[] command) {
