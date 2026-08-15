@@ -291,7 +291,8 @@ def _score(match: data.Match, payload: dict) -> None:
 
     gamemode = mmconfig["gamemodes"][match.gamemode]
     result, avgElo = matchmaking.matchResults(gamemode, *players)
-    data.MatchResult.recordFinalResults(match.id, result)
+    # Taken off the live snapshot here because recording the result is what clears it.
+    data.MatchResult.recordFinalResults(match.id, result, _roundScore(match))
 
     lines = "\n\n".join(
         f"{data.User.getSteamData(s).name} ({s})\n"
@@ -303,6 +304,23 @@ def _score(match: data.Match, payload: dict) -> None:
     Webhook(f"Match.{match.id} ({match.region})").info(
         "Results", f"***Average Elo** {avgElo}*\n\n{lines}"
     )
+
+
+def _roundScore(match: data.Match) -> list:
+    """The rounds each team won, read off the match's last live snapshot.
+
+    The snapshot is the only place the round tally exists — the result report says who
+    won, not by how much — and it is cleared the moment the result is recorded, so this
+    is the last instant it can be kept.
+    """
+    return [
+        {
+            "name": team.get("teamName"),
+            "wins": team.get("wins", 0),
+            "losses": team.get("losses", 0),
+        }
+        for team in (match.livedata or {}).get("teams", [])
+    ]
 
 
 def _player(steam64: int) -> dict:

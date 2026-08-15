@@ -106,3 +106,31 @@ class Server:
         )
         r.raise_for_status()
         return r.json()["response"]["servers"][0]
+
+    @staticmethod
+    def describe(steam_id) -> dict | None:
+        """What Steam says about the server holding a match, or None if it will not say.
+
+        A match's `claimed` is the GSLT's own Steam ID, which is what Steam's master
+        list is keyed by, so the connect code the site already stores is enough to get
+        the server's advertised name, map and player count with no extra bookkeeping.
+
+        None rather than a raised exception because this is decoration on a page that
+        has to render regardless: an offline server is missing from the master list
+        entirely, and that is the moment an admin most wants the rest of the card.
+        """
+        if not steam_id or str(steam_id) == "0":
+            return None
+
+        try:
+            raw = Server.from_steam_id(str(steam_id))
+        except Exception:
+            return None
+
+        return {
+            "name": raw.get("name"),
+            "map": raw.get("map"),
+            "players": raw.get("players"),
+            "maxPlayers": raw.get("max_players"),
+            "address": raw.get("addr"),
+        }

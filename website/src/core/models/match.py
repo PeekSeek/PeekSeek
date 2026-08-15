@@ -624,10 +624,15 @@ class MatchResult(SQLModel, table=True):
             return bool(result and result.data.get("results"))
 
     @staticmethod
-    def recordFinalResults(matchId: int, results: dict) -> None:
+    def recordFinalResults(matchId: int, results: dict, score: list | None = None) -> None:
         """`results` is matchmaking.matchResults()'s per-player summary, keyed by steam64.
         A match with no kills (a walkover) still gets a row here, since this is also the
-        only place a player's final per-match line is kept."""
+        only place a player's final per-match line is kept.
+
+        `score` is the round tally, copied off the last live snapshot as it is recorded
+        because scoring a match wipes that snapshot. Without it a finished match knows
+        who won and not by how much, and 3-0 and 3-2 read identically forever after.
+        """
         from src.core.db import open
 
         with open() as db:
@@ -635,9 +640,21 @@ class MatchResult(SQLModel, table=True):
             db.query(MatchResult).where(MatchResult.id == result.id).update(
                 {
                     "endTime": datetime.utcnow(),
-                    "data": result.data | {"results": results},
+                    "data": result.data | {"results": results, "score": score or []},
                 }
             )
+
+    @staticmethod
+    def findFor(matchId: int) -> "MatchResult | None":
+        """This match's durable record, or None if it never got one. Read-only, unlike
+        `_row`, which exists to create one."""
+        from src.core.db import open
+
+        with open() as db:
+            row = db.query(MatchResult).where(MatchResult.matchId == matchId).first()
+            if row is not None:
+                db.expunge(row)
+            return row
 
     @staticmethod
     def recordUnscored(matchId: int, reason: str) -> None:

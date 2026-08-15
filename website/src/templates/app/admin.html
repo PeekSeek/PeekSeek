@@ -9,45 +9,14 @@
 {% block content %}
 
 <div class="mainElement">
-  <h2>Matches</h2>
-  {% if not matches %}
-  <span>No matches.</span>
-  {% else %}
-    <div class = "matchGrid">
-    {% for match in matches %}
-
-        <div class="matchGridElement {% if match.connectCode() %}clickable" href="steam://run/304930//+connect {{match.connectCode()}}"{% else %}"{% endif %}><div class="matchGridInner">
-
-            <span>Match.<b style="color:#20a0f0;">{{match.id}}</b></span>
-            
-            <hr>
-            {% for team in match.teams %}
-              <span class="userList">
-                {{team["name"]}}
-                {% for user in toList(team["users"]) %}
-                  <a href="/u/{{user.steam64}}" class="userProfile">
-                    <img src="{{user.avatar}}" style="width:20px;height:20px;border-radius:5px;">
-                    <span style="font-weight:200;font-size:14px;">{{user.name}}</span>
-                  </a>
-                {% endfor %}
-              </span>
-            {% endfor %}
-
-          </div><div class="matchGridInner">
-
-            <button class="settingsButton" style="background-color:#faa;" onclick="forceStopMatch({{match.id}})"><img src="/static/img/stop.png" height="20" style="filter: invert(1);">Force stop</button>
-
-            {% if match.connectCode() %}
-            <button class="settingsButton" style="background-color:#aab;" onclick="window.location.href = 'steam://run/304930//+connect {{match.connectCode()}}'"><img src="/static/img/spectate.png" height="20" style="filter: invert(1);">Click to spectate</button>
-            {% endif %}
-
-            <span style="color:#333;font-size:12px;">{{match.statusLabel}} • {{fromTimestamp(match.time).strftime("%d/%m/%Y @ %H:%M:%S")}}</span> 
-          
-        </div></div>
-        {% endfor %}
-
-      </div>
-  {% endif %}
+  <div class="adminHeader">
+    <h2>Matches</h2>
+    <span class="adminRefreshed" id="refreshed">Loading...</span>
+  </div>
+  {# Everything below is drawn by admin.js from /admin/matches and redrawn on a timer,
+     so there is one description of a match card rather than a server-rendered one and
+     a polled one that drift apart. #}
+  <div class="matchGrid" id="matches"></div>
 </div>
 
 {% endblock %}
