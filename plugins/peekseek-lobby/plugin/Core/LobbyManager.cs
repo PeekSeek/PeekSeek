@@ -492,23 +492,50 @@ internal abstract class LobbyManager {
         return Assets.find(EAssetType.ITEM, itemID) is ItemAsset asset ? asset.itemName : "something";
     }
 
+    /// Puts a player into the arena, kitted and briefly protected.
+    ///
+    /// The AFK guard lives here rather than at the call sites because there are several
+    /// and they do not look alike: a deploy coming due, an arena reset putting everyone
+    /// back in, a player connecting. Every one of them is "spawn this player", and an
+    /// AFK player must come out of all of them the same way, which is the bug that
+    /// shipped in 1.5.0: the deploy path checked and the arena reset did not, so anyone
+    /// AFK was dropped back into the fight the next time the arena cleared.
     private static void SpawnPlayer(CSteamID steamID, PlayerState state) {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
-        TeleportToSpawn(player);
+        if (state.Afk) {
+            TeleportToSafeSpawn(player);
+            return;
+        }
+
+        TeleportToArena(player);
 
         state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
 
         EquipRealKit(player, steamID, state);
     }
 
-    private static void TeleportToSpawn(Player player) {
+    /// One of the configured arena spawns, which is where the fighting is. Named for
+    /// what it does rather than "spawn", because the level's own spawn point is a
+    /// different place with the opposite meaning and the two were being confused.
+    private static void TeleportToArena(Player player) {
         List<LobbySpawn> spawns = PeekSeekLobby.Config.Spawns;
         if (spawns is not { Count: > 0 }) return;
 
         LobbySpawn spawn = spawns[Random.Range(0, spawns.Count)];
         player.teleportToLocationUnsafe(spawn.Position.ToVector3(), player.look.yaw);
+    }
+
+    /// The level's own spawn point: the safezone players wait at between lives, and the
+    /// only place somebody who is not fighting belongs. This is where a respawn drops a
+    /// dead player, so an AFK player parked here is standing exactly where the lobby
+    /// already puts anyone who is out of the fight.
+    private static void TeleportToSafeSpawn(Player player) {
+        PlayerSpawnpoint spawn = LevelPlayers.getSpawn(false);
+        if (spawn == null) return;
+
+        player.teleportToLocationUnsafe(spawn.point, spawn.angle);
     }
 
     /// Respawning the moment the life updates is what keeps a death screen off the
@@ -698,8 +725,12 @@ internal abstract class LobbyManager {
         state.Afk = !state.Afk;
 
         if (state.Afk) {
+            // The safezone, not an arena spawn. Sending them to one of the configured
+            // arena points is what 1.5.0 did, which put an untouchable player in the
+            // middle of the fighting and looked from the outside like /afk doing nothing.
+            state.DeployAt = 0;
             Player player = PlayerTool.getPlayer(steamID);
-            if (player != null) TeleportToSpawn(player);
+            if (player != null) TeleportToSafeSpawn(player);
             return true;
         }
 
@@ -779,6 +810,10 @@ internal abstract class LobbyManager {
     private static void SendToMatch(ulong steam64, PlayerState state, int matchId) {
         state.Queueing = false;
         state.MatchId = matchId;
+        // AFK is a lobby state and this player is leaving the lobby. Left set it would
+        // outlive the reason for it: the countdown below is about to move them anyway,
+        // and anything asking whether they can be hurt would keep saying no.
+        state.Afk = false;
 
         CSteamID steamID = new(steam64);
         Player player = PlayerTool.getPlayer(steamID);
@@ -830,7 +865,10 @@ internal abstract class LobbyManager {
         // Being pulled out for a match ends the wait between lives — a deploy still
         // pending would otherwise drop them back into the arena moments later.
         state.DeployAt = 0;
-        TeleportToSpawn(player);
+        // Out of the arena, which is what "pulled out for a match" means. This used to
+        // teleport them to an arena spawn, so being given a match dropped them into the
+        // middle of a fight to read the link from.
+        TeleportToSafeSpawn(player);
         state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
 
         Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_found"));

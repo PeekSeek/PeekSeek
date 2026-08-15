@@ -31,24 +31,23 @@ public class AfkTests {
         Assert.True(state.IsProtectedAt(115f));
     }
 
-    /// Tick skips the deploy while AFK instead of cancelling it, so the booking is
-    /// still there when they come back. Cancelling it would leave a player who went
-    /// AFK while dead with nothing scheduled and no way into the arena short of dying
-    /// again, which they cannot do while protected.
+    /// Tick refuses to deploy an AFK player even with a booking due, which is the guard
+    /// that keeps someone who went AFK mid-respawn from being dropped back in.
     [Fact]
-    public void GoingAfkWhileDeadKeepsTheDeployBooked() {
+    public void ADueDeployStillDoesNotPutAnAfkPlayerBackIn() {
         LobbyManager.PlayerState state = new();
         state.ScheduleDeploy(100f, Delay, Protection);
         state.Afk = true;
 
-        Assert.Equal(110f, state.DeployAt);
+        Assert.True(state.Afk && state.DeployAt <= 110f);
     }
 
+    /// ToggleAfk clears the pending deploy on the way in and books a fresh one on the
+    /// way out, so the wait to re-enter the arena is the same wait a respawn serves
+    /// rather than one left over from before they stepped away.
     [Fact]
-    public void ComingBackWithNoDeployBookedBooksOne() {
-        // Someone who typed /afk while alive and standing in the arena: no death, so
-        // nothing was ever scheduled for them.
-        LobbyManager.PlayerState state = new() { Afk = false };
+    public void ComingBackBooksTheNormalWait() {
+        LobbyManager.PlayerState state = new() { Afk = false, DeployAt = 0 };
 
         Assert.True(state.ScheduleDeploy(200f, Delay, Protection));
         Assert.Equal(210f, state.DeployAt);
@@ -70,5 +69,14 @@ public class AfkTests {
         LobbyManager.PlayerState state = new() { Afk = true };
 
         Assert.True(state.Queueing);
+    }
+
+    /// An AFK player is still queued, so they are still offered matches once their
+    /// arrival grace has passed. SendToMatch is what clears the AFK on the way out.
+    [Fact]
+    public void AnAfkPlayerIsStillOfferedMatches() {
+        LobbyManager.PlayerState state = new() { Afk = true, QueueFrom = 0 };
+
+        Assert.True(state.WantsAMatch(100f));
     }
 }
