@@ -473,6 +473,31 @@
 
 /* The admin match list. Cards are the same .matchGridElement the rest of the site uses;
    everything here is the extra density an admin page wants and no other page does. */
+
+/* A real grid rather than the wrapping flex row .matchGrid uses, so every card is one
+   column wide and they all line up. Flex sizes each card to its own contents, which on a
+   page you are scanning for the odd one out is the wrong signal entirely: a 1v1 came out
+   narrower than a 2v2 and the eye reads that as a difference that means something.
+
+   auto-fill rather than auto-fit so a quiet moment with two matches on it leaves empty
+   columns instead of stretching two cards across the whole screen, and the min() so a
+   window narrower than one column shrinks the card instead of overflowing the page. */
+.adminMatchGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+  gap: 20px;
+  margin-top: 10px;
+}
+
+/* Cards stretch to their row's height, which is what .matchGridElement's existing
+   space-between is for: the buttons settle on the card's bottom edge and line up across
+   the row rather than floating wherever that card's roster happened to end.
+   min-width goes because the card carries one for the flex layout, and in a grid it
+   would stop the card shrinking with its column on a narrow window. */
+.adminMatchGrid .matchGridElement {
+  min-width: 0;
+}
+
 .adminHeader {
   display: flex;
   align-items: baseline;

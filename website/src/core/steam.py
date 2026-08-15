@@ -13,6 +13,11 @@ DEFAULT_AVATAR = (
 
 _user_cache: TTLCache = TTLCache(maxsize=512, ttl=60)
 _server_cache: TTLCache = TTLCache(maxsize=128, ttl=120)
+_describe_cache: TTLCache = TTLCache(maxsize=64, ttl=60)
+
+# Steam is a third party on the request path of pages that have to render without it.
+# Every call here is decoration, so waiting on one is never worth holding a page open.
+STEAM_TIMEOUT = 5
 
 
 def _persist_steam_data(steam64: int, raw: dict) -> None:
@@ -41,6 +46,7 @@ def get_steam_user_data(steam64: int) -> dict:
     r = requests.get(
         f"{STEAM_API}/ISteamUser/GetPlayerSummaries/v2",
         {"key": settings.steam_api_key, "format": "json", "steamids": [steam64]},
+        timeout=STEAM_TIMEOUT,
     )
     r.raise_for_status()
     data = r.json()["response"]["players"][0]
@@ -91,8 +97,8 @@ class Server:
             f"{STEAM_API}/IGameServersService/GetServerList/v1/"
             f"?key={settings.steam_api_key}&filter=%5Caddr%5C{self.addr}"
         )
-        r = requests.get(url).json()
         try:
+            r = requests.get(url, timeout=STEAM_TIMEOUT).json()
             return r["response"]["servers"][0]
         except Exception:
             return None
@@ -102,12 +108,14 @@ class Server:
     def from_steam_id(steam_id: str) -> dict:
         r = requests.get(
             f"{STEAM_API}/IGameServersService/GetServerList/v1/"
-            f"?key={settings.steam_api_key}&filter=%5Csteamid%5C{steam_id}"
+            f"?key={settings.steam_api_key}&filter=%5Csteamid%5C{steam_id}",
+            timeout=STEAM_TIMEOUT,
         )
         r.raise_for_status()
         return r.json()["response"]["servers"][0]
 
     @staticmethod
+    @cached(_describe_cache, key=lambda steam_id: hashkey(str(steam_id)))
     def describe(steam_id) -> dict | None:
         """What Steam says about the server holding a match, or None if it will not say.
 
@@ -118,6 +126,11 @@ class Server:
         None rather than a raised exception because this is decoration on a page that
         has to render regardless: an offline server is missing from the master list
         entirely, and that is the moment an admin most wants the rest of the card.
+
+        Cached separately from `from_steam_id` so that a *failure* is cached too. The
+        admin list asks about every match on it every 15 seconds, and several matches
+        share one server: uncached, Steam being slow or down cost one blocking request
+        per card per poll, which is what hung the page rather than degrading it.
         """
         if not steam_id or str(steam_id) == "0":
             return None

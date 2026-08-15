@@ -93,14 +93,35 @@ def matches(steam64: LoggedInSteam64):
             if eventIds
             else {}
         )
+        profiles = _profiles(db, rows)
 
     return {
         "generatedAt": int(time()),
-        "matches": [_card(m, results.get(m.id), events, signups) for m in rows],
+        "matches": [
+            _card(m, results.get(m.id), events, signups, profiles) for m in rows
+        ],
     }
 
 
-def _card(match, result, events, signups) -> dict:
+def _profiles(db, rows) -> dict:
+    """Every player on the page, named and avatared, in one query.
+
+    Read off the Users table rather than through `steam.User`, which asks Steam first
+    and does not cache a failure: called once per player per card per poll, that was
+    twenty blocking Steam requests every fifteen seconds, and with Steam refusing the
+    key it made this endpoint take sixteen seconds to answer. The site persists each
+    player's name and avatar on their own row precisely so a page does not have to ask.
+    """
+    steam64s = {str(u) for match in rows for team in match.teams for u in team["users"]}
+    stored = (
+        db.query(data.User)
+        .where(data.User.steam64.in_([int(s) for s in steam64s]))
+        .all()
+    )
+    return {str(user.steam64): user.steam_data or {} for user in stored}
+
+
+def _card(match, result, events, signups, profiles) -> dict:
     """One match, as the admin page draws it.
 
     Live numbers come off the match's own snapshot and final ones off its result row,
@@ -137,7 +158,7 @@ def _card(match, result, events, signups) -> dict:
         "ending": _ending(match, stored),
         "event": {"id": event.id, "name": event.name} if event else None,
         "teams": [
-            _team(team, live, stored, finalResults, event, signups)
+            _team(team, live, stored, finalResults, event, signups, profiles)
             for team in match.teams
         ],
     }
@@ -174,7 +195,9 @@ def _ending(match, stored: dict) -> str | None:
     return "scored" if stored.get("results") else "unrecorded"
 
 
-def _team(team, live: dict, stored: dict, finalResults: dict, event, signups) -> dict:
+def _team(
+    team, live: dict, stored: dict, finalResults: dict, event, signups, profiles
+) -> dict:
     """One side of a match. `match.teams` is the roster of record, so the snapshot and
     the result row are both looked up against it rather than iterated themselves: a
     player who never connected appears in neither, and leaving them off the card is
@@ -194,24 +217,32 @@ def _team(team, live: dict, stored: dict, finalResults: dict, event, signups) ->
         "losses": score.get("losses"),
         "eventScore": signup.score if signup else None,
         "players": [
-            _cardPlayer(steam64, (liveTeam or {}).get("users", {}), finalResults)
+            _cardPlayer(
+                steam64, (liveTeam or {}).get("users", {}), finalResults, profiles
+            )
             for steam64 in team["users"]
         ],
     }
 
 
-def _cardPlayer(steam64: str, liveUsers: dict, finalResults: dict) -> dict:
+def _cardPlayer(
+    steam64: str, liveUsers: dict, finalResults: dict, profiles: dict
+) -> dict:
     """One player's line. Live stats while the match runs, final ones once it is scored,
-    and the Steam identity either way so a card is readable before anyone has done
-    anything at all."""
+    and a name and face either way so a card is readable before anyone has done anything
+    at all.
+
+    The in-game character name wins over the stored Steam persona when there is one,
+    because that is what an admin watching the server sees people called.
+    """
     liveUser = liveUsers.get(str(steam64)) or {}
     final = finalResults.get(str(steam64)) or {}
-    profile = steam.User(steam64)
+    profile = profiles.get(str(steam64)) or {}
 
     return {
         "steam64": str(steam64),
-        "name": liveUser.get("name") or profile.name,
-        "avatar": profile.avatar,
+        "name": liveUser.get("name") or profile.get("name") or "Nameless",
+        "avatar": profile.get("avatar") or steam.DEFAULT_AVATAR,
         # Only meaningful while the match is live; the snapshot it comes from is gone
         # afterwards, which is why this is null rather than false on a finished match.
         "connected": liveUser.get("state") != "offline" if liveUser else None,
