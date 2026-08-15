@@ -118,22 +118,35 @@ class UserHB(SQLModel, table=True):
             )
 
     @staticmethod
-    def dequeue(steam64s, db=None) -> None:
-        """Take these players out of the queue.
+    def claim(steam64s) -> bool:
+        """Take these players out of the queue, and say whether this call is the one
+        that got them.
 
-        Pass an open session to make the dequeue part of the caller's transaction.
-        Creating a match and dequeuing the players on it has to be one step: done in
-        two, there is a window where the match already exists but its players still
-        look queued, and a second game server polling inside that window builds a
-        second match out of the same people. That is not hypothetical — it happens
-        whenever more than one free server polls the same region, which is the normal
-        case.
+        This is the lock that stops two game servers building a match out of the same
+        people. Both scan the queue, both like the same roster, and both end up here,
+        but each delete runs in a transaction of its own, so the second one waits for
+        the first to commit and then finds nothing left to remove. Being told False
+        means somebody else got there first, and the caller must not create anything.
+
+        All of them or none. A partial claim would take players out of a queue they
+        are still waiting in, having handed the rest of their roster to another
+        server, so anything short of the full set is rolled back and they stay queued.
+
+        Leaving the queue is also what makes them unavailable everywhere else, which is
+        why it happens before the match is built rather than alongside it: building one
+        means Steam lookups and Discord messages, and for that whole second these
+        players would still be sitting in the queue for the next server to find.
         """
-        from contextlib import nullcontext
-
         from src.core.db import open
 
-        with nullcontext(db) if db is not None else open() as session:
-            session.query(UserHB).where(
-                UserHB.steam64.in_([int(s) for s in steam64s])
-            ).delete()
+        steam64s = [int(s) for s in steam64s]
+        with open() as session:
+            removed = (
+                session.query(UserHB)
+                .where(UserHB.steam64.in_(steam64s))
+                .delete(synchronize_session=False)
+            )
+            if removed == len(steam64s):
+                return True
+            session.rollback()
+            return False

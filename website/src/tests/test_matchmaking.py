@@ -1,4 +1,4 @@
-"""The full matchmaking loop: queue -> match -> dequeue -> results -> cancel."""
+"""The full matchmaking loop: queue -> match -> claim -> results -> cancel."""
 
 from time import time
 
@@ -711,3 +711,66 @@ def test_a_team_with_no_name_still_gets_one():
 
     assert all(names), names
     assert len(set(names)) == 2, names
+
+
+def test_a_queued_player_already_in_a_match_is_never_matched_again(user_factory):
+    """The queue is not a list of who is free. Lobby servers re-queue everyone standing
+    in them on a timer, so a player who was matched a second ago is still standing in
+    the lobby and still sending heartbeats. Pairing them again is how one set of players
+    ended up in two matches at once."""
+    first, second, third = user_factory(), user_factory(), user_factory()
+    for player in (first, second, third):
+        data.User.addToQueue(player.steam64, GAMEMODE_BIT, region="paris")
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
+
+    # Both of the matched players heartbeat again from the lobby they are still in.
+    matched = [
+        int(u)
+        for team in _onlyMatch().teams
+        for u in team["users"]
+    ]
+    for steam64 in matched:
+        data.User.addToQueue(steam64, GAMEMODE_BIT, region="paris")
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is None
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).count() == 1
+
+
+def test_a_roster_the_queue_will_not_give_up_creates_nothing(user_factory):
+    """What the second of two servers polling at the same instant runs into: it scanned
+    the queue, liked a roster, and by the time it went to take those players another
+    server already had them. It must create nothing at all: not a match, and not the
+    "Match started" post that goes out with one."""
+    first, second = user_factory(), user_factory()
+    data.User.addToQueue(first.steam64, GAMEMODE_BIT, region="paris")
+    data.User.addToQueue(second.steam64, GAMEMODE_BIT, region="paris")
+
+    players = [first.steam64, second.steam64]
+    assert data.UserHB.claim(players) is True
+
+    assert matchmaking._createMatch(0, players, "paris", SERVER_CODE) is None
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).count() == 0
+
+
+def test_half_a_roster_left_in_the_queue_is_put_back(user_factory):
+    """A claim is all of them or none. Taking only the players still queued would strand
+    them: their roster went to another server, and they would be waiting in a queue they
+    are no longer in."""
+    first, second = user_factory(), user_factory()
+    data.User.addToQueue(first.steam64, GAMEMODE_BIT, region="paris")
+    data.User.addToQueue(second.steam64, GAMEMODE_BIT, region="paris")
+    data.User.removeFromQueue(first.steam64)
+
+    assert data.UserHB.claim([first.steam64, second.steam64]) is False
+    with Session(core_db.engine) as s:
+        assert s.query(data.UserHB).count() == 1, "the one still queued stayed queued"
+
+
+def _onlyMatch() -> data.Match:
+    with Session(core_db.engine) as s:
+        match = s.query(data.Match).first()
+        s.expunge(match)
+        return match

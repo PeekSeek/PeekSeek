@@ -604,9 +604,10 @@ def test_a_second_server_polling_cannot_form_the_same_pairing_twice(gameserver):
     This covers the sequential case only. The bug that produced two matches for one
     pairing is a race between the two polls, and it cannot be reproduced here: these
     run one after the other, and the SQLite the tests use serialises writes through a
-    single connection anyway. What fixes the race is that the dequeue now shares the
-    transaction that inserts the match, so no reader can ever see one without the
-    other — that is a property of the code, not something this test proves.
+    single connection anyway. What fixes the race is that taking the players out of
+    the queue is now the claim itself: one delete, in one transaction, that either gets
+    the whole roster or gets nothing, so the loser of the race is told so before it
+    builds anything. See test_matchmaking for what each half of that guarantees.
     """
     first, second = 76561198000000201, 76561198000000202
     for steam64 in (first, second):

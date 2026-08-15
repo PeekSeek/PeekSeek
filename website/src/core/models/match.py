@@ -287,6 +287,26 @@ class Match(SQLModel, table=True):
             )
 
     @staticmethod
+    def playersInAMatch() -> set[str]:
+        """Every steam64 that is on a match which has not finished.
+
+        `User.getCurrentMatchId` answers this one player at a time, which is fine for a
+        page about that player and wrong for matchmaking: scanning the queue asked it
+        per heartbeat, and each of those reread every unfinished match. One read of the
+        same table answers it for the whole queue at once, and is what lets the scan
+        drop players who are already in a match before it starts pairing anyone up.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            return {
+                str(user)
+                for match in db.query(Match).where(Match.finished.is_(False)).all()
+                for team in match.teams
+                for user in team["users"]
+            }
+
+    @staticmethod
     def releaseAbandoned(serverCode: str) -> None:
         """A server reporting itself free has no match — so if it still holds one that
         never finished, that match's only "I'm done" signal never arrived. Nothing else

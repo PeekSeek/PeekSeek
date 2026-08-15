@@ -1,6 +1,6 @@
 """Turning queued players into matches, and match results into stats.
 
-The queue itself lives on UserHB (freshInQueue/dequeue) and a match's lifecycle on
+The queue itself lives on UserHB (freshInQueue/claim) and a match's lifecycle on
 Match — this module only orchestrates.
 
 Matchmaking runs when a game server asks for work, never when a player asks for a
@@ -47,12 +47,18 @@ def _matchFromQueue(region: str, serverCode: str) -> "data.Match | None":
 
     One match per call on purpose: one server can only host one match, and a second
     match made in the same breath would have no server of its own to go to.
+
+    Anyone already on an unfinished match is dropped before the scan starts rather than
+    checked once a roster has been built. A player can be in both places at once: lobby
+    servers re-queue everyone standing in them on a timer, and a player matched a moment
+    ago is still standing there. The queue on its own is not a list of who is free.
     """
+    inAMatch = data.Match.playersInAMatch()
     with open() as db:
         queued = [
             heartbeat
             for heartbeat in data.UserHB.freshInQueue(db)
-            if heartbeat.region == region
+            if heartbeat.region == region and str(heartbeat.steam64) not in inAMatch
         ]
 
     for gamemodeId, gamemode in enumerate(mmconfig["gamemodes"]):
@@ -81,12 +87,14 @@ def modesFittingParty(gamemode: int, partySize: int) -> int:
 def _partyGroups(heartbeats: list) -> list[list[int]]:
     """Queued players grouped by party — a solo player is a group of one — ordered by
     the earliest heartbeat in the group, so queueing together doesn't jump a party
-    ahead of players who'd already been waiting."""
+    ahead of players who'd already been waiting.
+
+    Everyone here is already known to be free: _matchFromQueue drops the players who
+    are on a match before it hands the queue over.
+    """
     groups: dict[object, list[int]] = {}
     earliest: dict[object, float] = {}
     for hb in heartbeats:
-        if data.User.getCurrentMatchId(hb.steam64):
-            continue
         key = hb.partyId or f"solo-{hb.steam64}"
         groups.setdefault(key, []).append(hb.steam64)
         earliest[key] = min(earliest.get(key, hb.time), hb.time)
@@ -222,7 +230,21 @@ def _wouldRepeatAFixture(
 
 def _createMatch(
     gamemode: int, players: list[int], region: str, serverCode: str
-) -> "data.Match":
+) -> "data.Match | None":
+    """This roster, taken out of the queue and made into a match for the calling server.
+
+    None when the queue would not give them up, which means another server claimed at
+    least one of them between this scan and this call. Nothing is created in that case:
+    the server is told to idle and asks again a second later.
+    """
+    # Before anything else, and before anyone is told a match exists. Building one means
+    # a Steam lookup per player, a Discord webhook and a DM each, and every one of those
+    # is time these players would otherwise spend still sitting in the queue looking
+    # free. That window is what produced two matches for one pairing, five "Match
+    # started" posts deep.
+    if not data.UserHB.claim(players):
+        return None
+
     perTeam = mmconfig["gamemodes"][gamemode]["playersPerTeam"]
     teams = [
         [str(s) for s in players[i * perTeam : (i + 1) * perTeam]]
@@ -245,12 +267,6 @@ def _createMatch(
     with open() as db:
         db.add(match)
         db.flush()
-        # In the same transaction as the insert. Committing the match and dequeuing
-        # afterwards leaves a moment where the match exists and its players still
-        # look queued, and a second free server polling inside that moment forms the
-        # very same pairing again — two matches, one set of players. Nothing outside
-        # this transaction ever sees one without the other.
-        data.UserHB.dequeue(players, db)
         db.refresh(match)
         db.expunge(match)
 
@@ -277,19 +293,27 @@ def attemptCreateEventMatch(trackSteam64: int, eventId: int) -> bool:
 
         if len(teams) < 2:
             return False
+        teams = teams[:2]
+        meta = event.data["meta"]
+        spectators = [str(x) for x in event.data.get("spectators", [])]
 
+    # Same claim-first order as a matchmade match, for the same reason: two owners
+    # queueing at once both used to reach here with the same two teams in hand.
+    if not data.UserHB.claim([team["users"][0] for team in teams]):
+        return False
+
+    with open() as db:
         db.add(
             data.Match(
-                gamemode=event.data["meta"].get("gamemode", 1),
-                teams=teams[:2],
-                region=event.data["meta"].get("region", "paris"),
+                gamemode=meta.get("gamemode", 1),
+                teams=teams,
+                region=meta.get("region", "paris"),
                 eventId=eventId,
-                spectators=[str(x) for x in event.data.get("spectators", [])],
+                spectators=spectators,
             )
         )
 
-    data.UserHB.dequeue([team["users"][0] for team in teams[:2]])
-    return any(int(team["users"][0]) == int(trackSteam64) for team in teams[:2])
+    return any(int(team["users"][0]) == int(trackSteam64) for team in teams)
 
 
 def _eventTeam(db, heartbeat, event) -> dict | None:
