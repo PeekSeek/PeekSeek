@@ -3,7 +3,6 @@ using PeekSeekLobby.Core;
 using Rocket.API;
 using Rocket.Unturned.Player;
 using SDG.Unturned;
-using UnityEngine;
 
 namespace PeekSeekLobby.Commands;
 
@@ -27,7 +26,7 @@ internal class PingCommand : IRocketCommand {
             return;
         }
 
-        int ms = Mathf.RoundToInt(target.ping * 1000f);
+        int ms = Ping.Milliseconds(target);
         string label = target.playerID.steamID == callerPlayer.CSteamID ? "Your" : $"{target.playerID.characterName}'s";
         LobbyManager.Whisper(self, $"{label} ping: {ms}ms");
     }

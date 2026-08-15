@@ -99,7 +99,7 @@ internal abstract class PSManager {
         Player attacker = PlayerTool.getPlayer(parameters.killer);
 
         if (attacker != null && parameters.damage > 5) {
-            float ping = attacker.channel.owner.ping * 1000f;
+            int ping = Ping.Milliseconds(attacker.channel.owner);
 
             foreach (var config in PeekSeek.Config.PingConfig.OrderByDescending(c => c.PingOrHigher)) {
                 if (!(ping >= config.PingOrHigher)) continue;
@@ -141,7 +141,7 @@ internal abstract class PSManager {
     /// shooter sees their hits land for less than they should and concludes the server
     /// is broken. Throttled per shooter for the same reason it is worth saying at all —
     /// once is information, every bullet is noise.
-    private static void TellAboutPingReduction(Player attacker, int percentage, float ping) {
+    private static void TellAboutPingReduction(Player attacker, int percentage, int ping) {
         ulong steam64 = attacker.channel.owner.playerID.steamID.m_SteamID;
         float now = Time.realtimeSinceStartup;
 
@@ -150,7 +150,7 @@ internal abstract class PSManager {
         LastPingNotice[steam64] = now;
 
         Whisper(attacker.channel.owner,
-            PeekSeek.Instance.Translate("damage_reduced", percentage, Mathf.RoundToInt(ping)));
+            PeekSeek.Instance.Translate("damage_reduced", percentage, ping));
     }
 
     /// Only worth sampling in bullet-drop mode: instant-hit mode has no equivalent
