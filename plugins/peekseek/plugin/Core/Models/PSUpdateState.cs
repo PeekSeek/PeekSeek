@@ -104,16 +104,15 @@ internal class UserStats {
     public bool IsBleeding { get; set; }
     [JsonProperty("isBroken")]
     public bool IsBroken { get; set; }
-    /// Item id currently held, or 0 for empty hands (also reported for a bow that has
-    /// used its last arrow, since there is nothing left for the player to do with it).
+    /// Item id currently held, or 0 for empty hands.
     [JsonProperty("equipped")]
     public int Equipped { get; set; }
-    /// Everything they are carrying, one entry per item id. Magazines and arrows are
-    /// excluded — see TotalAmmo.
+    /// Everything they are carrying, one entry per item id. Magazines are excluded and
+    /// counted in TotalAmmo instead, and a bow is excluded in favour of its arrows.
     [JsonProperty("inventory")]
     public List<PSUpdateItem> Inventory { get; set; }
-    /// Spare rounds across every magazine/arrow carried, plus whatever is chambered in
-    /// the gun itself.
+    /// Spare rounds across every magazine carried, plus whatever is chambered in the gun
+    /// itself. Arrows are not rounds and are listed in Inventory instead.
     [JsonProperty("totalAmmo")]
     public int TotalAmmo { get; set; }
 

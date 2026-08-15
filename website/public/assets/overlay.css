@@ -360,15 +360,31 @@ body {
 .kit { display: flex; align-items: center; gap: 0.24vw; }
 .col.r .kit { flex-direction: row-reverse; }
 
-/* Same treatment as the stat numbers — muted, not bold, no unit shown since position
-   next to the gun already says what it's counting. Empty rather than "0" when there is
-   nothing to add up (no gun, no spare magazines): a bare 0 would read as "empty" for a
-   melee kit that was never going to have ammo in the first place. */
+/* Same treatment as the stat numbers, muted and not bold, with a cartridge to say what
+   is being counted. Hidden outright rather than showing "0" when there is nothing to add
+   up (no gun, no spare magazines): a bare 0 would read as "empty" for a melee kit that
+   was never going to have ammo in the first place. */
 .ammo {
+    display: none;
+    align-items: center;
+    gap: 0.2vw;
     font-size: var(--card-text);
     font-weight: 600;
     color: var(--muted);
     white-space: nowrap;
+}
+
+.ammo.has { display: flex; }
+.col.r .ammo { flex-direction: row-reverse; }
+
+/* Takes its colour from the count it labels, so the two read as one thing rather than
+   as an icon sitting next to a number. */
+.ammo .rd {
+    height: calc(var(--card-text) * 1.05);
+    width: auto;
+    fill: currentColor;
+    flex: none;
+    display: block;
 }
 
 /* Covers the loadout row with the powerup's name, the same width and position as .l2

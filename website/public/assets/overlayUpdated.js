@@ -23,6 +23,14 @@ const DEFAULT_ROUNDS_TO_WIN = 3;
 const FLARE_L = `<svg class="flare l" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0 L10 0 L10 10 A10 10 0 0 0 0 0 Z"/></svg>`;
 const FLARE_R = `<svg class="flare r" viewBox="0 0 10 10" aria-hidden="true"><path d="M10 0 L0 0 L0 10 A10 10 0 0 1 10 0 Z"/></svg>`;
 
+/* Says what the number beside it counts, since a bare figure at the end of the loadout
+   row could be read as anything the card carries. A cartridge, drawn once here and
+   mounted with the card rather than rewritten on every poll. */
+const ROUNDS = `<svg class="rd" viewBox="0 0 8 20" aria-label="rounds">
+  <path d="M4 0 C6.2 3 7 5.6 7 8.4 L1 8.4 C1 5.6 1.8 3 4 0 Z"/>
+  <path d="M1 9.6 L7 9.6 L7 20 L1 20 Z"/>
+</svg>`;
+
 /* Headshot marker for the kill feed. */
 const CROSSHAIR = `<svg class="hs" viewBox="0 0 24 24" aria-label="headshot">
   <circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
@@ -69,13 +77,24 @@ function powerupItemIds(config, name) {
     return new Set((entry?.items || []).map(item => item[0]));
 }
 
-/* Everything the player carries except the gun already shown in the first
-   slot: their own kit first, then whatever the powerup granted. */
-function loadout(user, powerupIds) {
-    const rest = user.inventory.filter(item => item.id !== user.equipped);
+/* The weapon they brought, which holds the front of the row for the whole round. This
+   used to be whatever they had in their hands, so the row reshuffled every time they
+   pulled out a medkit or the crossbow and the gun dropped back into alphabetical-looking
+   inventory order. A powerup can hand out a second gun, the rocket launcher or the
+   pistol, and that is not the weapon they fight with, so it stays with the rest of the
+   powerup's items. */
+function weapon(user) {
+    return user.inventory.find(item =>
+        (item.kind === "gun" || item.kind === "melee") && !user.powerupIds.has(item.id)) || null;
+}
+
+/* Everything they carry except the weapon already shown in the first slot: their own
+   kit first, then whatever the powerup granted. */
+function loadout(user, held) {
+    const rest = user.inventory.filter(item => item !== held);
     return [
-        ...rest.filter(item => !powerupIds.has(item.id)),
-        ...rest.filter(item => powerupIds.has(item.id))
+        ...rest.filter(item => !user.powerupIds.has(item.id)),
+        ...rest.filter(item => user.powerupIds.has(item.id))
     ];
 }
 
@@ -122,9 +141,9 @@ function buildState(payload) {
                         kills: pick(stats, "kills", "Kills") ?? 0,
                         deaths: pick(stats, "deaths", "Deaths") ?? 0,
                         headshots: pick(stats, "headshots", "Headshots") ?? 0,
-                        equipped: pick(stats, "equipped", "Equipped") ?? 0,
                         inventory: (pick(stats, "inventory", "Inventory") || []).map(item => ({
                             id: pick(item, "id", "Id"),
+                            kind: pick(item, "kind", "Kind") || "",
                             amount: pick(item, "amount", "Amount") ?? 1
                         })),
                         totalAmmo: pick(stats, "totalAmmo", "TotalAmmo") ?? 0
@@ -173,7 +192,7 @@ function columnHtml(state, side) {
             </div>
             <div class="l2">
               <span class="kit"></span>
-              <span class="ammo"></span>
+              <span class="ammo">${ROUNDS}<span></span></span>
               <span class="reveal"></span>
             </div>
             <span class="hp"><i></i></span>
@@ -209,6 +228,7 @@ function mount(state) {
             stats: el.querySelector(".stats"),
             kit: el.querySelector(".kit"),
             ammo: el.querySelector(".ammo"),
+            rounds: el.querySelector(".ammo span"),
             reveal: el.querySelector(".reveal"),
             gauge: el.querySelector(".hp i"),
             health: null,
@@ -271,15 +291,19 @@ function apply(state) {
            are whole-megapixel PNGs, so it is wasted work that only gets worse the faster
            this polls. Everything else on the card is patched in place, and this was the
            one piece that was not. */
-        const carried = loadout(user, user.powerupIds);
-        const kit = [user.equipped, ...carried.map(item => `${item.id}x${item.amount}`)].join(" ");
+        const held = weapon(user);
+        const carried = loadout(user, held);
+        const kit = [held ? held.id : 0, ...carried.map(item => `${item.id}x${item.amount}`)].join(" ");
         if (c.loadout !== kit) {
             c.loadout = kit;
-            c.kit.innerHTML = (user.equipped ? slotHtml({ id: user.equipped, amount: 1 }, "gun") : "") +
+            c.kit.innerHTML = (held ? slotHtml(held, "gun") : "") +
                 carried.map(item => slotHtml(item)).join("");
         }
 
-        c.ammo.textContent = user.totalAmmo > 0 ? user.totalAmmo : "";
+        /* No count at all rather than a bare 0 for a melee kit that was never going to
+           have rounds in the first place, and the cartridge goes with it. */
+        c.ammo.classList.toggle("has", user.totalAmmo > 0);
+        c.rounds.textContent = user.totalAmmo > 0 ? user.totalAmmo : "";
 
         c.reveal.textContent = user.powerup || "";
         c.reveal.classList.toggle("has", !!user.powerup);
