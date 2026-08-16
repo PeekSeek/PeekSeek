@@ -37,6 +37,11 @@ counter_channel = "1538266851203879032"
 # answers the third with a 429, so this cannot usefully go below ~300.
 counter_interval = 360
 
+# How long an arena must have been empty before the first player to walk into it is
+# worth announcing. People join an empty server, find nobody, and leave within seconds,
+# so a short value here would post several times an hour and teach everyone to ignore it.
+wake_ping_after = 1800
+
 [regions.names]
 # Region id -> display name used in Discord queue pings.
 paris = "EU-West"

@@ -64,11 +64,17 @@ The website deploys from this repo on [Dokploy](https://hosting.kcvdh.com) (proj
 
 | Environment | Domain | Source | Database |
 | --- | --- | --- | --- |
-| production | peekseek.net (+ esports, api, admin) | `PeekSeek/website@main` | production Postgres |
+| production | peekseek.net (+ esports, api, admin) | this repo, `main` | production Postgres |
 | develop | [dev.peekseek.net](https://dev.peekseek.net) | this repo, `main`, Dockerfile `website/Dockerfile` | its own Postgres, empty |
 
-Both auto-deploy on push. Production still builds from the old single-purpose
-`PeekSeek/website` repo until it is cut over to this one.
+Both auto-deploy on push, and neither deploy is a CI job: the workflows in this repo
+lint, test and release plugins, and Dokploy is what watches the branch. So a website
+change is live because Dokploy rebuilt it, not because a merge went green.
+
+The production Postgres in that table is also the database
+[data.peekseek.net](https://data.peekseek.net) reads. Anything the site creates on
+startup — a new SQLModel table, a column `addMissingColumns` fills in — shows up there
+one deploy later, which is the only way a new table ever reaches the analytics.
 
 The dev database is empty, with the schema SQLModel creates on startup; pages backed by
 data render blank until it is seeded. Dev also runs with `BOT_TOKEN`, `LOG_WEBHOOK` and
