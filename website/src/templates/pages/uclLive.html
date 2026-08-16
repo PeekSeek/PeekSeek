@@ -1,6 +1,7 @@
 {% extends "layout.html" %}
 
 {% block head %}
+    <link rel="stylesheet" href="/static/assets/css/uclLive.css" />
     <script src="https://embed.twitch.tv/embed/v1.js"></script>
 {% endblock %}
 
@@ -8,9 +9,9 @@
 
 <div class="mainElement centerflex">
   <h1><img src="/static/img/cmr.png" alt="" height="24px"> UCL Winter Cup</h1> 
-  <span style="width:100%;gap:15px;display: flex;flex-wrap: wrap;">
-    <div id="twitch1" style="border-radius:15px;overflow:hidden;padding-bottom:-15px;height:480px;"></div>
-    <div id="twitch2" style="border-radius:15px;overflow:hidden;padding-bottom:-15px;height:480px;"></div>
+  <span class="streamRow">
+    <div id="twitch1" class="streamEmbed"></div>
+    <div id="twitch2" class="streamEmbed"></div>
     <iframe title="YouTube live stream" width="560" height="349" src="https://www.youtube.com/embed/live_stream?channel=UCmJr4xp4xkX5XG4FUUxZPfQ" allowfullscreen></iframe>
   </span>
 </div>

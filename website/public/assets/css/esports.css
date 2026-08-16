@@ -1,3 +1,10 @@
+/* esports/index.html and esports/event.html.
+
+   This was two files -- esports.css and esports2.css -- that started identical and
+   drifted four rules apart, so a fix landed on one page and not the other. One file
+   now: rules shared by both pages sit at the top level, and the event list's own
+   variants are scoped under .events, which only the index page wraps its cards in. */
+
 .events {
     display: flex;
     flex-direction: column;
@@ -8,29 +15,23 @@
 .event {
     display: flex;
     flex-direction: row;
-    /* justify-content: space-between; */
+    align-items: center;
     gap: 5px;
-    align-items: flex-end;
 
     padding: 15px 20px;
     border-radius: 10px;
     background-image: url("https://cdn.peekseek.net/img/eventbg.png");
-    background-position: center; /* Center the image */
-    background-repeat: no-repeat; /* Do not repeat the image */
-    background-size: cover; /* Resize the background image to cover the entire container */
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
 }
 
 .event * {
     color: #FFF;
-} .event span {
-    color: #fff7;
-} .event span::before {
-    content: " • "
 }
 
 .event .eventTitle {
-    font-size: 20px;
-    font-weight: bold;
+    margin-bottom: 10px;
 }
 
 .event div {
@@ -48,7 +49,49 @@
     font-weight: bold;
 }
 
-input {
+/* The event list on the index page. A card here is a link to an event rather than the
+   event's own header, so the title carries the weight and the region/date trail after
+   it on one line instead of stacking. */
+.events .event {
+    align-items: flex-end;
+}
+
+.events .event .eventTitle {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 0;
+}
+
+.events .event span {
+    color: #fff7;
+} .events .event span::before {
+    content: " • ";
+}
+
+/* The detail page's header, which is the one .event that is not a link. */
+.eventHeader {
+    max-width: 700px;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+/* ---- Sign-up: the team name / join code pairs ---------------------------- */
+
+.signupPanel {
+    gap: 10px;
+}
+
+.signup {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+
+    width: 100%;
+}
+
+/* The input and its button are one control, so they meet with no seam: the input
+   loses its right corners and the button its left. */
+.signup input {
     background-color: #3333;
     margin-right: 0;
     outline: 0;
@@ -58,6 +101,8 @@ input {
 
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
+
+    width: 15%;
 }
 
 .eventButton {
@@ -111,10 +156,24 @@ input {
     background-color: #ac3636;
 }
 
+.teamActions {
+    display: flex;
+    gap: 15px;
+}
+
 .teamInfo {
     display: flex;
     flex-direction: column;
     gap: 10px;
+} .teamInfo h2 span {
+    color: #ccc;
+    font-weight: 200;
+} .teamInfo b {
+    color: #5a73ff;
+}
+
+.teamInfo a {
+    text-decoration: none;
 }
 
 .esuser {
@@ -137,13 +196,7 @@ input {
     margin-top: 5px;
 }
 
-.signup {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-
-    width: 100%;
-}
+/* ---- Leaderboard: the podium and the rest of the top ten ---------------- */
 
 .top3 {
     display: flex;
@@ -234,6 +287,8 @@ input {
     margin-right: 5px;
 }
 
+/* A slow gold sweep across first place, once every ten seconds. Long enough between
+   passes that it reads as a highlight rather than something demanding attention. */
 .t1::before {
   content: "";
   position: absolute;
@@ -252,7 +307,7 @@ input {
     #ffffff00   100%
   );
   filter: blur(30px);
-  
+
   transform: rotate(45deg);
   animation: diagonal-wipe 10s ease-in-out infinite;
   animation-delay: 2s;
@@ -347,12 +402,14 @@ input {
     color: #333;
 }
 
+/* Below 1500px the "you" panel is the first thing to go, since the player it names is
+   the one person on the page who already knows their own rank. */
 @media (max-width: 1500px) {
     .fullstats {
         grid-template-columns: 540px 1fr;
     }
 
-    .aboutyou {display: None;}
+    .aboutyou { display: none; }
 } @media (max-width: 1240px) {
     .fullstats {
         grid-template-columns: 1fr;
@@ -363,6 +420,8 @@ input {
     }
 }
 
+/* ---- Rendered markdown: the event's description and settings ------------- */
+
 .invisible {
     height: 40px;
 }
@@ -371,10 +430,14 @@ input {
     padding-top: 0;
 }
 
-.mainElement li {
-    margin-left: 15px;
+/* Scoped to the rendered markdown rather than the whole panel. As `.mainElement a` this
+   also caught the team roster and the sign-up buttons, which are not prose links and
+   should look like the player chips and buttons they are everywhere else on the site. */
+.eventBody a {
+    color: #66b0ff;
+    text-decoration: underline;
 }
 
-.teamInfo a {
-    text-decoration: none;
+.eventBody li {
+    margin-left: 15px;
 }

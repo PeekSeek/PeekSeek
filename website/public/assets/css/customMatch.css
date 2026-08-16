@@ -1,0 +1,54 @@
+/* app/custommatch.html -- the premium custom-match builder. */
+
+.sections {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.sections .section {
+  background-color: #121212;
+  display: flex;
+  flex-direction: column;
+  border-radius: 5px;
+  padding: 10px 15px;
+  justify-content: center;
+  font-weight: 800;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 0;
+}
+
+#customgrid, #customTeamsList {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+} #customgrid select {
+  background-color: #121212;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid #333;
+} #customTeamsList input {
+  background-color: #121212;
+  border: 1px solid #333;
+  margin: 5px 0;
+  outline: 0;
+  padding: 10px 15px;
+  border-radius: 5px;
+} #customgrid div {
+  width: 100%;
+} #customgrid {
+  gap: 5px;
+} #customTeamsCreate {
+  margin-bottom: 10px;
+} .customTeam {
+  display: flex;
+  gap: 10px;
+} .delbuttoncustom {
+  background: none;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+  font-size: 20px;
+}

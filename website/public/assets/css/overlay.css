@@ -89,6 +89,7 @@ body {
     filter: opacity(.8);
 }
 
+#notStarted .splash .splashLogo { height: 10vh; }
 #notStarted .splash h1 { font-size: 20vh; margin: 0; }
 #notStarted .splash span { font-size: 8vh; }
 

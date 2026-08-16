@@ -8,6 +8,10 @@
 
 {% block currentPage %}spectate{% endblock %}
 
+{% block addheader %}
+<link rel="stylesheet" href="/static/assets/css/spectate.css" />
+{% endblock %}
+
 {% block content %}
 
 <div class="mainElement">
@@ -15,34 +19,34 @@
   {% if not matches %}
   <span>No matches.</span>
   {% else %}
-    <div class = "matchGrid">
+    <div class="matchGrid">
     {% for match in matches %}
 
       <div class="matchGridElement {% if match.connectCode() %}clickable" href="steam://run/304930//+connect {{match.connectCode()}}"{% else %}"{% endif %}><div class="matchGridInner">
 
-            <span>Match.<b style="color:#20a0f0;">{{match.id}}</b></span>
+            <span>Match.<b class="matchNumber">{{match.id}}</b></span>
             
             <hr>
             {% for team in match.teams %}
               <span class="userList">
                 {{team["name"]}}
                 {% for user in toList(team["users"]) %}
-                  <a href="/u/{{user.steam64}}" class="userProfile">
-                    <img src="{{user.avatar}}" style="width:20px;height:20px;border-radius:5px;">
-                    <span style="font-weight:200;font-size:14px;">{{user.name}}</span>
+                  <a href="/u/{{user.steam64}}" class="userProfile small">
+                    <img src="{{user.avatar}}" alt="">
+                    <span>{{user.name}}</span>
                   </a>
                 {% endfor %}
               </span>
             {% endfor %}
 
           </div><div class="matchGridInner">
-            <button class="settingsButton" style="background-color:#aab;" onclick="navigator.clipboard.writeText('{{config.base_url}}/overlay?id={{match.id}}')"><img src="/static/img/copy.png" height="20" style="filter: invert(1);">Copy overlay link</button>
+            <button type="button" class="settingsButton spectateButton" onclick="navigator.clipboard.writeText('{{config.base_url}}/overlay?id={{match.id}}')"><img src="/static/img/copy.png" alt="" height="20">Copy overlay link</button>
 
             {% if match.connectCode() %}
-            <button class="settingsButton" style="background-color:#aab;" onclick="window.location.href = 'steam://run/304930//+connect {{match.connectCode()}}'"><img src="/static/img/spectate.png" height="20" style="filter: invert(1);">Click to spectate</button>
+            <button type="button" class="settingsButton spectateButton" onclick="window.location.href = 'steam://run/304930//+connect {{match.connectCode()}}'"><img src="/static/img/spectate.png" alt="" height="20">Click to spectate</button>
             {% endif %}
 
-            <span style="color:#333;font-size:12px;">
+            <span class="mutedSmall">
               {{match.statusLabel}} •
               {{fromTimestamp(match.time).strftime("%d/%m/%Y @ %H:%M:%S")}}
             </span> 

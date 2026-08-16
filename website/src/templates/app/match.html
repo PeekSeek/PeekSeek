@@ -8,255 +8,10 @@
 
 {% block currentPage %}play{% endblock %}
 
-{% block script %}<script src="/static/assets/matchServerCode.js" defer></script>{% endblock %}
+{% block script %}<script src="/static/assets/js/match.js" defer></script>{% endblock %}
 
 {% block addheader %}
-<style>
-  .uprof {
-    padding-right: 10px;
-    background-color: #0001;
-    border-radius: 15px;
-    border: 3px solid #000;
-    overflow: hidden;
-  }
-
-  .uprof img {
-    border-radius: 0px;
-  }
-
-  .mbutton {
-    color:#000;
-    font-size:20px;
-    padding:5px 15px;
-    border-radius:5px;
-    border:0;
-    cursor:pointer;
-    margin-bottom: 5px;
-  }
-
-  #message {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .botmargin {
-    margin-bottom: 10px;
-  }
-
-  .picktimer {
-    font-size: 12.5px;
-    color: #8a8a8a;
-  } .picktimer b {
-    color: var(--commit-red, #ff2d2d);
-  }
-
-  .choicegrid {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-  }
-
-  .choiceButton {
-    min-width: 60px;
-    min-height: 20px;
-    display: flex;
-    height: fit-content;
-  } .choiceButton span {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 5px;
-  }
-  .selectedChoice {
-    background-color: #121212;
-  } .selectedChoice::before {
-    content: "Selected";
-    font-size: 12px;
-    margin: 0;
-    color: #aae0ff;
-    font-weight: 200;
-  }
-
-  /* ---- Kit/powerup tiles: ported from the "commit list" concept ---------
-     Scoped to .kitbutton/.powerupbutton rather than changing .qgridoption or
-     .selectedChoice globally, since those are shared with the outfit selector
-     and other pickers elsewhere on the site. */
-  :root {
-    --commit-red: #ff2d2d;
-    --commit-red-dim: rgba(255, 45, 45, 0.16);
-    --commit-card: #161616;
-    --commit-line: #262626;
-  }
-
-  /* Real <button>s, not divs, so a kit/powerup pick is keyboard-reachable and reads as
-     an actual control rather than a label. Unselected tiles get a dashed border — an
-     outline nobody mistakes for "already chosen" — while a real pick fills solid, so
-     the two states never look alike even to a glance. */
-  .kitbutton, .powerupbutton {
-    position: relative;
-    padding: 12px 10px;
-    min-height: 40px;
-    font: inherit;
-    text-align: center;
-    background-color: var(--commit-card);
-    border: 1px dashed var(--commit-line) !important;
-    border-radius: 7px;
-    font-weight: 700;
-    font-size: 13px;
-    color: #8a8a8a;
-    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
-  } .kitbutton:hover, .powerupbutton:hover {
-    border-color: #3a3a3a !important;
-  } .kitbutton:focus-visible, .powerupbutton:focus-visible {
-    outline: 2px solid var(--commit-red);
-    outline-offset: 2px;
-  } .kitbutton.selectedChoice, .powerupbutton.selectedChoice {
-    background-color: var(--commit-red-dim);
-    border: 1px solid var(--commit-red) !important;
-    color: #f5f5f5;
-  } .kitbutton.selectedChoice::before, .powerupbutton.selectedChoice::before {
-    content: none;
-  }
-
-  /* CIW: the ask itself is the affordance — no separate label competing for
-     attention, and the reason to act now (a faster match) sits right under it. */
-  .pickPrompt {
-    font-size: 12px;
-    color: #8a8a8a;
-    margin: -6px 0 10px;
-  }
-
-  /* ---- Match settings: bullet drop / movement, shown once decided ------- */
-  .settingpills {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: center;
-  } .settingpill {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 20px;
-    background-color: var(--commit-card);
-    font-size: 12.5px;
-    color: #8a8a8a;
-  } .settingpill b {
-    color: #f5f5f5;
-  } .settingpill.undecided {
-    color: #555;
-  }
-
-  /* ---- Commit list: who's picked, opponents collapsed until everyone has -- */
-  .timerow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-size: 12.5px;
-    color: #8a8a8a;
-    width: 100%;
-    max-width: 360px;
-  } .timerow b {
-    color: #f5f5f5;
-  }
-
-  #commitlist {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    width: 100%;
-    max-width: 360px;
-  } #commitlist .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 9px 4px;
-    border-bottom: 1px solid var(--commit-line);
-    font-size: 13px;
-  } #commitlist .row .name {
-    font-weight: 600;
-    color: #f5f5f5;
-  } #commitlist .row .status {
-    font-size: 12px;
-    color: #8a8a8a;
-  } #commitlist .row .status.picked {
-    color: var(--commit-red);
-    font-weight: 700;
-  } #commitlist .row .status.picking::after {
-    content: "";
-    display: inline-block;
-    width: 22px;
-    height: 7px;
-    margin-left: 6px;
-    vertical-align: middle;
-    background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
-    background-size: 200% 100%;
-    border-radius: 3px;
-    animation: commitShimmer 1.1s linear infinite;
-  }
-
-  @keyframes commitShimmer {
-    from { background-position: 200% 0; }
-    to { background-position: -200% 0; }
-  }
-
-  #commitlist .opponents {
-    background-color: var(--commit-card);
-    border-radius: 7px;
-    overflow: hidden;
-    max-height: 44px;
-    transition: max-height 0.45s cubic-bezier(0.3, 0.8, 0.3, 1);
-  } #commitlist .opponents.expanded {
-    max-height: 300px;
-  } #commitlist .opponents .head {
-    padding: 11px 12px;
-    font-size: 12.5px;
-    color: #8a8a8a;
-    display: flex;
-    justify-content: space-between;
-  } #commitlist .opponents .head b {
-    color: #f5f5f5;
-  } #commitlist .opponents .row {
-    background: transparent;
-    border-radius: 0;
-    padding: 9px 12px;
-    border-bottom: 1px solid var(--commit-line);
-  }
-
-  /* ---- Progress line: shown once everyone's locked, before a server claims it -- */
-  #connectprogress {
-    width: 100%;
-    max-width: 360px;
-    display: none;
-    flex-direction: column;
-    gap: 8px;
-  } #connectprogress .progressline {
-    height: 4px;
-    background-color: var(--commit-card);
-    border-radius: 2px;
-    overflow: hidden;
-  } #connectprogress .progressline i {
-    display: block;
-    height: 100%;
-    width: 100%;
-    background-color: var(--commit-red);
-    transform-origin: left;
-    animation: connectPulse 1.4s ease-in-out infinite;
-  } #connectprogress .caption {
-    font-size: 12.5px;
-    color: #8a8a8a;
-    text-align: center;
-  } #connectprogress .caption b {
-    color: #f5f5f5;
-  }
-
-  @keyframes connectPulse {
-    0%, 100% { transform: scaleX(0.15); }
-    50% { transform: scaleX(1); }
-  }
-</style>
+<link rel="stylesheet" href="/static/assets/css/match.css" />
 {% endblock %}
 
 {% block content %}
@@ -267,9 +22,9 @@
   <a id="turn" class="userProfile uprof">Loading...</a>
   
   <span id="type">Loading...</span>
-  <span id="picktimer" class="picktimer" style="display:none;"></span>
+  <span id="picktimer" class="picktimer"></span>
 
-  <div style="display: flex;flex-direction: row;gap:15px;">
+  <div class="decisionRow">
     <button class="mbutton" id="b1" onclick="decide('0')">
       Yes
     </button>
@@ -279,16 +34,6 @@
   </div>
 
   <audio id="welcome-sound" src="/static/assets/trumpet.mp3" preload="auto"></audio>
-
-  <script>
-  window.addEventListener('DOMContentLoaded', () => {
-    const audio = document.getElementById('welcome-sound');
-
-    audio.play().catch(error => {
-      console.log('Autoplay prevented:', error);
-    });
-  });
-</script>
 
   <div id = "kits">
     {% if len(dataAsDict["config"]["kitsAllowed"]) > 1 %}
@@ -334,7 +79,7 @@
 
   <div class="settingpills" id="matchsettings"></div>
 
-  <span style="color:#333">Matchid: {{ dataAsDict["id"] }}</span>
+  <span class="muted">Matchid: {{ dataAsDict["id"] }}</span>
 </div>
 
 <script>

@@ -1,0 +1,19 @@
+/* app/spectate.html -- the matches you can watch.
+   The cards themselves (.matchGrid/.matchGridElement) are in default.css: the admin
+   match list is built from the same card. */
+
+.userList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.matchNumber {
+  color: #20a0f0;
+}
+
+/* The copy-link and spectate buttons. Grey rather than the site's white so a row of
+   them reads as one block of actions instead of three separate calls to act. */
+.spectateButton {
+  background-color: #aab;
+}

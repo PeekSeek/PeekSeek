@@ -197,6 +197,12 @@ def test_profile_page_renders_match_history(client, user_factory):
             }
         },
     )
+    # recordFinalResults writes the match's own record; the running totals behind the
+    # stat strip are a separate row the game server appends to. Without this the page
+    # renders "User has no statistics" instead, which is what the statcards assertion
+    # below was silently passing on back when profile.html carried its CSS inline and
+    # the class name appeared in the page whether or not anything used it.
+    data.Stat.append(player.steam64, "unt", kills=4, deaths=1, wins=1)
 
     r = client.get(f"/u/{player.steam64}")
 
