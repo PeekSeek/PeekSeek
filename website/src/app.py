@@ -4,17 +4,34 @@ One app serves everything: server-rendered pages, the browser JSON endpoints the
 site's own scripts call, and the `/server/v1/*` API the game servers run on.
 """
 
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
+from src.core.notify import keep_player_counter_current
 from src.core.settings import settings
 from src.dependencies import ActiveBan, LoginRedirect, load_user, templates
 from src.routes import admin, auth, esports, gameserver, index, kits, pages, party, user
 
-app = FastAPI(title="PeekSeek", dependencies=[Depends(load_user)])
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Background work that lives as long as the app does.
+
+    Only the Discord player counter so far. It no-ops without a BOT_TOKEN, so an
+    environment that has none still starts the task and simply never posts.
+    """
+    counter = asyncio.create_task(keep_player_counter_current())
+    yield
+    counter.cancel()
+
+
+app = FastAPI(title="PeekSeek", dependencies=[Depends(load_user)], lifespan=lifespan)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,

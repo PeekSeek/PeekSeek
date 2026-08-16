@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using PeekSeekLobby.Core.Models;
@@ -118,6 +119,30 @@ internal static class RemoteAPI {
 
     private static string Text(JToken token) {
         return token == null || token.Type == JTokenType.Null ? null : token.ToString();
+    }
+
+    /// How many people are in this arena right now and not already on a match.
+    ///
+    /// One call for the whole server rather than one per player, because it is a fact
+    /// about the server. The queue cannot stand in for it: this lobby holds players
+    /// back from queueing to keep its own listing worth joining, so a full arena can
+    /// honestly have nobody queueing in it.
+    ///
+    /// Players holding a match are left out because the site counts every roster it
+    /// handed out by itself. Somebody standing in the arena picking their kit is on
+    /// both lists, and sending them here too would count them twice in one total.
+    ///
+    /// Fire and forget — nothing here reads the answer, and a reading that misses a
+    /// beat is a counter that is a few seconds stale rather than a lobby that stops.
+    internal static void ReportPopulation(int players) {
+        Task.Run(async () => {
+            try {
+                StringContent body = new($"{{\"players\":{players}}}", Encoding.UTF8, "application/json");
+                await Client.PostAsync($"{Base}/lobby/population", body);
+            } catch (Exception ex) {
+                ReportFailure(ex.Message);
+            }
+        });
     }
 
     internal static void LeaveQueue(ulong steam64) {

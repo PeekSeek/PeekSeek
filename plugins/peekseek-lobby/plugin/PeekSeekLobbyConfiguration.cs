@@ -94,6 +94,42 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// entry per category in AllowedKitCategories.
     public List<FallbackKit> FallbackKits;
 
+    /// How many players this lobby tries to keep in the arena rather than sending
+    /// off to matches. Only the surplus above this is offered to the queue, longest
+    /// wait first, because a browser listing showing a handful of players is what
+    /// brings the next one in and every 1v1 started takes two of them out of it.
+    ///
+    /// Set it to 0 to go back to queueing everybody the moment they are eligible.
+    public byte MinLobbyPopulation;
+
+    /// How long a player can be held out of the queue by MinLobbyPopulation before
+    /// they are offered a match regardless. The floor is there to keep the arena
+    /// worth joining, not to keep people who came for a match from ever getting
+    /// one — without this a lobby resting exactly on the floor never plays a single
+    /// match and empties itself the slow way instead. Zero means never release.
+    public float LobbyHoldMaxSeconds;
+
+    /// Master switch for the solo target range. Off removes /range entirely —
+    /// the command still exists but says the range is not set up here.
+    public bool RangeEnabled;
+
+    /// The barricade placed as a target. Must be an item this server can place as
+    /// a barricade and one bullets can actually hit: an invulnerable barricade
+    /// never raises the damage event the range counts hits with. 1408 is the cloth
+    /// mannequin — humanoid, and flagged Vulnerable in the vanilla assets, unlike
+    /// the metal one at 1409.
+    public ushort RangeTargetItemId;
+
+    /// How many targets a run puts up. Every one goes down in a single hit
+    /// whatever it is shot with, so this is the whole length of a run.
+    public byte RangeTargetCount;
+
+    /// Metres out from the player the row is placed, and how many degrees of arc
+    /// it is spread across. Wide and close is a tracking drill, narrow and far is
+    /// a precision one.
+    public float RangeDistance;
+    public float RangeSpreadDegrees;
+
     public void LoadDefaults() {
         szAPIURL = "https://api.peekseek.com";
         szHexDefaultChatColor = "#FFFFFF";
@@ -155,6 +191,15 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         ];
         RemoveDroppedItems = true;
         ResetIntervalSeconds = 300f;
+        // Two is the floor because a 1v1 takes exactly two: at four the lobby can
+        // start a match and still show two, which the browser still sells.
+        MinLobbyPopulation = 2;
+        LobbyHoldMaxSeconds = 240f;
+        RangeEnabled = true;
+        RangeTargetItemId = 1408;
+        RangeTargetCount = 8;
+        RangeDistance = 18f;
+        RangeSpreadDegrees = 90f;
         ShowEloAsReputation = true;
         szDiscordURL = "https://discord.gg/NKgTe6RnvH";
         szMatchURL = "https://dev.peekseek.net/match";

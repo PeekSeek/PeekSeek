@@ -87,6 +87,16 @@ internal abstract class LobbyManager {
         /// asked for the queue themselves with /noqueue.
         internal float QueueFrom;
 
+        /// When this player started wanting a match, used to order the queue hold so
+        /// the longest wait is offered first. Zero while they do not want one, which
+        /// is also what makes stopping and starting again go to the back of the line.
+        internal float QueueingSince;
+
+        /// Whether they have already been told they are being held back, so it is
+        /// said once when it starts rather than every heartbeat for as long as it
+        /// lasts.
+        internal bool ToldHeld;
+
         /// Whether the site should be asked to queue this player on this tick.
         ///
         /// False for someone who opted out, someone already holding a match, and someone
@@ -176,6 +186,7 @@ internal abstract class LobbyManager {
         DamageTool.damagePlayerRequested += OnDamagePlayerRequested;
 
         LastArenaReset = Time.realtimeSinceStartup;
+        TargetRange.Init();
         RemoteAPI.Init();
     }
 
@@ -244,6 +255,7 @@ internal abstract class LobbyManager {
         DamageTool.damagePlayerRequested -= OnDamagePlayerRequested;
         Instrument.UnpatchAll(HarmonyId);
 
+        TargetRange.Shutdown();
         RemoteAPI.Shutdown();
     }
 
@@ -262,6 +274,10 @@ internal abstract class LobbyManager {
         // Someone arriving as someone else leaves keeps the count identical, and the
         // new player would never be sent a number they have not seen before.
         LastLevelNumberSent = -1;
+
+        // There is a real fight to be had now, so nobody's warm-up targets are left
+        // standing in the middle of it as cover.
+        if (Provider.clients.Count > 1) TargetRange.StopAll("range_ended_players");
 
         ForceSolo(player);
         SpawnPlayer(steamID, state);
@@ -291,9 +307,19 @@ internal abstract class LobbyManager {
 
         Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
             "welcome_extra", Mathf.RoundToInt(config.ResetIntervalSeconds / 60f)));
+
+        // Last, and only when it applies. Somebody who walked into a full arena
+        // does not need to be told about shooting mannequins, and somebody who
+        // walked into an empty one needs it more than anything above.
+        if (config.RangeEnabled && Provider.clients.Count <= 1) {
+            Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("range_hint"));
+        }
     }
 
     private static void OnPlayerDisconnected(CSteamID steamID) {
+        TargetRange.Forget(steamID.m_SteamID);
+        OfferRangeToWhoeverIsLeft();
+
         if (!PeekSeekLobby.Config.EnableQueue) {
             Players.Remove(steamID.m_SteamID);
             return;
@@ -301,6 +327,17 @@ internal abstract class LobbyManager {
         if (Players.Remove(steamID.m_SteamID)) {
             RemoteAPI.LeaveQueue(steamID.m_SteamID);
         }
+    }
+
+    /// The player whose opponent just left is in exactly the position the range is
+    /// for, and is the one most likely to leave next. Told once, when it becomes
+    /// true, rather than repeated at them while they stand there alone.
+    private static void OfferRangeToWhoeverIsLeft() {
+        if (!PeekSeekLobby.Config.RangeEnabled) return;
+        if (Provider.clients.Count != 1) return;
+
+        SteamPlayer alone = Provider.clients[0];
+        if (alone != null) Whisper(alone, PeekSeekLobby.Instance.Translate("range_hint"));
     }
 
     /// Ordinary lobby kills are public — there's no stream overlay here to carry a
@@ -810,6 +847,8 @@ internal abstract class LobbyManager {
     private static void SendToMatch(ulong steam64, PlayerState state, int matchId) {
         state.Queueing = false;
         state.MatchId = matchId;
+        // The range was only ever there to fill the wait, and the wait is over.
+        TargetRange.Stop(steam64);
         // AFK is a lobby state and this player is leaving the lobby. Left set it would
         // outlive the reason for it: the countdown below is about to move them anyway,
         // and anything asking whether they can be hurt would keep saying no.
@@ -986,6 +1025,7 @@ internal abstract class LobbyManager {
         if (now - LastRefreshSent < PeekSeekLobby.Config.HeartbeatIntervalSeconds) return;
         LastRefreshSent = now;
         RefreshPlayers();
+        RemoteAPI.ReportPopulation(Players.Count(entry => entry.Value.MatchId == 0));
     }
 
     private static void TopUpMagazines() {
@@ -1116,6 +1156,12 @@ internal abstract class LobbyManager {
     /// nothing built, every session score back to zero and everyone respawned
     /// with a fresh kit. Elo is deliberately untouched — it isn't a session stat.
     private static void ResetArena() {
+        // The wipe clears every barricade on the map, which is where a running
+        // range keeps its targets. Skipping the whole cycle rather than sparing
+        // them is the honest version: the only player here is the one on the
+        // range, so there is nothing else the wipe would have tidied up.
+        if (TargetRange.AnyRunning) return;
+
         AnnounceLeaderboard();
 
         ItemManager.askClearAllItems();
@@ -1176,6 +1222,7 @@ internal abstract class LobbyManager {
     /// second round trip between "you have a match" and "here is where it is".
     private static void RefreshPlayers() {
         float now = Time.realtimeSinceStartup;
+        HashSet<ulong> offered = OfferedAMatch(now);
 
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
             // Queueing has a side effect, so it is only ever used for someone who
@@ -1184,8 +1231,56 @@ internal abstract class LobbyManager {
             bool wantsAMatch = PeekSeekLobby.Config.EnableQueue
                 && entry.Value.WantsAMatch(now);
 
-            if (wantsAMatch) RemoteAPI.RefreshQueued(entry.Key);
-            else RemoteAPI.Refresh(entry.Key);
+            if (wantsAMatch && offered.Contains(entry.Key)) {
+                entry.Value.ToldHeld = false;
+                RemoteAPI.RefreshQueued(entry.Key);
+                continue;
+            }
+
+            // Held back, not forgotten: the site is still asked about them, so a match
+            // made on the site or in a party still reaches them. The only thing being
+            // withheld is this lobby volunteering them for a new one.
+            if (wantsAMatch) TellHeld(entry.Key, entry.Value);
+            RemoteAPI.Refresh(entry.Key);
         }
+    }
+
+    /// Who this lobby is willing to put into the queue this tick, keeping enough
+    /// people in the arena that the server is still worth joining from the browser.
+    private static HashSet<ulong> OfferedAMatch(float now) {
+        Dictionary<ulong, float> waiting = [];
+
+        foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
+            PlayerState state = entry.Value;
+            if (!PeekSeekLobby.Config.EnableQueue || !state.WantsAMatch(now)) {
+                // Stopping resets the clock, so coming back goes to the back of the
+                // line rather than keeping a wait they spent not wanting a match.
+                state.QueueingSince = 0;
+                continue;
+            }
+
+            if (state.QueueingSince == 0) state.QueueingSince = now;
+            waiting[entry.Key] = state.QueueingSince;
+        }
+
+        return QueueHold.Offered(
+            waiting,
+            Provider.clients.Count,
+            PeekSeekLobby.Config.MinLobbyPopulation,
+            PeekSeekLobby.Config.LobbyHoldMaxSeconds,
+            now);
+    }
+
+    /// Said once, when the hold starts. A wait nobody explains reads as matchmaking
+    /// being broken, which is the reading that makes people leave.
+    private static void TellHeld(ulong steam64, PlayerState state) {
+        if (state.ToldHeld) return;
+        state.ToldHeld = true;
+
+        SteamPlayer client = PlayerTool.getPlayer(new CSteamID(steam64))?.channel?.owner;
+        if (client == null) return;
+
+        Whisper(client, PeekSeekLobby.Instance.Translate(
+            "queue_held", PeekSeekLobby.Config.MinLobbyPopulation));
     }
 }

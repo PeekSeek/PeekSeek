@@ -25,6 +25,18 @@ list = ["admin", "canWriteBlog", "premium"]
 client_id = "1317158396629094451"
 invite_url = "https://discord.gg/NKgTe6RnvH"
 
+# Voice channel renamed to the live arena population, so the sidebar answers "is
+# anyone playing" without anyone having to open a channel or the game.
+#
+# A channel id is not a secret, so it lives here rather than in the environment.
+# Nothing renames it unless BOT_TOKEN is set, which is what keeps dev — which
+# deliberately runs without one — from renaming the production channel.
+counter_channel = "1538266851203879032"
+
+# Seconds between renames. Discord allows two channel renames per ten minutes and
+# answers the third with a 429, so this cannot usefully go below ~300.
+counter_interval = 360
+
 [regions.names]
 # Region id -> display name used in Discord queue pings.
 paris = "EU-West"

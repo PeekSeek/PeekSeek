@@ -118,6 +118,19 @@ class UserHB(SQLModel, table=True):
             )
 
     @staticmethod
+    def countAllFresh() -> int:
+        """How many players are waiting for a match anywhere.
+
+        Separate from countFresh because that one answers a game server asking about
+        its own region, and this one answers "is anything happening here at all",
+        where a queue in Utah counts exactly as much as one in Paris.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            return len(UserHB.freshInQueue(db))
+
+    @staticmethod
     def claim(steam64s) -> bool:
         """Take these players out of the queue, and say whether this call is the one
         that got them.
