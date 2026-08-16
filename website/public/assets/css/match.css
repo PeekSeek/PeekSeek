@@ -22,7 +22,11 @@
   border-radius: 0px;
 }
 
+/* #message is a full-width flex column, so a stretched button came out as wide as the
+   longest line of copy above it: "Copy server code" on a button the width of a
+   sentence. align-self keeps every button the width of its own label. */
 .mbutton {
+  background-color:#fff;
   color:#000;
   font-size:20px;
   padding:5px 15px;
@@ -30,6 +34,20 @@
   border:0;
   cursor:pointer;
   margin-bottom: 5px;
+  align-self: center;
+} .mbutton:hover {
+  background-color: #ddd;
+} #message a {
+  align-self: center;
+}
+
+/* Connecting is the one thing a player has to do on this screen, and it was competing
+   with a copy button that looked exactly like it, so it gets the site's orange rather
+   than a third white fill. */
+.mbutton.connect {
+  background-color: #ffa34e;
+} .mbutton.connect:hover {
+  background-color: #ffb974;
 }
 
 .decisionRow {

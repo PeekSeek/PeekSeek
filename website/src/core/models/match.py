@@ -525,10 +525,15 @@ class Match(SQLModel, table=True):
         return self.claimed
 
     def getSteamUserData(self) -> dict:
+        """Everything the site knows about each player in this match that the game
+        server does not: the Steam persona to call them by before they have connected,
+        and the gun they will spawn holding. Both are what the overlay's intermission
+        screen draws while the match is still filling up."""
         from src.core import steam
+        from .kit import Kit
 
         return {
-            user: steam.User(user).toDict()
+            user: steam.User(user).toDict() | {"gun": Kit.gunFor(user, self)}
             for team in self.teams
             for user in team["users"]
         }

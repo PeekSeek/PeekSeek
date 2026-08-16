@@ -451,22 +451,23 @@ function groupHtml(team) {
 /* A player who has not picked yet is shown pending rather than left out, so the column
    is its final height from the first frame and nothing shifts as picks land. */
 function cardHtml(steam64) {
-    const name = (data.users || {})[steam64]?.name || steam64;
+    const user = (data.users || {})[steam64] || {};
+    const name = user.name || steam64;
     const picks = (data.params?.userData || {})[steam64] || {};
 
+    /* The gun itself rather than the name of the kit it came out of. "Meta" tells a
+       viewer nothing about what the player is holding, and the icon is the same one
+       the in-play card shows, so the two screens name the weapon the same way. */
+    const gun = user.gun ? slotHtml({ id: user.gun, amount: 1 }, "gun") : "";
+
     const body = picks.kit
-        ? `<span class="kitname">${escapeHtml(titleCase(picks.kit))}</span>` +
-          `<span class="pw">${escapeHtml(picks.powerup || "No powerup")}</span>`
+        ? `${gun}<span class="pw">${escapeHtml(picks.powerup || "No powerup")}</span>`
         : `<span class="waiting">picking…</span>`;
 
     return `<div class="card flat${picks.kit ? "" : " pending"}">
       <span class="nm">${escapeHtml(name)}</span>
       <div class="l2">${body}</div>
     </div>`;
-}
-
-function titleCase(value) {
-    return String(value).charAt(0).toUpperCase() + String(value).slice(1);
 }
 
 function render() {
