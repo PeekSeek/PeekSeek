@@ -108,5 +108,9 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "match_found", "<color=white>Match found.</color> Open the page that just appeared to log in and pick your kit." },
         { "match_found_browser", "Open this and log in to select your kit and start your match" },
         { "match_started", "Your match is <color=white>ready</color>. Sending you to the server now." },
+        // Said to somebody who was taken out of the arena for a match that then ended
+        // without them. Leads with them being back in, because that is the part they can
+        // act on; why it fell through is not something this server can honestly say.
+        { "match_over_returning", "That match <color=white>ended without you</color>. You are back in the arena and back in the queue." },
     };
 }

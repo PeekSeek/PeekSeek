@@ -41,9 +41,20 @@ internal abstract class LobbyManager {
         internal ushort SpareMagItemId;
         internal byte SpareMagFullStock;
 
-        /// Non-zero once matchmaking has paired this player up, until their match is
-        /// actually being hosted and they get relayed over to it.
+        /// The match the site says this player is on, for as long as it says so. Zero
+        /// when they are free to be offered another.
+        ///
+        /// Cleared by the site's answer rather than by relaying them, because relaying
+        /// is not the same as arriving. Two in five matches end with nobody having
+        /// turned up, and a player still standing here when that happens used to keep
+        /// this set forever: never queued again, never counted in the arena, never put
+        /// back into the fight.
         internal int MatchId;
+
+        /// The match server this player has already been sent to. The site keeps
+        /// answering with the same server code for as long as the match is live, so
+        /// without this every refresh relays them again and says so in chat.
+        internal string RelayedTo;
 
         /// The player's Elo, re-asserted as their reputation on a timer because
         /// Unturned moves reputation itself on kills.
@@ -105,6 +116,26 @@ internal abstract class LobbyManager {
         /// repeated at the two call sites that ask.
         internal bool WantsAMatch(float now) {
             return Queueing && MatchId == 0 && now >= QueueFrom;
+        }
+
+        /// Whether the match this player is standing here holding has gone away.
+        ///
+        /// `siteMatchId` is what the site answered for them this refresh, and it is the
+        /// only thing that knows: a match ends by being scored, abandoned or cancelled,
+        /// and none of those are events this lobby is told about. So the answer simply
+        /// stops mentioning a match, and that is the signal.
+        internal bool LostTheirMatch(int siteMatchId) => MatchId != 0 && siteMatchId == 0;
+
+        /// Whether this player should be handed over to `serverCode` now.
+        ///
+        /// Once per server rather than once per refresh. The site keeps answering with
+        /// the same code for as long as the match is live, and a relay the client
+        /// refuses leaves the player right here — so without the last code remembered
+        /// they are invited again every few seconds, and told about it in chat each
+        /// time. A countdown still running wins: relaying mid-count would take away the
+        /// warning the count exists to give.
+        internal bool ShouldRelayTo(string serverCode) {
+            return MatchId != 0 && PullAt == 0 && RelayedTo != serverCode;
         }
 
         /// Whether this player cannot be hurt right now. One timer covers a life's
@@ -821,8 +852,9 @@ internal abstract class LobbyManager {
     /// Everything the site said about one player, acted on in one place.
     ///
     /// Reads top to bottom as the player's journey: rank first, then "you have a
-    /// match", then "your match is ready, go". Each step only fires once because the
-    /// step before it moves the player's own state on.
+    /// match", then either "your match is ready, go" or "that match is gone, back to
+    /// the fight". Each step only fires once because the step before it moves the
+    /// player's own state on.
     internal static void ApplyPlayerState(ulong steam64, RemoteAPI.PlayerState remote, bool eloKnown) {
         if (!Players.TryGetValue(steam64, out PlayerState state)) return;
 
@@ -832,21 +864,26 @@ internal abstract class LobbyManager {
         }
 
         if (remote.MatchId != 0 && state.MatchId == 0) SendToMatch(steam64, state, remote.MatchId);
+        if (state.LostTheirMatch(remote.MatchId)) ReturnToArena(steam64, state);
         if (remote.RelayTo != null) RelayToMatch(steam64, state, remote.RelayTo);
     }
 
-    /// A matched player stops fighting: back to a spawn point, out of the queue so the
-    /// lobby stops queueing for them, and handed the link that logs them in and lands
-    /// them on their match page. Hitting /match while logged out is itself what records
-    /// it as the page to return to, so the site sends them back there after login
-    /// without needing a redirect parameter.
+    /// A matched player stops fighting: back to a spawn point, and handed the link that
+    /// logs them in and lands them on their match page. Hitting /match while logged out
+    /// is itself what records it as the page to return to, so the site sends them back
+    /// there after login without needing a redirect parameter.
+    ///
+    /// Their own queue choice is deliberately left alone. Holding a match already keeps
+    /// them out of the queue — that is what WantsAMatch checks — so switching Queueing
+    /// off as well changed nothing while the match lasted and threw away the one thing
+    /// needed to put them back when it did not.
     ///
     /// Having a match is what matters here, not being in this lobby's queue — a match
     /// made on the site or in a party has to pull someone out of the arena just the
     /// same, or they fight on unaware their match is waiting.
     private static void SendToMatch(ulong steam64, PlayerState state, int matchId) {
-        state.Queueing = false;
         state.MatchId = matchId;
+        state.RelayedTo = null;
         // The range was only ever there to fill the wait, and the wait is over.
         TargetRange.Stop(steam64);
         // AFK is a lobby state and this player is leaving the lobby. Left set it would
@@ -918,19 +955,45 @@ internal abstract class LobbyManager {
     /// The site only fills in a server code once the match is genuinely being hosted, so
     /// this is the moment the player can be handed over and be sure of getting in — the
     /// same relay the match plugin uses to send everyone back here when a match ends.
+    ///
+    /// Sent once per match server rather than once per match: a relay the client refuses
+    /// leaves the player standing here, and the site goes on answering with the same
+    /// code until the match is over, so relaying every few seconds would fill their chat
+    /// with an invitation they have already declined.
     private static void RelayToMatch(ulong steam64, PlayerState state, string serverCode) {
-        if (state.MatchId == 0) return;
-        // A server that was ready before the countdown finished still waits for it.
-        // Relaying mid-count would take away the warning the count exists to give.
-        if (state.PullAt > 0) return;
+        if (!state.ShouldRelayTo(serverCode)) return;
         if (!ulong.TryParse(serverCode, out ulong serverId) || serverId == 0) return;
 
         Player player = PlayerTool.getPlayer(new CSteamID(steam64));
         if (player == null) return;
 
-        state.MatchId = 0;
+        state.RelayedTo = serverCode;
         Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_started"));
         player.sendRelayToServer(new CSteamID(serverId), string.Empty, true);
+    }
+
+    /// The match this player was taken out of the arena for is over and they are still
+    /// standing here, so they are put back into the fight and back into the queue.
+    ///
+    /// This is the ordinary ending, not an edge case: two in five matches finish with
+    /// nobody having turned up, and the players they were built out of are usually still
+    /// in this lobby when that happens. Without this they keep a match id the site
+    /// stopped believing in — parked on the spawn point PullIntoMatch left them on, never
+    /// offered another match, and left out of the arena count for the rest of the session,
+    /// which is a lobby quietly emptying itself of exactly the people who wanted to play.
+    private static void ReturnToArena(ulong steam64, PlayerState state) {
+        state.MatchId = 0;
+        state.RelayedTo = null;
+        // A match that died mid-countdown takes its countdown with it, or Tick would go
+        // on pulling them out for somewhere that no longer exists.
+        state.PullAt = 0;
+
+        CSteamID steamID = new(steam64);
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null) return;
+
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_over_returning"));
+        SpawnPlayer(steamID, state);
     }
 
     /// Switches the caller's kit category and re-equips them immediately (no
@@ -1025,7 +1088,6 @@ internal abstract class LobbyManager {
         if (now - LastRefreshSent < PeekSeekLobby.Config.HeartbeatIntervalSeconds) return;
         LastRefreshSent = now;
         RefreshPlayers();
-        RemoteAPI.ReportPopulation(Players.Count(entry => entry.Value.MatchId == 0));
     }
 
     private static void TopUpMagazines() {
@@ -1220,16 +1282,25 @@ internal abstract class LobbyManager {
     /// One request per player, every tick. Whether it queues them or only asks about
     /// them is the only difference — both come back with the same answer, so there is no
     /// second round trip between "you have a match" and "here is where it is".
+    ///
+    /// The population report goes out from here rather than from Tick because this is
+    /// where all three of its numbers are already known, and a count taken anywhere else
+    /// would be a second place deciding who is in the arena and who is waiting.
     private static void RefreshPlayers() {
         float now = Time.realtimeSinceStartup;
         HashSet<ulong> offered = OfferedAMatch(now);
+        int inArena = 0;
+        int wanting = 0;
 
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
+            if (entry.Value.MatchId == 0) inArena++;
+
             // Queueing has a side effect, so it is only ever used for someone who
             // actually wants a match: asking with it would quietly undo a /noqueue, and
             // would put a player who already has a match back in the queue for another.
             bool wantsAMatch = PeekSeekLobby.Config.EnableQueue
                 && entry.Value.WantsAMatch(now);
+            if (wantsAMatch) wanting++;
 
             if (wantsAMatch && offered.Contains(entry.Key)) {
                 entry.Value.ToldHeld = false;
@@ -1243,6 +1314,10 @@ internal abstract class LobbyManager {
             if (wantsAMatch) TellHeld(entry.Key, entry.Value);
             RemoteAPI.Refresh(entry.Key);
         }
+
+        // Everyone offered a match wanted one, so whoever wanted one and was not offered
+        // is exactly who this lobby is holding back.
+        RemoteAPI.ReportPopulation(inArena, wanting, wanting - offered.Count);
     }
 
     /// Who this lobby is willing to put into the queue this tick, keeping enough

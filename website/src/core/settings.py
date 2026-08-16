@@ -38,6 +38,7 @@ class Settings:
         self.discord_invite_url: str = toml["discord"]["invite_url"]
         self.counter_channel: str = toml["discord"]["counter_channel"]
         self.counter_interval: int = toml["discord"]["counter_interval"]
+        self.wake_ping_after: int = toml["discord"]["wake_ping_after"]
 
         self.mmconfig: dict = self._data_file(toml, "mmconfig")
         self.kits: dict = self._data_file(toml, "kits")

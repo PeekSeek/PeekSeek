@@ -154,14 +154,25 @@ watching a match it is not hosting.
 
 | Route | What it does |
 |---|---|
-| `POST /lobby/population` | How many players this server has right now. |
+| `POST /lobby/population` | What this server's arena looks like right now. |
 
 ```jsonc
-{"players": 6}
+{
+  "players": 6,    // in the arena and not on a match
+  "queueing": 4,   // optional — how many of those want a match
+  "held": 2        // optional — how many of those you are keeping out of the queue
+}
 ```
 
-Sent once per heartbeat for the whole server, not once per player: it is a fact about
-the server rather than about anybody in it. Nothing reads the reply.
+Sent once per heartbeat for the whole server, not once per player: every number here is
+a fact about the server rather than about anybody in it. Nothing reads the reply.
+
+`queueing` and `held` are optional, and are stored as absent rather than as zero when
+they are left out — a server that does not report them has not said nobody wanted a
+match. Send them if you hold players back for any reason. Without them a lobby with
+three people in it looks the same whether they are happily fighting or all three are
+waiting on a match you have not offered up, and those are the two cases anything trying
+to raise matches per day has to tell apart.
 
 **Report only the players who are not on a match.** The site counts every roster it
 handed out by itself, so a player standing in the arena picking their kit is already
@@ -176,6 +187,10 @@ six people fighting in it.
 
 A server that stops reporting drops out after 30 seconds rather than being trusted,
 so a lobby that crashed with eleven people in it stops advertising them.
+
+Each reading is also kept as history, but only when it says something the reading before
+it did not — so keep sending on your heartbeat and do not try to send only on change.
+The site knows what you last said; you would only be guessing.
 
 ## Matchmaking rules
 

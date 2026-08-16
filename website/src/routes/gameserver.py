@@ -386,18 +386,39 @@ def _player(steam64: int) -> dict:
 
 @router.post("/lobby/population")
 def lobbyPopulation(server: GameServer, payload: JsonBody):
-    """How many players this lobby has in its arena right now.
+    """What this lobby's arena looks like right now.
 
-    Sent once per heartbeat for the whole server rather than per player, because it
-    is one fact about the server and not a fact about anybody in it. Nothing reads
-    the reply — this exists so the site can say how alive the game is somewhere the
-    Unturned browser cannot reach, which today means the Discord counter.
+    Sent once per heartbeat for the whole server rather than per player, because every
+    number here is one fact about the server and not a fact about anybody in it. Nothing
+    reads the reply — this exists so the site can say how alive the game is somewhere the
+    Unturned browser cannot reach, which today means the Discord counter, the arena
+    history, and the announcement when an arena that has been dead for hours wakes up.
 
     Body:
-        players  how many are connected to the lobby, arena and queue alike.
+        players   how many are connected to the lobby and not already on a match.
+        queueing  how many of those want a match. Optional.
+        held      how many of those the lobby is keeping out of the queue to protect
+                  its own browser listing. Optional.
+
+    `queueing` and `held` are optional because a lobby build that predates them reports
+    neither, and a lobby that does no holding of its own has nothing to say about either.
+    They are stored as absent rather than as zero, so "this build does not report it"
+    never reads as "nobody wanted a match".
     """
-    data.LobbyPopulation.report(server.address, int(payload.get("players", 0)))
+    players = int(payload.get("players", 0))
+    data.LobbyPopulation.report(server.address, players)
+    data.ArenaReading.record(
+        server.address,
+        players,
+        _optionalCount(payload, "queueing"),
+        _optionalCount(payload, "held"),
+    )
     return {"status": "recorded"}
+
+
+def _optionalCount(payload: dict, field: str) -> int | None:
+    value = payload.get(field)
+    return None if value is None else int(value)
 
 
 @router.get("/players/{steam64}")
