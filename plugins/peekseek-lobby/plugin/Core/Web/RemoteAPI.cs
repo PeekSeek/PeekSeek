@@ -121,23 +121,33 @@ internal static class RemoteAPI {
         return token == null || token.Type == JTokenType.Null ? null : token.ToString();
     }
 
-    /// How many people are in this arena right now and not already on a match.
+    /// What this arena looks like right now: how many are in it, how many of those want
+    /// a match, and how many of those this lobby is holding back from the queue.
     ///
-    /// One call for the whole server rather than one per player, because it is a fact
-    /// about the server. The queue cannot stand in for it: this lobby holds players
-    /// back from queueing to keep its own listing worth joining, so a full arena can
-    /// honestly have nobody queueing in it.
+    /// One call for the whole server rather than one per player, because all three are
+    /// facts about the server. The queue cannot stand in for the first of them: this
+    /// lobby holds players back from queueing to keep its own listing worth joining, so
+    /// a full arena can honestly have nobody queueing in it.
     ///
-    /// Players holding a match are left out because the site counts every roster it
-    /// handed out by itself. Somebody standing in the arena picking their kit is on
-    /// both lists, and sending them here too would count them twice in one total.
+    /// The other two are sent because that hold is otherwise invisible. A lobby that
+    /// reports only its population looks identical whether it is three people happily
+    /// fighting or three people who all asked for a match and are being made to wait,
+    /// and those are the two cases anything trying to raise matches per day has to tell
+    /// apart.
+    ///
+    /// Players holding a match are left out of the population because the site counts
+    /// every roster it handed out by itself. Somebody standing in the arena picking
+    /// their kit is on both lists, and sending them here too would count them twice in
+    /// one total.
     ///
     /// Fire and forget — nothing here reads the answer, and a reading that misses a
     /// beat is a counter that is a few seconds stale rather than a lobby that stops.
-    internal static void ReportPopulation(int players) {
+    internal static void ReportPopulation(int players, int queueing, int held) {
         Task.Run(async () => {
             try {
-                StringContent body = new($"{{\"players\":{players}}}", Encoding.UTF8, "application/json");
+                StringContent body = new(
+                    $"{{\"players\":{players},\"queueing\":{queueing},\"held\":{held}}}",
+                    Encoding.UTF8, "application/json");
                 await Client.PostAsync($"{Base}/lobby/population", body);
             } catch (Exception ex) {
                 ReportFailure(ex.Message);
