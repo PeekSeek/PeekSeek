@@ -1,0 +1,123 @@
+/* pages/profile.html -- a player's stats, Elo trend and match history.
+   Match-first: a slim stat strip up top, the match list takes the visual weight. */
+
+.profileContainer {
+  width: 100%;
+}
+
+.currentProfile img {
+  width: 100px;
+  height: 100px;
+  margin-right: 20px;
+} .currentProfile span {
+  max-width: none;
+  display: flex;
+  align-items: flex-start;
+  font-size: 20px;
+  margin-top: 15px;
+}
+
+/* A button that has to read as part of the sentence it sits in, so it drops every
+   button style rather than adding one. */
+.inlineButton {
+  all: unset;
+  cursor: pointer;
+}
+
+.statcards {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin: 5px 0;
+} .statcard {
+  background-color: #121212;
+  border-radius: 6px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+} .statcard .label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8a8a8a;
+} .statcard .value {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+/* The kit cards show the gun big and its attachments in a row underneath, because
+   an attachment nobody can identify at 20px is still worth counting. */
+.kitcard .value {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+} .statcard span .kitimg {
+  width: 20%;
+  height: 20px;
+  object-fit: contain;
+} .statcard span .kitimg:first-child {
+  width: 100%;
+  height: 80px;
+}
+
+.eloChartWrap {
+  background-color: #121212;
+  border-radius: 6px;
+  padding: 14px;
+  height: 160px;
+  margin: 5px 0;
+}
+
+.matchlist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 5px 0;
+} .matchrow {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 14px;
+  border-radius: 6px;
+  padding: 10px 14px;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+  background-color: #151515;
+} .matchrow .map {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+} .matchrow .map .name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+} .matchrow .map .when {
+  font-size: 11px;
+  color: #8a8a8a;
+} .matchrow .kd, .matchrow .hs {
+  font-size: 12.5px;
+  color: #8a8a8a;
+  white-space: nowrap;
+} .matchrow .kd b {
+  color: #fff;
+} .matchrow .elo {
+  font-size: 13px;
+  font-weight: 700;
+} .matchrow .elo.pos {
+  color: #7ee08a;
+} .matchrow .elo.neg {
+  color: #ff4444;
+} .matchrow .result {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ff4444;
+} .matchrow.loss .result {
+  color: #8a8a8a;
+}
+
+h2 {
+  margin-top: 20px;
+}

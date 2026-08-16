@@ -163,3 +163,24 @@ footer a {
     font-size: 30px;
     margin-bottom: -15px;
 }
+.missionText {
+    max-width: 800px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.footerLinks {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 10px;
+    color: #333;
+}

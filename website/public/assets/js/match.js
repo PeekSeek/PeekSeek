@@ -1,6 +1,13 @@
 let canDisplayTurn = true;
 let canInterval = true;
 
+/* The fanfare for landing on the pick screen. Browsers refuse autoplay until the tab
+   has been interacted with, and arriving here from a link in another tab does not
+   count, so a refusal is the normal case rather than an error worth surfacing. */
+window.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("welcome-sound").play().catch(() => {});
+});
+
 /// Unturned takes the server code on the launch command line; there is no URL
 /// scheme that joins by code directly.
 function connectUrl(serverCode) {

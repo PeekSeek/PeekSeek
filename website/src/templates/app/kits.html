@@ -6,6 +6,10 @@
 
 {% block currentPage %}{{ category }}{% endblock %}
 
+{% block addheader %}
+<link rel="stylesheet" href="/static/assets/css/kits.css" />
+{% endblock %}
+
 {% block content %}
 {% include "app/_kit_editor.html" %}
 {% endblock %}

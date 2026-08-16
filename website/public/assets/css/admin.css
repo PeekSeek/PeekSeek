@@ -1,0 +1,102 @@
+/* app/admin.html -- the live match list, drawn entirely by js/admin.js.
+   Cards are the .matchGridElement in default.css that the rest of the site uses;
+   everything here is the extra density an admin page wants and no other page does. */
+
+/* A real grid rather than the wrapping flex row .matchGrid uses, so every card is one
+   column wide and they all line up. Flex sizes each card to its own contents, which on a
+   page you are scanning for the odd one out is the wrong signal entirely: a 1v1 came out
+   narrower than a 2v2 and the eye reads that as a difference that means something.
+
+   auto-fill rather than auto-fit so a quiet moment with two matches on it leaves empty
+   columns instead of stretching two cards across the whole screen, and the min() so a
+   window narrower than one column shrinks the card instead of overflowing the page. */
+.adminMatchGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+  gap: 20px;
+  margin-top: 10px;
+}
+
+/* Cards stretch to their row's height, which is what .matchGridElement's existing
+   space-between is for: the buttons settle on the card's bottom edge and line up across
+   the row rather than floating wherever that card's roster happened to end.
+   min-width goes because the card carries one for the flex layout, and in a grid it
+   would stop the card shrinking with its column on a narrow window. */
+.adminMatchGrid .matchGridElement {
+  min-width: 0;
+}
+
+.adminHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+} .adminRefreshed {
+  color: #8885;
+  font-size: 13px;
+}
+
+.adminCardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+} .adminClock {
+  color: #8885;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+} .adminMeta {
+  font-size: 13px;
+  color: #aaa;
+} .adminActions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.adminTeam {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 10px;
+} .adminTeamHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+} .adminTeamScore {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* Name, numbers, and where they stand, in three columns so every player on the page
+   lines up down the card however long their name is. */
+.adminPlayer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+} .adminPlayer .userProfile {
+  font-size: 14px;
+  font-weight: 400;
+  gap: 8px;
+  min-width: 0;
+} .adminPlayer .userProfile img {
+  height: 24px;
+  width: 24px;
+  border-radius: 5px;
+} .adminPlayer .userProfile span {
+  max-width: 100%;
+  white-space: nowrap;
+} .adminPlayerStats {
+  white-space: nowrap;
+} .adminPlayerTrailing {
+  white-space: nowrap;
+  text-align: right;
+}

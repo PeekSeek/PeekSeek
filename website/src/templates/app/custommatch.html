@@ -8,7 +8,11 @@
 {% block description %}Create a custom match.{% endblock %}
 {% block color %}#ff0000{% endblock %}
 
-{% block script %}<script src="/static/assets/custommatch.js" defer></script>{% endblock %}
+{% block script %}<script src="/static/assets/js/customMatch.js" defer></script>{% endblock %}
+
+{% block addheader %}
+<link rel="stylesheet" href="/static/assets/css/customMatch.css" />
+{% endblock %}
 
 {% block content %}
 
@@ -74,7 +78,7 @@
     </div>
 
     <div>
-        <button id="customStart" class="settingsButton"><img src="/static/img/play.png" alt="" width="15px" style="filter: invert(1);"> Start</button>
+        <button id="customStart" class="settingsButton"><img src="/static/img/play.png" alt="" width="15px"> Start</button>
     </div>
 </div>
 

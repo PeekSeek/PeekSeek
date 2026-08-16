@@ -27,6 +27,7 @@ it lands in one commit. That contract is written down in
 | [plugins/utelemetry/](plugins/utelemetry/) | RocketMod plugin for PvP telemetry beyond kill counts | C#, net48 |
 
 Each component keeps its own README with the detail; start there.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the branch model and the conventions.
 
 ## Working on it
 

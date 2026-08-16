@@ -1,0 +1,43 @@
+/* pages/match_detail.html -- the result and kill log for one finished match. */
+
+.profileContainer {
+  width: 100%;
+}
+
+.statTable {
+  width: 100%;
+  background-color: #333;
+  border-spacing: 2px;
+  border-radius: 5px;
+  border: solid 2px #333;
+  margin: 5px 0;
+} .statTable th {
+  text-align: left;
+  background-color: #0a0a0a;
+  padding: 5px 10px;
+} .statTable td {
+  text-align: left;
+  background-color: #0a0a0a;
+  padding: 5px 10px;
+  color: #fff9;
+}
+
+.statTable .win {
+  color: #7ee08a;
+  font-weight: 700;
+} .statTable .loss {
+  color: #ff4444;
+  font-weight: 700;
+}
+
+.matchHeading {
+  margin: 0;
+}
+
+.matchWhen {
+  color: #8885;
+}
+
+h2 {
+  margin-top: 20px;
+}

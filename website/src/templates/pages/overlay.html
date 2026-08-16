@@ -12,10 +12,10 @@
       let createdby = {{createdBy | safe}};
     </script>
 
-    <script src="/static/assets/api.js" crossorigin="anonymous" defer></script>
-    <script src="/static/assets/overlayUpdated.js" crossorigin="anonymous" defer></script>
+    <script src="/static/assets/js/api.js" crossorigin="anonymous" defer></script>
+    <script src="/static/assets/js/overlay.js" crossorigin="anonymous" defer></script>
 
-    <link rel="stylesheet" href="/static/assets/overlay.css" crossorigin="anonymous"></link>
+    <link rel="stylesheet" href="/static/assets/css/overlay.css" crossorigin="anonymous">
   </head>
   <body>
     <!-- What fills the gap before the first round. Two faces, swapped by class on
@@ -24,7 +24,7 @@
          by script so the markup can be styled and checked without a live match. -->
     <div id="notStarted" class="waiting">
       <div class="splash">
-        <img src="/static/img/cmw.png" style="height:10vh;">
+        <img src="/static/img/cmw.png" alt="PeekSeek" class="splashLogo">
         <h1>Starting soon</h1>
         <span id="notStartedText">Loading teams…</span>
       </div>

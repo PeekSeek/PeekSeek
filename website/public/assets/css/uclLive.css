@@ -1,0 +1,16 @@
+/* pages/uclLive.html -- the two Twitch embeds and the YouTube stream, side by side. */
+
+.streamRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    width: 100%;
+}
+
+/* The embeds are iframes the platforms build themselves, so the rounding has to be
+   clipped by this wrapper -- there is no way to ask Twitch for a rounded player. */
+.streamEmbed {
+    height: 480px;
+    border-radius: 15px;
+    overflow: hidden;
+}

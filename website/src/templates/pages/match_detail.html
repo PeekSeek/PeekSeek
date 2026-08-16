@@ -10,8 +10,8 @@
 
 <div class="mainElement">
   <div class="container profileContainer">
-    <h1 style="margin:0;">{{result.data.get("map") or "Unknown map"}}</h1>
-    <span style="color:#8885;">Match #{{result.matchId}} &middot; {{result.endTime.strftime("%d/%m/%Y %H:%M")}}</span>
+    <h1 class="matchHeading">{{result.data.get("map") or "Unknown map"}}</h1>
+    <span class="matchWhen">Match #{{result.matchId}} &middot; {{result.endTime.strftime("%d/%m/%Y %H:%M")}}</span>
 
     <h2>Result</h2>
     {% if not players %}
@@ -21,12 +21,12 @@
         <tr><th>Player</th><th>Kills</th><th>Deaths</th><th>HS%</th><th>Elo</th><th></th></tr>
         {% for p in players %}
         <tr>
-          <td><a class="userProfile" href="/u/{{p.steam64}}" style="font-size:14px;font-weight:600;"><img src="{{p.user.avatar}}" style="width:20px;height:20px;border-radius:5px;">{{p.user.name}}</a></td>
+          <td><a class="userProfile small" href="/u/{{p.steam64}}"><img src="{{p.user.avatar}}" alt="">{{p.user.name}}</a></td>
           <td>{{p.get("Kills", 0)}}</td>
           <td>{{p.get("Deaths", 0)}}</td>
           <td>{{round(p.get("Headshots", 0) / max(p.get("Kills", 0), 1) * 100, 1)}}</td>
           <td>{% if "Elo Change" in p %}{{ "+" if p.get("Elo Change", 0) >= 0 else "" }}{{p.get("Elo Change")}}{% endif %}</td>
-          <td style="color:{{ '#7ee08a' if p.get('Won') else '#ff4444' }};font-weight:700;">{{ "WIN" if p.get("Won") else "LOSS" }}</td>
+          <td class="{{ 'win' if p.get('Won') else 'loss' }}">{{ "WIN" if p.get("Won") else "LOSS" }}</td>
         </tr>
         {% endfor %}
       </table>
@@ -55,28 +55,5 @@
 {% endblock %}
 
 {% block addheader %}
-<style>
-  .profileContainer { width: 100%; }
-
-  .statTable {
-    width: 100%;
-    background-color: #333;
-    border: 0;
-    border-spacing: 2px;
-    border-radius: 5px;
-    border: solid 2px #333;
-    margin: 5px 0;
-  } .statTable th {
-    text-align: left;
-    background-color: #0a0a0a;
-    padding: 5px 10px;
-  } .statTable td {
-    text-align: left;
-    background-color: #0a0a0a;
-    padding: 5px 10px;
-    color: #fff9;
-  }
-
-  h2 { margin-top: 20px; }
-</style>
+<link rel="stylesheet" href="/static/assets/css/matchDetail.css" />
 {% endblock %}

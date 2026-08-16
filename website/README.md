@@ -20,7 +20,10 @@ server-rendered pages, the JSON endpoints the site's own scripts call, and the
 `/server/v1/*` API the game servers run on — see [API.md](API.md) for that contract.
 
 ```
-public/               # css/js/images, served at /static
+public/               # served at /static
+├── assets/css/       # one stylesheet per page, plus default.css for everything shared
+├── assets/js/        # one script per page
+├── img/ maps/ unturned/
 src/
 ├── app.py            # FastAPI assembly: middleware, routers, error pages
 ├── dependencies.py   # current user, auth guards, template renderer
@@ -96,6 +99,10 @@ else in the file is the same everywhere.
 docker build -t peekseek .
 docker run --env-file .env -p 8000:8000 peekseek
 ```
+
+The build runs [`minify.py`](minify.py) over `public/assets` after copying it in, so the
+image serves compressed CSS and JS while the repo keeps the readable source. The
+compressors are uninstalled in the same layer and never reach the running container.
 
 ## Testing
 

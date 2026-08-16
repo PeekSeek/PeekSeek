@@ -9,7 +9,8 @@
 {% block currentPage %}esports{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/assets/esports2.css" />
+<link rel="stylesheet" href="/static/assets/css/esports.css" />
+<script src="/static/assets/js/localTime.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -18,7 +19,7 @@
     <section class="aboutyou">
         {% if user %}
         <a href="/u/{{user.steam64}}">
-            <img src="{{user.avatar}}">
+            <img src="{{user.avatar}}" alt="">
             <h1>{{user.name}}</h1>
             <span>{{elo}}ELO</span>
             <i>*You</i>
@@ -33,7 +34,7 @@
         {% for n, place in ((1, "t2"), (0, "t1"), (2, "t3")) %}
         {% if top10|length > n %}
         <div><a class="{{place}}" href="/u/{{top10[n].u.steam64}}">
-            <img src="{{top10[n].u.avatar}}"><h1>{{top10[n].u.name}}</h1><span>{{top10[n].elo}}ELO</span></a></div>
+            <img src="{{top10[n].u.avatar}}" alt=""><h1>{{top10[n].u.name}}</h1><span>{{top10[n].elo}}ELO</span></a></div>
         {% endif %}
         {% endfor %}
     </div>
@@ -56,20 +57,5 @@
 	</a>
     {% endfor %}
 </div>
-
-<script>
-document.querySelectorAll('.date').forEach(el => {
-  const epoch = parseInt(el.dataset.epoch, 10);
-  const date = new Date(epoch * 1000);
-
-  const formatted = date.toLocaleString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric'
-  });
-
-  el.textContent = formatted.replace(',', '').replace(' PM', 'PM').replace(' AM', 'AM');
-});
-</script>
 
 {% endblock %}

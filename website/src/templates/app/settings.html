@@ -16,12 +16,12 @@
   You can link your Discord to get notifications in your dms, check your stats using our bot and sign up for tournaments. The bot can't dm you notifications if you're not in the server or if you have you're dms off. To solve this you can add the bot as a user application, which will also allow you to use the /stats command in any Discord.
 
   {% if discord %}
-  <span style="color:#333;">You're currently linked with Discord ID: <b style="color:#333b;">{{discord}}</b> </span>
+  <span class="muted">You're currently linked with Discord ID: <b>{{discord}}</b> </span>
   {% endif %}
 
-  <div style="display:flex;gap:15px;">
-    <a href="/auth/discord"><button type="button" class="settingsButton"> <img src="/static/img/discord.png" alt="" width="25px" style="filter: invert(1);"> Link</button></a>
-    <a href="https://discord.com/oauth2/authorize?client_id={{config.discord_client_id}}"><button type="button" class="settingsButton"> <img src="/static/img/discord.png" alt="" width="25px" style="filter: invert(1);"> Add user application</button></a>
+  <div class="buttonRow">
+    <a href="/auth/discord"><button type="button" class="settingsButton"> <img src="/static/img/discord.png" alt="" width="25px"> Link</button></a>
+    <a href="https://discord.com/oauth2/authorize?client_id={{config.discord_client_id}}"><button type="button" class="settingsButton"> <img src="/static/img/discord.png" alt="" width="25px"> Add user application</button></a>
   </div>
 </div>
 
@@ -31,9 +31,9 @@
     As an extra security meassure we have a UUID system which links with your Steam64 to form a PeekSeek.net account, with this UUID someone can make API calls for you and pretend to be you, they can even queue as you. <br><br>
     We recommend you never share your UUID, however we understand you may slip up once in a while and for that reason we allow you to change your UUID.
 
-    <span style="color:#333;">Everyone logged in to your steam account, including you, will be logged out when you press this button.</span>
+    <span class="muted">Everyone logged in to your steam account, including you, will be logged out when you press this button.</span>
 
-    <a href="/user/changeuuid"><button type="button" class="settingsButton"> <img src="/static/img/logo.png" alt="" width="25px" style="filter: invert(1);"> Reset UUID</button></a>
+    <a href="/user/changeuuid"><button type="button" class="settingsButton"> <img src="/static/img/logo.png" alt="" width="25px"> Reset UUID</button></a>
 </div>
 
 {% endblock %}

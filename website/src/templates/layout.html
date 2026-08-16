@@ -40,29 +40,29 @@
     <link rel="icon" href="/static/img/logo-dark.ico">
     <link rel="icon" href="/static/img/logo.ico" media="(prefers-color-scheme:dark)">
 
-    <link rel="stylesheet" href="/static/assets/elements.css" />
-    <link rel="stylesheet" href="/static/assets/default.css" />
-    
+    <link rel="stylesheet" href="/static/assets/css/default.css" />
+
     {% block addheader %}{% endblock %}
 
     {% block head %}{% endblock %}
 
-    <script src="/static/assets/htmx.min.js" defer></script>
-    <script src="/static/assets/api.js" defer></script>
-    <script src="/static/assets/cookies.js" defer></script>
+    <script src="/static/assets/js/htmx.min.js" defer></script>
+    <script src="/static/assets/js/api.js" defer></script>
+    <script src="/static/assets/js/cookies.js" defer></script>
+    <script src="/static/assets/js/layout.js" defer></script>
     {% block script %}{% endblock %}
   </head>
-  <body>
+  <body data-current-page="{% block currentPage %}{% endblock %}">
 
     <content>
       <div class="inner">
         <div class="info">
           <div class="flexrow">
             {% if user %}
-              <a href="/u/{{user.steam64}}" class="userProfile"> <img src="{{user.avatar}}" height="40px"> <span>{{user.name}}</span></a>
-              <a href="/auth/logout"> <img src="/static/img/logout.png" alt="" height="20px"> </a>
+              <a href="/u/{{user.steam64}}" class="userProfile"> <img src="{{user.avatar}}" alt="" height="40px"> <span>{{user.name}}</span></a>
+              <a href="/auth/logout"> <img src="/static/img/logout.png" alt="Log out" height="20px"> </a>
             {% else %}
-              <a href="/auth/steam"><button type="button" class="steamlogin" style="width:250px;padding:10px 15px;height:45px;border-radius:10px;margin-bottom:15px;"> <img src="/static/img/steam.png" alt="" height="25px"> Login</button></a>
+              <a href="/auth/steam"><button type="button" class="steamlogin"> <img src="/static/img/steam.png" alt="" height="25px"> Login</button></a>
             {% endif %}
           </div>
 
@@ -97,7 +97,7 @@
         <div class="mainContainer">
           <div class="main">
             
-            <div class="mainElement error" style="{% if lastError == None %}display: none;{% endif %}" id="lastError">
+            <div class="mainElement error{% if lastError == None %} hidden{% endif %}" id="lastError">
               Error: {{lastError}}
             </div>
 
@@ -115,29 +115,8 @@
 
     <footer>
       <div class="inner">
-        <a href="/"><img src="/static/img/cmw.png"></a>
+        <a href="/"><img src="/static/img/cmw.png" alt="PeekSeek"></a>
       </div>
     </footer>
-
-    <script>
-      var currentPage = "{% block currentPage %}None{% endblock %}"
-
-      Array.from(document.getElementsByClassName("infoli")).forEach((element) => {
-        Array.from(element.children).forEach((child) => {
-          if (child.innerText.toLowerCase() == currentPage) {
-
-            if (child.id == "esports") {
-              child.style.backgroundColor = "#002e43"
-            } else {
-              child.style.backgroundColor = "#411"
-            }
-            
-            child.style.cursor = "default"
-
-            child.children[0].style.filter = "brightness(1)"
-          }
-        })
-      })
-    </script>
   </body>
 </html>

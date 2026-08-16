@@ -1,0 +1,130 @@
+/* app/_kit_editor.html and app/_outfit_editor.html -- the loadout pickers.
+   One stylesheet for both: an outfit is picked out of the same tile grid a gun is. */
+
+.kitEditor {
+  justify-content: flex-start;
+  gap: 24px;
+}
+
+.kitHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kitHeader h1 {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.kitCategory {
+  color: #f66;
+  text-transform: uppercase;
+}
+
+.kitHint {
+  color: #888;
+  font-size: 14px;
+}
+
+.kitSlot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Item ids are the only names this data carries, so a tile can never label itself.
+   The slot is the one real name there is: say what the row is, above the row. */
+.kitSlotName {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+
+/* auto-fill rather than auto-fit so a two-option row (grip) keeps the same tile
+   size as a ten-option row (sight) instead of stretching to fill the panel. */
+.kitGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+
+.kitGrid.wide {
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}
+
+.itemIcon {
+  width: 100%;
+  height: 42px;
+  object-fit: contain;
+  padding: 4px 6px;
+  box-sizing: border-box;
+  border-radius: 6px;
+}
+
+.kitOption {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  padding: 6px;
+  background-color: #1a1a1a;
+  border: 1px solid #3334;
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+
+.kitGrid.wide .kitOption {
+  min-height: 74px;
+}
+
+.kitGrid.wide .itemIcon {
+  height: 62px;
+}
+
+.kitOption:hover {
+  background-color: #222;
+}
+
+/* The red the sidebar marks the current page with, so "this is the one you're on"
+   reads the same way across the site. */
+.kitOptionSelected, .kitOptionSelected:hover {
+  background-color: #411;
+  border-color: #f66;
+  cursor: default;
+}
+
+/* These radios used to be `hidden`, which took the entire editor out of the tab
+   order -- a picker built from labels is only operable if its inputs still are.
+   Keep them focusable and out of sight; the tile is what mouse and eye use. */
+.kitOption input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* :has(:focus-visible) rather than :focus-within, so the ring is a keyboard
+   affordance and doesn't linger on whatever tile the mouse last clicked. */
+.kitOption:has(input:focus-visible) {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.kitNone {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+@media (max-width: 560px) {
+  .kitGrid.wide {
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  }
+}

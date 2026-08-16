@@ -11,6 +11,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src ./src
 COPY public ./public
 
+# Minify the stylesheets and scripts into the image. The build-only compressors are
+# uninstalled in the same layer so they never reach the running container.
+COPY minify.py .
+RUN pip install --no-cache-dir csscompressor rjsmin \
+    && python minify.py \
+    && pip uninstall -y csscompressor rjsmin
+
 EXPOSE 8000
 
 # --forwarded-allow-ips must NOT be "*": authorized_server() and the ban/IP-tracking
