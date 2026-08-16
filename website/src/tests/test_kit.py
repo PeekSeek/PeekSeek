@@ -75,3 +75,46 @@ def test_public_data_magazine_is_null_for_an_unsupported_gun(user_factory):
 
     result = data.Kit.publicData(player.steam64)
     assert result[category]["magazine"] is None
+
+
+def test_gun_for_falls_back_to_the_first_gun_when_nothing_is_saved(user_factory):
+    """The overlay names a player's gun before they have ever opened the kit editor,
+    so an unsaved kit has to resolve to the same gun the game server would hand out."""
+    player = user_factory()
+    match = data.Match(
+        gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+    )
+
+    category = mmconfig["gamemodes"][0]["kitsAllowed"][0]
+    expected = int(next(iter(kitsConfig["kits"][category])))
+    assert data.Kit.gunFor(player.steam64, match) == expected
+
+
+def test_gun_for_reads_the_saved_gun_for_the_picked_kit(user_factory):
+    player = user_factory()
+    match = data.Match(
+        gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+    )
+    category = mmconfig["gamemodes"][0]["kitsAllowed"][0]
+    match.meta["userData"][str(player.steam64)]["kit"] = category
+
+    guns = list(kitsConfig["kits"][category])
+    chosen = int(guns[-1])
+    data.Kit.addOrUpdateData(player.steam64, category, {"gun": chosen})
+
+    assert data.Kit.gunFor(player.steam64, match) == chosen
+
+
+def test_gun_for_agrees_with_the_full_loadout_get_items_builds(user_factory):
+    """gunFor exists only to skip the work getItems does. The moment the two disagree
+    the overlay is naming a weapon the player will not spawn with."""
+    player = user_factory()
+    match = data.Match(
+        gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+    )
+    category = mmconfig["gamemodes"][0]["kitsAllowed"][0]
+    chosen = int(list(kitsConfig["kits"][category])[-1])
+    data.Kit.addOrUpdateData(player.steam64, category, {"gun": chosen})
+
+    items = data.Kit.getItems(player.steam64, match)
+    assert data.Kit.gunFor(player.steam64, match) == items[0][0]

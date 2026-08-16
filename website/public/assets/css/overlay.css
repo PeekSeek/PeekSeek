@@ -199,7 +199,6 @@ body {
 .rosters .col.r .card { text-align: right; }
 .rosters .col.r .card .l2 { flex-direction: row-reverse; }
 
-.rosters .kitname { color: var(--ink); }
 .rosters .pw { color: var(--muted); }
 
 /* A player still choosing fades rather than disappearing, the same rule the in-play
