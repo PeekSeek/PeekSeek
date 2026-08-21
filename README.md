@@ -9,13 +9,14 @@
 <p align="center">
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/website.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/website.yml/badge.svg" alt="website"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml/badge.svg" alt="peekseek-plugin"></a>
+  <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml/badge.svg" alt="peekseek-lobby"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/utelemetry.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/utelemetry.yml/badge.svg" alt="utelemetry"></a>
   <a href="https://discord.gg/NKgTe6RnvH"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 ---
 
-Three deployables live here. The website is the backend the plugins talk to, which is
+Four deployables live here. The website is the backend the plugins talk to, which is
 why they share a repo: a change to the `/server/v1/*` API and the plugin call that hits
 it lands in one commit. That contract is written down in
 [website/API.md](website/API.md).
@@ -24,10 +25,14 @@ it lands in one commit. That contract is written down in
 | --- | --- | --- |
 | [website/](website/) | The whole site and API: pages, JSON endpoints, and the `/server/v1/*` API game servers run on | FastAPI, Python 3.12 |
 | [plugins/peekseek/](plugins/peekseek/) | RocketMod plugin that runs matches: lobby lifecycle, match state, ping-based damage scaling | C#, net48 |
+| [plugins/peekseek-lobby/](plugins/peekseek-lobby/) | RocketMod plugin that runs the waiting arena: queueing from in-game, kits, AFK handling | C#, net48 |
 | [plugins/utelemetry/](plugins/utelemetry/) | RocketMod plugin for PvP telemetry beyond kill counts | C#, net48 |
 
 Each component keeps its own README with the detail; start there.
 [CONTRIBUTING.md](CONTRIBUTING.md) has the branch model and the conventions.
+
+[docs/](docs/) is the published documentation site: running your own instance, and
+forking the platform for another game.
 
 ## Working on it
 
@@ -56,6 +61,10 @@ One workflow per component in [.github/workflows/](.github/workflows/), each fil
 its own path, so touching the website does not run the C# jobs and vice versa. Tags for
 plugin releases are prefixed (`utelemetry-v1.2.3`) because one repo now ships several.
 
+`docs.yml` is the one workflow that deploys anything: a change under `docs/` on `main`
+builds the site with `--strict` and publishes it to GitHub Pages. Everything else lints,
+tests, or releases a plugin.
+
 ## Deployment
 
 The website deploys from this repo on [Dokploy](https://hosting.kcvdh.com) (project
@@ -64,12 +73,18 @@ The website deploys from this repo on [Dokploy](https://hosting.kcvdh.com) (proj
 
 | Environment | Domain | Source | Database |
 | --- | --- | --- | --- |
-| production | peekseek.net (+ esports, api, admin) | this repo, `main` | production Postgres |
+| production | [peekseek.net](https://peekseek.net) (+ `www`) | this repo, `main` | production Postgres |
 | develop | [dev.peekseek.net](https://dev.peekseek.net) | this repo, `main`, Dockerfile `website/Dockerfile` | its own Postgres, empty |
 
-Both auto-deploy on push, and neither deploy is a CI job: the workflows in this repo
-lint, test and release plugins, and Dokploy is what watches the branch. So a website
-change is live because Dokploy rebuilt it, not because a merge went green.
+Both auto-deploy on push, and neither website deploy is a CI job: the workflows in this
+repo lint, test and release plugins, and Dokploy is what watches the branch. So a website
+change is live because Dokploy rebuilt it, not because a merge went green. The docs site
+is the exception and does deploy from CI.
+
+Production and develop are separate Dokploy applications. Only one of them may hold a
+given hostname: two applications claiming the same domain leaves Traefik with two routers
+for one rule, and a redeploy can flip which one wins, which looks like a healthy
+container serving `502`.
 
 The production Postgres in that table is also the database
 [data.peekseek.net](https://data.peekseek.net) reads. Anything the site creates on
