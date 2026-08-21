@@ -301,12 +301,6 @@ content .main {
   cursor: pointer;
 }
 
-/* For markup that is rendered but starts hidden. Scripts that later reveal one of
-   these set style.display themselves, which outranks this. */
-.hidden {
-  display: none;
-}
-
 /* ---- Banners: the three notices layout.html and the pages can raise -------- */
 
 .warning, .error, .gdpr {
@@ -496,4 +490,20 @@ content .main {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #8883;
+}
+
+/* ---- Utilities, last on purpose ------------------------------------------- */
+
+/* For markup that is rendered but starts hidden. Scripts that later reveal one of
+   these set style.display themselves, which outranks this.
+
+   This lives at the bottom because it is a single class competing with other single
+   classes, so source order is the only thing that decides it. Declared up with the
+   other helpers it sat *above* `.warning, .error, .gdpr`, lost the tie to their
+   `display: flex`, and left the error bar open on every page reading "Error: None".
+
+   Not `!important`: play.js and esportsSignup.js raise that same bar by setting
+   style.display, and an important class here would outrank their inline style. */
+.hidden {
+  display: none;
 }
