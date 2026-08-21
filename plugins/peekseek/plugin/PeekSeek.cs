@@ -21,6 +21,10 @@ public class PeekSeek : RocketPlugin<PeekSeekConfiguration> {
         Logger.Log($"PeekSeek {Assembly.GetName().Version} is now loaded.");
         OnLoad?.Invoke();
 
+        CoreDumps.Swept swept = CoreDumps.Sweep(Directory);
+        if (swept.Cleared > 0) {
+            Logger.Log($"Cleared {swept.Cleared} crash dump(s), freeing {swept.FreedMegabytes} MB.");
+        }
         PSManager.Init();
     }
 
