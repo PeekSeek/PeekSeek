@@ -12,6 +12,18 @@ party_timeout = 600  # seconds with nobody looking at a party before it disbands
 max_team_elo_gap = 200   # widest average-Elo gap allowed between the teams in one match
 rematch_cooldown = 300   # seconds before the same two players can be put against each other again
 
+[lobby]
+# The DeathMatch server's Steam server code, which is what /lobby hands to Unturned.
+#
+# This is the steamID64 the server's GSLT owns, so it survives a restart. The FakeIP
+# address printed beside it in the console does not: the server runs with PROTECTION
+# set to fakeip, and the relay hands out a fresh 169.254.x.x:port every session, which
+# is exactly why the code and not the address is the thing worth writing down.
+#
+# It only changes if the login token does. Read the new one off the server console
+# ("Server Code: ...") after a GSLT change.
+connect_code = "85568392936415589"
+
 [data_files]
 # Big machine-shaped datasets stay JSON; these paths are relative to this file.
 mmconfig = "mmconfig.json"

@@ -34,6 +34,8 @@ class Settings:
         self.max_team_elo_gap: int = toml["matchmaking"]["max_team_elo_gap"]
         self.rematch_cooldown: int = toml["matchmaking"]["rematch_cooldown"]
 
+        self.lobby_connect_code: str = toml["lobby"]["connect_code"]
+
         self.discord_client_id: str = toml["discord"]["client_id"]
         self.discord_invite_url: str = toml["discord"]["invite_url"]
         self.counter_channel: str = toml["discord"]["counter_channel"]
