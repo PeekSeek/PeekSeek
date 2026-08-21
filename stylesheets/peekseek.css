@@ -1,0 +1,21 @@
+/* PeekSeek's red over Material's slate scheme, so the docs read as part of the site
+   rather than as a stock theme. Only the brand hues are overridden; everything else
+   is left to mkdocs-material, which is the whole reason for using it. */
+
+:root {
+  --md-primary-fg-color: #8c1218;
+  --md-primary-fg-color--light: #b3161d;
+  --md-primary-fg-color--dark: #5e0c10;
+  --md-accent-fg-color: #f04444;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 232;
+  --md-typeset-a-color: #f06a6a;
+}
+
+/* The site draws match ids and other machine values in blue, and inline code here is
+   nearly always one of those: a route, a column, an env var. */
+[data-md-color-scheme="slate"] .md-typeset code {
+  color: #6cb8e8;
+}

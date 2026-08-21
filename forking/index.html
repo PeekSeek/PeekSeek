@@ -1,0 +1,1244 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Run PeekSeek yourself, or fork it for another game">
+      
+      
+      
+      
+        <link rel="prev" href="../configuration/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Another game - PeekSeek Docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/peekseek.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#forking-for-another-game" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="PeekSeek Docs" class="md-header__button md-logo" aria-label="PeekSeek Docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            PeekSeek Docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Another game
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/PeekSeek/PeekSeek" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    PeekSeek/PeekSeek
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+  How it works
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../self-hosting/" class="md-tabs__link">
+          
+  
+  
+  Running your own
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Forking
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="PeekSeek Docs" class="md-nav__button md-logo" aria-label="PeekSeek Docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    PeekSeek Docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/PeekSeek/PeekSeek" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    PeekSeek/PeekSeek
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../match-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The match lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running your own
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Running your own
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../self-hosting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self-hosting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forking
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Forking
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Another game
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Another game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-part-you-get-for-free" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The part you get for free
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-actually-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you actually write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layer-1-the-launch-link-an-afternoon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 1: the launch link (an afternoon)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layer-2-game-data-a-weekend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 2: game data (a weekend)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layer-3-identity-the-real-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 3: identity (the real work)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-stays-untouched" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stays untouched
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-realistic-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A realistic order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing back
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-part-you-get-for-free" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The part you get for free
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-actually-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you actually write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layer-1-the-launch-link-an-afternoon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 1: the launch link (an afternoon)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layer-2-game-data-a-weekend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 2: game data (a weekend)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layer-3-identity-the-real-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 3: identity (the real work)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-stays-untouched" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stays untouched
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-realistic-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A realistic order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing back
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="forking-for-another-game">Forking for another game</h1>
+<p>PeekSeek runs Unturned, but very little of it knows that. This page is an honest
+inventory of what you would have to replace, ordered by how much work each part actually
+is.</p>
+<hr />
+<h2 id="the-part-you-get-for-free">The part you get for free</h2>
+<p><code>/server/v1/*</code> was built to not care what game it is. From
+<a href="https://github.com/PeekSeek/PeekSeek/blob/main/website/API.md">API.md</a>:</p>
+<blockquote>
+<p>It is deliberately not Unturned-specific: a server for a different game implements the
+same calls and speaks the same JSON.</p>
+</blockquote>
+<p>That is not aspiration. The website has no import, no branch and no model that reaches
+into Unturned. Matchmaking, Elo, parties, queueing, events, the admin panel, the stream
+overlay and the Discord integration are all game-agnostic already.</p>
+<p><strong>Your real job is writing one agent for your game that implements the polling loop.</strong>
+Everything below is smaller than that.</p>
+<hr />
+<h2 id="what-you-actually-write">What you actually write</h2>
+<p>A program that runs on your game server and does this:</p>
+<ol>
+<li>Poll <code>GET /server/v1/session</code> with <code>serverCode</code> and <code>matchId</code>.</li>
+<li>Switch on <code>action</code>: <code>idle</code>, <code>wait</code>, <code>host</code>, <code>abort</code>.</li>
+<li>On <code>host</code>, start a match from the payload: teams, per-player loadouts, settings.</li>
+<li>Stream <code>POST /matches/{id}/kills</code> and <code>POST /matches/{id}/state</code> as things happen.</li>
+<li><code>POST /matches/{id}/result</code> at the end, <strong>retrying until acknowledged</strong>.</li>
+</ol>
+<p>That is the entire contract. It is HTTP and JSON, so it can be a RocketMod plugin, a
+SourceMod extension, a Minecraft plugin, a sidecar process, or a few hundred lines in
+whatever language your game's modding API speaks.</p>
+<p>Read <a href="../match-lifecycle/">the match lifecycle</a> before you start. The retry semantics are
+the part people get wrong.</p>
+<p>The two shipped plugins are the reference implementation:</p>
+<table>
+<thead>
+<tr>
+<th>Plugin</th>
+<th>Implements</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek"><code>plugins/peekseek</code></a></td>
+<td>The match loop above</td>
+</tr>
+<tr>
+<td><a href="https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek-lobby"><code>plugins/peekseek-lobby</code></a></td>
+<td>The waiting arena, queueing from in-game, kits, AFK</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="layer-1-the-launch-link-an-afternoon">Layer 1: the launch link (an afternoon)</h2>
+<p>Unturned takes a server code on its launch command line, and there is no URL scheme that
+joins by code directly, so every join on the site goes through <code>steam://run/&lt;appid&gt;</code>.</p>
+<p>The app id <code>304930</code> is currently hardcoded in four places:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/routes/pages.py</code></td>
+<td><code>UNTURNED_APP_ID</code></td>
+</tr>
+<tr>
+<td><code>src/templates/app/spectate.html</code></td>
+<td>twice, in the card link and the spectate button</td>
+</tr>
+<tr>
+<td><code>public/assets/js/admin.js</code></td>
+<td>the spectate button</td>
+</tr>
+<tr>
+<td><code>public/assets/js/match.js</code></td>
+<td><code>connectUrl()</code></td>
+</tr>
+</tbody>
+</table>
+<p>If your game joins differently, this is where you change it. Lifting it into
+<code>config.toml</code> first is a good first commit for a fork, and a welcome pull request back.</p>
+<hr />
+<h2 id="layer-2-game-data-a-weekend">Layer 2: game data (a weekend)</h2>
+<p>Three things describe Unturned specifically. All are data, not code.</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+<th>Holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Kits</td>
+<td><code>src/kits.json</code></td>
+<td>Item ids, amounts, attachment state bytes</td>
+</tr>
+<tr>
+<td>Gamemodes</td>
+<td><code>src/mmconfig.json</code></td>
+<td>Modes, rounds to win, maps, per-mode settings</td>
+</tr>
+<tr>
+<td>Item metadata</td>
+<td><code>UnturnedItem</code> in <code>src/core/models/stat.py</code>, table <code>unturned_items</code></td>
+<td>Item names for display</td>
+</tr>
+<tr>
+<td>Assets</td>
+<td><code>public/unturned/</code>, <code>public/maps/</code></td>
+<td>Icons and map images</td>
+</tr>
+</tbody>
+</table>
+<p>The shapes are general. A "kit" is a list of things a player spawns with, and a
+"gamemode" is a named set of rules with a win condition. Whether an item id means an
+Unturned gun or a Counter-Strike weapon is not something the site inspects.</p>
+<p><code>UnturnedItem</code> is the one badly named table, since it is really "a display name for a
+game item". Renaming it is a schema change and therefore manual, per
+<a href="../architecture/#data">Architecture</a>.</p>
+<hr />
+<h2 id="layer-3-identity-the-real-work">Layer 3: identity (the real work)</h2>
+<p>This is the one to think about before starting.</p>
+<p>PeekSeek identifies players by <strong>steam64</strong>, everywhere. It is the primary key on users,
+the id in every API payload, and the thing the login flow returns.</p>
+<table>
+<thead>
+<tr>
+<th>Coupling</th>
+<th>Why it exists</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>steam64 as user id</td>
+<td>Unturned is a Steam game, so every player already has one</td>
+</tr>
+<tr>
+<td>Steam Web API</td>
+<td>Persona names and avatars</td>
+</tr>
+<tr>
+<td>Steam login</td>
+<td>One of the two supported sign-ins</td>
+</tr>
+<tr>
+<td>GSLT server codes</td>
+<td>How a server identifies itself and how players connect</td>
+</tr>
+</tbody>
+</table>
+<p>If your game is on Steam, <strong>none of this is a problem</strong>. Change the app id and the game
+data, and you are done.</p>
+<p>If it is not on Steam, you are replacing the identity layer. The site is helpful here in
+one specific way: steam64s are handled as <strong>strings</strong> throughout, precisely because they
+are 64-bit and JSON numbers are not. So the field is already an opaque string id, and
+substituting a different id scheme is less invasive than it sounds. Discord login already
+exists alongside Steam, which proves the user row does not truly require a Steam identity
+to be created.</p>
+<p>Budget real time for it anyway. It touches the user model, both login flows, the API
+payloads and every template that renders a profile.</p>
+<hr />
+<h2 id="what-stays-untouched">What stays untouched</h2>
+<p>Worth stating plainly, because it is most of the value:</p>
+<ul>
+<li>Matchmaking, Elo, and the balancing rules</li>
+<li>Queueing, parties, and the rematch cooldown</li>
+<li>The whole match lifecycle and its retry semantics</li>
+<li>Events, signups, and tournament pairings</li>
+<li>The admin panel</li>
+<li>The stream overlay</li>
+<li>Discord integration</li>
+<li>Sessions, permissions, bans, and the IP allow-list</li>
+</ul>
+<hr />
+<h2 id="a-realistic-order">A realistic order</h2>
+<ol>
+<li>Get the website running locally against SQLite.
+   <a href="../getting-started/">Getting Started</a>.</li>
+<li>Read <a href="../match-lifecycle/">the match lifecycle</a> until the retry rules make sense.</li>
+<li>Allow-list a machine you control with <code>BOOTSTRAP_SERVERS</code> and poll <code>/server/v1/session</code>
+   <strong>by hand</strong>, with curl. You will see <code>idle</code>.</li>
+<li>Queue a player through the site and watch your poll turn into <code>host</code>.</li>
+<li>Only then write the game-side agent. By this point you know the contract.</li>
+<li>Swap the game data and the launch link.</li>
+<li>Replace identity, if your game is not on Steam.</li>
+</ol>
+<p>Steps 3 and 4 are the ones people skip. They are also the ones that make the rest
+obvious.</p>
+<hr />
+<h2 id="contributing-back">Contributing back</h2>
+<p>Fork-friendliness is a goal, so changes that reduce coupling are especially welcome:
+lifting the app id into config, generalising <code>UnturnedItem</code>, or anything that makes the
+identity layer pluggable.</p>
+<p>See
+<a href="https://github.com/PeekSeek/PeekSeek/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>
+for the branch model and conventions. The licence is MIT, so you owe nothing. It is just
+nicer this way.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
