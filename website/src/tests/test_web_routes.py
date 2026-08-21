@@ -450,3 +450,17 @@ def test_kit_editor_saves_a_pick_and_returns_it_selected(client, login, user_fac
     # The swapped-in response is the only feedback a player gets that their click
     # landed, so the tile it comes back with has to be the one they picked.
     assert re.search(rf'id="sight-{sight}"[^>]*\bchecked\b', r.text, re.S)
+
+
+def test_lobby_hands_steam_the_launch_command(client):
+    """Anonymous on purpose: this link gets posted, and making people log in first
+    would defeat the point of posting it."""
+    from src.core.settings import settings
+
+    r = client.get("/lobby")
+    assert r.status_code == 200
+
+    url = f"steam://run/304930//+connect {settings.lobby_connect_code}"
+    assert url in r.text
+    # The bare code too, for Connect Directly and for anyone without the handler.
+    assert settings.lobby_connect_code in r.text

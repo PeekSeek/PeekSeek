@@ -16,6 +16,34 @@ def discord():
     return RedirectResponse(settings.discord_invite_url, status_code=302)
 
 
+# Unturned takes the server code on its launch command line; there is no URL scheme
+# that joins by code directly, which is why every join on the site goes through
+# `steam://run` rather than linking the server itself.
+UNTURNED_APP_ID = 304930
+
+
+@router.get("/lobby")
+def lobby(request: Request):
+    """Open the DeathMatch lobby in Unturned.
+
+    A link made to be posted, so it does not redirect straight to `steam://`: a browser
+    that refuses to hand a protocol handler a navigation the user did not start would
+    leave nothing but a blank page, and this link's whole job is being pasted somewhere
+    else. The page fires the launch itself and keeps a button and the bare code for
+    when that is refused, or for someone who would rather type it into Connect Directly.
+    """
+    return templates.TemplateResponse(
+        request=request,
+        name="pages/lobby.html",
+        context={
+            "connectCode": settings.lobby_connect_code,
+            "connectUrl": (
+                f"steam://run/{UNTURNED_APP_ID}//+connect {settings.lobby_connect_code}"
+            ),
+        },
+    )
+
+
 @router.get("/overlay")
 def overlay(request: Request, id: str | None = None, createdBy: str | None = None):
     if id is None and createdBy is None:

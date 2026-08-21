@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+
+{% block title %}Lobby{% endblock %}
+
+{% block titleEmbed %}Join the PeekSeek lobby{% endblock %}
+
+{% block description %}One click into the DeathMatch arena. Queue for a ranked match from inside it.{% endblock %}
+
+{% block script %}
+<script>
+  /* Fire the launch on load, so the ordinary case is one click from wherever the link
+     was posted. The button below covers the browsers that will not hand a protocol
+     handler a navigation the visitor did not start on this page.
+
+     tojson rather than the bare string, for the same reason the overlay quotes its
+     ids: it emits a real JS string literal instead of trusting a config value to
+     survive being pasted into source. */
+  window.location.href = {{ connectUrl | tojson }};
+</script>
+{% endblock %}
+
+{% block content %}
+
+<div class="mainElement spaced">
+  <h1>Opening the lobby</h1>
+  <span>
+    Steam should be asking to launch Unturned. If nothing happened, use the button
+    below, or enter the code in Unturned's <b>Connect Directly</b> menu yourself.
+  </span>
+</div>
+
+<div class="mainElement spaced">
+  <button type="button" class="settingsButton" onclick="window.location.href = '{{ connectUrl }}'">
+    <img src="/static/img/spectate.png" alt="" height="20">Open Unturned
+  </button>
+  <span>Server code <b class="bigger">{{ connectCode }}</b></span>
+</div>
+
+{% endblock %}

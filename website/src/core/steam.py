@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime, timezone
 
 import requests
@@ -17,6 +18,12 @@ DEFAULT_AVATAR = (
 _user_cache: TTLCache = TTLCache(maxsize=512, ttl=300)
 _server_cache: TTLCache = TTLCache(maxsize=128, ttl=120)
 _describe_cache: TTLCache = TTLCache(maxsize=64, ttl=60)
+
+# Servers currently being looked up, so a page that names the same one on ten cards
+# starts one thread rather than ten.
+# ponytail: the check-then-add is not atomic, so a genuine race costs one duplicate
+# request to Steam. A lock here would buy nothing worth having.
+_describing: set[str] = set()
 
 # Steam is a third party on the request path of pages that have to render without it.
 # Every call here is decoration, so waiting on one is never worth holding a page open.
@@ -134,9 +141,8 @@ class Server:
         return r.json()["response"]["servers"][0]
 
     @staticmethod
-    @cached(_describe_cache, key=lambda steam_id: hashkey(str(steam_id)))
     def describe(steam_id) -> dict | None:
-        """What Steam says about the server holding a match, or None if it will not say.
+        """What Steam has already said about the server holding a match, or None.
 
         A match's `claimed` is the GSLT's own Steam ID, which is what Steam's master
         list is keyed by, so the connect code the site already stores is enough to get
@@ -146,23 +152,46 @@ class Server:
         has to render regardless: an offline server is missing from the master list
         entirely, and that is the moment an admin most wants the rest of the card.
 
-        Cached separately from `from_steam_id` so that a *failure* is cached too. The
-        admin list asks about every match on it every 15 seconds, and several matches
-        share one server: uncached, Steam being slow or down cost one blocking request
-        per card per poll, which is what hung the page rather than degrading it.
+        **This never calls Steam.** It answers from `_describe_cache` and starts a
+        thread to fill it on a miss. Caching the failure too was not enough on its own:
+        the admin list asks about every match on it, one after another, so each time the
+        sixty-second TTL lapsed the next poll paid one blocking request per *distinct*
+        server. Two servers Steam would not answer for, at STEAM_TIMEOUT each, held the
+        whole page for ten seconds a minute. The page redraws whole every fifteen
+        seconds, so a miss simply shows up on the following pass instead.
         """
         if not steam_id or str(steam_id) == "0":
             return None
 
-        try:
-            raw = Server.from_steam_id(str(steam_id))
-        except Exception:
-            return None
+        key = str(steam_id)
+        if key in _describe_cache:
+            return _describe_cache[key]
 
-        return {
-            "name": raw.get("name"),
-            "map": raw.get("map"),
-            "players": raw.get("players"),
-            "maxPlayers": raw.get("max_players"),
-            "address": raw.get("addr"),
-        }
+        if key not in _describing:
+            _describing.add(key)
+            threading.Thread(
+                target=Server._fetch_description, args=(key,), daemon=True
+            ).start()
+        return None
+
+    @staticmethod
+    def _fetch_description(key: str) -> None:
+        """Fill `_describe_cache` for one server, off any request path.
+
+        A failure is stored exactly like a success, so a server Steam will not talk
+        about is asked about once per TTL rather than once per card per poll.
+        """
+        try:
+            raw = Server.from_steam_id(key)
+            described = {
+                "name": raw.get("name"),
+                "map": raw.get("map"),
+                "players": raw.get("players"),
+                "maxPlayers": raw.get("max_players"),
+                "address": raw.get("addr"),
+            }
+        except Exception:
+            described = None
+
+        _describe_cache[key] = described
+        _describing.discard(key)
