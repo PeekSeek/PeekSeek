@@ -259,6 +259,12 @@ internal abstract class PSManager {
         RelayAllClients();
         HeldMatchId = 0;
         UpdateStatus(EPSStatus.READY);
+
+        // A cancelled match empties this server exactly as a finished one does, so it is
+        // the same safe moment to go down and come back on the current build. Left out,
+        // a server that was handed nothing but cancelled matches would keep an old build
+        // until its uptime ceiling, which on a quiet region can be the whole day.
+        WantRestart("a match was cancelled");
     }
 
     /// The site has the result, so this server owes it nothing more and is free again.
