@@ -130,18 +130,42 @@ what happens to a match whose result was slow to arrive.
 | `PUT /players/{steam64}/queue` | Queue them, and answer the same thing. |
 | `DELETE /players/{steam64}/queue` | Take them out of the queue. |
 | `GET /players/{steam64}/kits` | Every saved kit, resolved into ready-to-equip items. |
+| `POST /players/{steam64}/decide` | Lock their kit and/or powerup for the match they are on. |
 | `POST /players/{steam64}/bans` | A ban issued by anti-cheat. Empty body bans for "Cheating". |
 
 Both reads answer the same shape:
 
 ```jsonc
-{"steam64": "7656…", "elo": 300, "matchId": 42, "relayTo": null}
+{
+  "steam64": "7656…", "elo": 300, "matchId": 42, "relayTo": null,
+  "choose": {
+    "kits": ["meta", "sniper"],
+    "powerups": ["Movement", "Ammo", "Boom"],
+    "kit": null, "powerup": null
+  }
+}
 ```
 
 `relayTo` is the whole decision for anything holding players. **Null means keep them;
 non-null is the site's promise that the match is being hosted right now and this player
 will be let in.** It stays null while the match is still in selection, so nobody is ever
 sent to a server that would refuse them.
+
+`choose` is what this player still gets to decide, and null when there is nothing: no
+match, or a gamemode that offers them one kit and one powerup. **A list with one entry in
+it never appears.** The site resolves those itself, so an empty list means "do not put
+this in front of them", and a caller can prompt without knowing the gamemode.
+
+`POST /players/{steam64}/decide?kit=sniper&powerup=Boom` locks either or both and answers
+with the same `choose` block, so a caller can re-prompt off the reply. Both values are
+checked against the gamemode; an unknown one is a `400` rather than a match nobody can be
+equipped for.
+
+This is what keeps a lobby from having to wait out selection. `readyToHost` needs every
+player to have chosen, or `selectKitsTime` to run out, so a player with no way to choose
+from where they are standing costs their opponent the whole timer. Once every player has
+locked both, the outstanding map/ballistics/movement picks are collapsed to their
+defaults as well: nobody who chose from in-game is at a browser to make them.
 
 The side-effect-free `GET` exists so a lobby can keep asking about a player who used
 `/noqueue`: a match made on the site or by their party still has to pull them out of the

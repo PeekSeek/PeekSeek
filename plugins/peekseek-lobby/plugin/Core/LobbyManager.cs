@@ -85,6 +85,11 @@ internal abstract class LobbyManager {
         /// once however many times Tick runs inside that second.
         internal int LastCountdownSecond;
 
+        /// The choices this player's match is waiting on, once the site has answered
+        /// with a match. Null while they have none, and null for a gamemode that leaves
+        /// them nothing to decide.
+        internal MatchPicks Picks;
+
         /// Whether this player has stepped away. They keep their queue heartbeat and
         /// their stats, they are simply never put back into the arena until they say
         /// so, which is the whole difference between /afk and /noqueue.
@@ -863,6 +868,8 @@ internal abstract class LobbyManager {
             state.EloKnown = true;
         }
 
+        RememberPicks(state, remote);
+
         if (remote.MatchId != 0 && state.MatchId == 0) SendToMatch(steam64, state, remote.MatchId);
         if (state.LostTheirMatch(remote.MatchId)) ReturnToArena(steam64, state);
         if (remote.RelayTo != null) RelayToMatch(steam64, state, remote.RelayTo);
@@ -948,8 +955,200 @@ internal abstract class LobbyManager {
         state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
 
         Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_found"));
-        player.sendBrowserRequest(
-            PeekSeekLobby.Instance.Translate("match_found_browser"), PeekSeekLobby.Config.szMatchURL);
+        BeginPicks(steamID, state);
+    }
+
+    /// How long a player gets to answer the loadout prompt when the config does not say.
+    /// Only reached when MatchPickSeconds is missing from the live XML, which Rocket
+    /// deserialises to zero rather than to its LoadDefaults value.
+    private const float FallbackPickSeconds = 8f;
+
+    /// How often the prompt is said again while the window runs down. Once is not
+    /// enough in a chat box that a firefight is still writing to.
+    private const int PromptEverySeconds = 3;
+
+    /// Keeps what the site says there is to choose, without losing a choice just made.
+    ///
+    /// The site is the truth about the options, but a pick made a moment ago may not be
+    /// in its answer yet: the refresh carrying it can land after one that was already in
+    /// flight. Keeping a local choice the site has not contradicted is what stops the
+    /// menu reappearing under somebody who has already answered it.
+    private static void RememberPicks(PlayerState state, RemoteAPI.PlayerState remote) {
+        if (remote.MatchId == 0) {
+            state.Picks = null;
+            return;
+        }
+        if (remote.Choose == null) return;
+
+        MatchPicks known = state.Picks;
+        state.Picks = remote.Choose;
+        if (known == null) return;
+
+        state.Picks.Kit ??= known.Kit;
+        state.Picks.Powerup ??= known.Powerup;
+        state.Picks.DecideBy = known.DecideBy;
+        state.Picks.LastPromptSecond = known.LastPromptSecond;
+    }
+
+    /// Puts the match's remaining choices in front of the player and starts the clock.
+    ///
+    /// The kit is locked to whatever they are already holding rather than asked about.
+    /// It is the kit they chose to fight the arena with, so it is the best guess anyone
+    /// has, and a choice already made is one less thing between them and the match. The
+    /// prompt still says what it is and how to change it.
+    private static void BeginPicks(CSteamID steamID, PlayerState state) {
+        MatchPicks picks = state.Picks;
+        if (picks == null || !picks.Outstanding) return;
+
+        if (picks.NeedsKit && picks.Kits.Contains(state.KitCategory)) {
+            Decide(steamID.m_SteamID, state, state.KitCategory, null);
+        }
+
+        float window = PeekSeekLobby.Config.MatchPickSeconds;
+        if (window <= 0f) {
+            Logger.LogWarning(
+                $"MatchPickSeconds is {window} in the live config, so nobody would get a "
+                + $"chance to choose. Using {FallbackPickSeconds}s. Add the field to "
+                + "PeekSeekLobby.configuration.xml.");
+            window = FallbackPickSeconds;
+        }
+
+        picks.DecideBy = Time.realtimeSinceStartup + window;
+        picks.LastPromptSecond = 0;
+
+        if (!picks.Outstanding) {
+            picks.DecideBy = 0f;
+            return;
+        }
+        ShowPicks(steamID, state);
+    }
+
+    /// The prompt. Said again every few seconds while the window lasts, because one line
+    /// in a chat box a firefight is still writing to is a line nobody reads.
+    private static void ShowPicks(CSteamID steamID, PlayerState state) {
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null) return;
+
+        MatchPicks picks = state.Picks;
+        int remaining = Mathf.Max(0, Mathf.CeilToInt(picks.DecideBy - Time.realtimeSinceStartup));
+
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("pick_header", remaining));
+        if (picks.NeedsKit) {
+            Whisper(player.channel.owner,
+                PeekSeekLobby.Instance.Translate("pick_kit", Numbered(picks.Kits)));
+        }
+        if (picks.NeedsPowerup) {
+            Whisper(player.channel.owner,
+                PeekSeekLobby.Instance.Translate("pick_powerup", Numbered(picks.Powerups)));
+        }
+    }
+
+    /// "1 meta, 2 sniper". Numbering them is what makes the answer one character long.
+    private static string Numbered(List<string> options) {
+        string[] parts = new string[options.Count];
+        for (int i = 0; i < options.Count; i++) {
+            parts[i] = $"<color=white>{i + 1}</color> {options[i]}";
+        }
+        return string.Join(", ", parts);
+    }
+
+    /// Counts the window down and takes the decision away when it runs out.
+    ///
+    /// Locking the first option rather than letting the window lapse is the point: the
+    /// site hands a match over as soon as everyone has chosen, so somebody who ignores
+    /// the prompt otherwise costs their opponent the rest of selectKitsTime.
+    private static void TickPicks(CSteamID steamID, PlayerState state, float now) {
+        MatchPicks picks = state.Picks;
+        if (picks == null || picks.DecideBy == 0f) return;
+
+        if (!picks.Outstanding) {
+            picks.DecideBy = 0f;
+            return;
+        }
+
+        int remaining = Mathf.CeilToInt(picks.DecideBy - now);
+        if (remaining <= 0) {
+            picks.DecideBy = 0f;
+            LockRemaining(steamID, state);
+            return;
+        }
+
+        if (remaining == picks.LastPromptSecond) return;
+        if (remaining % PromptEverySeconds != 0) return;
+
+        picks.LastPromptSecond = remaining;
+        ShowPicks(steamID, state);
+    }
+
+    /// The end of the window: whatever is still unanswered goes in as the first option,
+    /// which is the same fallback the site applies when nobody ever picks.
+    private static void LockRemaining(CSteamID steamID, PlayerState state) {
+        MatchPicks picks = state.Picks;
+        string kit = picks.NeedsKit ? picks.Kits[0] : null;
+        string powerup = picks.NeedsPowerup ? picks.Powerups[0] : null;
+        if (kit == null && powerup == null) return;
+
+        Decide(steamID.m_SteamID, state, kit, powerup);
+
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null) return;
+        Whisper(player.channel.owner,
+            PeekSeekLobby.Instance.Translate("pick_defaulted", Loadout(picks)));
+    }
+
+    /// Records a choice locally as well as sending it.
+    ///
+    /// Applied here because the site is a couple of seconds away and the prompt is not:
+    /// without it the player picks, sees the same menu on the next tick, and picks again.
+    private static void Decide(ulong steam64, PlayerState state, string kit, string powerup) {
+        if (kit != null) state.Picks.Kit = kit;
+        if (powerup != null) state.Picks.Powerup = powerup;
+        RemoteAPI.Decide(steam64, kit, powerup);
+    }
+
+    private static string Loadout(MatchPicks picks) {
+        if (picks.Powerup == null) return picks.Kit;
+        return picks.Kit == null ? picks.Powerup : $"{picks.Kit} + {picks.Powerup}";
+    }
+
+    /// Whether this player has a match kit to choose, which is what tells /kit whether
+    /// it is picking a loadout or switching an arena gun.
+    ///
+    /// True for as long as the choice exists rather than only until it is first made:
+    /// somebody who picks meta and then changes their mind is still out of the arena
+    /// with nothing else /kit could sensibly mean, and a second answer is free right up
+    /// until the match is handed over.
+    internal static bool HasMatchKitChoice(CSteamID steamID) {
+        return Players.TryGetValue(steamID.m_SteamID, out PlayerState state)
+            && state.Picks != null && state.Picks.Kits.Count > 1;
+    }
+
+    /// /kit and /powerup, once they know which list they are answering. `choice` is
+    /// either the option's name or its number in the prompt. False and an untouched
+    /// state for anything unrecognised, so the caller can say what the options were.
+    internal static bool ChooseForMatch(CSteamID steamID, bool powerup, string choice) {
+        if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
+        if (state.Picks == null) return false;
+
+        string picked = state.Picks.OptionFor(powerup, choice);
+        if (picked == null) return false;
+
+        Decide(steamID.m_SteamID, state, powerup ? null : picked, powerup ? picked : null);
+
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player != null) {
+            Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("pick_locked", picked));
+        }
+        if (!state.Picks.Outstanding) state.Picks.DecideBy = 0f;
+        return true;
+    }
+
+    /// The options a player is choosing between, for a command that has to list them
+    /// back. Null when they are not choosing anything.
+    internal static List<string> MatchOptions(CSteamID steamID, bool powerup) {
+        if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return null;
+        if (state.Picks == null) return null;
+        return powerup ? state.Picks.Powerups : state.Picks.Kits;
     }
 
     /// The site only fills in a server code once the match is genuinely being hosted, so
@@ -1042,6 +1241,7 @@ internal abstract class LobbyManager {
             if (state.StreakMagItemId != 0) TakeBackSpentStreakMagazine(steamID, state);
 
             if (state.PullAt > 0) CountDownToMatch(steamID, state, now);
+            TickPicks(steamID, state, now);
 
             // An AFK player's deploy stays booked rather than being cancelled, so
             // coming back puts them into the arena on the next tick instead of making

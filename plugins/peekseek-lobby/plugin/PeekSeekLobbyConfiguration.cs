@@ -25,6 +25,15 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// short enough that the match is not kept waiting on them.
     public float MatchWarningSeconds;
 
+    /// How long a matched player gets to answer the loadout prompt before the lobby
+    /// locks whatever they have not answered to its first option.
+    ///
+    /// This is the last thing standing between a match being made and everyone on it
+    /// being teleported into it, so it is a conversion setting as much as a fairness
+    /// one: the site cannot hand the match to a server until every player has chosen,
+    /// and a player who is still reading is a player their opponent is waiting on.
+    public float MatchPickSeconds;
+
     public List<LobbySpawn> Spawns;
 
     /// How many spare magazines a player carries, whatever the kit itself asks
@@ -141,7 +150,8 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;
         RespawnDelaySeconds = 10f;
-        MatchWarningSeconds = 5f;
+        MatchWarningSeconds = 3f;
+        MatchPickSeconds = 8f;
         SpareMagazines = 1;
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = true;
