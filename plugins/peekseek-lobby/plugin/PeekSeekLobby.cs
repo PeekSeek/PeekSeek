@@ -105,7 +105,18 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "match_found_warning", "<color=white>Match found.</color> You are out of the arena in <color=white>{0}s</color>. Finish up." },
         { "match_countdown", "Leaving for your match in <color=white>{0}</color>..." },
 
-        { "match_found", "<color=white>Match found.</color> Open the page that just appeared to log in and pick your kit." },
+        { "match_found", "<color=white>MATCH FOUND.</color> You are out of the arena. Sending you in as soon as it is ready." },
+
+        // The loadout prompt. This is the last thing between a match being made and
+        // everyone on it being teleported in, so it says the deadline out loud and
+        // numbers the options: a one-character answer is one people actually give.
+        { "pick_header", "<color=white>Pick your loadout.</color> <color=white>{0}s</color> left, then we pick for you." },
+        { "pick_kit", "Kit: {0}   Type <color=white>/kit 1</color>" },
+        { "pick_powerup", "Powerup: {0}   Type <color=white>/powerup 1</color>" },
+        { "pick_locked", "Locked in: <color=white>{0}</color>." },
+        { "pick_defaulted", "Out of time. You are going in with <color=white>{0}</color>." },
+        { "pick_unknown", "No such option. Pick one of: {0}" },
+        { "pick_nothing_to_pick", "You have nothing to pick right now." },
         { "match_found_browser", "Open this and log in to select your kit and start your match" },
         { "match_started", "Your match is <color=white>ready</color>. Sending you to the server now." },
         // Said to somebody who was taken out of the arena for a match that then ended

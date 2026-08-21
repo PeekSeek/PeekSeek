@@ -487,6 +487,30 @@ class Match(SQLModel, table=True):
         m["pickDeadline"] = Match._nextPickDeadline(m)
         return m
 
+    def collapsedMetaIfNobodyIsPicking(self) -> dict | None:
+        """Every outstanding ballistics/map/movement pick decided at once, or None when
+        there is nothing left to decide.
+
+        The pick phase is only worth waiting on while somebody is at a browser to use
+        it. Once every player has locked their kit and powerup from in-game, nobody is,
+        and what is left of the phase is three `pickTimeout` windows of dead time
+        between a match being ready and anyone being teleported into it. Falls back to
+        the same "index 0" option `resolvedMetaIfExpired` uses, so a collapsed pick and
+        an expired one produce the same match.
+        """
+        notPicked = [
+            o for o in ["ballistics", "map", "movement"] if self.meta[o] is None
+        ]
+        if not notPicked:
+            return None
+
+        gm = mmconfig["gamemodes"][self.gamemode]
+        m = self.meta.copy()
+        for field in notPicked:
+            m[field] = gm[field][0]
+        m["pickDeadline"] = None
+        return m
+
     def localJson(self) -> dict:
         """The match as the site's own pages read it — the match screen, the stream
         overlay, and the spectate and admin lists.

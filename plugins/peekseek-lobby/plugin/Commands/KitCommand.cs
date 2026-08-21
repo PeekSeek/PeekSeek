@@ -8,6 +8,11 @@ namespace PeekSeekLobby.Commands;
 /// /kit with no arguments lists the categories AllowedKitCategories currently
 /// allows and which one the caller has equipped; /kit <category> switches to it
 /// and re-equips immediately.
+///
+/// While the caller is being asked to choose a kit for a match they have just been
+/// given, the same command answers that instead. Deliberately the same word: it is
+/// the one everybody in the arena already types to change guns, and a loadout prompt
+/// nobody knows the command for is a loadout prompt nobody answers.
 internal class KitCommand : IRocketCommand {
     public AllowedCaller AllowedCaller => AllowedCaller.Player;
     public string Name => "kit";
@@ -18,6 +23,12 @@ internal class KitCommand : IRocketCommand {
 
     public void Execute(IRocketPlayer caller, string[] command) {
         UnturnedPlayer player = (UnturnedPlayer)caller;
+
+        if (LobbyManager.HasMatchKitChoice(player.CSteamID)) {
+            PickCommand.Answer(player, powerup: false, command);
+            return;
+        }
+
         List<string> allowed = PeekSeekLobby.Config.AllowedKitCategories;
 
         if (command.Length == 0) {

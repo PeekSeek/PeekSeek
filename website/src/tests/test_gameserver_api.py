@@ -471,6 +471,7 @@ def test_asking_about_a_player_does_not_queue_them(gameserver, user_factory):
         "elo": 300,
         "matchId": None,
         "relayTo": None,
+        "choose": None,
     }
     with opendb() as db:
         assert db.query(data.UserHB).count() == 0
@@ -666,3 +667,94 @@ def test_an_account_is_still_made_when_steam_will_not_answer(gameserver, monkeyp
         user = db.query(data.User).where(data.User.steam64 == stranger).first()
         assert user is not None
         assert not user.steam_data
+
+
+def test_picking_in_game_hands_the_match_over_without_waiting_out_selection(
+    gameserver, user_factory
+):
+    """The whole point of the in-game pick. Two players who lock a kit and a powerup
+    from the lobby are hosted on the very next poll: no `selectKitsTime` to sit out,
+    and no waiting on map/ballistics/movement picks that nobody is at a browser to
+    make."""
+    first, second = user_factory(), user_factory()
+    queue(first, second)
+    matchId = poll(gameserver)["matchId"]
+
+    for user in (first, second):
+        r = gameserver.post(
+            f"/server/v1/players/{user.steam64}/decide",
+            params={"kit": "sniper", "powerup": "Boom"},
+        )
+        assert r.status_code == 200, r.text
+
+    answer = poll(gameserver, matchId)
+
+    assert answer["action"] == "host"
+    assert answer["match"]["settings"]["map"] is not None
+
+
+def test_one_player_locking_in_does_not_start_the_match_for_everyone(
+    gameserver, user_factory
+):
+    """Collapsing the pick phase is only safe once nobody is left who might use it."""
+    first, second = user_factory(), user_factory()
+    queue(first, second)
+    matchId = poll(gameserver)["matchId"]
+
+    gameserver.post(
+        f"/server/v1/players/{first.steam64}/decide",
+        params={"kit": "meta", "powerup": "Boom"},
+    )
+
+    assert poll(gameserver, matchId)["action"] == "wait"
+
+
+def test_an_unknown_pick_is_refused_rather_than_reaching_the_match(
+    gameserver, user_factory
+):
+    """An unknown kit category reaches Kit.getItems as a missing key, and an unknown
+    powerup equips nothing — so both are refused here instead."""
+    first, second = user_factory(), user_factory()
+    queue(first, second)
+    poll(gameserver)
+
+    kit = gameserver.post(
+        f"/server/v1/players/{first.steam64}/decide", params={"kit": "rocket"}
+    )
+    powerup = gameserver.post(
+        f"/server/v1/players/{first.steam64}/decide", params={"powerup": "Nothing"}
+    )
+
+    assert kit.status_code == 400
+    assert powerup.status_code == 400
+
+
+def test_a_matched_player_is_told_what_is_left_to_choose(gameserver, user_factory):
+    """`choose` is what lets the lobby put a menu in front of somebody without knowing
+    anything about the gamemode."""
+    first, second = user_factory(), user_factory()
+    queue(first, second)
+    poll(gameserver)
+
+    choose = gameserver.get(f"/server/v1/players/{first.steam64}").json()["choose"]
+    assert choose["kits"] == ["meta", "sniper"]
+    assert "Boom" in choose["powerups"]
+    assert choose["kit"] is None
+
+    gameserver.post(
+        f"/server/v1/players/{first.steam64}/decide", params={"kit": "meta"}
+    )
+
+    choose = gameserver.get(f"/server/v1/players/{first.steam64}").json()["choose"]
+    assert choose["kit"] == "meta"
+    assert choose["powerup"] is None
+
+
+def test_deciding_without_a_match_is_a_404(gameserver, user_factory):
+    player = user_factory()
+
+    r = gameserver.post(
+        f"/server/v1/players/{player.steam64}/decide", params={"kit": "meta"}
+    )
+
+    assert r.status_code == 404

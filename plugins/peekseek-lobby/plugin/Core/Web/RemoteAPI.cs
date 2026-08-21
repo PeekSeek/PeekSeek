@@ -43,6 +43,11 @@ internal static class RemoteAPI {
         /// to send them yet. Non-null is the site's promise that the match is being
         /// hosted right now and this player will be let in.
         internal string RelayTo;
+
+        /// What the site is still waiting on this player to choose about their match.
+        /// Null when they have no match, or when the gamemode leaves them nothing to
+        /// decide.
+        internal MatchPicks Choose;
     }
 
     /// Queue this player and read back where they stand. Both jobs in one call because
@@ -90,7 +95,8 @@ internal static class RemoteAPI {
                 PlayerState state = new() {
                     Elo = Number(body["elo"]) ?? 0,
                     MatchId = Number(body["matchId"]) ?? 0,
-                    RelayTo = Text(body["relayTo"])
+                    RelayTo = Text(body["relayTo"]),
+                    Choose = Choices(body["choose"])
                 };
                 bool eloKnown = body["elo"] != null && body["elo"].Type != JTokenType.Null;
 
@@ -108,6 +114,51 @@ internal static class RemoteAPI {
     /// Null unless the response really is JSON. The site answers with an HTML error page
     /// when it is down or behind a proxy that is, and every player is refreshed every
     /// few seconds — parsing that would bury the console in identical parse errors.
+    /// The site's `choose` block, or null when there is nothing to choose.
+    ///
+    /// Internal rather than private so the shape the site actually sends can be pinned
+    /// by a test: this is the seam where a renamed field stops the loadout prompt
+    /// appearing at all, and it fails silently everywhere else.
+    internal static MatchPicks Choices(JToken token) {
+        if (token == null || token.Type != JTokenType.Object) return null;
+
+        MatchPicks picks = new() {
+            Kit = Text(token["kit"]),
+            Powerup = Text(token["powerup"])
+        };
+        Fill(picks.Kits, token["kits"]);
+        Fill(picks.Powerups, token["powerups"]);
+        return picks;
+    }
+
+    private static void Fill(List<string> into, JToken array) {
+        if (array == null || array.Type != JTokenType.Array) return;
+        foreach (JToken entry in array) into.Add(entry.ToString());
+    }
+
+    /// Lock a matched player's kit and/or powerup from in-game.
+    ///
+    /// Fire and forget, and deliberately not deduplicated with the refresh in flight:
+    /// this is the one call the player is actually waiting on, and the next refresh
+    /// reads back whatever the site really stored, so a request that fails costs a
+    /// couple of seconds rather than a menu that lies.
+    internal static void Decide(ulong steam64, string kit, string powerup) {
+        List<string> query = [];
+        if (kit != null) query.Add("kit=" + Uri.EscapeDataString(kit));
+        if (powerup != null) query.Add("powerup=" + Uri.EscapeDataString(powerup));
+        if (query.Count == 0) return;
+
+        string url = $"{Base}/players/{steam64}/decide?" + string.Join("&", query);
+        Task.Run(async () => {
+            try {
+                HttpResponseMessage response = await Client.PostAsync(url, null);
+                ReportStatus(response.StatusCode);
+            } catch (Exception ex) {
+                ReportFailure(ex.Message);
+            }
+        });
+    }
+
     private static async Task<JObject> ReadJson(HttpResponseMessage response) {
         if (response.Content.Headers.ContentType?.MediaType != "application/json") return null;
         return JObject.Parse(await response.Content.ReadAsStringAsync());

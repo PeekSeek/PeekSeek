@@ -1,6 +1,6 @@
 {
-    "selectKitsTime": 60,
-    "pickTimeout": 15,
+    "selectKitsTime": 25,
+    "pickTimeout": 10,
     "gamemodes": [
         {
             "name": "Competitive",

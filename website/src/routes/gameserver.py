@@ -368,20 +368,109 @@ def _roundScore(match: data.Match) -> list:
 
 def _player(steam64: int) -> dict:
     """One player as every player-facing route here reports them: their rank, and where
-    they should be. `matchId` without a `relayTo` means "matched, still choosing"."""
+    they should be. `matchId` without a `relayTo` means "matched, still choosing", and
+    `choose` is what they are still choosing between."""
     matchId = data.User.getCurrentMatchId(steam64)
-    relayTo = None
+    match = None
     if matchId:
         with opendb() as db:
             match = db.query(data.Match).where(data.Match.id == matchId).first()
-        relayTo = match.connectCode() if match else None
 
     return {
         "steam64": str(steam64),
         "elo": data.Stat.getElo(steam64),
         "matchId": matchId or None,
-        "relayTo": relayTo,
+        "relayTo": match.connectCode() if match else None,
+        "choose": _choices(match, steam64) if match else None,
     }
+
+
+def _choices(match: "data.Match", steam64: int) -> dict | None:
+    """What this player still gets to decide about their match, and what they have
+    decided so far. Null when there is nothing for them to decide.
+
+    A list with one entry in it is not a choice — `Kit.getItems` resolves those itself
+    — so it comes back empty rather than as a menu with one item on it. That is what
+    lets a caller treat "empty" as "do not prompt" without knowing the gamemode.
+    """
+    userData = match.meta["userData"].get(str(steam64))
+    if userData is None:
+        return None
+
+    gm = mmconfig["gamemodes"][match.gamemode]
+    kits = list(gm["kitsAllowed"]) if len(gm["kitsAllowed"]) > 1 else []
+    powerups = [p["name"] for p in gm["powerups"]] if len(gm["powerups"]) > 1 else []
+    if not kits and not powerups:
+        return None
+
+    return {
+        "kits": kits,
+        "powerups": powerups,
+        "kit": userData["kit"],
+        "powerup": userData["powerup"],
+    }
+
+
+@router.post("/players/{steam64}/decide")
+def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = None):
+    """Lock this player's kit and/or powerup for the match they are on.
+
+    The in-game half of the pick screen. Until this existed the only place a pick could
+    be made was the match page on the site, so a player standing in a lobby had no way
+    to make one at all — and `readyToHost` waits on every pick being made or
+    `selectKitsTime` running out, which is the whole of the delay between "you have a
+    match" and being teleported into it.
+
+    Both fields are optional and independent, so a caller can lock a kit the moment it
+    knows one and leave the powerup for the player to choose. Values are checked
+    against the gamemode rather than trusted: an unknown kit category reaches
+    `Kit.getItems` as a missing key, and an unknown powerup equips nothing at all.
+
+    Once every player has locked both, the outstanding map/ballistics/movement picks
+    are collapsed rather than waited on. Nobody who locked from in-game is at a browser
+    to make them, so what is left of that phase is dead time.
+
+    Answers with the same `choose` block `GET /players/{steam64}` returns, so a caller
+    can prompt again off the reply without a second call.
+    """
+    matchId = data.User.getCurrentMatchId(steam64)
+    if not matchId:
+        raise HTTPException(status_code=404, detail="No match found.")
+
+    with opendb() as db:
+        match = db.query(data.Match).where(data.Match.id == matchId).first()
+
+    choices = _choices(match, steam64)
+    if choices is None:
+        raise HTTPException(status_code=404, detail="Not a player on this match.")
+
+    picked = {}
+    if kit is not None:
+        if kit not in choices["kits"]:
+            raise HTTPException(status_code=400, detail=f"Unknown kit '{kit}'.")
+        picked["kit"] = kit
+    if powerup is not None:
+        if powerup not in choices["powerups"]:
+            raise HTTPException(status_code=400, detail=f"Unknown powerup '{powerup}'.")
+        picked["powerup"] = powerup
+
+    if picked:
+        with opendb() as db:
+            match.meta = match.getReturnedMeta(steam64, **picked)
+            db.query(data.Match).where(data.Match.id == matchId).update(
+                {"meta": match.meta}
+            )
+
+        if match.allKitsLocked():
+            collapsed = match.collapsedMetaIfNobodyIsPicking()
+            if collapsed is not None:
+                with opendb() as db:
+                    db.query(data.Match).where(data.Match.id == matchId).update(
+                        {"meta": collapsed}
+                    )
+                match.meta = collapsed
+
+    return {"matchId": matchId, "choose": _choices(match, steam64)}
 
 
 @router.post("/lobby/population")
