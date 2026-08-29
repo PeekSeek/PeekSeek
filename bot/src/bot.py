@@ -749,7 +749,7 @@ async def onCommandError(interaction: discord.Interaction, error: Exception):
 
 
 # ---------------------------------------------------------------------------
-# The sticky notice in the reports channel.
+# The sticky notice telling players how to report a cheater.
 
 # The title identifies the bot's own sticky when clearing up after a restart. It used
 # to be a footer, which put a line of housekeeping in front of readers to solve a
@@ -823,7 +823,7 @@ async def postSticky(channel) -> None:
 
 @bot.event
 async def on_message(message: discord.Message):
-    """Keep the notice at the bottom of the reports channel.
+    """Keep the notice at the bottom of its channel.
 
     Its own message rather than a pinned one: a pin is a click away and nobody clicks
     it, and the whole point is that somebody about to type out a description of a cheat
@@ -839,7 +839,7 @@ async def on_message(message: discord.Message):
 
     if message.author.id == bot.user.id:
         return
-    if not settings.report_channel or message.channel.id != int(settings.report_channel):
+    if not settings.sticky_channel or message.channel.id != int(settings.sticky_channel):
         return
 
     if stickyPending:
@@ -860,11 +860,11 @@ async def on_message(message: discord.Message):
 async def on_ready():
     logging.info("Logged in as %s", bot.user)
 
-    if not settings.report_channel:
+    if not settings.sticky_channel:
         return
-    channel = bot.get_channel(int(settings.report_channel))
+    channel = bot.get_channel(int(settings.sticky_channel))
     if channel is None:
-        logging.warning("Report channel %s not visible", settings.report_channel)
+        logging.warning("Sticky channel %s not visible", settings.sticky_channel)
         return
 
     async with stickyLock:

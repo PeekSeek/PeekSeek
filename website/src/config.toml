@@ -69,6 +69,11 @@ staff_role = "1309223753129005117"
 # has already been made and that the rest of staff should see.
 overturn_channel = "1392874678577533039"
 
+# Where the "how to report a cheater" notice sits, kept at the bottom of the channel.
+# Not the report channel: this is aimed at players about to describe something they
+# saw, and that is a different room from the one staff pick work up in.
+sticky_channel = "1395115837551022162"
+
 [regions.names]
 # Region id -> display name used in Discord queue pings.
 paris = "EU-West"
