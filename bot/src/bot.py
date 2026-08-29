@@ -748,9 +748,115 @@ async def onCommandError(interaction: discord.Interaction, error: Exception):
         await interaction.response.send_message(message, ephemeral=True)
 
 
+# ---------------------------------------------------------------------------
+# The sticky notice in the reports channel.
+
+# Written into the footer so the bot can recognise its own sticky after a restart and
+# clear the old one, rather than leaving a trail of them up the channel.
+STICKY_MARK = "PeekSeek sticky"
+
+# How long to let a burst of messages settle before reposting. Without it, five
+# messages arriving together would delete and repost the sticky five times, which is
+# both rate-limit bait and visible flicker for anyone reading.
+STICKY_SETTLE = 3
+
+stickyId: int | None = None
+stickyLock = asyncio.Lock()
+stickyPending = False
+
+
+def stickyEmbed() -> discord.Embed:
+    embed = discord.Embed(
+        title="Reporting a cheater",
+        colour=0xFFA34E,
+        description=(
+            "**If you are on a PeekSeek server right now, use `/report <player> <reason>` "
+            "in game.**\n"
+            "It sends staff a screenshot of what they are seeing, plus their damage, "
+            "accuracy and headshot rate for the round. That is far stronger than "
+            "describing it afterwards, and it takes a few seconds.\n\n"
+            "**If you have already left the server, post here instead and attach video.** "
+            "A clip of the whole fight is worth more than a screenshot of the killfeed."
+        ),
+    )
+    embed.set_footer(text=STICKY_MARK)
+    return embed
+
+
+async def clearOldStickies(channel) -> None:
+    """Delete any sticky left over from a previous run.
+
+    A restart otherwise strands the old one part way up the channel, and after a few
+    restarts the channel is mostly stickies.
+    """
+    async for message in channel.history(limit=50):
+        if message.author.id != bot.user.id or not message.embeds:
+            continue
+        if (message.embeds[0].footer.text or "") == STICKY_MARK:
+            try:
+                await message.delete()
+            except discord.HTTPException:
+                pass
+
+
+async def postSticky(channel) -> None:
+    global stickyId
+
+    if stickyId is not None:
+        try:
+            await channel.get_partial_message(stickyId).delete()
+        except discord.HTTPException:
+            # Already gone, or somebody deleted it by hand. Either way it is not in the
+            # way any more, which is all this delete was for.
+            pass
+
+    stickyId = (await channel.send(embed=stickyEmbed())).id
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    """Keep the notice at the bottom of the reports channel.
+
+    Its own message rather than a pinned one: a pin is a click away and nobody clicks
+    it, and the whole point is that somebody about to type out a description of a cheat
+    reads that there is a better way first.
+    """
+    global stickyPending
+
+    if not settings.report_channel or message.channel.id != int(settings.report_channel):
+        return
+    # Reports are posted by this same bot token, so self-authored messages are not
+    # skipped. Only the sticky itself is, or it would chase its own tail forever.
+    if stickyId is not None and message.id == stickyId:
+        return
+
+    if stickyPending:
+        return
+    stickyPending = True
+
+    try:
+        await asyncio.sleep(STICKY_SETTLE)
+        async with stickyLock:
+            stickyPending = False
+            await postSticky(message.channel)
+    except discord.HTTPException as error:
+        stickyPending = False
+        logging.warning("Could not move the sticky: %s", error)
+
 @bot.event
 async def on_ready():
     logging.info("Logged in as %s", bot.user)
+
+    if not settings.report_channel:
+        return
+    channel = bot.get_channel(int(settings.report_channel))
+    if channel is None:
+        logging.warning("Report channel %s not visible", settings.report_channel)
+        return
+
+    async with stickyLock:
+        await clearOldStickies(channel)
+        await postSticky(channel)
 
 
 if __name__ == "__main__":
