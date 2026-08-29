@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import traceback
+from time import time
 
 import discord
 from discord import app_commands
@@ -396,6 +397,112 @@ async def stats(
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+
+class PickBanToOverturn(discord.ui.View):
+    """Every ban this player has, as a menu, because "unban them" is ambiguous the
+    moment somebody has been banned more than once.
+
+    Overturning does not delete the row. It sets the expiry to zero and writes who
+    lifted it into the note, so a repeat offender still reads as one and the fact that
+    somebody overturned a ban is itself part of the record.
+    """
+
+    def __init__(self, invoker: int, bans: list, byName: str, bySteam64):
+        super().__init__(timeout=120)
+        self.invoker = invoker
+        self.byName = byName
+        self.bySteam64 = bySteam64
+
+        options = []
+        for ban in bans[:25]:
+            issued = ban.created_at.strftime("%d %b %Y") if ban.created_at else "unknown"
+            state = "in force" if ban.endTime > int(time()) else "already over"
+            note = (ban.moderatorNote or "no note")[:90]
+            options.append(
+                discord.SelectOption(
+                    label=f"{ban.reason} - {issued} ({state})"[:100],
+                    description=note,
+                    value=str(ban.id),
+                )
+            )
+
+        self.menu = discord.ui.Select(placeholder="Which ban?", options=options)
+        self.menu.callback = self.chosen
+        self.add_item(self.menu)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.invoker:
+            await interaction.response.send_message("That menu is not yours.", ephemeral=True)
+            return False
+        return True
+
+    async def chosen(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        banId = int(self.menu.values[0])
+
+        lifted = await bot.loop.run_in_executor(
+            None,
+            lambda: moderation.overturnBan(banId, self.byName, self.bySteam64),
+        )
+        if lifted is None:
+            await interaction.followup.send("That ban no longer exists.", ephemeral=True)
+            return
+
+        await interaction.followup.send(
+            f"Overturned the **{lifted['reason']}** ban on "
+            f"**{displayName(lifted['steam64'])}**. The record is kept and now says you "
+            "lifted it.",
+            ephemeral=True,
+        )
+        self.stop()
+
+
+
+@bot.tree.command(name="unban", description="Overturn a ban.")
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(
+    player="The Discord account of the player.", steam64="Or their steam64."
+)
+async def unban(
+    interaction: discord.Interaction,
+    player: discord.User | None = None,
+    steam64: str | None = None,
+):
+    admin = await requireAdmin(interaction)
+    if admin is None:
+        return
+
+    target, error = resolveTarget(player, steam64)
+    if error:
+        await interaction.response.send_message(error, ephemeral=True)
+        return
+
+    history = data.UserBan.historyFor(target)
+    if not history:
+        await interaction.response.send_message(
+            f"**{displayName(target)}** has never been banned.", ephemeral=True
+        )
+        return
+
+    active = data.UserBan.activeFor(target)
+    embed = discord.Embed(
+        title=f"Bans on {displayName(target)}",
+        url=f"{settings.base_url}/u/{target}",
+        colour=RED if active else GREY,
+        description=(
+            "They are not currently banned; these are all expired or already overturned."
+            if not active
+            else f"Currently banned: **{active.reason}** until {active.expiryLabel}."
+        ),
+    )
+
+    await interaction.response.send_message(
+        embed=embed,
+        view=PickBanToOverturn(
+            interaction.user.id, history, displayName(admin.steam64), admin.steam64
+        ),
+        ephemeral=True,
+    )
 
 @bot.tree.error
 async def onCommandError(interaction: discord.Interaction, error: Exception):
