@@ -268,19 +268,6 @@ function loadBanState() {
         .catch(() => { /* Chips are an enhancement. The page is fine without them. */ });
 }
 
-function searchPlayer(event) {
-    if (event.key !== "Enter") return;
-
-    // Accepts a bare steam64 or a profile URL pasted straight out of the browser.
-    const found = event.target.value.trim().match(/(\d{17,})/);
-    if (!found) {
-        alert("Paste a steam64 or a peekseek.net/u/ link.");
-        return;
-    }
-    event.target.value = "";
-    openDrawer(found[1]);
-}
-
 document.addEventListener("DOMContentLoaded", () => {
     const overlay = document.getElementById("modOverlay");
     if (!overlay) return;

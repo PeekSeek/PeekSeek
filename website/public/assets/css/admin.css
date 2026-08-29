@@ -75,9 +75,16 @@
 
 /* Name, numbers, and where they stand, in three columns so every player on the page
    lines up down the card however long their name is. */
+.adminPlayerWho {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .adminPlayer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 10px;
   font-size: 13px;

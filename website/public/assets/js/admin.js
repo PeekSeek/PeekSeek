@@ -102,20 +102,22 @@ function playerRow(player, over) {
     }
 
     // The profile link stays what it always was; moderation is a separate control so
-    // clicking a name still goes where everyone expects. The button is hidden until the
-    // row is hovered unless this player actually has ban state worth surfacing.
-    const state = banState[player.steam64];
-    const always = state && (state.banned || state.prior) ? " always" : "";
-
+    // clicking a name still goes where everyone expects.
+    // The chip travels inside the name cell rather than as a column of its own. The
+    // row is a grid with a fixed number of columns, and a chip that only exists for
+    // some players would change that count and drop the rest of the row onto a second
+    // line, which is what it did.
     return `<div class="adminPlayer">
-        <a href="/u/${esc(player.steam64)}" class="userProfile">
-          <img src="${esc(player.avatar)}" alt="">
-          <span>${esc(player.name)}</span>
-        </a>
-        ${banChip(player.steam64)}
+        <span class="adminPlayerWho">
+          <a href="/u/${esc(player.steam64)}" class="userProfile">
+            <img src="${esc(player.avatar)}" alt="">
+            <span>${esc(player.name)}</span>
+          </a>
+          ${banChip(player.steam64)}
+        </span>
         <span class="adminPlayerStats">${numbers}</span>
         <span class="adminPlayerTrailing">${trailing}</span>
-        <button class="modOpen${always}" title="Ban this player"
+        <button class="modOpen" title="Ban this player"
                 onclick="openDrawer('${esc(player.steam64)}')">&#9873;</button>
       </div>`;
 }

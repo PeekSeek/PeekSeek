@@ -216,6 +216,10 @@
 .banChip.active { background: #4411117f; color: #f04444; }
 .banChip.prior { background: #643c177f; color: #ffa34e; }
 
+ /* Always visible. Revealing it on hover meant you had to already know it was there
+   to find it, and made the row twitch as the pointer crossed it. The chip beside the
+   name carries whether this player has any ban history; the button is just the way in,
+   so it looks the same on every row. */
 .modOpen {
     flex: none;
     width: 24px;
@@ -227,12 +231,8 @@
     font-size: 12px;
     line-height: 1;
     cursor: pointer;
-    visibility: hidden;
 }
-.adminPlayer:hover .modOpen,
-.modOpen.always { visibility: visible; }
-.modOpen.always { border-color: #6a2b2b; color: #f04444; }
-.modOpen:hover { color: #fff; border-color: #666; }
+.modOpen:focus-visible { outline: 2px solid #47bbe9; outline-offset: 1px; }
 
 .adminSearch {
     background: #1a1a1a;
