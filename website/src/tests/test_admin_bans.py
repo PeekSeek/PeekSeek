@@ -189,14 +189,14 @@ def test_ban_rows_are_admin_only(client, login, admin, user_factory):
     assert "Cheating" in client.get(f"/u/{target.steam64}").text
 
 
-def test_only_an_admin_gets_the_moderate_button(client, login, admin, user_factory):
+def test_only_an_admin_gets_the_ban_button(client, login, admin, user_factory):
     target = user_factory()
 
     login(client, user_factory())
-    assert "Moderate" not in client.get(f"/u/{target.steam64}").text
+    assert ">Ban" not in client.get(f"/u/{target.steam64}").text
 
     login(client, admin)
-    assert "Moderate" in client.get(f"/u/{target.steam64}").text
+    assert ">Ban" in client.get(f"/u/{target.steam64}").text
 
 
 def test_a_logged_out_visitor_gets_no_moderation(client, user_factory):
@@ -204,7 +204,7 @@ def test_a_logged_out_visitor_gets_no_moderation(client, user_factory):
 
     body = client.get(f"/u/{target.steam64}").text
 
-    assert "Moderate" not in body
+    assert ">Ban" not in body
     assert "moderation.js" not in body
 
 

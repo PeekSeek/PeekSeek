@@ -115,7 +115,7 @@ function playerRow(player, over) {
         ${banChip(player.steam64)}
         <span class="adminPlayerStats">${numbers}</span>
         <span class="adminPlayerTrailing">${trailing}</span>
-        <button class="modOpen${always}" title="Moderate this player"
+        <button class="modOpen${always}" title="Ban this player"
                 onclick="openDrawer('${esc(player.steam64)}')">&#9873;</button>
       </div>`;
 }
