@@ -116,6 +116,41 @@ def displayName(steam64) -> str:
     return stored.get("name") or str(steam64)
 
 
+def cheatingPreviewEmbed(target, preview: dict) -> discord.Embed:
+    """What a cheating ban would cost everyone else, before it costs them anything."""
+    lines = "\n".join(
+        f"`{r['elo']:+d}` <{settings.base_url}/u/{r['steam64']}>"
+        for r in preview["refunds"][:10]
+    )
+    if preview["players"] > 10:
+        lines += f"\n... and {preview['players'] - 10} more"
+
+    stats = preview["stats"]
+    embed = discord.Embed(
+        title=f"Confirm permanent ban: {displayName(target)}",
+        url=f"{settings.base_url}/u/{target}",
+        colour=RED,
+        description=lines or "No matches to refund.",
+    )
+    embed.add_field(name="Steam64", value=f"`{target}`", inline=True)
+    embed.add_field(
+        name="Their record",
+        value=(
+            f"{stats['elo']} Elo, {stats['kills']}K/{stats['deaths']}D"
+            if stats
+            else "No stats row"
+        ),
+        inline=True,
+    )
+    embed.add_field(
+        name="Would void",
+        value=f"{preview['matches']} matches, refunding {preview['players']} players "
+        f"{preview['eloReturned']:+d} Elo",
+        inline=False,
+    )
+    return embed
+
+
 class ConfirmBan(discord.ui.View):
     """The confirmation a cheating ban goes through, and nothing else does.
 
@@ -259,39 +294,8 @@ async def ban(
     await interaction.response.defer(ephemeral=True)
     preview = await asyncio.to_thread(moderation.previewBan, target)
 
-    lines = "\n".join(
-        f"`{r['elo']:+d}` <{settings.base_url}/u/{r['steam64']}>"
-        for r in preview["refunds"][:10]
-    )
-    if preview["players"] > 10:
-        lines += f"\n… and {preview['players'] - 10} more"
-
-    stats = preview["stats"]
-    embed = discord.Embed(
-        title=f"Confirm permanent ban: {displayName(target)}",
-        url=f"{settings.base_url}/u/{target}",
-        colour=RED,
-        description=lines or "No matches to refund.",
-    )
-    embed.add_field(name="Steam64", value=f"`{target}`", inline=True)
-    embed.add_field(
-        name="Their record",
-        value=(
-            f"{stats['elo']} Elo, {stats['kills']}K/{stats['deaths']}D"
-            if stats
-            else "No stats row"
-        ),
-        inline=True,
-    )
-    embed.add_field(
-        name="Would void",
-        value=f"{preview['matches']} matches, refunding {preview['players']} players "
-        f"{preview['eloReturned']:+d} Elo",
-        inline=False,
-    )
-
     await interaction.followup.send(
-        embed=embed,
+        embed=cheatingPreviewEmbed(target, preview),
         view=ConfirmBan(interaction.user.id, target, note, byName, admin.steam64),
         ephemeral=True,
     )
@@ -327,30 +331,34 @@ async def stop(interaction: discord.Interaction, matchid: int):
     )
 
 
-@bot.tree.command(name="stats", description="Look up a player's record and ban history.")
-@app_commands.default_permissions(administrator=True)
-@app_commands.describe(
-    player="The Discord account of the player.", steam64="Or their steam64."
-)
-async def stats(
-    interaction: discord.Interaction,
-    player: discord.User | None = None,
-    steam64: str | None = None,
-):
-    admin = await requireAdmin(interaction)
-    if admin is None:
-        return
+def profileLinks(target) -> discord.ui.View:
+    """Their PeekSeek profile and their Steam profile, as link buttons.
 
-    # Defaults to the caller, so an admin checking their own record does not have to
-    # type their own steam64 at themselves.
-    if player is None and steam64 is None:
-        target = admin.steam64
-    else:
-        target, error = resolveTarget(player, steam64)
-        if error:
-            await interaction.response.send_message(error, ephemeral=True)
-            return
+    Link buttons need no interaction handling, so these keep working whatever state
+    the bot is in, and they save anyone reading a stat line from copying a steam64
+    out of it to go and look the player up.
+    """
+    view = discord.ui.View()
+    view.add_item(
+        discord.ui.Button(
+            label="PeekSeek profile",
+            style=discord.ButtonStyle.link,
+            url=f"{settings.base_url}/u/{target}",
+        )
+    )
+    view.add_item(
+        discord.ui.Button(
+            label="Steam profile",
+            style=discord.ButtonStyle.link,
+            url=f"https://steamcommunity.com/profiles/{target}",
+        )
+    )
+    return view
 
+
+async def sendStats(interaction: discord.Interaction, target) -> None:
+    """One player's record. Deliberately says nothing about bans: that belongs to
+    /unban, which is the command that acts on them."""
     with opendb() as db:
         record = db.query(data.Stat).where(data.Stat.steam64 == int(target)).first()
 
@@ -372,7 +380,39 @@ async def stats(
     else:
         embed.add_field(name="Elo", value="Never played a ranked match", inline=True)
 
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message(
+        embed=embed, view=profileLinks(target), ephemeral=True
+    )
+
+
+@bot.tree.command(name="stats", description="Look up a player's PeekSeek record.")
+@app_commands.describe(
+    player="The Discord account of the player.", steam64="Or their steam64."
+)
+async def stats(
+    interaction: discord.Interaction,
+    player: discord.User | None = None,
+    steam64: str | None = None,
+):
+    """Open to everyone. A player's Elo and K/D are already public on their profile,
+    so gating the command that reads them out would only make it less useful."""
+    if player is None and steam64 is None:
+        caller = linkedAccount(interaction.user.id)
+        if caller is None:
+            await interaction.response.send_message(
+                "Your Discord is not linked to a PeekSeek account, so I do not know "
+                "who you are. Name a player or pass a steam64.",
+                ephemeral=True,
+            )
+            return
+        target = caller.steam64
+    else:
+        target, error = resolveTarget(player, steam64)
+        if error:
+            await interaction.response.send_message(error, ephemeral=True)
+            return
+
+    await sendStats(interaction, target)
 
 
 class BanSelect(discord.ui.Select):
@@ -458,7 +498,36 @@ class PickBanToOverturn(discord.ui.View):
             await interaction.response.send_message(message, ephemeral=True)
 
 
-@bot.tree.command(name="unban", description="Overturn a ban.")
+async def sendUnban(interaction: discord.Interaction, admin, target) -> None:
+    history = data.UserBan.historyFor(target)
+    if not history:
+        await interaction.response.send_message(
+            f"**{displayName(target)}** has never been banned.", ephemeral=True
+        )
+        return
+
+    active = data.UserBan.activeFor(target)
+    embed = discord.Embed(
+        title=f"Bans on {displayName(target)}",
+        url=f"{settings.base_url}/u/{target}",
+        colour=RED if active else GREY,
+        description=(
+            f"Currently banned: **{active.reason}** until {active.expiryLabel}."
+            if active
+            else "They are not currently banned; these are all expired or already lifted."
+        ),
+    )
+
+    await interaction.response.send_message(
+        embed=embed,
+        view=PickBanToOverturn(
+            interaction.user.id, history, displayName(admin.steam64), admin.steam64
+        ),
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="unban", description="Lift a ban.")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(
     player="The Discord account of the player.", steam64="Or their steam64."
@@ -477,32 +546,192 @@ async def unban(
         await interaction.response.send_message(error, ephemeral=True)
         return
 
-    history = data.UserBan.historyFor(target)
-    if not history:
-        await interaction.response.send_message(
-            f"**{displayName(target)}** has never been banned.", ephemeral=True
+    await sendUnban(interaction, admin, target)
+
+
+# ---------------------------------------------------------------------------
+# Context menus: right-click a member, Apps, and the command runs against them.
+#
+# A user context menu is a module-level function taking exactly the interaction and
+# the member, which is why these cannot simply be the slash commands with a decorator
+# added. They share the handlers above rather than the logic being written twice.
+
+
+class BanNote(discord.ui.Modal):
+    """The note, and for a custom ban its length and reason.
+
+    A modal rather than more buttons because a note is free text and this is the only
+    Discord component that can ask for any. Discord modals take text inputs only, so
+    the preset is chosen from a menu first and this asks for what the preset cannot
+    say for itself.
+    """
+
+    def __init__(self, preset: str, target, admin):
+        super().__init__(title=f"{moderation.PRESETS.get(preset, {}).get('label', 'Custom')} ban")
+        self.preset = preset
+        self.target = target
+        self.admin = admin
+
+        self.note = discord.ui.TextInput(
+            label="Moderator note",
+            placeholder="Clip, match id, what you saw",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=900,
         )
+        self.add_item(self.note)
+
+        if preset == "custom":
+            self.days = discord.ui.TextInput(
+                label="Days", placeholder="7", max_length=4, required=True
+            )
+            self.reason = discord.ui.TextInput(
+                label="Reason", placeholder="What it is for", max_length=100, required=True
+            )
+            self.add_item(self.days)
+            self.add_item(self.reason)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        byName = displayName(self.admin.steam64)
+
+        if self.preset == "custom":
+            if not str(self.days).strip().isdigit():
+                await interaction.response.send_message(
+                    "Days has to be a number.", ephemeral=True
+                )
+                return
+            await asyncio.to_thread(
+                moderation.issueBan,
+                self.target,
+                None,
+                int(str(self.days)),
+                str(self.reason),
+                str(self.note),
+                byName,
+                self.admin.steam64,
+            )
+            await interaction.response.send_message(
+                f"**{displayName(self.target)}** is banned for {self.days} days.",
+                ephemeral=True,
+            )
+            return
+
+        if self.preset != "cheating":
+            await asyncio.to_thread(
+                moderation.issueBan,
+                self.target,
+                self.preset,
+                None,
+                None,
+                str(self.note),
+                byName,
+                self.admin.steam64,
+            )
+            length = moderation.PRESETS[self.preset]["summary"].lower()
+            await interaction.response.send_message(
+                f"**{displayName(self.target)}** is banned for {length}.", ephemeral=True
+            )
+            return
+
+        # Cheating shows what it would do before doing any of it, exactly as /ban does.
+        await interaction.response.defer(ephemeral=True)
+        preview = await asyncio.to_thread(moderation.previewBan, self.target)
+        await interaction.followup.send(
+            embed=cheatingPreviewEmbed(self.target, preview),
+            view=ConfirmBan(
+                interaction.user.id, self.target, str(self.note), byName, self.admin.steam64
+            ),
+            ephemeral=True,
+        )
+
+
+class PresetSelect(discord.ui.Select):
+    def __init__(self, target, admin):
+        self.target = target
+        self.admin = admin
+
+        options = [
+            discord.SelectOption(
+                label=preset["label"], description=preset["summary"], value=key
+            )
+            for key, preset in moderation.PRESETS.items()
+        ]
+        options.append(
+            discord.SelectOption(
+                label="Custom", description="Set days + reason", value="custom"
+            )
+        )
+        super().__init__(placeholder="Why are they being banned?", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            BanNote(self.values[0], self.target, self.admin)
+        )
+
+
+class PickPreset(discord.ui.View):
+    def __init__(self, invoker: int, target, admin):
+        super().__init__(timeout=180)
+        self.invoker = invoker
+        self.add_item(PresetSelect(target, admin))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.invoker:
+            await interaction.response.send_message("That menu is not yours.", ephemeral=True)
+            return False
+        return True
+
+    async def on_error(self, interaction, error, item):
+        logging.error("Ban menu failed: %s", "".join(traceback.format_exception(error)))
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "That failed. It is logged; nothing was changed.", ephemeral=True
+            )
+
+
+@bot.tree.context_menu(name="PeekSeek stats")
+async def statsContext(interaction: discord.Interaction, member: discord.Member):
+    """Open to everyone, same as /stats."""
+    target, error = resolveTarget(member, None)
+    if error:
+        await interaction.response.send_message(error, ephemeral=True)
+        return
+    await sendStats(interaction, target)
+
+
+@bot.tree.context_menu(name="Ban from PeekSeek")
+@app_commands.default_permissions(administrator=True)
+async def banContext(interaction: discord.Interaction, member: discord.Member):
+    admin = await requireAdmin(interaction)
+    if admin is None:
         return
 
-    active = data.UserBan.activeFor(target)
-    embed = discord.Embed(
-        title=f"Bans on {displayName(target)}",
-        url=f"{settings.base_url}/u/{target}",
-        colour=RED if active else GREY,
-        description=(
-            "They are not currently banned; these are all expired or already overturned."
-            if not active
-            else f"Currently banned: **{active.reason}** until {active.expiryLabel}."
-        ),
-    )
+    target, error = resolveTarget(member, None)
+    if error:
+        await interaction.response.send_message(error, ephemeral=True)
+        return
 
     await interaction.response.send_message(
-        embed=embed,
-        view=PickBanToOverturn(
-            interaction.user.id, history, displayName(admin.steam64), admin.steam64
-        ),
+        f"Banning **{displayName(target)}** (`{target}`).",
+        view=PickPreset(interaction.user.id, target, admin),
         ephemeral=True,
     )
+
+
+@bot.tree.context_menu(name="Lift PeekSeek ban")
+@app_commands.default_permissions(administrator=True)
+async def unbanContext(interaction: discord.Interaction, member: discord.Member):
+    admin = await requireAdmin(interaction)
+    if admin is None:
+        return
+
+    target, error = resolveTarget(member, None)
+    if error:
+        await interaction.response.send_message(error, ephemeral=True)
+        return
+
+    await sendUnban(interaction, admin, target)
+
 
 @bot.tree.error
 async def onCommandError(interaction: discord.Interaction, error: Exception):

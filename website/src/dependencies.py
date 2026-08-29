@@ -3,7 +3,6 @@ compatibility helpers, and the template renderer every route uses.
 """
 
 import json
-from time import time as unix_time
 from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, Request
