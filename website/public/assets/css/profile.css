@@ -148,6 +148,7 @@ h2 {
 .profileName {
     font-size: 20px;
     line-height: 1.1;
+    margin-right: 5px;
 }
 
 .profileActions {
@@ -158,7 +159,7 @@ h2 {
 }
 
 .profileRank {
-    color: #fff;
+    color: #ccc;
     font-size: 20px;
 }
 
