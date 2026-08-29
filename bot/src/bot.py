@@ -751,9 +751,10 @@ async def onCommandError(interaction: discord.Interaction, error: Exception):
 # ---------------------------------------------------------------------------
 # The sticky notice in the reports channel.
 
-# Written into the footer so the bot can recognise its own sticky after a restart and
-# clear the old one, rather than leaving a trail of them up the channel.
-STICKY_MARK = "PeekSeek sticky"
+# The title identifies the bot's own sticky when clearing up after a restart. It used
+# to be a footer, which put a line of housekeeping in front of readers to solve a
+# problem only the bot has.
+STICKY_TITLE = "Reporting a cheater"
 
 # How long to let a burst of messages settle before reposting. Without it, five
 # messages arriving together would delete and repost the sticky five times, which is
@@ -766,21 +767,28 @@ stickyPending = False
 
 
 def stickyEmbed() -> discord.Embed:
-    embed = discord.Embed(
-        title="Reporting a cheater",
+    """Two situations, two answers, in the order somebody arrives in.
+
+    Anybody opening this channel has just watched something they think was cheating.
+    The first thing they need to know is that there is a better option than typing it
+    out, and that it takes seconds, so that goes first and short. The fallback for
+    people who have already quit the server goes second, because the people who need
+    it will keep reading and the people who do not are already gone.
+    """
+    return discord.Embed(
+        title=STICKY_TITLE,
         colour=0xFFA34E,
         description=(
-            "**If you are on a PeekSeek server right now, use `/report <player> <reason>` "
-            "in game.**\n"
-            "It sends staff a screenshot of what they are seeing, plus their damage, "
-            "accuracy and headshot rate for the round. That is far stronger than "
-            "describing it afterwards, and it takes a few seconds.\n\n"
-            "**If you have already left the server, post here instead and attach video.** "
-            "A clip of the whole fight is worth more than a screenshot of the killfeed."
+            "**Still in the server? Use `/report` in game.**\n"
+            "Type `/report <player> <what they did>`. Staff instantly get a picture of "
+            "their screen and their damage, accuracy and headshot rate for the round. "
+            "It takes about five seconds and it is the strongest evidence you can "
+            "give us.\n\n"
+            "**Already left? Post here with a clip.**\n"
+            "Show the whole fight if you can. A short video tells us more than a "
+            "screenshot of the killfeed or a description ever will."
         ),
     )
-    embed.set_footer(text=STICKY_MARK)
-    return embed
 
 
 async def clearOldStickies(channel) -> None:
@@ -792,7 +800,7 @@ async def clearOldStickies(channel) -> None:
     async for message in channel.history(limit=50):
         if message.author.id != bot.user.id or not message.embeds:
             continue
-        if (message.embeds[0].footer.text or "") == STICKY_MARK:
+        if message.embeds[0].title == STICKY_TITLE:
             try:
                 await message.delete()
             except discord.HTTPException:
@@ -820,14 +828,18 @@ async def on_message(message: discord.Message):
     Its own message rather than a pinned one: a pin is a click away and nobody clicks
     it, and the whole point is that somebody about to type out a description of a cheat
     reads that there is a better way first.
+
+    Only a message from somebody else moves it. Comparing the id against the sticky's
+    own was not enough and could not be: the gateway delivers MESSAGE_CREATE before
+    channel.send returns, so the sticky's id is still unset when its own arrival is
+    handled, and it retriggered on itself forever. Author is known at that moment and
+    the id is not.
     """
     global stickyPending
 
-    if not settings.report_channel or message.channel.id != int(settings.report_channel):
+    if message.author.id == bot.user.id:
         return
-    # Reports are posted by this same bot token, so self-authored messages are not
-    # skipped. Only the sticky itself is, or it would chase its own tail forever.
-    if stickyId is not None and message.id == stickyId:
+    if not settings.report_channel or message.channel.id != int(settings.report_channel):
         return
 
     if stickyPending:
@@ -842,6 +854,7 @@ async def on_message(message: discord.Message):
     except discord.HTTPException as error:
         stickyPending = False
         logging.warning("Could not move the sticky: %s", error)
+
 
 @bot.event
 async def on_ready():
