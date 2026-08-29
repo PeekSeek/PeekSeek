@@ -122,26 +122,88 @@ h2 {
   margin-top: 20px;
 }
 
-/* A ban is shown to everyone who opens the profile, not just staff. It is part of
-   what this player's record is, and hiding it makes the page lie about why their Elo
-   stopped moving. Only the controls for acting on it are admin-only. */
-.profileBan {
-    background: #4411117f;
-    border-left: 3px solid #f04444;
-    border-radius: 0 5px 5px 0;
-    padding: 10px 14px;
-    margin: 12px 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.profileBan b { color: #f04444; }
-.profileBan span { color: #aaa; font-size: 13px; }
-
-.profileMod {
+/* The identity block: avatar beside a name and, under it, everything you can do about
+   this player. One block rather than rows separated by <br>, which is what made the
+   Moderate button look bolted on. */
+.profileHeader {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin: 12px 0;
+    gap: 14px;
 }
-.profileModNote { color: #8885; font-size: 13px; }
+
+.profileAvatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    flex: none;
+}
+
+.profileIdentity {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.profileName {
+    font-size: 20px;
+    line-height: 1.1;
+}
+
+.profileActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.profileRank {
+    color: #8885;
+    font-size: 13px;
+    margin-right: 2px;
+}
+
+/* The site's filled-white button, at the size a row of them wants to be. */
+.profileButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    color: #000;
+    border: 0;
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    line-height: 1;
+}
+.profileButton:hover { background: #ddd; }
+.profileButton:focus-visible { outline: 2px solid #47bbe9; outline-offset: 2px; }
+
+/* Bans reuse the match row, because they are the same shape of thing: a list of
+   what has happened to this account. Only the leading column differs. */
+.banlist { margin-top: 14px; }
+
+.banState {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    min-width: 58px;
+}
+.banlist .loss .banState { color: #f04444; }
+.banlist .win .banState { color: #8885; }
+
+.banNote {
+    color: #8885;
+    font-size: 12px;
+    margin-left: auto;
+    text-align: right;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

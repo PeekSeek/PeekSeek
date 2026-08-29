@@ -11,6 +11,16 @@
    where the "Ban this player" button on an in-game report points, so a report sitting
    in Discord is one click from the form that acts on it. */
 
+/* Shared with admin.js, which relies on this file being loaded first. It was left
+   behind there when the drawer was split out, which broke the drawer on every page
+   that does not also load the match grid. */
+function esc(value) {
+    if (value === null || value === undefined) return "";
+    return String(value).replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+}
+
 let modState = null;
 
 /* What to do once a ban or an overturn lands. The admin page redraws its match grid

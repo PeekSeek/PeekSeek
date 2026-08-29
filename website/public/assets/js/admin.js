@@ -13,13 +13,6 @@ const CLOCK_MS = 1000;
 
 let lastPayload = null;
 
-function esc(value) {
-    if (value === null || value === undefined) return "";
-    return String(value).replace(/[&<>"']/g, c => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-    }[c]));
-}
-
 function duration(fromUnix, toUnix) {
     const seconds = Math.max(0, Math.floor((toUnix ?? Date.now() / 1000) - fromUnix));
     const minutes = Math.floor(seconds / 60);

@@ -11,46 +11,60 @@
 
 <div class="mainElement">
   <div class="container profileContainer">
-    <div class="currentProfile userProfile"> <img src="{{steamData.avatar}}" alt=""> <span><b>{{steamData.name}}</b></span></div>
-
-    <br>
-
-    <span>
-      {% if userData %}
-        {% if userData.getPermission("admin") %}
-          Admin
-        {% elif userData.getPermission("premium") %}
-          Supporter
-        {% elif userData.discord %}
-          Discord Linked
-        {% else %}
-          Regular
-        {% endif %}
-      {% else %}
-        No user data.
-      {% endif %} - <button type="button" class="inlineButton" onclick="navigator.clipboard.writeText('{{steamData.steam64}}');alert('Copied!')">Copy Steam64</button>
-    </span>
-
-
-    {% if ban %}
-      <div class="profileBan">
-        <b>{{ "Permanently banned" if ban.permanent else "Banned" }}</b>
-        <span>{{ ban.reason }} &middot; {{ ban.expiryLabel }}</span>
-      </div>
-    {% endif %}
-
-    {% if viewerIsAdmin %}
-      <div class="profileMod">
-        <button type="button" class="settingsButton" onclick="openDrawer('{{ steam64Str }}')">
-          <img src="/static/img/admin.png" alt="" height="18">Moderate
-        </button>
-        {% if banHistory %}
-          <span class="profileModNote">
-            {{ banHistory|length }} ban{{ "" if banHistory|length == 1 else "s" }} on record
+    {# Avatar spans both lines: name on top, everything you can do about this player
+       on the second, so the identity reads as one block rather than a stack of rows
+       separated by <br>. #}
+    <div class="profileHeader">
+      <img class="profileAvatar" src="{{steamData.avatar}}" alt="">
+      <div class="profileIdentity">
+        <b class="profileName">{{steamData.name}}</b>
+        <div class="profileActions">
+          <span class="profileRank">
+            {% if userData %}
+              {% if userData.getPermission("admin") %}Admin
+              {% elif userData.getPermission("premium") %}Supporter
+              {% elif userData.discord %}Discord Linked
+              {% else %}Regular
+              {% endif %}
+            {% else %}
+              No user data
+            {% endif %}
           </span>
-        {% else %}
-          <span class="profileModNote">Never banned</span>
-        {% endif %}
+
+          <a class="profileButton" href="https://steamcommunity.com/profiles/{{steamData.steam64}}"
+             target="_blank" rel="noopener">
+            <img src="/static/img/steam.png" alt="" height="16">Steam
+          </a>
+
+          <button type="button" class="profileButton"
+                  onclick="navigator.clipboard.writeText('{{steamData.steam64}}');alert('Copied!')">
+            <img src="/static/img/copy.png" alt="" height="16">Copy Steam64
+          </button>
+
+          {% if viewerIsAdmin %}
+            <button type="button" class="profileButton" onclick="openDrawer('{{ steam64Str }}')">
+              <img src="/static/img/admin.png" alt="" height="16">Moderate
+            </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Bans read as rows for the same reason matches do: they are a list of things that
+       happened to this account, and the shape that already works for one works for the
+       other. Admin-only, and drawn at all only when there is something to draw. #}
+    {% if viewerIsAdmin and banHistory %}
+      <div class="matchlist banlist">
+        {% for b in banHistory %}
+        <div class="matchrow {{ 'loss' if b.endTime > now else 'win' }}">
+          <span class="banState">{{ "Active" if b.endTime > now else ("Lifted" if b.endTime == 0 else "Expired") }}</span>
+          <span class="map">
+            <span class="name">{{ b.reason }}</span>
+            <span class="when">{{ b.created_at.strftime("%d/%m/%Y") if b.created_at else "" }} &middot; {{ b.expiryLabel }}</span>
+          </span>
+          <span class="banNote">{{ b.moderatorNote or "" }}</span>
+        </div>
+        {% endfor %}
       </div>
     {% endif %}
 

@@ -3,6 +3,7 @@
 import json
 from datetime import datetime
 from uuid import uuid4
+from time import time
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
@@ -252,8 +253,10 @@ def profile(request: Request, steam64: int, viewer: CurrentUser = None):
                 "viewerIsAdmin": viewer is not None and viewer.getPermission("admin"),
                 "viewerSteam64": str(viewer.steam64) if viewer else "",
                 "viewerName": data.User.getSteamData(viewer.steam64).name if viewer else "",
-                "ban": data.UserBan.activeFor(steam64),
-                "banHistory": data.UserBan.historyFor(steam64),
+                "banHistory": data.UserBan.historyFor(steam64) if (viewer and viewer.getPermission("admin")) else [],
+                # Compared against each ban's endTime in the template, so a row can say
+                # whether it is still in force without the template doing arithmetic.
+                "now": int(time()),
                 "max": max,
                 "round": round,
             },
