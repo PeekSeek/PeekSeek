@@ -172,7 +172,7 @@ h2 {
     color: #000;
     border: 0;
     border-radius: 5px;
-    padding: 5px 10px;
+    padding: 5px 7px;
     font-size: 13px;
     font-weight: 600;
     font-family: inherit;
@@ -180,7 +180,7 @@ h2 {
     text-decoration: none;
     line-height: 1;
 }
-.profileButton:hover { background: #ddd; }
+.profileButton img {filter: brightness(0)}
 .profileButton:focus-visible { outline: 2px solid #47bbe9; outline-offset: 2px; }
 
 /* Bans reuse the match row, because they are the same shape of thing: a list of
