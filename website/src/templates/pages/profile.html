@@ -11,14 +11,27 @@
 
 <div class="mainElement">
   <div class="container profileContainer">
-    {# Avatar spans both lines: the name and everything you can do about this player
-       on the first, the rank under it. One block rather than rows separated by <br>. #}
+    {# Avatar spans both lines: who they are on the first, what you can do about them
+       on the second. One block rather than rows separated by <br>. #}
     <div class="profileHeader">
       <img class="profileAvatar" src="{{steamData.avatar}}" alt="">
       <div class="profileIdentity">
         <div class="profileNameRow">
           <b class="profileName">{{steamData.name}}</b>
+          <span class="profileRank">
+            {% if userData %}
+              {% if userData.getPermission("admin") %}Admin
+              {% elif userData.getPermission("premium") %}Supporter
+              {% elif userData.discord %}Discord Linked
+              {% else %}Regular
+              {% endif %}
+            {% else %}
+              No user data
+            {% endif %}
+          </span>
+        </div>
 
+        <div class="profileActions">
           <a class="profileButton" href="https://steamcommunity.com/profiles/{{steamData.steam64}}"
              target="_blank" rel="noopener">
             <img src="/static/img/steam.png" alt="" height="16">Steam
@@ -35,18 +48,6 @@
             </button>
           {% endif %}
         </div>
-
-        <span class="profileRank">
-          {% if userData %}
-            {% if userData.getPermission("admin") %}Admin
-            {% elif userData.getPermission("premium") %}Supporter
-            {% elif userData.discord %}Discord Linked
-            {% else %}Regular
-            {% endif %}
-          {% else %}
-            No user data
-          {% endif %}
-        </span>
       </div>
     </div>
 
