@@ -87,13 +87,26 @@ class UserHB(SQLModel, table=True):
 
     @staticmethod
     def freshInQueue(db, eventId: int | None = None) -> list["UserHB"]:
-        """Live heartbeats for a queue, deleting any that have gone stale."""
+        """Live heartbeats for a queue, deleting any that have gone stale or banned.
+
+        The ban filter is here rather than only at the point of queueing because a ban
+        can land while someone is already waiting. Their row was written before anyone
+        banned them, so nothing else would ever reconsider it, and the matchmaker would
+        put them in the next roster it built. Dropping the row rather than skipping it
+        keeps them out of the population counts a game server reads too.
+        """
+        from .user import UserBan
+
         queue = (
             UserHB.eventId.is_(None) if eventId is None else UserHB.eventId == eventId
         )
+        rows = db.query(UserHB).where(queue).all()
+        banned = UserBan.activeAmong([row.steam64 for row in rows], db)
+
         fresh = []
-        for heartbeat in db.query(UserHB).where(queue).all():
-            if time() - heartbeat.time > settings.queue_timeout:
+        for heartbeat in rows:
+            stale = time() - heartbeat.time > settings.queue_timeout
+            if stale or heartbeat.steam64 in banned:
                 db.delete(heartbeat)
                 continue
             fresh.append(heartbeat)

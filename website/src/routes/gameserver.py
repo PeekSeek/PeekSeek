@@ -376,12 +376,24 @@ def _player(steam64: int) -> dict:
         with opendb() as db:
             match = db.query(data.Match).where(data.Match.id == matchId).first()
 
+    # Reported on every player read, not just on the queue call, so a lobby learns
+    # about a ban that lands while somebody is already standing in the arena rather
+    # than only when it next tries to queue them.
+    ban = data.UserBan.activeFor(steam64)
+
     return {
         "steam64": str(steam64),
         "elo": data.Stat.getElo(steam64),
         "matchId": matchId or None,
         "relayTo": match.connectCode() if match else None,
         "choose": _choices(match, steam64) if match else None,
+        "ban": {
+            "reason": ban.reason,
+            "expires": ban.endTime,
+            "permanent": ban.permanent,
+        }
+        if ban
+        else None,
     }
 
 
@@ -554,6 +566,8 @@ def joinQueue(steam64: int, gamemodes: int = 1, region: str = "paris"):
     No party support, on purpose: a lobby server knows who is connected to it, not who
     is grouped with whom on the site.
     """
+    # addToQueue refuses a banned player and says so; the ban reaches the lobby on the
+    # `ban` field of the reply either way, so there is nothing extra to do with it here.
     if not data.User.getCurrentMatchId(steam64):
         data.User.addToQueue(steam64, gamemodes, region=region)
     return _player(steam64)
@@ -573,7 +587,7 @@ def banPlayer(steam64: int, payload: JsonBody):
         db.add(
             data.UserBan(
                 steam64=steam64,
-                endTime=9999999999,
+                endTime=data.UserBan.PERMANENT,
                 reason=reason,
                 moderatorNote="by PeekSeek Guard",
             )

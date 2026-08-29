@@ -142,9 +142,20 @@ Both reads answer the same shape:
     "kits": ["meta", "sniper"],
     "powerups": ["Movement", "Ammo", "Boom"],
     "kit": null, "powerup": null
-  }
+  },
+  "ban": null
 }
 ```
+
+`ban` is `null` for a player who may play, and otherwise
+`{"reason": "Cheating", "expires": 9999999999, "permanent": true}`. **A caller holding
+players must remove anyone it is non-null for.** `PUT .../queue` refuses to queue them,
+so a lobby that ignores it ends up full of people who can never be matched.
+
+It is on both reads, not just the queue call, because a ban can land while somebody is
+already stood in an arena: nothing would otherwise reconsider them until they next tried
+to queue. For the same reason the site drops a banned player's queue heartbeat rather
+than skipping it, so population counts do not include somebody who cannot be matched.
 
 `relayTo` is the whole decision for anything holding players. **Null means keep them;
 non-null is the site's promise that the match is being hosted right now and this player

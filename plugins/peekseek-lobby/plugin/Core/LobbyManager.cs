@@ -863,6 +863,19 @@ internal abstract class LobbyManager {
     internal static void ApplyPlayerState(ulong steam64, RemoteAPI.PlayerState remote, bool eloKnown) {
         if (!Players.TryGetValue(steam64, out PlayerState state)) return;
 
+        // Before anything else this method might do with them. A banned player has no
+        // business holding a slot in the arena, and the site has already refused to
+        // queue them, so leaving them stood here would only be a lobby full of people
+        // who can never be matched.
+        //
+        // The kick lands a moment after they connect rather than at the door: the
+        // answer comes from an HTTP call and Unturned's connection check is
+        // synchronous, so there is nothing to wait on at the point they are let in.
+        if (remote.Ban != null) {
+            KickBanned(steam64, remote.Ban);
+            return;
+        }
+
         if (eloKnown) {
             state.Elo = remote.Elo;
             state.EloKnown = true;
@@ -873,6 +886,19 @@ internal abstract class LobbyManager {
         if (remote.MatchId != 0 && state.MatchId == 0) SendToMatch(steam64, state, remote.MatchId);
         if (state.LostTheirMatch(remote.MatchId)) ReturnToArena(steam64, state);
         if (remote.RelayTo != null) RelayToMatch(steam64, state, remote.RelayTo);
+    }
+
+    /// Remove a banned player, telling them why rather than dropping them silently.
+    ///
+    /// Their lobby state goes with them so a reconnect is a fresh arrival rather than a
+    /// resumption, and so nothing left behind keeps counting them as present.
+    private static void KickBanned(ulong steam64, RemoteAPI.BanInfo ban) {
+        string reason = string.IsNullOrWhiteSpace(ban.Reason) ? "Banned" : ban.Reason;
+        string until = ban.Permanent ? "permanently" : "temporarily";
+
+        Players.Remove(steam64);
+        TargetRange.Stop(steam64);
+        Provider.kick(new CSteamID(steam64), $"You are {until} banned from PeekSeek: {reason}. Appeal at peekseek.net/discord");
     }
 
     /// A matched player stops fighting: back to a spawn point, and handed the link that

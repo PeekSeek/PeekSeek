@@ -34,10 +34,22 @@ internal static class RemoteAPI {
         Client = null;
     }
 
+    /// Why a player may not play, as the site reports it.
+    internal class BanInfo {
+        internal string Reason;
+        internal bool Permanent;
+    }
+
     /// Everything the lobby acts on for one player, as the site sees them.
     internal class PlayerState {
         internal int Elo;
         internal int MatchId;
+
+        /// The ban keeping this player out, or null when they may play. Carried on
+        /// every player read rather than only on the queue call, so a ban that lands
+        /// while somebody is already stood in the arena reaches the lobby on their
+        /// next refresh instead of waiting for them to try to queue.
+        internal BanInfo Ban;
 
         /// The server code to hand this player over to, or null while there is nowhere
         /// to send them yet. Non-null is the site's promise that the match is being
@@ -96,7 +108,8 @@ internal static class RemoteAPI {
                     Elo = Number(body["elo"]) ?? 0,
                     MatchId = Number(body["matchId"]) ?? 0,
                     RelayTo = Text(body["relayTo"]),
-                    Choose = Choices(body["choose"])
+                    Choose = Choices(body["choose"]),
+                    Ban = Ban(body["ban"])
                 };
                 bool eloKnown = body["elo"] != null && body["elo"].Type != JTokenType.Null;
 
@@ -119,6 +132,21 @@ internal static class RemoteAPI {
     /// Internal rather than private so the shape the site actually sends can be pinned
     /// by a test: this is the seam where a renamed field stops the loadout prompt
     /// appearing at all, and it fails silently everywhere else.
+    /// The site's `ban` block, or null when this player may play.
+    ///
+    /// Internal rather than private for the same reason as Choices: this is the seam
+    /// where a renamed field would silently stop a banned player being removed, and
+    /// nothing else in the lobby would look wrong.
+    internal static BanInfo Ban(JToken token) {
+        if (token == null || token.Type != JTokenType.Object) return null;
+
+        return new BanInfo {
+            Reason = Text(token["reason"]),
+            Permanent = token["permanent"] != null && token["permanent"].Type == JTokenType.Boolean
+                && token["permanent"].Value<bool>()
+        };
+    }
+
     internal static MatchPicks Choices(JToken token) {
         if (token == null || token.Type != JTokenType.Object) return null;
 
