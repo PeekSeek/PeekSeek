@@ -82,6 +82,13 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "range_stopped", "Targets <color=white>cleared</color>." },
         { "range_not_alone", "The range is for when you are here on your own. There are <color=white>{0}</color> others in the arena to shoot at." },
         { "range_unavailable", "The range isn't set up on this server." },
+
+        // Reporting is the one thing here a player does about somebody else, so the
+        // wording stays factual: it says what was sent, not what will happen to them.
+        { "report_usage", "<color=white>/report <player> <reason></color> sends staff their screen and this round's stats." },
+        { "report_no_player", "Nobody here called <color=white>{0}</color>." },
+        { "report_self", "You cannot report yourself." },
+        { "report_sent", "Reported <color=white>{0}</color>. Staff have been sent their screen and this round's stats." },
         { "range_ended_players", "<color=white>Somebody joined.</color> Targets cleared, back to the arena." },
 
         // Framed as warming the arena up rather than as a restriction, because that

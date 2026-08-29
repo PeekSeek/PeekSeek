@@ -1,10 +1,10 @@
 {% extends "layout.html" %}
 
-{% block title %}Lobby{% endblock %}
+{% block title %}{{ heading }}{% endblock %}
 
-{% block titleEmbed %}Join the PeekSeek lobby{% endblock %}
+{% block titleEmbed %}{{ embedTitle }}{% endblock %}
 
-{% block description %}One click into the DeathMatch arena. Queue for a ranked match from inside it.{% endblock %}
+{% block description %}{{ embedDescription }}{% endblock %}
 
 {% block script %}
 <script>
@@ -22,7 +22,7 @@
 {% block content %}
 
 <div class="mainElement spaced">
-  <h1>Opening the lobby</h1>
+  <h1>{{ heading }}</h1>
   <span>
     Steam should be asking to launch Unturned. If nothing happened, use the button
     below, or enter the code in Unturned's <b>Connect Directly</b> menu yourself.

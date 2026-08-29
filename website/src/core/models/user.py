@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import ClassVar, TYPE_CHECKING, Optional
 
 from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, JSON, text
 from sqlmodel import Field, Relationship, SQLModel
@@ -204,6 +204,19 @@ class User(SQLModel, table=True):
         if isinstance(steam64, User):
             steam64 = steam64.steam64
         with open() as db:
+            # Every route into the queue funnels through here: the lobby server, the
+            # play page, an event signup, and a party leader queueing members who never
+            # asked for themselves. Refusing here rather than at each caller is what
+            # makes a ban actually mean something: the check used to live only in
+            # load_user, which a game server never triggers because it carries no player
+            # session, so a permanently banned player queued from in-game for six weeks.
+            ban = UserBan.activeFor(steam64, db)
+            if ban is not None:
+                # A ban landing mid-queue takes effect on their next heartbeat rather
+                # than waiting for the row to age out of the queue on its own.
+                db.query(UserHB).where(UserHB.steam64 == steam64).delete()
+                return ban
+
             User.ensure(db, steam64)
             db.query(UserHB).where(UserHB.steam64 == steam64).delete()
             db.add(
@@ -216,6 +229,7 @@ class User(SQLModel, table=True):
                     eventId=eventId,
                 )
             )
+            return None
 
     @staticmethod
     def removeFromQueue(steam64):
@@ -258,3 +272,102 @@ class UserBan(SQLModel, table=True):
             DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
         ),
     )
+
+    # Far enough out to be permanent in every sense that matters, and the value
+    # POST /server/v1/players/{steam64}/bans has always written. Rows predating this
+    # constant also use 9999999999999999; anything beyond now reads as permanent, so
+    # both are honoured and only new bans are normalised onto this one.
+    PERMANENT: ClassVar[int] = 9999999999
+
+    @property
+    def permanent(self) -> bool:
+        return self.endTime >= UserBan.PERMANENT
+
+    @property
+    def expiryLabel(self) -> str:
+        from datetime import datetime, timezone
+
+        if self.permanent:
+            return "Permanent"
+        return datetime.fromtimestamp(self.endTime, timezone.utc).strftime(
+            "%d %b %Y, %H:%M UTC"
+        )
+
+    @staticmethod
+    def activeFor(steam64, db=None) -> "UserBan | None":
+        """This player's ban if one is in force right now, else None.
+
+        The single answer to "may this player play", so the queue, the matchmaker, the
+        game-server API and the admin page cannot drift apart on it. Takes an optional
+        session because the callers inside matchmaking already hold one and opening a
+        second per player is what made the old per-player lookups expensive.
+        """
+        from time import time
+
+        def query(session):
+            return (
+                session.query(UserBan)
+                .where(UserBan.steam64 == int(steam64), UserBan.endTime > int(time()))
+                .order_by(UserBan.endTime.desc())
+                .first()
+            )
+
+        if db is not None:
+            return query(db)
+
+        from src.core.db import open
+
+        with open() as session:
+            ban = query(session)
+            if ban is not None:
+                session.expunge(ban)
+            return ban
+
+    @staticmethod
+    def activeAmong(steam64s, db=None) -> set:
+        """Which of these players are banned, in one query rather than one each.
+
+        The matchmaker asks about every player in the queue on every poll, so asking
+        per player would put a round trip per queued player on the hot path.
+        """
+        from time import time
+
+        ids = [int(s) for s in steam64s]
+        if not ids:
+            return set()
+
+        def query(session):
+            return {
+                row.steam64
+                for row in session.query(UserBan)
+                .where(UserBan.steam64.in_(ids), UserBan.endTime > int(time()))
+                .all()
+            }
+
+        if db is not None:
+            return query(db)
+
+        from src.core.db import open
+
+        with open() as session:
+            return query(session)
+
+    @staticmethod
+    def historyFor(steam64) -> list["UserBan"]:
+        """Every ban this player has ever had, newest first, expired ones included.
+
+        An admin deciding what to do about somebody needs the pattern, not just whether
+        they happen to be banned at this second.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            rows = (
+                db.query(UserBan)
+                .where(UserBan.steam64 == int(steam64))
+                .order_by(UserBan.created_at.desc())
+                .all()
+            )
+            for row in rows:
+                db.expunge(row)
+            return rows

@@ -472,6 +472,7 @@ def test_asking_about_a_player_does_not_queue_them(gameserver, user_factory):
         "matchId": None,
         "relayTo": None,
         "choose": None,
+        "ban": None,
     }
     with opendb() as db:
         assert db.query(data.UserHB).count() == 0
