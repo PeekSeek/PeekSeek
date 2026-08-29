@@ -766,22 +766,33 @@ stickyLock = asyncio.Lock()
 stickyPending = False
 
 
+# Uploaded to the application with the bot token, so they work in any server the bot
+# is in without anybody adding them by hand. White on transparent, one icon set, drawn
+# at one weight: seven icons from seven sources look like seven mistakes.
+EMOJI = {
+    "live": "<:ps_live:1543393454623563797>",
+    "clip": "<:ps_clip:1543393456246751303>",
+    "wait": "<:ps_wait:1543393457375150233>",
+    "rank": "<:ps_rank:1543393459589611651>",
+    "fairplay": "<:ps_fairplay:1543393461288308736>",
+    "rulebook": "<:ps_rulebook:1543393462781747300>",
+    "rules": "<:ps_rules:1543393464241234071>",
+}
+
+
 def stickyEmbed() -> discord.Embed:
     """Four questions, four answers, in the order somebody gets to them.
 
-    Written for a reader who is angry, scanning, and may well be twelve. Three things
-    follow from that.
+    Written for a reader who is angry, scanning, and may well be twelve. Each block is
+    titled with the reader's own question rather than with a topic, so a skimmer stops
+    at the one that matches their situation instead of reading all of it to find out
+    none of it applies. Nobody opens this channel out of curiosity; they open it
+    because something just happened to them.
 
-    Each block is titled with the reader's own question rather than with a topic, so
-    somebody skimming stops at the one that matches their situation instead of reading
-    all of it to find out none of it applies. Nobody opens this channel out of
-    curiosity; they open it because something just happened to them.
-
-    Sentences are short and the words are ordinary. The two facts most likely to be
-    missed are the two that decide whether anybody reports anything again: that no
-    admin is coming, and that their Elo comes back regardless. Both are written as
-    reassurance rather than as policy, because "an admin cannot always join" on its own
-    reads as "nothing will happen" and is a reason to stop bothering.
+    The answer used to be bold on its own line under a bold heading, which put two
+    headings on top of each other and made the whole thing one grey slab. The answer
+    now opens its paragraph instead, and a blank line separates each block, so the eye
+    has somewhere to stop between them.
 
     The Elo answer is last on purpose. It is the worry underneath the complaint, and
     ending on it is what sends somebody away calm instead of arguing in the channel.
@@ -789,43 +800,68 @@ def stickyEmbed() -> discord.Embed:
     embed = discord.Embed(title="Think someone is cheating?", colour=0xF04444)
 
     embed.add_field(
-        name="Still in the server with them?",
+        name=f"{EMOJI['live']}  Still in the server with them?",
         value=(
-            "**Use `/report` in game.**\n"
-            "Type `/report <player> <what they did>`.\n"
-            "We instantly get a picture of their screen and their aim stats. "
-            "It is the best proof you can give us, and it takes about five seconds."
+            f"**Use `/report` in game.** Type `/report <player> <what they did>`.\n"
+            f"We instantly get a picture of their screen and their aim stats. "
+            f"It is the best proof you can give us, and it takes about five seconds."
+            f"\n\u200b"
         ),
         inline=False,
     )
     embed.add_field(
-        name="Match already over?",
+        name=f"{EMOJI['clip']}  Match already over?",
         value=(
-            "**Post your video here.**\n"
-            "Upload the clip in this channel and say who it was. "
-            "Show the whole fight if you can, not just the moment you died."
+            f"**Post your video here.** Say who it was.\n"
+            f"Show the whole fight if you can, not just the moment you died."
+            f"\n\u200b"
         ),
         inline=False,
     )
     embed.add_field(
-        name="No admin turned up?",
+        name=f"{EMOJI['wait']}  No admin turned up?",
         value=(
-            "**That is normal. Report it anyway.**\n"
-            "We cannot always jump into a live game, and we do not need to. "
-            "Every clip gets watched."
+            f"**That is normal. Report it anyway.**\n"
+            f"We cannot always jump into a live game, and we do not need to. "
+            f"Every clip gets watched."
+            f"\n\u200b"
         ),
         inline=False,
     )
     embed.add_field(
-        name="Worried about your Elo?",
+        name=f"{EMOJI['rank']}  Worried about your Elo?",
         value=(
-            "**You never lose Elo to a cheater.**\n"
-            "When someone is banned for cheating, everyone who played them gets their "
-            "Elo back. It happens automatically. You do not have to ask."
+            f"**You never lose Elo to a cheater.**\n"
+            f"When someone is banned for cheating, everyone who played them gets their "
+            f"Elo back. It happens automatically. You do not have to ask."
         ),
         inline=False,
     )
     return embed
+
+
+def stickyLinks() -> discord.ui.View:
+    """The three documents somebody argues about, one click away.
+
+    Link buttons, so they keep working whatever state the bot is in, and so the rules
+    are never something a moderator has to paste by hand for the third time this week.
+    """
+    view = discord.ui.View()
+    for label, emoji, url in (
+        ("Fair play", EMOJI["fairplay"], "https://peekseek.net/fair-play/"),
+        ("Rulebook", EMOJI["rulebook"], "https://peekseek.net/ucl/rulebook/"),
+        (
+            "Discord rules",
+            EMOJI["rules"],
+            "https://discord.com/channels/1309223629271339068/1309229769057112146/1319433644535844986",
+        ),
+    ):
+        view.add_item(
+            discord.ui.Button(
+                label=label, emoji=emoji, style=discord.ButtonStyle.link, url=url
+            )
+        )
+    return view
 
 
 async def clearOldStickies(channel) -> None:
@@ -855,7 +891,7 @@ async def postSticky(channel) -> None:
             # way any more, which is all this delete was for.
             pass
 
-    stickyId = (await channel.send(embed=stickyEmbed())).id
+    stickyId = (await channel.send(embed=stickyEmbed(), view=stickyLinks())).id
 
 
 @bot.event
@@ -893,9 +929,63 @@ async def on_message(message: discord.Message):
         logging.warning("Could not move the sticky: %s", error)
 
 
+# ---------------------------------------------------------------------------
+# The player count, as the bot's status.
+
+# Presence updates are limited per session rather than per route, so this can run far
+# more often than the voice channel rename it mirrors: that one is capped at two
+# renames per ten minutes and spends one of them saying "still 4".
+PRESENCE_INTERVAL = 60
+
+
+async def keepPresenceCurrent() -> None:
+    """Keep the status showing what the sidebar counter shows.
+
+    Deliberately the same sentence, from the same function. Two places saying how many
+    people are playing is two places to disagree, and the one that is wrong is always
+    the one somebody screenshots.
+
+    A custom activity rather than "Playing" or "Watching", so the status reads as a
+    plain sentence with no verb bolted on the front.
+
+    Nothing here is allowed to end the loop. If the database or Discord is briefly
+    unavailable the status simply goes stale until the next pass, which is a better
+    failure than a bot that stops updating for the rest of its life.
+    """
+    from src.core.notify import _counter_name
+
+    await bot.wait_until_ready()
+    last = None
+
+    while not bot.is_closed():
+        try:
+            name = await asyncio.to_thread(
+                lambda: _counter_name(
+                    data.LobbyPopulation.playingNow(), data.UserHB.countAllFresh()
+                )
+            )
+            if name != last:
+                await bot.change_presence(activity=discord.CustomActivity(name=name))
+                last = name
+        except Exception as error:
+            logging.warning("Could not update presence: %s", error)
+
+        await asyncio.sleep(PRESENCE_INTERVAL)
+
+
+presenceTask: asyncio.Task | None = None
+
+
 @bot.event
 async def on_ready():
+    global presenceTask
+
     logging.info("Logged in as %s", bot.user)
+
+    # on_ready fires again after a reconnect, and a second copy of this loop would
+    # fight the first over what the status says.
+    if presenceTask is None or presenceTask.done():
+        presenceTask = asyncio.create_task(keepPresenceCurrent())
 
     if not settings.sticky_channel:
         return
