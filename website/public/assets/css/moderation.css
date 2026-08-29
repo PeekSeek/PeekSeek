@@ -13,25 +13,37 @@
 }
 .modOverlay.open { display: block; }
 
-.modDrawer {
+.modPanel {
     position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(430px, 100%);
-    background: #121212;
-    border-left: 1px solid #333;
-    padding: 20px;
+    top: 50%;
+    left: 50%;
+    width: min(680px, calc(100% - 40px));
+    max-height: 85vh;
     overflow-y: auto;
-    transform: translateX(100%);
-    transition: transform 0.18s ease-out;
+    background: #121212;
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 24px;
     z-index: 41;
+
+    /* Closed rather than removed, so opening it does not have to rebuild the panel.
+       pointer-events matters: a transparent element sitting over the middle of the
+       page would otherwise swallow every click on the page behind it. */
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -48%) scale(0.98);
+    transition: opacity 0.13s ease-out, transform 0.13s ease-out;
 }
-.modDrawer.open { transform: translateX(0); }
+.modPanel.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
+}
 
 @media (prefers-reduced-motion: reduce) {
-    .modDrawer { transition: none; }
+    .modPanel { transition: none; }
 }
+
 
 .modHead { display: flex; gap: 12px; align-items: center; }
 .modHead img { width: 44px; height: 44px; border-radius: 8px; }
@@ -100,7 +112,12 @@
 }
 .modBan button:hover { color: #fff; border-color: #666; }
 
-.modTiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 14px; }
+.modTiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    margin: 10px 0 14px;
+}
 .modTile {
     background: #1a1a1a;
     border-radius: 7px;

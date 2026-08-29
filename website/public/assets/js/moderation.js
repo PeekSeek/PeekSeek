@@ -5,7 +5,7 @@
    would be a second thing to keep correct.
 */
 /* ---------------------------------------------------------------------------
-   Moderation drawer.
+   Moderation panel.
 
    Opened from a player row, from the search box, or from ?ban=<steam64> — which is
    where the "Ban this player" button on an in-game report points, so a report sitting
@@ -49,7 +49,7 @@ function banChip(steam64) {
 
 function openDrawer(steam64) {
     document.getElementById("modOverlay").classList.add("open");
-    const drawer = document.getElementById("modDrawer");
+    const drawer = document.getElementById("modPanel");
     drawer.classList.add("open");
     drawer.innerHTML = `<span style="color:#8885;">Loading…</span>`;
 
@@ -67,7 +67,7 @@ function openDrawer(steam64) {
 
 function closeDrawer() {
     document.getElementById("modOverlay").classList.remove("open");
-    document.getElementById("modDrawer").classList.remove("open");
+    document.getElementById("modPanel").classList.remove("open");
     modState = null;
 }
 
@@ -156,7 +156,7 @@ function drawDrawer() {
         ? (p.ban ? banRow(p.ban, true) : "") + past.map(b => banRow(b, false)).join("")
         : `<span style="color:#8885;font-size:13px;">Never banned.</span>`;
 
-    document.getElementById("modDrawer").innerHTML = `
+    document.getElementById("modPanel").innerHTML = `
       <div class="modHead">
         <img src="${esc(p.avatar)}" alt="">
         <div>

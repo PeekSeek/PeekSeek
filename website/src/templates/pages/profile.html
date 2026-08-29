@@ -183,7 +183,8 @@
 
 {% if viewerIsAdmin %}
 <div class="modOverlay" id="modOverlay"></div>
-<aside class="modDrawer" id="modDrawer" aria-label="Player moderation"></aside>
+<div class="modPanel" id="modPanel" role="dialog" aria-modal="true"
+     aria-label="Player moderation"></div>
 {% endif %}
 
 {% endblock %}

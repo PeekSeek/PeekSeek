@@ -36,10 +36,11 @@
   <div class="adminMatchGrid" id="matches"></div>
 </div>
 
-{# A drawer rather than a modal: an admin deciding about a player is usually reading
-   the match card behind it at the same time, and blacking the page out takes away the
-   evidence they are deciding on. #}
+{# Centred over the page rather than slid in from the edge. It carries a ban form,
+   a dry run and a history list, and that is a decision to stop and make rather than
+   something to glance at while carrying on reading. #}
 <div class="modOverlay" id="modOverlay"></div>
-<aside class="modDrawer" id="modDrawer" aria-label="Player moderation"></aside>
+<div class="modPanel" id="modPanel" role="dialog" aria-modal="true"
+     aria-label="Player moderation"></div>
 
 {% endblock %}

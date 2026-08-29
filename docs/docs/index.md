@@ -40,8 +40,9 @@ halves of one contract, and a change to both belongs in one commit.
 | [`plugins/peekseek/`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek) | Runs matches on a game server: match state, lifecycle, ping-based damage scaling | C#, net48 |
 | [`plugins/peekseek-lobby/`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek-lobby) | Runs the waiting arena: queueing from in-game, kits, AFK handling | C#, net48 |
 | [`plugins/utelemetry/`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/utelemetry) | PvP telemetry beyond kill counts | C#, net48 |
+| [`plugins/peekseek-armor-skin/`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek-armor-skin) | Gives every player one of four skin colours and a full military set's damage resistance, whatever they wear | C#, net48 |
 
-The two RocketMod plugins are the only Unturned-specific code in the system. The website
+The RocketMod plugins are the only Unturned-specific code in the system. The website
 never imports anything that knows what Unturned is.
 
 ---

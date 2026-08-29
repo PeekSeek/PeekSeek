@@ -11,12 +11,13 @@
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml/badge.svg" alt="peekseek-plugin"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml/badge.svg" alt="peekseek-lobby"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/utelemetry.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/utelemetry.yml/badge.svg" alt="utelemetry"></a>
+  <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-armor-skin.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-armor-skin.yml/badge.svg" alt="peekseek-armor-skin"></a>
   <a href="https://discord.gg/NKgTe6RnvH"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 ---
 
-Five deployables live here. The website is the backend the plugins talk to, which is
+Six deployables live here. The website is the backend the plugins talk to, which is
 why they share a repo: a change to the `/server/v1/*` API and the plugin call that hits
 it lands in one commit. That contract is written down in
 [website/API.md](website/API.md).
@@ -27,6 +28,7 @@ it lands in one commit. That contract is written down in
 | [plugins/peekseek/](plugins/peekseek/) | RocketMod plugin that runs matches: lobby lifecycle, match state, ping-based damage scaling | C#, net48 |
 | [plugins/peekseek-lobby/](plugins/peekseek-lobby/) | RocketMod plugin that runs the waiting arena: queueing from in-game, kits, AFK handling | C#, net48 |
 | [plugins/utelemetry/](plugins/utelemetry/) | RocketMod plugin for PvP telemetry beyond kill counts | C#, net48 |
+| [plugins/peekseek-armor-skin/](plugins/peekseek-armor-skin/) | RocketMod plugin that gives every player one of four skin colours and a full military set's damage resistance, whatever they wear | C#, net48 |
 | [bot/](bot/) | Discord bot for staff: `/ban`, `/stop`, `/stats`. Imports the website's own moderation code | Python 3.12 |
 
 Each component keeps its own README with the detail; start there.
