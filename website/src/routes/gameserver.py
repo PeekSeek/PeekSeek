@@ -586,6 +586,7 @@ async def submitReport(
     reason: str = Form(...),
     serverCode: str | None = Form(None),
     where: str = Form("a PeekSeek server"),
+    channel: str | None = Form(None),
     damageDealt: int = Form(0),
     shotsFired: int = Form(0),
     shotsHit: int = Form(0),
@@ -618,6 +619,8 @@ async def submitReport(
         serverCode=serverCode,
         where=where,
         screenshot=image,
+        # A server may route its own reports elsewhere; empty means the site's.
+        channel=channel or None,
     )
     # 200 either way: the report reached the site, and a game server has nothing it
     # could usefully do about Discord being down. It is logged on this side instead.

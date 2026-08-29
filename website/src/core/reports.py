@@ -97,6 +97,7 @@ def send(
     serverCode: str | None = None,
     where: str = "a PeekSeek server",
     screenshot: bytes | None = None,
+    channel: str | None = None,
 ) -> bool:
     """Post one report to the staff channel. Returns whether Discord took it.
 
@@ -104,7 +105,8 @@ def send(
     thing it is evidence of is usually over by the time anyone reads the report, and an
     attachment is what survives in the channel afterwards.
     """
-    if not settings.bot_token or not settings.report_channel:
+    channel = channel or settings.report_channel
+    if not settings.bot_token or not channel:
         logging.info("Report from %s about %s not sent: no Discord configured", reporter, reported)
         return False
 
@@ -136,13 +138,13 @@ def send(
         "allowed_mentions": {"roles": [settings.staff_role] if settings.staff_role else []},
     }
 
-    return _post(payload, screenshot)
+    return _post(channel, payload, screenshot)
 
 
-def _post(payload: dict, screenshot: bytes | None) -> bool:
+def _post(channel: str, payload: dict, screenshot: bytes | None) -> bool:
     import json
 
-    url = f"{DISCORD_API}/channels/{settings.report_channel}/messages"
+    url = f"{DISCORD_API}/channels/{channel}/messages"
     headers = {"Authorization": f"Bot {settings.bot_token}"}
 
     try:

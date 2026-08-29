@@ -11,6 +11,16 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public string szHexDefaultChatColor;
     public string szChatIconURL;
     public string szRegion;
+
+    /// This server's Unturned connect code, so an in-game /report can link staff
+    /// straight into it. Empty leaves the join button off the report rather than
+    /// posting one that goes nowhere.
+    public string szServerCode;
+
+    /// Where reports from this server land. Empty uses whatever channel the site is
+    /// configured with, which is the normal case; setting it routes one server's
+    /// reports somewhere else without redeploying the site.
+    public string szReportChannel;
     public ushort GamemodeBitmask;
     public float HeartbeatIntervalSeconds;
     public float SpawnProtectionSeconds;
@@ -146,6 +156,8 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         // Bitmask selecting mmconfig gamemode 0 (Competitive) — matches the site's
         // /queue/heartbeat bit convention, not a literal gamemode array index.
         szRegion = "paris";
+        szServerCode = "";
+        szReportChannel = "";
         GamemodeBitmask = 1;
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;

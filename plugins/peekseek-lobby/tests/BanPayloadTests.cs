@@ -35,7 +35,7 @@ public class BanPayloadTests {
         }
         """;
 
-    private static RemoteAPI.BanInfo Ban(string body) => RemoteAPI.Ban(JObject.Parse(body)["ban"]);
+    private static RemoteAPI.BanInfo Ban(string body) => RemoteAPI.ParseBan(JObject.Parse(body)["ban"]);
 
     [Fact]
     public void ABannedPlayerCarriesTheirReason() {
@@ -55,13 +55,13 @@ public class BanPayloadTests {
     /// working, so a missing key reads as "not banned" rather than throwing.
     [Fact]
     public void AResponseWithoutTheFieldIsNotABan() {
-        Assert.Null(RemoteAPI.Ban(JObject.Parse("""{ "elo": 300 }""")["ban"]));
+        Assert.Null(RemoteAPI.ParseBan(JObject.Parse("""{ "elo": 300 }""")["ban"]));
     }
 
     /// A temporary ban is still a ban; only the wording of the kick differs.
     [Fact]
     public void ATemporaryBanIsNotPermanent() {
-        RemoteAPI.BanInfo ban = RemoteAPI.Ban(
+        RemoteAPI.BanInfo ban = RemoteAPI.ParseBan(
             JObject.Parse("""{ "ban": { "reason": "Toxicity", "expires": 1788000000, "permanent": false } }""")["ban"]);
 
         Assert.NotNull(ban);

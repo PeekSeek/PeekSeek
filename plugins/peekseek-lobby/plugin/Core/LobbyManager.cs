@@ -24,6 +24,17 @@ internal abstract class LobbyManager {
         internal byte Kills;
         internal byte Deaths;
         internal byte Headshots;
+
+        /// What /report sends about somebody. Accuracy and headshot share are the two
+        /// numbers that separate a cheat from a good player, and neither means anything
+        /// as a raw count — so shots taken is tracked alongside shots landed rather than
+        /// hits alone. Reset with the arena, so a report describes the round it was
+        /// written in rather than somebody's whole session.
+        internal int DamageDealt;
+        internal int ShotsFired;
+        internal int ShotsHit;
+        internal int HeadshotHits;
+
         internal float SpawnProtectedUntil;
 
         /// When Tick should deploy this player from the standard spawn into the
@@ -220,6 +231,8 @@ internal abstract class LobbyManager {
 
         ItemManager.onServerSpawningItemDrop += OnItemDropRequested;
         DamageTool.damagePlayerRequested += OnDamagePlayerRequested;
+        UseableGun.onBulletSpawned += OnBulletSpawned;
+        UseableGun.onBulletHit += OnBulletHit;
 
         LastArenaReset = Time.realtimeSinceStartup;
         TargetRange.Init();
@@ -247,6 +260,29 @@ internal abstract class LobbyManager {
     /// Environmental damage is refused too: teleporting someone to a spawn point
     /// with teleportToLocationUnsafe can land them hard enough to hurt, and dying
     /// to the deploy that was meant to save you is not a lobby anyone enjoys.
+    /// Every shot leaving a gun, so accuracy has a denominator.
+    ///
+    /// Counted here rather than from hits alone because "412 hits" says nothing about
+    /// whether somebody is cheating; 412 hits out of 430 shots does.
+    private static void OnBulletSpawned(UseableGun gun, BulletInfo bullet) {
+        if (gun?.player == null) return;
+        if (Players.TryGetValue(gun.player.channel.owner.playerID.steamID.m_SteamID, out PlayerState state))
+            state.ShotsFired++;
+    }
+
+    /// Shots that connected with a player, and how many of those hit the head.
+    ///
+    /// Only hits on people are counted. A bullet that lands in a wall is not a miss
+    /// worth reporting on and a bullet that lands in a warm-up target is not a hit,
+    /// so both are left out of the ratio entirely.
+    private static void OnBulletHit(UseableGun gun, BulletInfo bullet, InputInfo hit, ref bool shouldAllow) {
+        if (gun?.player == null || hit == null || hit.type != ERaycastInfoType.PLAYER) return;
+        if (!Players.TryGetValue(gun.player.channel.owner.playerID.steamID.m_SteamID, out PlayerState state)) return;
+
+        state.ShotsHit++;
+        if (hit.limb == ELimb.SKULL) state.HeadshotHits++;
+    }
+
     private static void OnDamagePlayerRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
         CSteamID victimID = parameters.player.channel.owner.playerID.steamID;
         CSteamID attacker = parameters.killer;
@@ -261,7 +297,15 @@ internal abstract class LobbyManager {
         }
 
         if (!Players.TryGetValue(victimID.m_SteamID, out PlayerState victimState)) return;
-        if (!victimState.IsProtectedAt(now)) return;
+        if (!victimState.IsProtectedAt(now)) {
+            // Counted only once the hit is going to land, and only against another
+            // player: damage a spawn-protected target absorbs never happened, and
+            // reporting it would credit a shooter for damage nobody took.
+            if (attacker != CSteamID.Nil && attacker != victimID
+                    && Players.TryGetValue(attacker.m_SteamID, out PlayerState dealer))
+                dealer.DamageDealt += Mathf.RoundToInt(parameters.damage * parameters.times);
+            return;
+        }
 
         shouldAllow = false;
 
@@ -289,6 +333,8 @@ internal abstract class LobbyManager {
 
         ItemManager.onServerSpawningItemDrop -= OnItemDropRequested;
         DamageTool.damagePlayerRequested -= OnDamagePlayerRequested;
+        UseableGun.onBulletSpawned -= OnBulletSpawned;
+        UseableGun.onBulletHit -= OnBulletHit;
         Instrument.UnpatchAll(HarmonyId);
 
         TargetRange.Shutdown();
@@ -888,6 +934,39 @@ internal abstract class LobbyManager {
         if (remote.RelayTo != null) RelayToMatch(steam64, state, remote.RelayTo);
     }
 
+    /// Ask the reported player's client for a screenshot, then send it to staff with
+    /// their numbers for this round attached.
+    ///
+    /// `CSteamID.Nil` as the destination is what makes this a server-side capture: the
+    /// built-in /spy passes the requesting admin so the image is relayed to their
+    /// client, and there is no admin here to relay it to. The callback is where the
+    /// bytes actually arrive.
+    ///
+    /// The counters are read here, on the game thread, rather than inside the callback.
+    /// A screenshot can take seconds to come back, and by then an arena reset may have
+    /// cleared them — the report would then describe a round nobody was complaining
+    /// about.
+    internal static void Report(CSteamID reporter, SteamPlayer target, string reason) {
+        ulong reported = target.playerID.steamID.m_SteamID;
+        Players.TryGetValue(reported, out PlayerState state);
+
+        RemoteAPI.Report payload = new() {
+            Reported = reported,
+            Reporter = reporter.m_SteamID,
+            Reason = reason,
+            Where = "the warm-up lobby",
+            DamageDealt = state?.DamageDealt ?? 0,
+            ShotsFired = state?.ShotsFired ?? 0,
+            ShotsHit = state?.ShotsHit ?? 0,
+            HeadshotHits = state?.HeadshotHits ?? 0
+        };
+
+        target.player.sendScreenshot(CSteamID.Nil, (_, image) => {
+            payload.Screenshot = image;
+            RemoteAPI.SendReport(payload);
+        });
+    }
+
     /// Remove a banned player, telling them why rather than dropping them silently.
     ///
     /// Their lobby state goes with them so a reconnect is a fresh arrival rather than a
@@ -1461,6 +1540,10 @@ internal abstract class LobbyManager {
             state.Kills = 0;
             state.Deaths = 0;
             state.Headshots = 0;
+            state.DamageDealt = 0;
+            state.ShotsFired = 0;
+            state.ShotsHit = 0;
+            state.HeadshotHits = 0;
             state.Streak.EndRound();
 
             CSteamID steamID = new(entry.Key);
