@@ -118,3 +118,25 @@ def test_gun_for_agrees_with_the_full_loadout_get_items_builds(user_factory):
 
     items = data.Kit.getItems(player.steam64, match)
     assert data.Kit.gunFor(player.steam64, match) == items[0][0]
+
+
+def test_resolve_outfit_keeps_a_pick_that_is_still_offered():
+    slot, options = next(iter(kitsConfig["outfits"].items()))
+    chosen = options[-1]
+    assert data.Kit.resolveOutfit({slot: chosen})[slot] == chosen
+
+
+def test_resolve_outfit_replaces_a_retired_item_with_the_slot_default():
+    """307 and its Forest Military siblings were dropped from kits.json with 347
+    saved outfits still naming them, and Kit.getItems used to hand a saved row
+    straight to the server."""
+    resolved = data.Kit.resolveOutfit({slot: 307 for slot in kitsConfig["outfits"]})
+    assert resolved == {
+        slot: options[0] for slot, options in kitsConfig["outfits"].items()
+    }
+
+
+def test_resolve_outfit_fills_in_a_slot_that_was_never_saved():
+    assert data.Kit.resolveOutfit({}) == {
+        slot: options[0] for slot, options in kitsConfig["outfits"].items()
+    }

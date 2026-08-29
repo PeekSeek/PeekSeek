@@ -85,6 +85,17 @@ class Kit(SQLModel, table=True):
         return int(next(iter(kitsConfig["kits"][category])))
 
     @staticmethod
+    def resolveOutfit(saved: dict) -> dict:
+        """The outfit a player actually wears: their pick per slot, or that slot's
+        first option wherever they have no pick or the one they saved is no longer
+        offered. Retiring an item from kits.json is enough to move everyone off it,
+        so a saved row can never hand out a piece the site has stopped listing."""
+        return {
+            slot: saved[slot] if saved.get(slot) in options else options[0]
+            for slot, options in kitsConfig["outfits"].items()
+        }
+
+    @staticmethod
     def getItems(steam64, currentMatch: "Match"):  # noqa: F821
         from src.core.db import open
         from src.core import metagun
@@ -121,10 +132,7 @@ class Kit(SQLModel, table=True):
                 gunId = weaponKit["gun"]
                 weaponKit.pop("gun")
 
-            if not outfitKit:
-                outfitKit = {x: y[0] for x, y in kitsConfig["outfits"].items()}
-            else:
-                outfitKit = outfitKit.data
+            outfitKit = Kit.resolveOutfit(outfitKit.data if outfitKit else {})
 
             if str(gunId) in mmconfig["defaultMagAmountFiremodePerGunId"]:
                 items = [
@@ -175,14 +183,9 @@ class Kit(SQLModel, table=True):
                 for kit in db.query(Kit).where(Kit.steam64 == steam64).all()
             }
 
-        outfitSaved = saved.get("outfit") or {}
         outfitItems = [
-            [
-                outfitSaved[slot] if outfitSaved.get(slot) in options else options[0],
-                1,
-                "",
-            ]
-            for slot, options in kitsConfig["outfits"].items()
+            [item_id, 1, ""]
+            for item_id in Kit.resolveOutfit(saved.get("outfit") or {}).values()
         ]
 
         result = {}
