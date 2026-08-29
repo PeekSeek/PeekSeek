@@ -146,7 +146,7 @@ def cheatingPreviewEmbed(target, preview: dict) -> discord.Embed:
         name="Would void",
         value=f"{preview['matches']} matches, refunding {preview['players']} players "
         f"{preview['eloReturned']:+d} Elo",
-        inline=False,
+        inline=True,
     )
     return embed
 
@@ -802,31 +802,36 @@ def stickyEmbed() -> discord.Embed:
     embed.add_field(
         name=f"{EMOJI['live']}  Still in the server with them?",
         value=(
-            f"**Use `/report` in game.** Type `/report <player> <what they did>`.\n"
+            f"**Use `/report` in game.** Type `/report <name> what they did`.\n"
             f"We instantly get a picture of their screen and their aim stats. "
             f"It is the best proof you can give us, and it takes about five seconds."
-            f"\n\u200b"
         ),
-        inline=False,
+        inline=True,
     )
     embed.add_field(
         name=f"{EMOJI['clip']}  Match already over?",
         value=(
-            f"**Post your video here.** Say who it was.\n"
-            f"Show the whole fight if you can, not just the moment you died."
-            f"\n\u200b"
+            f"**Post your clip here.** A clip is what actually gets someone "
+            f"banned.\n"
+            f"Show the whole fight, not just the moment you died, and say who it "
+            f"was.\n"
+            f"File too big? Put it on [Streamable](https://streamable.com/) or "
+            f"[Medal](https://medal.tv/) and paste the link."
         ),
-        inline=False,
+        inline=True,
     )
+    # Forces the second pair onto its own row. Four inline fields would otherwise
+    # flow three and one, which is not a grid.
+    embed.add_field(name="\u200b", value="\u200b", inline=False)
+
     embed.add_field(
         name=f"{EMOJI['wait']}  No admin turned up?",
         value=(
             f"**That is normal. Report it anyway.**\n"
             f"We cannot always jump into a live game, and we do not need to. "
             f"Every clip gets watched."
-            f"\n\u200b"
         ),
-        inline=False,
+        inline=True,
     )
     embed.add_field(
         name=f"{EMOJI['rank']}  Worried about your Elo?",
@@ -835,7 +840,7 @@ def stickyEmbed() -> discord.Embed:
             f"When someone is banned for cheating, everyone who played them gets their "
             f"Elo back. It happens automatically. You do not have to ask."
         ),
-        inline=False,
+        inline=True,
     )
     return embed
 
@@ -864,34 +869,40 @@ def stickyLinks() -> discord.ui.View:
     return view
 
 
-async def clearOldStickies(channel) -> None:
-    """Delete any sticky left over from a previous run.
+async def clearOldStickies(channel, keep: int | None = None) -> None:
+    """Delete every sticky this bot has left in the channel except the one to keep.
 
-    A restart otherwise strands the old one part way up the channel, and after a few
-    restarts the channel is mostly stickies.
+    A remembered message id was not enough. It lives in memory, so a restart forgets it
+    and strands the old notice; and it was matched by embed title, so changing the
+    wording stranded every copy written under the previous title. Sweeping the channel
+    depends on neither.
+
+    The test is authorship, not content: the bot posts nothing else here, and anything
+    that recognises the sticky by what it says will miss the next one whose wording
+    changes. A hundred messages is one request and far more history than this channel
+    turns over between restarts.
     """
-    async for message in channel.history(limit=50):
-        if message.author.id != bot.user.id or not message.embeds:
+    async for message in channel.history(limit=100):
+        if message.author.id != bot.user.id or message.id == keep:
             continue
-        if message.embeds[0].title == STICKY_TITLE:
-            try:
-                await message.delete()
-            except discord.HTTPException:
-                pass
+        try:
+            await message.delete()
+        except discord.HTTPException:
+            pass
 
 
 async def postSticky(channel) -> None:
+    """Post the notice, then remove every older copy.
+
+    In that order on purpose: sweeping first would leave the channel with no notice for
+    as long as the send takes, and a failed send would leave it with none at all.
+    Sweeping after means the worst case is briefly two, which nobody minds.
+    """
     global stickyId
 
-    if stickyId is not None:
-        try:
-            await channel.get_partial_message(stickyId).delete()
-        except discord.HTTPException:
-            # Already gone, or somebody deleted it by hand. Either way it is not in the
-            # way any more, which is all this delete was for.
-            pass
-
-    stickyId = (await channel.send(embed=stickyEmbed(), view=stickyLinks())).id
+    posted = await channel.send(embed=stickyEmbed(), view=stickyLinks())
+    stickyId = posted.id
+    await clearOldStickies(channel, keep=posted.id)
 
 
 @bot.event
@@ -995,7 +1006,6 @@ async def on_ready():
         return
 
     async with stickyLock:
-        await clearOldStickies(channel)
         await postSticky(channel)
 
 
