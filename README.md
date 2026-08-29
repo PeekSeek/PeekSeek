@@ -16,7 +16,7 @@
 
 ---
 
-Four deployables live here. The website is the backend the plugins talk to, which is
+Five deployables live here. The website is the backend the plugins talk to, which is
 why they share a repo: a change to the `/server/v1/*` API and the plugin call that hits
 it lands in one commit. That contract is written down in
 [website/API.md](website/API.md).
@@ -27,6 +27,7 @@ it lands in one commit. That contract is written down in
 | [plugins/peekseek/](plugins/peekseek/) | RocketMod plugin that runs matches: lobby lifecycle, match state, ping-based damage scaling | C#, net48 |
 | [plugins/peekseek-lobby/](plugins/peekseek-lobby/) | RocketMod plugin that runs the waiting arena: queueing from in-game, kits, AFK handling | C#, net48 |
 | [plugins/utelemetry/](plugins/utelemetry/) | RocketMod plugin for PvP telemetry beyond kill counts | C#, net48 |
+| [bot/](bot/) | Discord bot for staff: `/ban`, `/stop`, `/stats`. Imports the website's own moderation code | Python 3.12 |
 
 Each component keeps its own README with the detail; start there.
 [CONTRIBUTING.md](CONTRIBUTING.md) has the branch model and the conventions.
