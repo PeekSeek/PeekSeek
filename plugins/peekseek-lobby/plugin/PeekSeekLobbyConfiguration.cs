@@ -21,6 +21,11 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// configured with, which is the normal case; setting it routes one server's
     /// reports somewhere else without redeploying the site.
     public string szReportChannel;
+
+    /// The Discord role a report pings. Empty uses the site's. The ping is sent in
+    /// the message content rather than the embed, because a mention inside an embed
+    /// renders as one but never notifies anybody.
+    public string szStaffRole;
     public ushort GamemodeBitmask;
     public float HeartbeatIntervalSeconds;
     public float SpawnProtectionSeconds;
@@ -158,6 +163,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         szRegion = "paris";
         szServerCode = "";
         szReportChannel = "";
+        szStaffRole = "";
         GamemodeBitmask = 1;
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;

@@ -258,7 +258,7 @@ def _logRefunds(steam64, reason: str, byName: str, summary: dict) -> None:
     """Post the full refund list to the moderation channel.
 
     Every refunded player is named, because the people whose Elo moved are the ones
-    who have to be able to check that it moved by the right amount — and a summary
+    who have to be able to check that it moved by the right amount, and a summary
     that only says "11 players" is not something anyone can check.
     """
     if not summary or not summary["refunds"]:
@@ -269,7 +269,7 @@ def _logRefunds(steam64, reason: str, byName: str, summary: dict) -> None:
         for r in summary["refunds"]
     )
     embed = {
-        "title": f"{reason} ban — {summary['players']} players refunded",
+        "title": f"{reason} ban: {summary['players']} players refunded",
         "url": f"{settings.base_url}/u/{steam64}",
         "color": 0xF04444,
         "description": (

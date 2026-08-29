@@ -65,7 +65,7 @@ def _joinPage(
 
 @router.get("/join/{serverCode}")
 def join(request: Request, serverCode: str):
-    """Open any server by its code — what an in-game report links staff to.
+    """Open any server by its code. This is what an in-game report links staff to.
 
     Shares the lobby's page rather than redirecting straight to `steam://`, for the
     same reason: this link is made to be clicked out of Discord, and a browser that

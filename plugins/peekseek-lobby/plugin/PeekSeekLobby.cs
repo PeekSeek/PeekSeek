@@ -85,7 +85,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
 
         // Reporting is the one thing here a player does about somebody else, so the
         // wording stays factual: it says what was sent, not what will happen to them.
-        { "report_usage", "<color=white>/report <player> <reason></color> — sends staff their screen and this round's stats." },
+        { "report_usage", "<color=white>/report <player> <reason></color> sends staff their screen and this round's stats." },
         { "report_no_player", "Nobody here called <color=white>{0}</color>." },
         { "report_self", "You cannot report yourself." },
         { "report_sent", "Reported <color=white>{0}</color>. Staff have been sent their screen and this round's stats." },

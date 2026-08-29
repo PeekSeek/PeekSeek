@@ -3,7 +3,7 @@
 Every one of these covers a path that was open in production: a permanently banned
 player queued from in-game for six weeks and played twenty ranked matches, because
 the only ban check the site had lived in `load_user`, which a game server never
-triggers — it carries a server token, not a player session.
+triggers, because it carries a server token and not a player session.
 """
 
 from time import time
@@ -109,7 +109,7 @@ def test_a_party_leader_cannot_drag_a_banned_member_into_the_queue(
     party_factory(leader, member)
     login(client, leader)
 
-    # Casual Duo (bit 8) — a party of two does not fit any 1v1 mode.
+    # Casual Duo (bit 8), because a party of two does not fit any 1v1 mode.
     body = client.get("/queue/heartbeat?gamemode=8&region=paris").json()
 
     assert body["refused"] == {str(member.steam64): "Cheating"}
@@ -120,8 +120,8 @@ def test_a_party_leader_cannot_drag_a_banned_member_into_the_queue(
 
 
 def test_activeFor_prefers_the_ban_that_lasts_longest(user_factory):
-    """Two bans is normal — a player can be banned twice before either expires — and
-    the one an admin needs to see is whichever keeps them out longest."""
+    """Two bans is normal, since a player can be banned twice before either expires,
+    and the one an admin needs to see is whichever keeps them out longest."""
     player = user_factory()
     ban(player.steam64, endTime=int(time()) + 60, reason="Toxicity")
     ban(player.steam64, reason="Cheating")

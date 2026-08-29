@@ -145,7 +145,7 @@ internal static class RemoteAPI {
     }
 
     /// Everything one /report carries, gathered on the game thread before the upload
-    /// leaves it — every field here reads live game state that is not safe to touch
+    /// leaves it. Every field here reads live game state that is not safe to touch
     /// from the background task that does the sending.
     internal class Report {
         internal ulong Reported;
@@ -179,6 +179,7 @@ internal static class RemoteAPI {
                     { new StringContent(PeekSeekLobby.Config.szServerCode ?? ""), "serverCode" },
                     { new StringContent(report.Where ?? "the warm-up lobby"), "where" },
                     { new StringContent(PeekSeekLobby.Config.szReportChannel ?? ""), "channel" },
+                    { new StringContent(PeekSeekLobby.Config.szStaffRole ?? ""), "staffRole" },
                     { new StringContent(report.DamageDealt.ToString()), "damageDealt" },
                     { new StringContent(report.ShotsFired.ToString()), "shotsFired" },
                     { new StringContent(report.ShotsHit.ToString()), "shotsHit" },

@@ -1,6 +1,6 @@
 """In-game /report: the spy screenshot, the numbers, and the two buttons staff need.
 
-The game server captures the screenshot because only it can — `Player.sendScreenshot`
+The game server captures the screenshot because only it can: `Player.sendScreenshot`
 asks the reported player's own client for it. Everything after that happens here so the
 bot token, the embed shape and the staff role live in one place rather than being
 copied into both plugins.
@@ -16,13 +16,13 @@ from src.core import models as data
 
 
 def _percent(part: int, whole: int) -> str:
-    """`part` of `whole` to one decimal, or an em dash when there is nothing to divide.
+    """`part` of `whole` to one decimal, or "n/a" when there is nothing to divide.
 
-    A dash rather than 0%: a player who has not fired a shot has no accuracy, and
-    printing zero would read as someone missing every shot they took.
+    Not 0%: a player who has not fired a shot has no accuracy, and printing zero
+    would read as someone who missed every shot they took.
     """
     if not whole:
-        return "—"
+        return "n/a"
     return f"{part / whole * 100:.1f}%"
 
 
@@ -30,7 +30,7 @@ def _statLines(stats: dict) -> str:
     """The numbers a moderator judges a report on, and nothing else.
 
     Accuracy and headshot share are the two that separate a cheat from a good player,
-    and neither means anything as a raw count — which is why both are shown as a
+    and neither means anything as a raw count, which is why both are shown as a
     percentage of the shots actually taken rather than as "412 hits".
     """
     fired = int(stats.get("shotsFired") or 0)
@@ -47,7 +47,7 @@ def _statLines(stats: dict) -> str:
 
 def _buttons(reported, serverCode: str | None) -> list:
     """Join the server, and ban the player. Both link buttons, so neither needs the
-    bot to be running to work — a link button is a URL, not an interaction.
+    bot to be running to work, because a link button is a URL, not an interaction.
 
     The ban link opens the admin drawer with the player already loaded, which is where
     the preset reasons and the moderator note field already live. Rebuilding that as a
@@ -98,6 +98,7 @@ def send(
     where: str = "a PeekSeek server",
     screenshot: bytes | None = None,
     channel: str | None = None,
+    staffRole: str | None = None,
 ) -> bool:
     """Post one report to the staff channel. Returns whether Discord took it.
 
@@ -106,6 +107,7 @@ def send(
     attachment is what survives in the channel afterwards.
     """
     channel = channel or settings.report_channel
+    staffRole = staffRole or settings.staff_role
     if not settings.bot_token or not channel:
         logging.info("Report from %s about %s not sent: no Discord configured", reporter, reported)
         return False
@@ -130,12 +132,12 @@ def send(
         embed["image"] = {"url": "attachment://spy.jpg"}
 
     payload = {
-        "content": f"<@&{settings.staff_role}>" if settings.staff_role else None,
+        "content": f"<@&{staffRole}>" if staffRole else None,
         "embeds": [embed],
         "components": _buttons(reported, serverCode),
         # Without this a report naming a role would ping it from inside the embed
         # description too, if a reporter typed one into their reason.
-        "allowed_mentions": {"roles": [settings.staff_role] if settings.staff_role else []},
+        "allowed_mentions": {"roles": [staffRole] if staffRole else []},
     }
 
     return _post(channel, payload, screenshot)

@@ -587,6 +587,7 @@ async def submitReport(
     serverCode: str | None = Form(None),
     where: str = Form("a PeekSeek server"),
     channel: str | None = Form(None),
+    staffRole: str | None = Form(None),
     damageDealt: int = Form(0),
     shotsFired: int = Form(0),
     shotsHit: int = Form(0),
@@ -601,8 +602,8 @@ async def submitReport(
     call that could fail on its own and leave a report with no evidence.
 
     The counters are sent rather than derived here. A lobby server and a match server
-    count "this round" differently — one resets on an arena wipe, the other on a round
-    — and only they know which of the two they are.
+    count "this round" differently, one resetting on an arena wipe and the other on a
+    round, and only they know which of the two they are.
     """
     image = await screenshot.read() if screenshot is not None else None
 
@@ -621,6 +622,7 @@ async def submitReport(
         screenshot=image,
         # A server may route its own reports elsewhere; empty means the site's.
         channel=channel or None,
+        staffRole=staffRole or None,
     )
     # 200 either way: the report reached the site, and a game server has nothing it
     # could usefully do about Discord being down. It is logged on this side instead.

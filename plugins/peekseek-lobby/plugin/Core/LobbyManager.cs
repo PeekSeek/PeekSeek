@@ -27,7 +27,7 @@ internal abstract class LobbyManager {
 
         /// What /report sends about somebody. Accuracy and headshot share are the two
         /// numbers that separate a cheat from a good player, and neither means anything
-        /// as a raw count — so shots taken is tracked alongside shots landed rather than
+        /// as a raw count, so shots taken is tracked alongside shots landed rather than
         /// hits alone. Reset with the arena, so a report describes the round it was
         /// written in rather than somebody's whole session.
         internal int DamageDealt;
@@ -944,7 +944,7 @@ internal abstract class LobbyManager {
     ///
     /// The counters are read here, on the game thread, rather than inside the callback.
     /// A screenshot can take seconds to come back, and by then an arena reset may have
-    /// cleared them — the report would then describe a round nobody was complaining
+    /// cleared them, and the report would then describe a round nobody was complaining
     /// about.
     internal static void Report(CSteamID reporter, SteamPlayer target, string reason) {
         ulong reported = target.playerID.steamID.m_SteamID;

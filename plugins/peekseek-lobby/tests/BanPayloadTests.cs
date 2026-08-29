@@ -9,7 +9,7 @@ namespace PeekSeekLobby.Tests;
 /// Pinned for the same reason as the `choose` block, and with more at stake: a renamed
 /// or retyped field here does not throw, it leaves `Ban` null, and a banned player is
 /// simply never removed from the arena. That is the failure this whole field exists to
-/// stop — a permanently banned account queued from in-game for six weeks because no
+/// stop: a permanently banned account queued from in-game for six weeks because no
 /// part of the game path had ever been told about bans. `test_the_game_server_is_told_why`
 /// holds the site's end of it.
 public class BanPayloadTests {

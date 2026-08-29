@@ -204,7 +204,7 @@ class User(SQLModel, table=True):
         if isinstance(steam64, User):
             steam64 = steam64.steam64
         with open() as db:
-            # Every route into the queue funnels through here — the lobby server, the
+            # Every route into the queue funnels through here: the lobby server, the
             # play page, an event signup, and a party leader queueing members who never
             # asked for themselves. Refusing here rather than at each caller is what
             # makes a ban actually mean something: the check used to live only in

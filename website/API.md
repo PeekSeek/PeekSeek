@@ -194,7 +194,7 @@ point of it. Fields: `reported`, `reporter`, `reason`, and optionally `serverCod
 file part.
 
 The screenshot is captured by asking the reported player's own client, which only a
-game server can do — in Unturned that is `Player.sendScreenshot(CSteamID, PlayerSpyReady)`,
+game server can do. In Unturned that is `Player.sendScreenshot(CSteamID, PlayerSpyReady)`,
 the same call the built-in `/spy` command makes. It has to arrive with the report rather
 than as a second call, or a failure leaves a report with no evidence attached.
 
@@ -203,7 +203,7 @@ about what "this round" means, and only they know which they are. Accuracy and h
 share are computed from them for display.
 
 Answers `{"status": "ok", "delivered": true|false}`. **`delivered: false` is not an
-error** — the report reached the site and Discord did not take it, which is logged here
+error**. The report reached the site and Discord did not take it, which is logged here
 and is nothing a game server can act on.
 
 ## Lobby population
