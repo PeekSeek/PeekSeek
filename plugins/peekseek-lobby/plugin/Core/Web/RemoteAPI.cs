@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Steamworks;
 using PeekSeekLobby.Core.Models;
 using Rocket.Core.Logging;
 using Rocket.Core.Utils;
@@ -21,6 +22,11 @@ namespace PeekSeekLobby.Core.Web;
 /// in the arena while their match waited for them.
 internal static class RemoteAPI {
     private static string Base => PeekSeekLobby.Config.szAPIURL.TrimEnd('/') + "/server/v1";
+
+    /// This server's own connect code, which is its Steam ID. Read at runtime rather
+    /// than configured, so it cannot be set wrong and does not have to be set at all
+    /// on a server somebody just stood up.
+    private static string ServerCode => SteamGameServer.GetSteamID().ToString();
 
     private static HttpClient Client;
 
@@ -176,7 +182,7 @@ internal static class RemoteAPI {
                     { new StringContent(report.Reported.ToString()), "reported" },
                     { new StringContent(report.Reporter.ToString()), "reporter" },
                     { new StringContent(report.Reason ?? ""), "reason" },
-                    { new StringContent(PeekSeekLobby.Config.szServerCode ?? ""), "serverCode" },
+                    { new StringContent(ServerCode), "serverCode" },
                     { new StringContent(report.Where ?? "the warm-up lobby"), "where" },
                     { new StringContent(PeekSeekLobby.Config.szReportChannel ?? ""), "channel" },
                     { new StringContent(PeekSeekLobby.Config.szStaffRole ?? ""), "staffRole" },

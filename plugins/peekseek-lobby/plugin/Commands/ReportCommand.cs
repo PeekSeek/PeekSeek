@@ -37,7 +37,7 @@ internal class ReportCommand : IRocketCommand {
             return;
         }
 
-        if (target.playerID.steamID == reporter.CSteamID && !PeekSeekLobby.Config.AllowSelfReport) {
+        if (target.playerID.steamID == reporter.CSteamID) {
             LobbyManager.Whisper(reporter.Player.channel.owner,
                 PeekSeekLobby.Instance.Translate("report_self"));
             return;

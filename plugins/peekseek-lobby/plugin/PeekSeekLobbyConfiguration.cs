@@ -12,11 +12,6 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public string szChatIconURL;
     public string szRegion;
 
-    /// This server's Unturned connect code, so an in-game /report can link staff
-    /// straight into it. Empty leaves the join button off the report rather than
-    /// posting one that goes nowhere.
-    public string szServerCode;
-
     /// Where reports from this server land. Empty uses whatever channel the site is
     /// configured with, which is the normal case; setting it routes one server's
     /// reports somewhere else without redeploying the site.
@@ -26,11 +21,6 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// the message content rather than the embed, because a mention inside an embed
     /// renders as one but never notifies anybody.
     public string szStaffRole;
-
-    /// Whether /report accepts you reporting yourself. Off by default because a
-    /// self-report is noise in the staff channel, on where somebody is testing the
-    /// pipeline end to end without needing a second account.
-    public bool AllowSelfReport;
     public ushort GamemodeBitmask;
     public float HeartbeatIntervalSeconds;
     public float SpawnProtectionSeconds;
@@ -166,10 +156,8 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         // Bitmask selecting mmconfig gamemode 0 (Competitive) — matches the site's
         // /queue/heartbeat bit convention, not a literal gamemode array index.
         szRegion = "paris";
-        szServerCode = "";
         szReportChannel = "";
         szStaffRole = "";
-        AllowSelfReport = false;
         GamemodeBitmask = 1;
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;

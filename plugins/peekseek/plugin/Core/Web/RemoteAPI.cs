@@ -60,6 +60,60 @@ internal static class RemoteAPI {
     /// actually calls.
     private static string ServerCode => SteamGameServer.GetSteamID().ToString();
 
+    /// Everything one /report carries, gathered on the game thread before the upload
+    /// leaves it. Every field here reads live match state that is not safe to touch
+    /// from the background task that does the sending.
+    internal class Report {
+        internal ulong Reported;
+        internal ulong Reporter;
+        internal string Reason;
+        internal int DamageDealt;
+        internal int ShotsFired;
+        internal int ShotsHit;
+        internal int HeadshotHits;
+        internal byte[] Screenshot;
+    }
+
+    /// Send one report, with the reported player's spy screenshot attached.
+    ///
+    /// Multipart because the screenshot is the point of it: the round it is evidence of
+    /// is usually over by the time anyone reads the report, so it has to arrive with
+    /// the report rather than as a second call that can fail on its own.
+    ///
+    /// Deliberately outside the session loop. That loop is what keeps a match alive and
+    /// must not be held up by an upload, and a report that failed to send must not be
+    /// retried forever the way a match result is: it is one moment somebody complained
+    /// about, not a result the site is waiting on.
+    internal static void SendReport(Report report) {
+        Task.Run(async () => {
+            try {
+                MultipartFormDataContent form = new() {
+                    { new StringContent(report.Reported.ToString()), "reported" },
+                    { new StringContent(report.Reporter.ToString()), "reporter" },
+                    { new StringContent(report.Reason ?? ""), "reason" },
+                    { new StringContent(ServerCode), "serverCode" },
+                    { new StringContent("a live match"), "where" },
+                    { new StringContent(report.DamageDealt.ToString()), "damageDealt" },
+                    { new StringContent(report.ShotsFired.ToString()), "shotsFired" },
+                    { new StringContent(report.ShotsHit.ToString()), "shotsHit" },
+                    { new StringContent(report.HeadshotHits.ToString()), "headshotHits" }
+                };
+
+                if (report.Screenshot != null) {
+                    ByteArrayContent image = new(report.Screenshot);
+                    image.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+                    form.Add(image, "screenshot", "spy.jpg");
+                }
+
+                HttpResponseMessage response = await Client.PostAsync($"{Base}/reports", form);
+                if (!response.IsSuccessStatusCode)
+                    Logger.LogWarning($"Report for {report.Reported} refused: {response.StatusCode}");
+            } catch (Exception ex) {
+                Logger.LogWarning($"Report for {report.Reported} failed to send: {ex.Message}");
+            }
+        });
+    }
+
     internal static void StartSession() {
         Cancellation = new CancellationTokenSource();
         Task.Run(async () => await RunSession(Cancellation.Token));

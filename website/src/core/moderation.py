@@ -222,6 +222,11 @@ def issueBan(
 
     summary = previewBan(steam64) if voids else None
 
+    # Before the ban lands, because the answer stops being available once they are
+    # no longer anybody's problem: a match already in progress has to be ended, and
+    # this is the only moment we still know which one it is.
+    live = data.User.getCurrentMatchId(steam64) if voids else None
+
     with opendb() as db:
         if voids:
             matches = taintedMatches(db, steam64)
@@ -248,7 +253,18 @@ def issueBan(
         # their next heartbeat.
         db.query(data.UserHB).where(data.UserHB.steam64 == int(steam64)).delete()
 
+        # A cheat's match in progress ends with them. Leaving it running would score a
+        # match that has already been decided to be worthless, and the Elo it moved
+        # would land after everything else was refunded, which is the one order that
+        # puts the numbers back wrong.
+        if live:
+            db.query(data.Match).where(data.Match.id == live).update({"finished": True})
+
+    if live:
+        data.MatchResult.recordUnscored(live, "abandoned")
+
     if voids:
+        summary["cancelledMatch"] = live
         _logRefunds(steam64, reason, byName, summary)
 
     return summary or {"steam64": str(steam64), "matches": 0, "players": 0}

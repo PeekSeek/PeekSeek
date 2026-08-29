@@ -160,6 +160,12 @@ internal abstract class PSManager {
     /// third-person the aim direction no longer matches where their reticle actually was,
     /// so a spray-offset sample from that shot would be quietly wrong rather than missing.
     private static void OnBulletSpawned(UseableGun gun, BulletInfo bullet) {
+        // Counted before the ballistics guard below, which exists for the shot-trace
+        // telemetry. A shot is a shot whether or not this match records trajectories,
+        // and accuracy is wrong if half of them are not counted.
+        if (gun?.player != null)
+            StatService.RecordShotFired(gun.player.channel.owner.playerID.steamID);
+
         if (Data?.Settings?.Ballistics != true) return;
         if (gun.player.look.perspective != EPlayerPerspective.FIRST) return;
 
@@ -485,6 +491,36 @@ internal abstract class PSManager {
 
     /// Same as Announce but to one player only — StatsCommand also uses this rather than
     /// building its own ChatManager call.
+    /// Ask the reported player's client for a screenshot, then send it to staff with
+    /// their numbers for this match attached.
+    ///
+    /// `CSteamID.Nil` as the destination is what makes this a server-side capture: the
+    /// built-in /spy passes the requesting admin so the image is relayed to their
+    /// client, and there is no admin here to relay it to. The callback is where the
+    /// bytes actually arrive.
+    ///
+    /// The counters are read here, on the game thread, rather than inside the callback.
+    /// A screenshot can take seconds to come back, and StatService is being written to
+    /// by every shot fired in the meantime.
+    internal static void Report(CSteamID reporter, SteamPlayer target, string reason) {
+        CSteamID reported = target.playerID.steamID;
+
+        RemoteAPI.Report payload = new() {
+            Reported = reported.m_SteamID,
+            Reporter = reporter.m_SteamID,
+            Reason = reason,
+            DamageDealt = Mathf.RoundToInt(StatService.GetStatDamageDealt(reported)),
+            ShotsFired = StatService.GetStatShotsFired(reported),
+            ShotsHit = StatService.GetStatHits(reported),
+            HeadshotHits = StatService.GetStatHeadshotHits(reported)
+        };
+
+        target.player.sendScreenshot(CSteamID.Nil, (_, image) => {
+            payload.Screenshot = image;
+            RemoteAPI.SendReport(payload);
+        });
+    }
+
     internal static void Whisper(SteamPlayer to, string message) {
         ChatManager.serverSendMessage(
             message,

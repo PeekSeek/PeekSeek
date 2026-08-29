@@ -263,3 +263,58 @@ def test_an_overturn_is_announced_to_staff(user_factory, monkeypatch):
 
 def test_the_overturn_log_is_not_the_report_channel(user_factory):
     assert settings.overturn_channel != settings.report_channel
+
+
+def liveMatch(players: list) -> int:
+    """An unfinished match with these players on it."""
+    from time import time as now
+
+    with Session(engine) as session:
+        row = data.Match(
+            time=int(now()),
+            region="paris",
+            gamemode=0,
+            teams=[{"name": "a", "users": [str(players[0])]},
+                   {"name": "b", "users": [str(players[1])]}],
+            meta={"map": "Alpha Valley", "userData": {}},
+            finished=False,
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return row.id
+
+
+def test_a_cheating_ban_ends_the_match_they_are_in(user_factory):
+    """Leaving it running would score a match already decided to be worthless, and its
+    Elo would land after everything else was refunded."""
+    cheat = user_factory()
+    victim = user_factory()
+    matchId = liveMatch([cheat.steam64, victim.steam64])
+
+    moderation.issueBan(cheat.steam64, preset="cheating")
+
+    with opendb() as db:
+        assert db.query(data.Match).where(data.Match.id == matchId).first().finished
+    stored = data.MatchResult.findFor(matchId)
+    assert stored.data["unscored"] == "abandoned"
+
+
+def test_a_toxicity_ban_leaves_their_match_alone(user_factory):
+    """A week off for shouting does not void a match that is being played fairly."""
+    player = user_factory()
+    other = user_factory()
+    matchId = liveMatch([player.steam64, other.steam64])
+
+    moderation.issueBan(player.steam64, preset="toxicity")
+
+    with opendb() as db:
+        assert not db.query(data.Match).where(data.Match.id == matchId).first().finished
+
+
+def test_banning_someone_in_no_match_is_fine(user_factory):
+    cheat = user_factory()
+
+    summary = moderation.issueBan(cheat.steam64, preset="cheating")
+
+    assert summary["cancelledMatch"] is None

@@ -53,6 +53,14 @@ internal static class StatService {
         if (headshot) stat.HeadshotHits++;
     }
 
+    internal static void RecordShotFired(CSteamID player) {
+        GetOrCreate(player).ShotsFired++;
+    }
+
+    internal static ushort GetStatShotsFired(CSteamID player) {
+        return Find(player)?.ShotsFired ?? 0;
+    }
+
     internal static ushort GetStatHits(CSteamID player) {
         return Find(player)?.Hits ?? 0;
     }

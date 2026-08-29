@@ -13,6 +13,10 @@ internal class PSPlayerStat {
     /// match easily passes 255 hits.
     internal ushort Hits;
     internal ushort HeadshotHits;
+    /// Every shot they have fired this match, hit or miss. Hits alone say nothing about
+    /// whether somebody is cheating; hits out of shots taken is the number a moderator
+    /// actually reads, and it is what /report sends.
+    internal ushort ShotsFired;
     /// Raw damage dealt/taken this match, from every DamageTool.damagePlayerRequested this
     /// player was on either side of. Kept as float since ping reduction scales it
     /// fractionally; rounded only when reported.
