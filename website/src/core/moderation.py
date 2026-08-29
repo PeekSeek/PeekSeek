@@ -228,6 +228,16 @@ def issueBan(
     live = data.User.getCurrentMatchId(steam64) if voids else None
 
     with opendb() as db:
+        # Most people worth banning have never opened the site: they were reported from
+        # a game server, and the site only creates an account when somebody logs in or
+        # a result comes in for them. Without a row here the ban lands on an id with no
+        # name, no avatar and nothing to hang a profile off, so every list that draws
+        # them shows "Nameless" and anything joined to Users refuses them outright.
+        #
+        # ensure fetches their Steam name and avatar on the way, so the record reads as
+        # a person from the moment it exists rather than after their next login.
+        data.User.ensure(db, int(steam64))
+
         if voids:
             matches = taintedMatches(db, steam64)
             _applyRefunds(db, _reversals(matches, steam64))

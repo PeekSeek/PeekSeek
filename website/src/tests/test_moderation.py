@@ -318,3 +318,49 @@ def test_banning_someone_in_no_match_is_fine(user_factory):
     summary = moderation.issueBan(cheat.steam64, preset="cheating")
 
     assert summary["cancelledMatch"] is None
+
+
+def test_banning_somebody_the_site_has_never_seen(monkeypatch):
+    """Most people worth banning were reported from a game server and have never opened
+    the site, so the account has to be created rather than assumed."""
+    monkeypatch.setattr(
+        "src.core.steam.get_steam_user_data",
+        lambda steam64: {"personaname": "Walls", "avatarfull": "http://avatar"},
+        raising=False,
+    )
+    unknown = 76561199999999999
+
+    with opendb() as db:
+        assert db.query(data.User).where(data.User.steam64 == unknown).first() is None
+
+    moderation.issueBan(unknown, preset="toxicity", note="reported in game")
+
+    assert data.UserBan.activeFor(unknown) is not None
+    with opendb() as db:
+        created = db.query(data.User).where(data.User.steam64 == unknown).first()
+    assert created is not None
+    # Named on the way in, so the ban record reads as a person immediately rather than
+    # showing "Nameless" until they happen to log in.
+    assert created.steam_data["name"] == "Walls"
+
+
+def test_a_cheating_ban_on_an_unknown_player_works_too(monkeypatch):
+    monkeypatch.setattr(
+        "src.core.steam.get_steam_user_data", lambda steam64: None, raising=False
+    )
+    unknown = 76561199999999998
+
+    summary = moderation.issueBan(unknown, preset="cheating")
+
+    assert summary["matches"] == 0
+    with opendb() as db:
+        assert db.query(data.User).where(data.User.steam64 == unknown).first() is not None
+
+
+def test_banning_a_known_player_does_not_duplicate_them(user_factory):
+    player = user_factory()
+
+    moderation.issueBan(player.steam64, preset="toxicity")
+
+    with opendb() as db:
+        assert db.query(data.User).where(data.User.steam64 == player.steam64).count() == 1
