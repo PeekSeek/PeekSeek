@@ -18,12 +18,12 @@ Conventions, all of which hold for every route here:
 The whole lifecycle runs through one call, `GET /session`. See its docstring.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from src.core.settings import settings
 from src.core.db import open as opendb
 from src.core import models as data
-from src.core import matchmaking, notify
+from src.core import matchmaking, notify, reports
 from src.core.webhook import Webhook
 from src.dependencies import GameServer, JsonBody, authorized_server
 
@@ -577,6 +577,51 @@ def joinQueue(steam64: int, gamemodes: int = 1, region: str = "paris"):
 def leaveQueue(steam64: int):
     data.User.removeFromQueue(steam64)
     return {"status": "ok"}
+
+
+@router.post("/reports")
+async def submitReport(
+    reported: int = Form(...),
+    reporter: int = Form(...),
+    reason: str = Form(...),
+    serverCode: str | None = Form(None),
+    where: str = Form("a PeekSeek server"),
+    damageDealt: int = Form(0),
+    shotsFired: int = Form(0),
+    shotsHit: int = Form(0),
+    headshotHits: int = Form(0),
+    screenshot: UploadFile | None = File(None),
+):
+    """An in-game /report, with the reported player's spy screenshot attached.
+
+    Multipart rather than JSON because the screenshot is the point: it is captured by
+    asking the reported player's own client (`Player.sendScreenshot`), which only the
+    game server can do, and it has to arrive with the report rather than as a second
+    call that could fail on its own and leave a report with no evidence.
+
+    The counters are sent rather than derived here. A lobby server and a match server
+    count "this round" differently — one resets on an arena wipe, the other on a round
+    — and only they know which of the two they are.
+    """
+    image = await screenshot.read() if screenshot is not None else None
+
+    sent = reports.send(
+        reported=reported,
+        reporter=reporter,
+        reason=reason[:1000],
+        stats={
+            "damageDealt": damageDealt,
+            "shotsFired": shotsFired,
+            "shotsHit": shotsHit,
+            "headshotHits": headshotHits,
+        },
+        serverCode=serverCode,
+        where=where,
+        screenshot=image,
+    )
+    # 200 either way: the report reached the site, and a game server has nothing it
+    # could usefully do about Discord being down. It is logged on this side instead.
+    return {"status": "ok", "delivered": sent}
 
 
 @router.post("/players/{steam64}/bans")

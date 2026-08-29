@@ -132,6 +132,7 @@ what happens to a match whose result was slow to arrive.
 | `GET /players/{steam64}/kits` | Every saved kit, resolved into ready-to-equip items. |
 | `POST /players/{steam64}/decide` | Lock their kit and/or powerup for the match they are on. |
 | `POST /players/{steam64}/bans` | A ban issued by anti-cheat. Empty body bans for "Cheating". |
+| `POST /reports` | An in-game `/report`, with the spy screenshot attached. |
 
 Both reads answer the same shape:
 
@@ -184,6 +185,26 @@ arena, and asking with `PUT` would quietly put them back in the queue.
 
 `GET /matches/{id}` answers the same `status` and `relayTo` for one match, for anything
 watching a match it is not hosting.
+
+## Reports
+
+`POST /reports` is **multipart/form-data**, not JSON, because the screenshot is the
+point of it. Fields: `reported`, `reporter`, `reason`, and optionally `serverCode`,
+`where`, `damageDealt`, `shotsFired`, `shotsHit`, `headshotHits`, and a `screenshot`
+file part.
+
+The screenshot is captured by asking the reported player's own client, which only a
+game server can do — in Unturned that is `Player.sendScreenshot(CSteamID, PlayerSpyReady)`,
+the same call the built-in `/spy` command makes. It has to arrive with the report rather
+than as a second call, or a failure leaves a report with no evidence attached.
+
+The counters are sent, not derived here: a lobby server and a match server disagree
+about what "this round" means, and only they know which they are. Accuracy and headshot
+share are computed from them for display.
+
+Answers `{"status": "ok", "delivered": true|false}`. **`delivered: false` is not an
+error** — the report reached the site and Discord did not take it, which is logged here
+and is nothing a game server can act on.
 
 ## Lobby population
 
