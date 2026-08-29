@@ -18,13 +18,6 @@ class LoginRedirect(Exception):
     """Raised by page guards for anonymous users; handled with a redirect home."""
 
 
-class ActiveBan(Exception):
-    """Raised when the requester has an active ban; handled with the error page."""
-
-    def __init__(self, ban: data.UserBan):
-        self.ban = ban
-
-
 def client_ip(request: Request) -> str:
     return request.client.host if request.client else ""
 
@@ -54,28 +47,9 @@ def _remember_page(request: Request) -> None:
     request.session["lastPage"] = str(request.url)
 
 
-def _find_active_ban(steam64: int | None, ip: str) -> data.UserBan | None:
-    with opendb() as db:
-        steam64s = [
-            row.steam64
-            for row in db.query(data.UserIP).where(data.UserIP.address == ip).all()
-        ]
-        if steam64:
-            steam64s.append(steam64)
-        if not steam64s:
-            return None
-
-        for ban in (
-            db.query(data.UserBan).where(data.UserBan.steam64.in_(steam64s)).all()
-        ):
-            if unix_time() < ban.endTime:
-                return ban
-    return None
-
-
 def load_user(request: Request) -> Optional[data.User]:
     """Resolve the requester from the session (or ?uuid=), record the page for
-    post-login redirects, track their IP, and gate active bans.
+    post-login redirects, and track their IP.
 
     Registered app-wide, so every route (and template) sees request.state.user.
     """
@@ -106,15 +80,6 @@ def load_user(request: Request) -> Optional[data.User]:
             db.add(data.UserIP(steam64=user.steam64, address=ip))
 
     request.state.user = user
-
-    # Checked on every request rather than once a minute. The throttle this replaces
-    # was there to save a query, and what it bought instead was a banned player who
-    # could browse the site normally for up to a minute at a time and hit the ban page
-    # at apparently random moments. UserBans is tiny and the lookup is indexed, next to
-    # the two queries load_user already runs for every request.
-    ban = _find_active_ban(user.steam64, ip)
-    if ban:
-        raise ActiveBan(ban)
 
     return user
 
@@ -198,6 +163,10 @@ def page_context(request: Request) -> dict:
         "match": user.getCurrentMatchId() if user else None,
         "discord": user.discord if user else None,
         "getPermission": user.getPermission if user else (lambda permission: False),
+        # Raised as a banner rather than a wall. A ban stops somebody playing, not
+        # reading: they still need their profile, the rules and the appeal link, and
+        # the page that used to block all of that told them less than the banner does.
+        "ownBan": data.UserBan.activeFor(user.steam64) if user else None,
     }
 
 

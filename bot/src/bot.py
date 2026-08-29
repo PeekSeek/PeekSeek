@@ -11,6 +11,7 @@ Admin is PeekSeek's own permission bit, resolved from the caller's linked Steam 
 Discord's `administrator` only hides the commands from the picker; it is not the gate.
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -145,15 +146,13 @@ class ConfirmBan(discord.ui.View):
     @discord.ui.button(label="Ban and refund", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, _: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        summary = await bot.loop.run_in_executor(
-            None,
-            lambda: moderation.issueBan(
-                self.steam64,
-                preset="cheating",
-                note=self.note,
-                byName=self.byName,
-                bySteam64=self.bySteam64,
-            ),
+        summary = await asyncio.to_thread(
+            moderation.issueBan,
+            self.steam64,
+            preset="cheating",
+            note=self.note,
+            byName=self.byName,
+            bySteam64=self.bySteam64,
         )
         await interaction.followup.send(
             f"**{displayName(self.steam64)}** is permanently banned. "
@@ -258,7 +257,7 @@ async def ban(
 
     # Cheating: show what it would do before doing any of it.
     await interaction.response.defer(ephemeral=True)
-    preview = await bot.loop.run_in_executor(None, moderation.previewBan, target)
+    preview = await asyncio.to_thread(moderation.previewBan, target)
 
     lines = "\n".join(
         f"`{r['elo']:+d}` <{settings.base_url}/u/{r['steam64']}>"
@@ -355,13 +354,10 @@ async def stats(
     with opendb() as db:
         record = db.query(data.Stat).where(data.Stat.steam64 == int(target)).first()
 
-    ban = data.UserBan.activeFor(target)
-    history = data.UserBan.historyFor(target)
-
     embed = discord.Embed(
         title=displayName(target),
         url=f"{settings.base_url}/u/{target}",
-        colour=RED if ban else GREY,
+        colour=GREY,
     )
     embed.add_field(name="Steam64", value=f"`{target}`", inline=True)
 
@@ -369,66 +365,81 @@ async def stats(
         embed.add_field(name="Elo", value=str(record.elo), inline=True)
         embed.add_field(
             name="Record",
-            value=f"{record.wins}W {record.losses}L · {record.kills}K {record.deaths}D",
+            value=f"{record.wins}W {record.losses}L - {record.kills}K {record.deaths}D",
             inline=True,
         )
-        embed.add_field(
-            name="Headshots", value=f"{record.headshotPercent}%", inline=True
-        )
+        embed.add_field(name="Headshots", value=f"{record.headshotPercent}%", inline=True)
     else:
         embed.add_field(name="Elo", value="Never played a ranked match", inline=True)
-
-    if ban:
-        embed.add_field(
-            name="Banned",
-            value=f"{ban.reason} · {ban.expiryLabel}\n{ban.moderatorNote or ''}"[:1024],
-            inline=False,
-        )
-
-    past = [b for b in history if b is not ban]
-    if past:
-        embed.add_field(
-            name=f"{len(past)} previous ban{'' if len(past) == 1 else 's'}",
-            value="\n".join(
-                f"{b.reason} · {b.expiryLabel} · {b.moderatorNote or ''}" for b in past[:5]
-            )[:1024],
-            inline=False,
-        )
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-class PickBanToOverturn(discord.ui.View):
-    """Every ban this player has, as a menu, because "unban them" is ambiguous the
-    moment somebody has been banned more than once.
+class BanSelect(discord.ui.Select):
+    """The menu itself, as a subclass rather than a Select with its callback reassigned.
 
-    Overturning does not delete the row. It sets the expiry to zero and writes who
-    lifted it into the note, so a repeat offender still reads as one and the fact that
-    somebody overturned a ban is itself part of the record.
+    Reassigning `.callback` on an instance works until it does not, and when it fails
+    the interaction simply dies with "this interaction failed" and nothing is logged,
+    which is exactly how this was failing.
     """
 
-    def __init__(self, invoker: int, bans: list, byName: str, bySteam64):
-        super().__init__(timeout=120)
-        self.invoker = invoker
+    def __init__(self, bans: list, byName: str, bySteam64):
         self.byName = byName
         self.bySteam64 = bySteam64
 
         options = []
         for ban in bans[:25]:
             issued = ban.created_at.strftime("%d %b %Y") if ban.created_at else "unknown"
-            state = "in force" if ban.endTime > int(time()) else "already over"
-            note = (ban.moderatorNote or "no note")[:90]
+            if ban.endTime == 0:
+                state = "overturned"
+            elif ban.endTime > int(time()):
+                state = "in force"
+            else:
+                state = "expired"
+
             options.append(
                 discord.SelectOption(
-                    label=f"{ban.reason} - {issued} ({state})"[:100],
-                    description=note,
+                    label=f"{ban.reason or 'No reason'} - {issued} ({state})"[:100],
+                    description=(ban.moderatorNote or "no note")[:100],
                     value=str(ban.id),
                 )
             )
 
-        self.menu = discord.ui.Select(placeholder="Which ban?", options=options)
-        self.menu.callback = self.chosen
-        self.add_item(self.menu)
+        super().__init__(placeholder="Pick the ban to lift", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        banId = int(self.values[0])
+
+        lifted = await asyncio.to_thread(
+            moderation.overturnBan, banId, self.byName, self.bySteam64
+        )
+        if lifted is None:
+            await interaction.followup.send("That ban no longer exists.", ephemeral=True)
+            return
+
+        await interaction.followup.send(
+            f"Lifted the **{lifted['reason']}** ban on "
+            f"**{displayName(lifted['steam64'])}**. The record is kept and now says you "
+            "lifted it.",
+            ephemeral=True,
+        )
+        self.view.stop()
+
+
+class PickBanToOverturn(discord.ui.View):
+    """Every ban this player has, as a menu, because "unban them" is ambiguous the
+    moment somebody has been banned more than once.
+
+    Lifting one does not delete the row. It sets the expiry to zero and writes who
+    lifted it into the note, so a repeat offender still reads as one and the fact that
+    somebody lifted a ban is part of the record rather than something erased.
+    """
+
+    def __init__(self, invoker: int, bans: list, byName: str, bySteam64):
+        super().__init__(timeout=180)
+        self.invoker = invoker
+        self.add_item(BanSelect(bans, byName, bySteam64))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.invoker:
@@ -436,26 +447,15 @@ class PickBanToOverturn(discord.ui.View):
             return False
         return True
 
-    async def chosen(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        banId = int(self.menu.values[0])
-
-        lifted = await bot.loop.run_in_executor(
-            None,
-            lambda: moderation.overturnBan(banId, self.byName, self.bySteam64),
-        )
-        if lifted is None:
-            await interaction.followup.send("That ban no longer exists.", ephemeral=True)
-            return
-
-        await interaction.followup.send(
-            f"Overturned the **{lifted['reason']}** ban on "
-            f"**{displayName(lifted['steam64'])}**. The record is kept and now says you "
-            "lifted it.",
-            ephemeral=True,
-        )
-        self.stop()
-
+    async def on_error(self, interaction, error, item):
+        """Without this a failing menu leaves Discord's "interaction failed" and nothing
+        in the log, which is indistinguishable from the bot being down."""
+        logging.error("Unban menu failed: %s", "".join(traceback.format_exception(error)))
+        message = "That failed. It is logged; nothing was changed."
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
 
 
 @bot.tree.command(name="unban", description="Overturn a ban.")

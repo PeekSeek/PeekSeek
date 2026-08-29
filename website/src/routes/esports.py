@@ -60,7 +60,22 @@ def signup(steam64: ApiSteam64, values: RequestValues):
 
         existing = _find_signup(db, eventId, steam64)
         if existing is not None:
+            # Leaving a team and resetting a join code stay open to a banned player.
+            # The ban is about playing, and somebody who cannot play the event is
+            # exactly who should be able to drop out of a team that is counting on them.
             return _handle_existing(db, existing, steam64, values)
+
+        # A ban only blocks signing up if it is still running when the event starts.
+        # Someone banned for a week can enter an event three weeks out: they will be
+        # free to play it by the time it happens, and holding the whole event against
+        # a ban that will have expired punishes them twice.
+        ban = data.UserBan.activeFor(steam64)
+        if ban is not None and ban.endTime >= event.data["meta"]["queueTimes"][0][0]:
+            return PlainTextResponse(
+                f'Your "{ban.reason}" ban runs until {ban.expiryLabel}, which is after '
+                "this event starts.",
+                status_code=403,
+            )
 
         if values.get("team"):
             teamname = _clean_teamname(values["team"])

@@ -142,38 +142,40 @@ def test_ban_chips_come_back_for_a_whole_card_at_once(client, login, admin, user
     assert str(clean.steam64) not in body
 
 
-def test_a_banned_player_sees_the_ban_page_not_an_error_page(client, login, user_factory):
+def test_a_banned_player_still_gets_the_site(client, login, user_factory):
+    """A ban stops somebody playing, not reading. They still need their profile, the
+    rules, and the link to appeal, all of which the old wall blocked."""
     player = user_factory()
-    ban(player.steam64, reason="Cheating")
+    ban(player.steam64, reason="Toxicity", endTime=int(time()) + 6 * 86400)
     login(client, player)
 
     r = client.get("/fairplay")
 
-    assert r.status_code == 403
-    assert "You are banned" in r.text
-    assert "Cheating" in r.text
-    # The old page called this a "Cooldown", which is not what a permanent ban is.
-    assert "Cooldown" not in r.text
+    assert r.status_code == 200
+    assert "You are currently banned for" in r.text
+    assert "Toxicity" in r.text
+    assert "another 5 days" in r.text or "another 6 days" in r.text
 
 
-def test_the_ban_page_says_when_it_ends(client, login, user_factory):
-    player = user_factory()
-    ban(player.steam64, endTime=int(time()) + 86400, reason="Toxicity")
-    login(client, player)
-
-    assert "Permanent" not in client.get("/fairplay").text
 
 
-def test_the_ban_is_checked_on_every_request(client, login, user_factory):
-    """It used to be checked once a minute, which let a banned player browse normally
-    between checks and hit the ban page at apparently random moments."""
+
+def test_an_unbanned_player_sees_no_banner(client, login, user_factory):
     player = user_factory()
     login(client, player)
-    assert client.get("/fairplay").status_code == 200
 
-    ban(player.steam64)
+    assert "You are currently banned" not in client.get("/fairplay").text
 
-    assert client.get("/fairplay").status_code == 403
+
+def test_a_permanent_ban_says_permanently(client, login, user_factory):
+    player = user_factory()
+    ban(player.steam64, reason="Cheating")
+    login(client, player)
+
+    body = client.get("/fairplay").text
+
+    assert "You are currently banned for" in body
+    assert "permanently" in body
 
 
 def test_ban_rows_are_admin_only(client, login, admin, user_factory):
@@ -226,3 +228,72 @@ def test_a_profile_with_no_bans_draws_no_ban_list(client, login, admin, user_fac
     login(client, admin)
 
     assert "banlist" not in client.get(f"/u/{target.steam64}").text
+
+
+def event(owner, startsIn: int):
+    """An event whose first queue window opens `startsIn` seconds from now."""
+    start = int(time()) + startsIn
+    with Session(engine) as session:
+        row = data.Event(
+            ownerSteam64=owner.steam64,
+            name="Test Cup",
+            timeCreated=int(time()),
+            gamemode=0,
+            data={
+                "meta": {
+                    "queueTimes": [[start, start + 3600]],
+                    "maxPlayersPerTeam": 2,
+                    "maxMatchesPerTeam": 5,
+                }
+            },
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return row.id
+
+
+def test_a_ban_ending_before_the_event_does_not_block_signup(client, login, user_factory):
+    """Somebody banned for a week can enter an event three weeks out. Holding the whole
+    event against a ban that will have expired punishes them twice."""
+    player = user_factory()
+    eventId = event(player, startsIn=21 * 86400)
+    ban(player.steam64, endTime=int(time()) + 7 * 86400, reason="Toxicity")
+    login(client, player)
+
+    r = client.post(f"/esports/signup?eventId={eventId}&team=Late+Bloomers")
+
+    assert r.status_code == 200
+    with opendb() as db:
+        assert db.query(data.EventSignup).count() == 1
+
+
+def test_a_ban_running_past_the_start_blocks_signup(client, login, user_factory):
+    player = user_factory()
+    eventId = event(player, startsIn=2 * 86400)
+    ban(player.steam64, endTime=int(time()) + 7 * 86400, reason="Toxicity")
+    login(client, player)
+
+    r = client.post(f"/esports/signup?eventId={eventId}&team=Too+Soon")
+
+    assert r.status_code == 403
+    assert "after this event starts" in r.text
+    with opendb() as db:
+        assert db.query(data.EventSignup).count() == 0
+
+
+def test_a_permanent_ban_blocks_every_event(client, login, user_factory):
+    player = user_factory()
+    eventId = event(player, startsIn=365 * 86400)
+    ban(player.steam64, reason="Cheating")
+    login(client, player)
+
+    assert client.post(f"/esports/signup?eventId={eventId}&team=Nope").status_code == 403
+
+
+def test_an_unbanned_player_signs_up_fine(client, login, user_factory):
+    player = user_factory()
+    eventId = event(player, startsIn=2 * 86400)
+    login(client, player)
+
+    assert client.post(f"/esports/signup?eventId={eventId}&team=Fine").status_code == 200

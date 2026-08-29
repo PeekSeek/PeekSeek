@@ -15,7 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from src.core.notify import keep_player_counter_current
 from src.core.settings import settings
-from src.dependencies import ActiveBan, LoginRedirect, load_user, templates
+from src.dependencies import LoginRedirect, load_user, templates
 from src.routes import admin, auth, esports, gameserver, index, kits, pages, party, user
 
 
@@ -48,18 +48,6 @@ for module in (index, pages, auth, user, kits, admin, esports, gameserver, party
 def login_redirect(request: Request, exc: LoginRedirect):
     request.session["lastError"] = str(exc)
     return RedirectResponse("/", status_code=302)
-
-
-@app.exception_handler(ActiveBan)
-def banned_page(request: Request, exc: ActiveBan):
-    """The ban page. 403 rather than 200: this is a refusal, and a crawler or a script
-    reading the status code should see one."""
-    return templates.TemplateResponse(
-        request=request,
-        name="pages/banned.html",
-        context={"ban": exc.ban},
-        status_code=403,
-    )
 
 
 @app.exception_handler(StarletteHTTPException)

@@ -101,6 +101,12 @@
               Error: {{lastError}}
             </div>
 
+            {% if ownBan %}
+            <div class="mainElement warning">
+              <span>You are currently banned for <b>"{{ ownBan.reason }}"</b> for {{ ownBan.remainingLabel }}.</span>
+            </div>
+            {% endif %}
+
             <div class="mainElement gdpr" id="gdprheader">
               <span><a href="/gdpr/">See how PeekSeek uses your <b>Cookies</b> and <b>other Data</b>.</a></span>
               <button onclick="acceptCookies()">Accept</button>

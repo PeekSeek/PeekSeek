@@ -293,6 +293,31 @@ class UserBan(SQLModel, table=True):
             "%d %b %Y, %H:%M UTC"
         )
 
+    @property
+    def remainingLabel(self) -> str:
+        """How much longer this lasts, in the unit somebody would say out loud.
+
+        Days once there is more than a day left, hours below that, and "less than an
+        hour" at the end rather than counting down minutes: a ban is not a timer
+        anybody should be watching tick.
+        """
+        from time import time
+
+        if self.permanent:
+            return "permanently"
+
+        left = self.endTime - int(time())
+        if left <= 0:
+            return "no longer"
+        if left < 3600:
+            return "less than an hour"
+        if left < 86400:
+            hours = left // 3600
+            return f"another {hours} hour{'' if hours == 1 else 's'}"
+
+        days = left // 86400
+        return f"another {days} day{'' if days == 1 else 's'}"
+
     @staticmethod
     def activeFor(steam64, db=None) -> "UserBan | None":
         """This player's ban if one is in force right now, else None.
