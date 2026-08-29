@@ -107,11 +107,14 @@ def load_user(request: Request) -> Optional[data.User]:
 
     request.state.user = user
 
-    if unix_time() - request.session.get("lastBanCheck", 0) > 60:
-        request.session["lastBanCheck"] = unix_time()
-        ban = _find_active_ban(user.steam64, ip)
-        if ban:
-            raise ActiveBan(ban)
+    # Checked on every request rather than once a minute. The throttle this replaces
+    # was there to save a query, and what it bought instead was a banned player who
+    # could browse the site normally for up to a minute at a time and hit the ban page
+    # at apparently random moments. UserBans is tiny and the lookup is indexed, next to
+    # the two queries load_user already runs for every request.
+    ban = _find_active_ban(user.steam64, ip)
+    if ban:
+        raise ActiveBan(ban)
 
     return user
 

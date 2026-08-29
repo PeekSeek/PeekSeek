@@ -4,7 +4,16 @@
 
 {% block currentPage %}admin{% endblock %}
 
-{% block script %}<script src="/static/assets/js/admin.js" defer></script>{% endblock %}
+{% block script %}
+{# Who is issuing a ban, so the drawer can show the note prefix as real text rather
+   than promising that something gets prepended out of sight. tojson for the steam64
+   in particular: it is past Number.MAX_SAFE_INTEGER and loses digits unquoted. #}
+<script>
+  const adminSteam64 = {{ adminSteam64 | tojson }};
+  const adminName = {{ adminName | tojson }};
+</script>
+<script src="/static/assets/js/admin.js" defer></script>
+{% endblock %}
 
 {% block addheader %}
 <link rel="stylesheet" href="/static/assets/css/admin.css" />
@@ -15,6 +24,8 @@
 <div class="mainElement">
   <div class="adminHeader">
     <h2>Matches</h2>
+    <input class="adminSearch" type="search" id="playerSearch" onkeydown="searchPlayer(event)"
+           placeholder="steam64 or profile link to moderate" aria-label="Find a player to moderate">
     <span class="adminRefreshed" id="refreshed">Loading...</span>
   </div>
   {# Everything below is drawn by admin.js from /admin/matches and redrawn on a timer,
@@ -22,5 +33,11 @@
      a polled one that drift apart. #}
   <div class="adminMatchGrid" id="matches"></div>
 </div>
+
+{# A drawer rather than a modal: an admin deciding about a player is usually reading
+   the match card behind it at the same time, and blacking the page out takes away the
+   evidence they are deciding on. #}
+<div class="modOverlay" id="modOverlay"></div>
+<aside class="modDrawer" id="modDrawer" aria-label="Player moderation"></aside>
 
 {% endblock %}

@@ -100,3 +100,232 @@
   white-space: nowrap;
   text-align: right;
 }
+
+/* Moderation drawer.
+
+   A drawer rather than a modal because an admin deciding about a player is usually
+   reading the match card behind it at the same time, and a modal that blacks the page
+   out takes away the evidence. */
+.modOverlay {
+    position: fixed;
+    inset: 0;
+    background: #0008;
+    display: none;
+    z-index: 40;
+}
+.modOverlay.open { display: block; }
+
+.modDrawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(430px, 100%);
+    background: #121212;
+    border-left: 1px solid #333;
+    padding: 20px;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.18s ease-out;
+    z-index: 41;
+}
+.modDrawer.open { transform: translateX(0); }
+
+@media (prefers-reduced-motion: reduce) {
+    .modDrawer { transition: none; }
+}
+
+.modHead { display: flex; gap: 12px; align-items: center; }
+.modHead img { width: 44px; height: 44px; border-radius: 8px; }
+.modName { font-size: 18px; font-weight: 700; }
+.modId { font-size: 12px; color: #8885; }
+
+.modClose {
+    margin-left: auto;
+    background: none;
+    border: 0;
+    color: #aaa;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+}
+.modClose:hover { color: #fff; }
+
+.modBanner {
+    background: #4411117f;
+    border-left: 3px solid #f04444;
+    padding: 10px 12px;
+    border-radius: 0 5px 5px 0;
+    margin: 14px 0;
+    font-size: 13px;
+}
+.modBanner .t { color: #f04444; font-weight: 700; margin-bottom: 3px; }
+.modBanner .s { color: #aaa; font-size: 12.5px; line-height: 1.5; }
+
+.modSection {
+    border-top: 1px solid #333;
+    margin-top: 16px;
+    padding-top: 12px;
+}
+.modSection h4 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #8885;
+    font-weight: 700;
+}
+
+.modBan {
+    display: flex;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 13px;
+    border-bottom: 1px solid #ffffff08;
+}
+.modBan:last-child { border-bottom: 0; }
+.modBan.expired { opacity: 0.45; }
+.modBan .w { color: #8885; font-size: 11.5px; width: 66px; flex: none; padding-top: 2px; }
+.modBan .r { font-weight: 600; }
+.modBan .n { color: #8885; font-size: 12px; line-height: 1.45; }
+.modBan button {
+    margin-left: auto;
+    align-self: flex-start;
+    background: #1a1a1a;
+    color: #aaa;
+    border: 1px solid #333;
+    border-radius: 4px;
+    font-size: 11px;
+    padding: 3px 8px;
+    cursor: pointer;
+}
+.modBan button:hover { color: #fff; border-color: #666; }
+
+.modTiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 14px; }
+.modTile {
+    background: #1a1a1a;
+    border-radius: 7px;
+    padding: 10px 12px;
+    cursor: pointer;
+    user-select: none;
+    outline: 3px solid transparent;
+}
+.modTile:hover { outline-color: #3334; }
+.modTile.sel { background: #3334; outline-color: #6a2b2b; }
+.modTile .n { font-weight: 600; font-size: 13.5px; }
+.modTile .d { font-size: 11px; color: #8885; margin-top: 2px; }
+.modTile.sel .d { color: #ffa34e; }
+
+.modField { margin-bottom: 12px; }
+.modField label {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #8885;
+    margin-bottom: 5px;
+}
+.modField input,
+.modField textarea {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 5px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #fff;
+    font-family: inherit;
+}
+.modField textarea { min-height: 60px; resize: vertical; }
+.modField input:focus-visible,
+.modField textarea:focus-visible,
+.modTile:focus-visible {
+    outline: 2px solid #47bbe9;
+    outline-offset: 1px;
+}
+
+/* Shown as real text so an admin can see exactly what gets stored, rather than
+   trusting that something is prepended out of sight. */
+.modPrefix {
+    color: #47bbe9;
+    font-size: 12px;
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+.modConsequence {
+    background: #643c1733;
+    border: 1px solid #6a4a1a;
+    border-radius: 6px;
+    padding: 11px 13px;
+    margin: 14px 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: #aaa;
+}
+.modConsequence .h {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #ffa34e;
+    margin-bottom: 6px;
+}
+.modConsequence b { color: #fff; }
+
+.modConfirm {
+    display: block;
+    width: 100%;
+    background: #f04444;
+    color: #180505;
+    border: 0;
+    border-radius: 5px;
+    padding: 11px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+}
+.modConfirm:disabled { background: #444; color: #888; cursor: not-allowed; }
+
+/* Ban state on a player row. Nothing is drawn for a clean player: twenty players a
+   card is a lot of surface to spend on a state almost nobody is in. */
+.banChip {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex: none;
+}
+.banChip.active { background: #4411117f; color: #f04444; }
+.banChip.prior { background: #643c177f; color: #ffa34e; }
+
+.modOpen {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    border: 1px solid #333;
+    background: transparent;
+    color: #8885;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    visibility: hidden;
+}
+.adminPlayer:hover .modOpen,
+.modOpen.always { visibility: visible; }
+.modOpen.always { border-color: #6a2b2b; color: #f04444; }
+.modOpen:hover { color: #fff; border-color: #666; }
+
+.adminSearch {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: #fff;
+    font-family: inherit;
+    width: 260px;
+}

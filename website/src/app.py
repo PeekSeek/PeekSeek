@@ -52,14 +52,13 @@ def login_redirect(request: Request, exc: LoginRedirect):
 
 @app.exception_handler(ActiveBan)
 def banned_page(request: Request, exc: ActiveBan):
+    """The ban page. 403 rather than 200: this is a refusal, and a crawler or a script
+    reading the status code should see one."""
     return templates.TemplateResponse(
         request=request,
-        name="pages/error.html",
-        context={
-            "error": "Cooldown",
-            "message": f'"{exc.ban.reason}"',
-            "noHomeButton": True,
-        },
+        name="pages/banned.html",
+        context={"ban": exc.ban},
+        status_code=403,
     )
 
 

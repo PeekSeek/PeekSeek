@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+
+{% block title %}Banned{% endblock %}
+
+{% block titleEmbed %}Banned from PeekSeek{% endblock %}
+
+{% block description %}This account cannot play on PeekSeek.{% endblock %}
+
+{% block content %}
+
+{# Its own page rather than the generic error template. A ban is not an error: the
+   site worked exactly as intended, and the reader needs three specific things the
+   error page has nowhere to put — what they are banned for, when it ends, and how
+   to argue with it. #}
+<div class="mainElement spaced banned">
+  <h1>You are banned</h1>
+
+  <div class="bannedFacts">
+    <div>
+      <span class="bannedLabel">Reason</span>
+      <b>{{ ban.reason }}</b>
+    </div>
+    <div>
+      <span class="bannedLabel">Expires</span>
+      <b>{{ ban.expiryLabel }}</b>
+    </div>
+  </div>
+
+  {% if ban.permanent %}
+    <span>This one does not expire.</span>
+  {% else %}
+    {# The exact timestamp above is UTC, which nobody reads in their own head. #}
+    <span>Your account works again from that time.</span>
+  {% endif %}
+</div>
+
+<div class="mainElement spaced">
+  <span>
+    If you think this is wrong, appeal in Discord. Bring the match id or a clip if you
+    have one — an appeal with something to check gets answered faster than one without.
+  </span>
+  <a href="{{ config.discord_invite_url }}">
+    <button type="button" class="settingsButton">
+      <img src="/static/img/discord.png" alt="" height="20">Appeal in Discord
+    </button>
+  </a>
+</div>
+
+{% endblock %}

@@ -26,6 +26,11 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// the message content rather than the embed, because a mention inside an embed
     /// renders as one but never notifies anybody.
     public string szStaffRole;
+
+    /// Whether /report accepts you reporting yourself. Off by default because a
+    /// self-report is noise in the staff channel, on where somebody is testing the
+    /// pipeline end to end without needing a second account.
+    public bool AllowSelfReport;
     public ushort GamemodeBitmask;
     public float HeartbeatIntervalSeconds;
     public float SpawnProtectionSeconds;
@@ -164,6 +169,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         szServerCode = "";
         szReportChannel = "";
         szStaffRole = "";
+        AllowSelfReport = false;
         GamemodeBitmask = 1;
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;

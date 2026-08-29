@@ -10,9 +10,15 @@ from sqlalchemy import desc, or_
 from src.core.settings import settings
 from src.core.db import open as opendb
 from src.core import models as data
-from src.core import steam
+from src.core import moderation, steam
 from src.core.webhook import Webhook
-from src.dependencies import ApiSteam64, LoggedInSteam64, RequestValues, templates
+from src.dependencies import (
+    ApiSteam64,
+    JsonBody,
+    LoggedInSteam64,
+    RequestValues,
+    templates,
+)
 
 router = APIRouter(prefix="/admin")
 
@@ -42,7 +48,12 @@ def admin(request: Request, steam64: LoggedInSteam64):
             return RedirectResponse("/", status_code=302)
 
     return templates.TemplateResponse(
-        request=request, name="app/admin.html", context={}
+        request=request,
+        name="app/admin.html",
+        context={
+            "adminSteam64": str(steam64),
+            "adminName": data.User.getSteamData(steam64).name,
+        },
     )
 
 
@@ -274,3 +285,141 @@ def force_stop(steam64: ApiSteam64, values: RequestValues):
         description=f"By [({name})]({settings.profile_url(steam64)}) `{steam64}`.",
     )
     return PlainTextResponse("success")
+
+
+def _banSummary(ban) -> dict:
+    return {
+        "id": ban.id,
+        "reason": ban.reason,
+        "note": ban.moderatorNote,
+        "expires": ban.endTime,
+        "expiryLabel": ban.expiryLabel,
+        "permanent": ban.permanent,
+        "issued": ban.created_at.isoformat() if ban.created_at else None,
+    }
+
+
+@router.get("/player/{target}")
+def player(steam64: LoggedInSteam64, target: int):
+    """Everything the moderation drawer shows about one player.
+
+    Answers in one call, including the dry run, because the drawer needs all of it the
+    moment it opens: the blast radius has to be on screen before an admin can decide,
+    not fetched after they pick a preset.
+    """
+    _requireAdmin(steam64)
+
+    with opendb() as db:
+        record = db.query(data.Stat).where(data.Stat.steam64 == target).first()
+        user = db.query(data.User).where(data.User.steam64 == target).first()
+
+    active = data.UserBan.activeFor(target)
+    profile = (user.steam_data or {}) if user else {}
+
+    return {
+        "steam64": str(target),
+        "known": user is not None,
+        "name": profile.get("name") or "Nameless",
+        "avatar": profile.get("avatar") or steam.DEFAULT_AVATAR,
+        "stats": {
+            "elo": record.elo,
+            "kills": record.kills,
+            "deaths": record.deaths,
+            "wins": record.wins,
+            "losses": record.losses,
+            "headshotPercent": record.headshotPercent,
+        }
+        if record
+        else None,
+        "ban": _banSummary(active) if active else None,
+        "history": [_banSummary(b) for b in data.UserBan.historyFor(target)],
+        # What a cheating ban would cost everyone else. Computed for every player the
+        # drawer opens on, so the numbers are already there when the preset is picked.
+        "preview": moderation.previewBan(target),
+        "presets": {
+            key: {"label": p["label"], "summary": p["summary"], "voids": p["voidsHistory"]}
+            for key, p in moderation.PRESETS.items()
+        },
+    }
+
+
+@router.post("/ban")
+def ban(steam64: ApiSteam64, values: JsonBody):
+    """Issue a ban from the dashboard.
+
+    Runs the same `moderation.issueBan` the Discord bot does, so a ban means one thing
+    whichever of the two it came from.
+    """
+    _requireAdmin(steam64)
+
+    target = values.get("steam64")
+    if not target:
+        raise HTTPException(status_code=400, detail="No player given.")
+
+    preset = values.get("preset") or None
+    days = values.get("days")
+    try:
+        summary = moderation.issueBan(
+            int(target),
+            preset=None if preset == "custom" else preset,
+            days=int(days) if days else None,
+            reason=values.get("reason"),
+            note=values.get("note"),
+            byName=data.User.getSteamData(steam64).name,
+            bySteam64=steam64,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return {"status": "ok", "summary": summary}
+
+
+@router.get("/bans")
+def bans(steam64: LoggedInSteam64, steam64s: str = ""):
+    """Ban state for a list of players, for the chips on the match cards.
+
+    One call for everyone on screen rather than one per player: a dozen cards of four
+    would be fifty requests per poll, for a chip that almost nobody has.
+    """
+    _requireAdmin(steam64)
+
+    ids = [int(s) for s in steam64s.split(",") if s.strip().isdigit()]
+    if not ids:
+        return {}
+
+    active = data.UserBan.activeAmong(ids)
+    with opendb() as db:
+        counts = {}
+        for row in db.query(data.UserBan).where(data.UserBan.steam64.in_(ids)).all():
+            counts[row.steam64] = counts.get(row.steam64, 0) + 1
+
+    return {
+        str(i): {
+            "banned": i in active,
+            # Prior bans only, so a currently banned player is not also labelled with
+            # a count that includes the ban already being shown.
+            "prior": max(counts.get(i, 0) - (1 if i in active else 0), 0),
+        }
+        for i in ids
+        if i in active or counts.get(i)
+    }
+
+
+@router.post("/unban")
+def unban(steam64: ApiSteam64, values: JsonBody):
+    """Overturn one ban. The row is kept and marked, never deleted."""
+    _requireAdmin(steam64)
+
+    banId = values.get("id")
+    if not banId:
+        raise HTTPException(status_code=400, detail="No ban given.")
+
+    lifted = moderation.overturnBan(
+        int(banId),
+        byName=data.User.getSteamData(steam64).name,
+        bySteam64=steam64,
+    )
+    if lifted is None:
+        raise HTTPException(status_code=404, detail="No such ban.")
+
+    return {"status": "ok", "ban": lifted}

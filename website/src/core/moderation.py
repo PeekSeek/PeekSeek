@@ -283,3 +283,41 @@ def _logRefunds(steam64, reason: str, byName: str, summary: dict) -> None:
 
     if not send_discord_channel(settings.report_channel, embed=embed):
         logging.warning("Refund list for %s was not posted to Discord", steam64)
+
+
+def overturnBan(banId: int, byName: str, bySteam64) -> dict | None:
+    """Lift one ban, and record in its own note that it was lifted and by whom.
+
+    The row is kept with `endTime` set to 0 rather than deleted. A ban that was wrong is
+    part of a player's history in exactly the way a ban that stood is: deleting it would
+    make an admin looking at a repeat offender see a clean record, and would quietly
+    erase the fact that somebody overturned it.
+
+    Zero rather than "now" because `activeFor` compares against the current time, and a
+    value in the past is unambiguous however clocks drift. Returns None when there is no
+    such ban.
+    """
+    from datetime import datetime, timezone
+
+    stamp = datetime.now(timezone.utc).strftime("%d %b %Y")
+
+    with opendb() as db:
+        ban = db.query(data.UserBan).where(data.UserBan.id == banId).first()
+        if ban is None:
+            return None
+
+        note = (ban.moderatorNote or "").strip()
+        overturn = f"[overturned by {byName}/{bySteam64} on {stamp}]"
+        db.query(data.UserBan).where(data.UserBan.id == banId).update(
+            {
+                "endTime": 0,
+                "moderatorNote": f"{note} {overturn}".strip(),
+            }
+        )
+
+        return {
+            "id": ban.id,
+            "steam64": str(ban.steam64),
+            "reason": ban.reason,
+            "wasPermanent": ban.permanent,
+        }
