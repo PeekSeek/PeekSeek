@@ -315,9 +315,46 @@ def overturnBan(banId: int, byName: str, bySteam64) -> dict | None:
             }
         )
 
-        return {
+        lifted = {
             "id": ban.id,
             "steam64": str(ban.steam64),
             "reason": ban.reason,
             "wasPermanent": ban.permanent,
         }
+
+    _logOverturn(lifted, byName, bySteam64, note)
+    return lifted
+
+
+def _logOverturn(lifted: dict, byName: str, bySteam64, previousNote: str) -> None:
+    """Announce a lifted ban to staff, pinging the role.
+
+    Louder than issuing one on purpose. A ban is one person's call and stands until
+    somebody argues with it; undoing one reverses a colleague's decision, and the rest
+    of staff finding out by accident is how the same player gets banned again next week.
+
+    The ping goes in the content, never the embed: a mention inside an embed renders
+    as a mention and notifies nobody.
+    """
+    from src.core.notify import send_discord_channel
+
+    role = settings.staff_role
+    embed = {
+        "title": f"Ban lifted: {lifted['reason']}",
+        "url": f"{settings.base_url}/u/{lifted['steam64']}",
+        "color": 0x6CC66C,
+        "description": (
+            f"**{lifted['steam64']}** is no longer banned.\n"
+            f"Lifted by **{byName}** (`{bySteam64}`).\n\n"
+            f"The ban was {'permanent' if lifted['wasPermanent'] else 'temporary'}."
+        ),
+        "fields": [{"name": "Original note", "value": (previousNote or "none")[:1000]}],
+    }
+
+    if not send_discord_channel(
+        settings.overturn_channel,
+        content=f"<@&{role}>" if role else None,
+        embed=embed,
+        allowed_mentions={"roles": [role] if role else []},
+    ):
+        logging.warning("Overturn of ban %s was not posted to Discord", lifted["id"])

@@ -41,6 +41,7 @@ class Settings:
         self.counter_channel: str = toml["discord"]["counter_channel"]
         self.report_channel: str = toml["discord"]["report_channel"]
         self.staff_role: str = toml["discord"]["staff_role"]
+        self.overturn_channel: str = toml["discord"]["overturn_channel"]
         self.counter_interval: int = toml["discord"]["counter_interval"]
         self.wake_ping_after: int = toml["discord"]["wake_ping_after"]
 

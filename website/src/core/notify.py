@@ -24,8 +24,15 @@ def _headers() -> dict | None:
     }
 
 
-def send_discord_channel(channel_id, content: str = None, embed: dict = None) -> bool:
-    """Post into a channel as the bot. Returns whether it went."""
+def send_discord_channel(
+    channel_id, content: str = None, embed: dict = None, allowed_mentions: dict = None
+) -> bool:
+    """Post into a channel as the bot. Returns whether it went.
+
+    `allowed_mentions` matters whenever `content` names a role: a mention inside an
+    embed renders as one but notifies nobody, and one in content is only delivered
+    if it is allowed. Passing it explicitly beats relying on Discord's default.
+    """
     headers = _headers()
     if not channel_id or not headers:
         return False
@@ -35,6 +42,8 @@ def send_discord_channel(channel_id, content: str = None, embed: dict = None) ->
         body["content"] = content
     if embed:
         body["embeds"] = [embed]
+    if allowed_mentions is not None:
+        body["allowed_mentions"] = allowed_mentions
 
     try:
         response = requests.post(

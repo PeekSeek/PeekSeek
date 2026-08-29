@@ -64,6 +64,11 @@ wake_ping_after = 1800
 report_channel = "1543350716683395199"
 staff_role = "1309223753129005117"
 
+# Lifting a ban is logged apart from where reports land, because it is a different
+# audience: a report is work waiting to be picked up, an overturn is a decision that
+# has already been made and that the rest of staff should see.
+overturn_channel = "1392874678577533039"
+
 [regions.names]
 # Region id -> display name used in Discord queue pings.
 paris = "EU-West"

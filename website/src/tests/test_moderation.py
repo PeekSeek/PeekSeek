@@ -13,6 +13,7 @@ from sqlmodel import Session
 
 from src.core import moderation
 from src.core import models as data
+from src.core.settings import settings
 from src.core.db import engine, open as opendb
 
 
@@ -230,3 +231,35 @@ def test_an_unknown_preset_is_refused(user_factory):
 
     with pytest.raises(ValueError):
         moderation.issueBan(player.steam64, preset="vibes")
+
+
+def test_an_overturn_is_announced_to_staff(user_factory, monkeypatch):
+    """Louder than issuing a ban on purpose: undoing one reverses a colleague's call,
+    and staff finding out by accident is how the same player gets banned again."""
+    posted = {}
+
+    def capture(channel, content=None, embed=None, allowed_mentions=None):
+        posted.update(
+            channel=channel, content=content, embed=embed, mentions=allowed_mentions
+        )
+        return True
+
+    monkeypatch.setattr("src.core.notify.send_discord_channel", capture)
+
+    player = user_factory()
+    moderation.issueBan(player.steam64, preset="toxicity", note="said a thing")
+    banId = data.UserBan.activeFor(player.steam64).id
+
+    moderation.overturnBan(banId, byName="Homeless", bySteam64=1)
+
+    assert posted["channel"] == settings.overturn_channel
+    # The ping has to be in content: a mention inside an embed notifies nobody.
+    assert posted["content"] == f"<@&{settings.staff_role}>"
+    assert posted["mentions"] == {"roles": [settings.staff_role]}
+    assert "Homeless" in posted["embed"]["description"]
+    # The note as it read before the overturn marker was appended.
+    assert "said a thing" in posted["embed"]["fields"][0]["value"]
+
+
+def test_the_overturn_log_is_not_the_report_channel(user_factory):
+    assert settings.overturn_channel != settings.report_channel
