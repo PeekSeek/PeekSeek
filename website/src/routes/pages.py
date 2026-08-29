@@ -2,7 +2,7 @@
 
 import json
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from src.core.settings import settings
@@ -32,15 +32,59 @@ def lobby(request: Request):
     else. The page fires the launch itself and keeps a button and the bare code for
     when that is refused, or for someone who would rather type it into Connect Directly.
     """
+    return _joinPage(
+        request,
+        settings.lobby_connect_code,
+        heading="Opening the lobby",
+        embedTitle="Join the PeekSeek lobby",
+        embedDescription=(
+            "One click into the DeathMatch arena. Queue for a ranked match from inside it."
+        ),
+    )
+
+
+def _joinPage(
+    request: Request,
+    serverCode: str,
+    heading: str,
+    embedTitle: str,
+    embedDescription: str,
+):
     return templates.TemplateResponse(
         request=request,
         name="pages/lobby.html",
         context={
-            "connectCode": settings.lobby_connect_code,
-            "connectUrl": (
-                f"steam://run/{UNTURNED_APP_ID}//+connect {settings.lobby_connect_code}"
-            ),
+            "connectCode": serverCode,
+            "connectUrl": f"steam://run/{UNTURNED_APP_ID}//+connect {serverCode}",
+            "heading": heading,
+            "embedTitle": embedTitle,
+            "embedDescription": embedDescription,
         },
+    )
+
+
+@router.get("/join/{serverCode}")
+def join(request: Request, serverCode: str):
+    """Open any server by its code — what an in-game report links staff to.
+
+    Shares the lobby's page rather than redirecting straight to `steam://`, for the
+    same reason: this link is made to be clicked out of Discord, and a browser that
+    refuses a protocol handler a navigation the visitor did not start would leave
+    them looking at nothing.
+
+    The code is checked against the same shape Unturned accepts before it reaches the
+    page. Unlike the lobby's, this one arrives in the URL, so an unfiltered value would
+    be reflected into an inline script and an onclick attribute.
+    """
+    if not serverCode.isalnum() or len(serverCode) > 32:
+        raise HTTPException(status_code=404, detail="Not a server code.")
+
+    return _joinPage(
+        request,
+        serverCode,
+        heading="Opening the server",
+        embedTitle=f"Join PeekSeek server {serverCode}",
+        embedDescription="One click into the match.",
     )
 
 
