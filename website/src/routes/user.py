@@ -11,7 +11,13 @@ from src.core.settings import settings
 from src.core.db import open as opendb
 from src.core import models as data
 from src.core import steam
-from src.dependencies import ApiSteam64, JsonBody, LoggedInSteam64, templates
+from src.dependencies import (
+    ApiSteam64,
+    CurrentUser,
+    JsonBody,
+    LoggedInSteam64,
+    templates,
+)
 
 router = APIRouter()
 
@@ -221,7 +227,7 @@ def public_reputation(steam64: int):
 
 @router.get("/user/{steam64}")
 @router.get("/u/{steam64}")
-def profile(request: Request, steam64: int):
+def profile(request: Request, steam64: int, viewer: CurrentUser = None):
     with opendb() as db:
         matches = data.MatchResult.latestFor(steam64)
         return templates.TemplateResponse(
@@ -239,6 +245,15 @@ def profile(request: Request, steam64: int):
                 "eloHistory": _eloHistory(matches, str(steam64)),
                 "steam64Str": str(steam64),
                 "steamData": data.User.getSteamData(steam64),
+                # Moderation lives on the profile because this is the page somebody is
+                # already on when they decide a player needs dealing with. Everything
+                # below is drawn only for an admin; for everyone else the profile is
+                # exactly what it was.
+                "viewerIsAdmin": viewer is not None and viewer.getPermission("admin"),
+                "viewerSteam64": str(viewer.steam64) if viewer else "",
+                "viewerName": data.User.getSteamData(viewer.steam64).name if viewer else "",
+                "ban": data.UserBan.activeFor(steam64),
+                "banHistory": data.UserBan.historyFor(steam64),
                 "max": max,
                 "round": round,
             },

@@ -31,6 +31,29 @@
       {% endif %} - <button type="button" class="inlineButton" onclick="navigator.clipboard.writeText('{{steamData.steam64}}');alert('Copied!')">Copy Steam64</button>
     </span>
 
+
+    {% if ban %}
+      <div class="profileBan">
+        <b>{{ "Permanently banned" if ban.permanent else "Banned" }}</b>
+        <span>{{ ban.reason }} &middot; {{ ban.expiryLabel }}</span>
+      </div>
+    {% endif %}
+
+    {% if viewerIsAdmin %}
+      <div class="profileMod">
+        <button type="button" class="settingsButton" onclick="openDrawer('{{ steam64Str }}')">
+          <img src="/static/img/admin.png" alt="" height="18">Moderate
+        </button>
+        {% if banHistory %}
+          <span class="profileModNote">
+            {{ banHistory|length }} ban{{ "" if banHistory|length == 1 else "s" }} on record
+          </span>
+        {% else %}
+          <span class="profileModNote">Never banned</span>
+        {% endif %}
+      </div>
+    {% endif %}
+
     <br>
 
     {% if not statsData %}
@@ -143,8 +166,26 @@
 </script>
 {% endif %}
 
+{% if viewerIsAdmin %}
+<div class="modOverlay" id="modOverlay"></div>
+<aside class="modDrawer" id="modDrawer" aria-label="Player moderation"></aside>
+{% endif %}
+
 {% endblock %}
 
 {% block addheader %}
 <link rel="stylesheet" href="/static/assets/css/profile.css" />
+{% if viewerIsAdmin %}<link rel="stylesheet" href="/static/assets/css/moderation.css" />{% endif %}
+{% endblock %}
+
+{% block script %}
+{% if viewerIsAdmin %}
+{# tojson for the steam64 in particular: it is past Number.MAX_SAFE_INTEGER and would
+   lose its bottom digits if it reached the page as a bare number literal. #}
+<script>
+  const adminSteam64 = {{ viewerSteam64 | tojson }};
+  const adminName = {{ viewerName | tojson }};
+</script>
+<script src="/static/assets/js/moderation.js" defer></script>
+{% endif %}
 {% endblock %}

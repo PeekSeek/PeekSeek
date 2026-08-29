@@ -174,3 +174,43 @@ def test_the_ban_is_checked_on_every_request(client, login, user_factory):
     ban(player.steam64)
 
     assert client.get("/fairplay").status_code == 403
+
+
+def test_the_profile_shows_a_ban_to_everyone(client, login, user_factory):
+    """A ban is part of the record. Hiding it makes the page lie about why their Elo
+    stopped moving."""
+    target = user_factory()
+    ban(target.steam64, reason="Cheating")
+    login(client, user_factory())
+
+    body = client.get(f"/u/{target.steam64}").text
+
+    assert "Permanently banned" in body
+    assert "Cheating" in body
+
+
+def test_only_an_admin_gets_the_moderate_button(client, login, admin, user_factory):
+    target = user_factory()
+
+    login(client, user_factory())
+    assert "Moderate" not in client.get(f"/u/{target.steam64}").text
+
+    login(client, admin)
+    assert "Moderate" in client.get(f"/u/{target.steam64}").text
+
+
+def test_a_logged_out_visitor_gets_no_moderation(client, user_factory):
+    target = user_factory()
+
+    body = client.get(f"/u/{target.steam64}").text
+
+    assert "Moderate" not in body
+    assert "moderation.js" not in body
+
+
+def test_the_profile_says_how_many_bans_are_on_record(client, login, admin, user_factory):
+    target = user_factory()
+    ban(target.steam64, endTime=int(time()) - 60, reason="Toxicity")
+    login(client, admin)
+
+    assert "1 ban on record" in client.get(f"/u/{target.steam64}").text

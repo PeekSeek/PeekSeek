@@ -62,7 +62,7 @@ wake_ping_after = 1800
 # embed renders as a mention but notifies nobody, so a report that pinged no one
 # would look identical to one that worked.
 report_channel = "1543350716683395199"
-staff_role = "1543350716683395199"
+staff_role = "1309223753129005117"
 
 [regions.names]
 # Region id -> display name used in Discord queue pings.

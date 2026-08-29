@@ -121,3 +121,27 @@
 h2 {
   margin-top: 20px;
 }
+
+/* A ban is shown to everyone who opens the profile, not just staff. It is part of
+   what this player's record is, and hiding it makes the page lie about why their Elo
+   stopped moving. Only the controls for acting on it are admin-only. */
+.profileBan {
+    background: #4411117f;
+    border-left: 3px solid #f04444;
+    border-radius: 0 5px 5px 0;
+    padding: 10px 14px;
+    margin: 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.profileBan b { color: #f04444; }
+.profileBan span { color: #aaa; font-size: 13px; }
+
+.profileMod {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0;
+}
+.profileModNote { color: #8885; font-size: 13px; }
