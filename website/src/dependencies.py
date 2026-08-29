@@ -161,6 +161,11 @@ def page_context(request: Request) -> dict:
         "user": data.User.getSteamData(user) if user else None,
         "match": user.getCurrentMatchId() if user else None,
         "discord": user.discord if user else None,
+        # Six accounts in seven have no Discord linked, so six players in seven cannot
+        # be told their match is ready. That is the single thing capping every
+        # notification the site sends, which is why it gets a banner rather than a
+        # line in settings nobody opens.
+        "needsDiscordLink": bool(user and not user.discord),
         "getPermission": user.getPermission if user else (lambda permission: False),
         # Raised as a banner rather than a wall. A ban stops somebody playing, not
         # reading: they still need their profile, the rules and the appeal link, and

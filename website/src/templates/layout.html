@@ -69,7 +69,6 @@
           <div class="infoli">
             <a href="/"> <img src="/static/img/play.png" alt="">Play</a>
             <a href="/discord/" target="_blank"> <img src="/static/img/discord.png" alt="">Discord</a>
-            <a href="https://patreon.com/PeekSeek" target="_blank"> <img src="/static/img/heart.png" alt="">Support us</a>
             <a href="/esports/" id="esports"> <img src="/static/img/esports.png" alt="">Esports</a>
           </div>
 
@@ -100,6 +99,17 @@
             <div class="mainElement error{% if lastError == None %} hidden{% endif %}" id="lastError">
               Error: {{lastError}}
             </div>
+
+            {% if needsDiscordLink %}
+            {# Says what they get, not what we want. "Link your Discord" is a chore;
+               being told your match is ready is a reason. #}
+            <a class="mainElement warning clickable" href="/auth/discord">
+              <span>
+                <b>Link your Discord</b> and we will tell you the moment your match is
+                ready, so you never miss one.
+              </span>
+            </a>
+            {% endif %}
 
             {% if ownBan %}
             <div class="mainElement warning">

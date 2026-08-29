@@ -984,12 +984,138 @@ async def keepPresenceCurrent() -> None:
         await asyncio.sleep(PRESENCE_INTERVAL)
 
 
+# ---------------------------------------------------------------------------
+# The weekly post.
+
+# Monday, in the hour the numbers say people are actually around. A leaderboard nobody
+# is there to read is a leaderboard nobody reads.
+WEEKLY_DAY = 0
+WEEKLY_HOUR = 15
+
+
+def weekOf(steam64) -> dict:
+    """One player's last seven days, from their own match records.
+
+    Read from MatchResults rather than Stats, because Stats is a running total and
+    cannot say what happened this week. Voided matches are skipped by construction: the
+    refund moves their results out of the key this reads.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    since = datetime.now(timezone.utc) - timedelta(days=7)
+    key = str(steam64)
+    week = {"played": 0, "elo": 0, "kills": 0, "deaths": 0, "wins": 0}
+
+    for row in data.MatchResult.latestFor(steam64, limit=100):
+        ended = row.endTime
+        if ended.tzinfo is None:
+            ended = ended.replace(tzinfo=timezone.utc)
+        if ended < since:
+            continue
+
+        line = (row.data.get("results") or {}).get(key) or {}
+        week["played"] += 1
+        week["elo"] += line.get("Elo Change", 0)
+        week["kills"] += line.get("Kills", 0)
+        week["deaths"] += line.get("Deaths", 0)
+        week["wins"] += 1 if line.get("Won") else 0
+
+    return week
+
+
+def leaderboardEmbed() -> discord.Embed:
+    lines = []
+    for place, row in enumerate(data.Stat.getTop10(), start=1):
+        name = getattr(row.u, "name", None) or "Nameless"
+        lines.append("`" + str(place).rjust(2) + ".` **" + name + "** " + str(row.elo) + " Elo")
+
+    return discord.Embed(
+        title="Top 10 this week",
+        url=settings.base_url,
+        colour=0xF04444,
+        description="\n".join(lines) or "Nobody has played a ranked match yet.",
+    )
+
+
+async def postWeekly() -> None:
+    """The leaderboard to the channel, then everyone's own week to them.
+
+    The recap goes only to people who played. A DM telling somebody they played nothing
+    is not a recap, it is a reminder that they stopped, and it reads as nagging from
+    something they never asked to hear from.
+    """
+    from src.core.notify import send_discord_dm
+
+    if settings.sticky_channel:
+        channel = bot.get_channel(int(settings.sticky_channel))
+        if channel is not None:
+            await channel.send(embed=leaderboardEmbed())
+
+    with opendb() as db:
+        linked = [
+            (u.steam64, u.discord)
+            for u in db.query(data.User).where(data.User.discord.isnot(None)).all()
+        ]
+
+    sent = 0
+    for steam64, discordId in linked:
+        week = await asyncio.to_thread(weekOf, steam64)
+        if not week["played"]:
+            continue
+
+        message = (
+            "**" + str(week["played"]) + " matches**, " + str(week["wins"]) + " won.\n"
+            "**" + format(week["elo"], "+d") + " Elo** this week.\n"
+            + str(week["kills"]) + " kills, " + str(week["deaths"]) + " deaths."
+        )
+        await asyncio.to_thread(
+            send_discord_dm,
+            discordId,
+            "Your week on PeekSeek",
+            message,
+            url=settings.base_url + "/u/" + str(steam64),
+        )
+        sent += 1
+        # Opening a DM channel is a request of its own, so this is paced rather than
+        # fired at everyone at once.
+        await asyncio.sleep(1)
+
+    logging.info("Weekly: leaderboard posted, %s recaps sent", sent)
+
+
+async def keepWeeklyPost() -> None:
+    """Wait for Monday, post, then wait for the next one.
+
+    Checks the clock rather than sleeping a week, so a restart on Sunday does not push
+    the post to the following Monday. The marker is the ISO week, so a redeploy in the
+    same hour cannot post it twice.
+    """
+    from datetime import datetime, timezone
+
+    await bot.wait_until_ready()
+    posted = None
+
+    while not bot.is_closed():
+        now = datetime.now(timezone.utc)
+        week = (now.isocalendar().year, now.isocalendar().week)
+
+        if now.weekday() == WEEKLY_DAY and now.hour == WEEKLY_HOUR and posted != week:
+            try:
+                await postWeekly()
+                posted = week
+            except Exception as error:
+                logging.warning("Weekly post failed: %s", error)
+
+        await asyncio.sleep(300)
+
+
 presenceTask: asyncio.Task | None = None
+weeklyTask: asyncio.Task | None = None
 
 
 @bot.event
 async def on_ready():
-    global presenceTask
+    global presenceTask, weeklyTask
 
     logging.info("Logged in as %s", bot.user)
 
@@ -997,6 +1123,8 @@ async def on_ready():
     # fight the first over what the status says.
     if presenceTask is None or presenceTask.done():
         presenceTask = asyncio.create_task(keepPresenceCurrent())
+    if weeklyTask is None or weeklyTask.done():
+        weeklyTask = asyncio.create_task(keepWeeklyPost())
 
     if not settings.sticky_channel:
         return

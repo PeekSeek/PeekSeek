@@ -65,7 +65,14 @@ def send_discord_dm(
     url: str | None = None,
     thumbnail: str | None = None,
     timestamp: datetime | None = None,
+    components: list | None = None,
 ) -> None:
+    """`components` is raw Discord component JSON, for link buttons.
+
+    A link button is a URL and needs nothing running to handle it, which is the point:
+    the one moment this matters is a player being told their match is ready, and a
+    button they press beats a line of text they have to read and act on.
+    """
     if not discord_id:
         return
 
@@ -90,22 +97,26 @@ def send_discord_dm(
 
         channel_id = dm.json()["id"]
 
+        body = {
+            "embeds": [
+                {
+                    "title": title,
+                    "url": url,
+                    "description": message,
+                    "color": color,
+                    "thumbnail": {"url": thumbnail},
+                    "footer": {"text": footer},
+                    "timestamp": timestamp.isoformat(),
+                }
+            ]
+        }
+        if components:
+            body["components"] = components
+
         requests.post(
             f"{DISCORD_API}/channels/{channel_id}/messages",
             headers=headers,
-            json={
-                "embeds": [
-                    {
-                        "title": title,
-                        "url": url,
-                        "description": message,
-                        "color": color,
-                        "thumbnail": {"url": thumbnail},
-                        "footer": {"text": footer},
-                        "timestamp": timestamp.isoformat(),
-                    }
-                ]
-            },
+            json=body,
         )
     except Exception as e:
         logging.error("Error sending discord notification: %s", e)

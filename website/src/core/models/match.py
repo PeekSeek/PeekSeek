@@ -265,6 +265,61 @@ class Match(SQLModel, table=True):
         with open() as db:
             db.query(Match).where(Match.id == self.id).update({"meta": self.meta})
 
+        self._tellPlayersToJoin()
+
+    def _tellPlayersToJoin(self) -> None:
+        """DM everyone on the match a button that launches the game.
+
+        More than a quarter of all matches ever made were never played: matchmaking
+        worked, a server was assigned, and nobody turned up. The existing DM goes out
+        when the match is *created*, which is minutes earlier and before there is
+        anywhere to go, so by the time there is, the only thing that told them has
+        scrolled away.
+
+        This one fires at the moment there is something to join and carries the button
+        that joins it, so the whole path from "your match is ready" to being in the
+        server is one press.
+
+        Failures are swallowed on purpose. This runs inside the session poll that hands
+        a server its match, and a Discord outage must not stop a match being played.
+        """
+        import logging
+
+        from src.core.db import open
+        from src.core.settings import settings
+        from .user import User
+
+        code = self.connectCode()
+        if not code:
+            return
+
+        joinButton = [
+            {
+                "type": 1,
+                "components": [
+                    {
+                        "type": 2,
+                        "style": 5,
+                        "label": "Join the match",
+                        "url": f"{settings.base_url}/join/{code}",
+                    }
+                ],
+            }
+        ]
+
+        try:
+            with open() as db:
+                players = [int(u) for team in self.teams for u in team["users"]]
+                for user in db.query(User).where(User.steam64.in_(players)).all():
+                    user.notify(
+                        "Your match is ready",
+                        "Press the button to join. It opens Unturned for you.",
+                        url=f"{settings.base_url}/match",
+                        components=joinButton,
+                    )
+        except Exception as error:
+            logging.warning("Could not send match-ready DMs for %s: %s", self.id, error)
+
     @staticmethod
     def pendingFor(region: str) -> "Match | None":
         """The oldest match in this region that nobody is hosting yet.
