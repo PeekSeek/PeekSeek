@@ -34,10 +34,22 @@ internal static class RemoteAPI {
         Client = null;
     }
 
+    /// Why a player may not play, as the site reports it.
+    internal class BanInfo {
+        internal string Reason;
+        internal bool Permanent;
+    }
+
     /// Everything the lobby acts on for one player, as the site sees them.
     internal class PlayerState {
         internal int Elo;
         internal int MatchId;
+
+        /// The ban keeping this player out, or null when they may play. Carried on
+        /// every player read rather than only on the queue call, so a ban that lands
+        /// while somebody is already stood in the arena reaches the lobby on their
+        /// next refresh instead of waiting for them to try to queue.
+        internal BanInfo Ban;
 
         /// The server code to hand this player over to, or null while there is nowhere
         /// to send them yet. Non-null is the site's promise that the match is being
@@ -96,7 +108,8 @@ internal static class RemoteAPI {
                     Elo = Number(body["elo"]) ?? 0,
                     MatchId = Number(body["matchId"]) ?? 0,
                     RelayTo = Text(body["relayTo"]),
-                    Choose = Choices(body["choose"])
+                    Choose = Choices(body["choose"]),
+                    Ban = ParseBan(body["ban"])
                 };
                 bool eloKnown = body["elo"] != null && body["elo"].Type != JTokenType.Null;
 
@@ -111,14 +124,83 @@ internal static class RemoteAPI {
         });
     }
 
-    /// Null unless the response really is JSON. The site answers with an HTML error page
-    /// when it is down or behind a proxy that is, and every player is refreshed every
-    /// few seconds — parsing that would bury the console in identical parse errors.
     /// The site's `choose` block, or null when there is nothing to choose.
     ///
     /// Internal rather than private so the shape the site actually sends can be pinned
     /// by a test: this is the seam where a renamed field stops the loadout prompt
     /// appearing at all, and it fails silently everywhere else.
+    /// The site's `ban` block, or null when this player may play.
+    ///
+    /// Internal rather than private for the same reason as Choices: this is the seam
+    /// where a renamed field would silently stop a banned player being removed, and
+    /// nothing else in the lobby would look wrong.
+    internal static BanInfo ParseBan(JToken token) {
+        if (token == null || token.Type != JTokenType.Object) return null;
+
+        return new BanInfo {
+            Reason = Text(token["reason"]),
+            Permanent = token["permanent"] != null && token["permanent"].Type == JTokenType.Boolean
+                && token["permanent"].Value<bool>()
+        };
+    }
+
+    /// Everything one /report carries, gathered on the game thread before the upload
+    /// leaves it. Every field here reads live game state that is not safe to touch
+    /// from the background task that does the sending.
+    internal class Report {
+        internal ulong Reported;
+        internal ulong Reporter;
+        internal string Reason;
+        internal string Where;
+        internal int DamageDealt;
+        internal int ShotsFired;
+        internal int ShotsHit;
+        internal int HeadshotHits;
+        internal byte[] Screenshot;
+    }
+
+    /// Send one report, with the reported player's spy screenshot attached.
+    ///
+    /// Multipart because the screenshot is the point of it: whatever it is evidence of
+    /// is usually over by the time anyone reads the report, so it has to arrive with
+    /// the report rather than as a second call that can fail on its own.
+    ///
+    /// Deliberately outside the InFlight deduplication the player refreshes use. That
+    /// exists to stop a slow site piling up identical polls; a report is not a poll,
+    /// there is only ever one per command, and dropping it because a refresh happened
+    /// to be out would silently lose the evidence.
+    internal static void SendReport(Report report) {
+        Task.Run(async () => {
+            try {
+                MultipartFormDataContent form = new() {
+                    { new StringContent(report.Reported.ToString()), "reported" },
+                    { new StringContent(report.Reporter.ToString()), "reporter" },
+                    { new StringContent(report.Reason ?? ""), "reason" },
+                    { new StringContent(PeekSeekLobby.Config.szServerCode ?? ""), "serverCode" },
+                    { new StringContent(report.Where ?? "the warm-up lobby"), "where" },
+                    { new StringContent(PeekSeekLobby.Config.szReportChannel ?? ""), "channel" },
+                    { new StringContent(PeekSeekLobby.Config.szStaffRole ?? ""), "staffRole" },
+                    { new StringContent(report.DamageDealt.ToString()), "damageDealt" },
+                    { new StringContent(report.ShotsFired.ToString()), "shotsFired" },
+                    { new StringContent(report.ShotsHit.ToString()), "shotsHit" },
+                    { new StringContent(report.HeadshotHits.ToString()), "headshotHits" }
+                };
+
+                if (report.Screenshot != null) {
+                    ByteArrayContent image = new(report.Screenshot);
+                    image.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+                    form.Add(image, "screenshot", "spy.jpg");
+                }
+
+                HttpResponseMessage response = await Client.PostAsync($"{Base}/reports", form);
+                if (!response.IsSuccessStatusCode)
+                    Logger.LogWarning($"Report for {report.Reported} refused: {response.StatusCode}");
+            } catch (Exception ex) {
+                Logger.LogWarning($"Report for {report.Reported} failed to send: {ex.Message}");
+            }
+        });
+    }
+
     internal static MatchPicks Choices(JToken token) {
         if (token == null || token.Type != JTokenType.Object) return null;
 
@@ -159,6 +241,9 @@ internal static class RemoteAPI {
         });
     }
 
+    /// Null unless the response really is JSON. The site answers with an HTML error page
+    /// when it is down or behind a proxy that is, and every player is refreshed every
+    /// few seconds — parsing that would bury the console in identical parse errors.
     private static async Task<JObject> ReadJson(HttpResponseMessage response) {
         if (response.Content.Headers.ContentType?.MediaType != "application/json") return null;
         return JObject.Parse(await response.Content.ReadAsStringAsync());

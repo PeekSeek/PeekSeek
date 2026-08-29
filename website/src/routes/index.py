@@ -107,10 +107,23 @@ def queue_heartbeat(
 
     _ping_if_queueing_alone(region)
 
+    # A party leader queues everyone in the party, including members who never made a
+    # request of their own, so a banned member has to be refused here rather than by
+    # whatever guard happens to sit on the caller.
+    refused = {}
     for member in partyMembers:
-        data.User.addToQueue(
+        ban = data.User.addToQueue(
             int(member), gamemode, partyId=(party.id if party else None), region=region
         )
+        if ban is not None:
+            refused[str(member)] = ban.reason
+
+    if str(steam64) in refused:
+        raise HTTPException(
+            status_code=403, detail=f"You are banned: {refused[str(steam64)]}"
+        )
+    if refused:
+        return {"succes": "true", "refused": refused}
     return {"succes": "true"}
 
 
@@ -139,7 +152,10 @@ def _event_heartbeat(steam64, team, eventId):
                 status_code=403, detail="You have reached your maximum matches."
             )
 
-    data.User.addToQueue(steam64, team, eventId=eventId)
+    ban = data.User.addToQueue(steam64, team, eventId=eventId)
+    if ban is not None:
+        raise HTTPException(status_code=403, detail=f"You are banned: {ban.reason}")
+
     if matchmaking.attemptCreateEventMatch(steam64, eventId):
         return {"succes": "true", "matchid": 1}
     return {"succes": "true"}

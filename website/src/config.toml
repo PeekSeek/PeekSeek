@@ -54,6 +54,16 @@ counter_interval = 360
 # so a short value here would post several times an hour and teach everyone to ignore it.
 wake_ping_after = 1800
 
+# Where in-game /report lands, and the role it pings. Not secrets, so they live
+# here rather than in the environment, and like counter_channel nothing posts
+# unless BOT_TOKEN is set, which is what keeps dev out of the real staff channel.
+#
+# The ping goes in the message content, never in the embed: a mention inside an
+# embed renders as a mention but notifies nobody, so a report that pinged no one
+# would look identical to one that worked.
+report_channel = "1543350716683395199"
+staff_role = "1543350716683395199"
+
 [regions.names]
 # Region id -> display name used in Discord queue pings.
 paris = "EU-West"

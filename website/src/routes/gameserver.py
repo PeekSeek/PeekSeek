@@ -18,12 +18,12 @@ Conventions, all of which hold for every route here:
 The whole lifecycle runs through one call, `GET /session`. See its docstring.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from src.core.settings import settings
 from src.core.db import open as opendb
 from src.core import models as data
-from src.core import matchmaking, notify
+from src.core import matchmaking, notify, reports
 from src.core.webhook import Webhook
 from src.dependencies import GameServer, JsonBody, authorized_server
 
@@ -376,12 +376,24 @@ def _player(steam64: int) -> dict:
         with opendb() as db:
             match = db.query(data.Match).where(data.Match.id == matchId).first()
 
+    # Reported on every player read, not just on the queue call, so a lobby learns
+    # about a ban that lands while somebody is already standing in the arena rather
+    # than only when it next tries to queue them.
+    ban = data.UserBan.activeFor(steam64)
+
     return {
         "steam64": str(steam64),
         "elo": data.Stat.getElo(steam64),
         "matchId": matchId or None,
         "relayTo": match.connectCode() if match else None,
         "choose": _choices(match, steam64) if match else None,
+        "ban": {
+            "reason": ban.reason,
+            "expires": ban.endTime,
+            "permanent": ban.permanent,
+        }
+        if ban
+        else None,
     }
 
 
@@ -554,6 +566,8 @@ def joinQueue(steam64: int, gamemodes: int = 1, region: str = "paris"):
     No party support, on purpose: a lobby server knows who is connected to it, not who
     is grouped with whom on the site.
     """
+    # addToQueue refuses a banned player and says so; the ban reaches the lobby on the
+    # `ban` field of the reply either way, so there is nothing extra to do with it here.
     if not data.User.getCurrentMatchId(steam64):
         data.User.addToQueue(steam64, gamemodes, region=region)
     return _player(steam64)
@@ -565,6 +579,56 @@ def leaveQueue(steam64: int):
     return {"status": "ok"}
 
 
+@router.post("/reports")
+async def submitReport(
+    reported: int = Form(...),
+    reporter: int = Form(...),
+    reason: str = Form(...),
+    serverCode: str | None = Form(None),
+    where: str = Form("a PeekSeek server"),
+    channel: str | None = Form(None),
+    staffRole: str | None = Form(None),
+    damageDealt: int = Form(0),
+    shotsFired: int = Form(0),
+    shotsHit: int = Form(0),
+    headshotHits: int = Form(0),
+    screenshot: UploadFile | None = File(None),
+):
+    """An in-game /report, with the reported player's spy screenshot attached.
+
+    Multipart rather than JSON because the screenshot is the point: it is captured by
+    asking the reported player's own client (`Player.sendScreenshot`), which only the
+    game server can do, and it has to arrive with the report rather than as a second
+    call that could fail on its own and leave a report with no evidence.
+
+    The counters are sent rather than derived here. A lobby server and a match server
+    count "this round" differently, one resetting on an arena wipe and the other on a
+    round, and only they know which of the two they are.
+    """
+    image = await screenshot.read() if screenshot is not None else None
+
+    sent = reports.send(
+        reported=reported,
+        reporter=reporter,
+        reason=reason[:1000],
+        stats={
+            "damageDealt": damageDealt,
+            "shotsFired": shotsFired,
+            "shotsHit": shotsHit,
+            "headshotHits": headshotHits,
+        },
+        serverCode=serverCode,
+        where=where,
+        screenshot=image,
+        # A server may route its own reports elsewhere; empty means the site's.
+        channel=channel or None,
+        staffRole=staffRole or None,
+    )
+    # 200 either way: the report reached the site, and a game server has nothing it
+    # could usefully do about Discord being down. It is logged on this side instead.
+    return {"status": "ok", "delivered": sent}
+
+
 @router.post("/players/{steam64}/bans")
 def banPlayer(steam64: int, payload: JsonBody):
     """A ban issued by anti-cheat on a game server. An empty body bans for "Cheating"."""
@@ -573,7 +637,7 @@ def banPlayer(steam64: int, payload: JsonBody):
         db.add(
             data.UserBan(
                 steam64=steam64,
-                endTime=9999999999,
+                endTime=data.UserBan.PERMANENT,
                 reason=reason,
                 moderatorNote="by PeekSeek Guard",
             )
