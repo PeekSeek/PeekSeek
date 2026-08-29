@@ -767,28 +767,65 @@ stickyPending = False
 
 
 def stickyEmbed() -> discord.Embed:
-    """Two situations, two answers, in the order somebody arrives in.
+    """Four questions, four answers, in the order somebody gets to them.
 
-    Anybody opening this channel has just watched something they think was cheating.
-    The first thing they need to know is that there is a better option than typing it
-    out, and that it takes seconds, so that goes first and short. The fallback for
-    people who have already quit the server goes second, because the people who need
-    it will keep reading and the people who do not are already gone.
+    Written for a reader who is angry, scanning, and may well be twelve. Three things
+    follow from that.
+
+    Each block is titled with the reader's own question rather than with a topic, so
+    somebody skimming stops at the one that matches their situation instead of reading
+    all of it to find out none of it applies. Nobody opens this channel out of
+    curiosity; they open it because something just happened to them.
+
+    Sentences are short and the words are ordinary. The two facts most likely to be
+    missed are the two that decide whether anybody reports anything again: that no
+    admin is coming, and that their Elo comes back regardless. Both are written as
+    reassurance rather than as policy, because "an admin cannot always join" on its own
+    reads as "nothing will happen" and is a reason to stop bothering.
+
+    The Elo answer is last on purpose. It is the worry underneath the complaint, and
+    ending on it is what sends somebody away calm instead of arguing in the channel.
     """
-    return discord.Embed(
-        title=STICKY_TITLE,
-        colour=0xFFA34E,
-        description=(
-            "**Still in the server? Use `/report` in game.**\n"
-            "Type `/report <player> <what they did>`. Staff instantly get a picture of "
-            "their screen and their damage, accuracy and headshot rate for the round. "
-            "It takes about five seconds and it is the strongest evidence you can "
-            "give us.\n\n"
-            "**Already left? Post here with a clip.**\n"
-            "Show the whole fight if you can. A short video tells us more than a "
-            "screenshot of the killfeed or a description ever will."
+    embed = discord.Embed(title="Think someone is cheating?", colour=0xF04444)
+
+    embed.add_field(
+        name="Still in the server with them?",
+        value=(
+            "**Use `/report` in game.**\n"
+            "Type `/report <player> <what they did>`.\n"
+            "We instantly get a picture of their screen and their aim stats. "
+            "It is the best proof you can give us, and it takes about five seconds."
         ),
+        inline=False,
     )
+    embed.add_field(
+        name="Match already over?",
+        value=(
+            "**Post your video here.**\n"
+            "Upload the clip in this channel and say who it was. "
+            "Show the whole fight if you can, not just the moment you died."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="No admin turned up?",
+        value=(
+            "**That is normal. Report it anyway.**\n"
+            "We cannot always jump into a live game, and we do not need to. "
+            "Every clip gets watched."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="Worried about your Elo?",
+        value=(
+            "**You never lose Elo to a cheater.**\n"
+            "When someone is banned for cheating, everyone who played them gets their "
+            "Elo back. It happens automatically. You do not have to ask."
+        ),
+        inline=False,
+    )
+    return embed
 
 
 async def clearOldStickies(channel) -> None:
