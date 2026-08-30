@@ -27,4 +27,13 @@ public class MilitaryArmorTests {
     public void For_LeavesTheLimbsVanillaNeverArmoursAlone(ELimb limb) {
         Assert.Equal(1f, MilitaryArmor.For(limb, Defaults()), 3);
     }
+
+    /// Vanilla averages the explosionArmor of pants, shirt, vest and hat, and
+    /// explosionArmor falls back to a piece's armor when the item never sets one.
+    /// So a full military set is (0.9 + 0.9 + 0.7 + 0.85) / 4, and a landmine was
+    /// the one thing still telling naked players apart from dressed ones.
+    [Fact]
+    public void ExplosionArmor_IsTheAverageOfAFullMilitarySet() {
+        Assert.Equal((0.9f + 0.9f + 0.7f + 0.85f) / 4f, Defaults().ExplosionArmor, 4);
+    }
 }

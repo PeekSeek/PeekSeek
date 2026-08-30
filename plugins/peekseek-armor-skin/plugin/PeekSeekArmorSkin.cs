@@ -18,7 +18,11 @@ public class PeekSeekArmorSkin : RocketPlugin<PeekSeekArmorSkinConfiguration> {
         Instrument = new Harmony(HarmonyId);
         Instrument.PatchAll(GetType().Assembly);
 
-        Logger.Log($"PeekSeekArmorSkin {Assembly.GetName().Version} is now loaded.");
+        foreach (var patched in Instrument.GetPatchedMethods())
+            Logger.Log($"PeekSeekArmorSkin patched {patched.DeclaringType?.Name}.{patched.Name}");
+
+        Logger.Log($"PeekSeekArmorSkin {Assembly.GetName().Version} is now loaded. "
+            + $"skin={Config.AssignSkinTones} armor={Config.EqualizeArmor} cosmetics={Config.StripCosmetics}");
     }
 
     protected override void Unload() {

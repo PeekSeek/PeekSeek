@@ -60,6 +60,14 @@ every camo variant carries the same ones:
 | Arms, hands | `0.9` | Military Top |
 | Legs, feet | `0.9` | Military Bottom |
 | Torso front and back | `1.0` | vanilla armours neither, so neither does this |
+| Explosions | `0.8375` | the set's average: `(0.9 + 0.9 + 0.7 + 0.85) / 4` |
+
+Explosions are a separate path in Unturned and needed their own number.
+`DamageTool.getPlayerExplosionArmor` averages the four worn pieces rather than
+picking one by limb, and a piece's explosion armor falls back to its ordinary
+armor when the item never sets one, which every military piece does. So a
+landmine was the last thing that could still tell a naked player from a dressed
+one.
 
 Lower is tougher: these multiply incoming damage rather than absorbing a
 percentage of it. Only shirt, pants, vest and hat ever mattered — vanilla never
@@ -84,6 +92,7 @@ longer decides anything, wearing it out would be damage nobody can feel.
 | `LegsArmor` | `0.9` | |
 | `SpineArmor` | `0.63` | |
 | `SkullArmor` | `0.85` | |
+| `ExplosionArmor` | `0.8375` | one number, not per-limb: the game averages instead |
 
 ## How it works
 
@@ -94,8 +103,9 @@ All three are Harmony prefixes, and none keeps state that outlives a connect:
   writes that same copy into the packet every other client is told about the new
   player with. This is the last moment both still read from `SteamPending` — set
   it any later and the server would be the only machine that agrees.
-- `DamageTool.getPlayerArmor` for the damage, replaced outright rather than
-  adjusted, which is also what leaves durability alone.
+- `DamageTool.getPlayerArmor` for bullets and melee, and
+  `DamageTool.getPlayerExplosionArmor` for blasts. Both replaced outright rather
+  than adjusted, which is also what leaves durability alone.
 
 It shares nothing with [peekseek-lobby](../peekseek-lobby/) and can be dropped
 onto any PeekSeek server by itself.

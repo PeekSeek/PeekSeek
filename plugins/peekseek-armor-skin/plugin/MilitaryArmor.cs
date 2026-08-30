@@ -25,3 +25,15 @@ internal static class EqualizeArmorPatch {
         return false;
     }
 }
+
+[HarmonyPatch(typeof(DamageTool), nameof(DamageTool.getPlayerExplosionArmor))]
+[UsedImplicitly]
+internal static class EqualizeExplosionArmorPatch {
+    [UsedImplicitly]
+    private static bool Prefix(ref float __result) {
+        if (!PeekSeekArmorSkin.Config.EqualizeArmor) return true;
+
+        __result = PeekSeekArmorSkin.Config.ExplosionArmor;
+        return false;
+    }
+}

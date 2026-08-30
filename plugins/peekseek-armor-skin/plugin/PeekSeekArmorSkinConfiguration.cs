@@ -16,6 +16,7 @@ public class PeekSeekArmorSkinConfiguration : IRocketPluginConfiguration {
     public float LegsArmor;
     public float SpineArmor;
     public float SkullArmor;
+    public float ExplosionArmor;
 
     public void LoadDefaults() {
         AssignSkinTones = true;
@@ -26,5 +27,6 @@ public class PeekSeekArmorSkinConfiguration : IRocketPluginConfiguration {
         LegsArmor = 0.9f;
         SpineArmor = 0.63f;
         SkullArmor = 0.85f;
+        ExplosionArmor = 0.8375f;
     }
 }
