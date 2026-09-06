@@ -546,10 +546,15 @@ def elo(user, value):
 
 
 def test_teams_too_far_apart_in_elo_are_not_matched(user_factory):
-    """A 200-point gap is the widest a match is allowed to be. Beyond it the two keep
-    waiting for someone closer rather than being handed a foregone conclusion."""
+    """Past max_team_elo_gap the two keep waiting for someone closer rather than being
+    handed a foregone conclusion.
+
+    Read from the setting rather than written down here: this test pinned 200 and went
+    red the day the gap was widened to 400, which said nothing about the rule and only
+    that the number had moved.
+    """
     strong, weak = user_factory(), user_factory()
-    elo(strong, 700)
+    elo(strong, 300 + settings.max_team_elo_gap + 100)
     elo(weak, 300)
     data.User.addToQueue(strong.steam64, GAMEMODE_BIT, region="paris")
     data.User.addToQueue(weak.steam64, GAMEMODE_BIT, region="paris")
@@ -561,7 +566,7 @@ def test_teams_too_far_apart_in_elo_are_not_matched(user_factory):
 
 def test_players_within_the_elo_gap_are_matched(user_factory):
     strong, weak = user_factory(), user_factory()
-    elo(strong, 480)
+    elo(strong, 300 + settings.max_team_elo_gap - 20)
     elo(weak, 300)
     data.User.addToQueue(strong.steam64, GAMEMODE_BIT, region="paris")
     data.User.addToQueue(weak.steam64, GAMEMODE_BIT, region="paris")

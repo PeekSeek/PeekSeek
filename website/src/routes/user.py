@@ -228,9 +228,24 @@ def public_reputation(steam64: int):
 
 @router.get("/user/{steam64}")
 @router.get("/u/{steam64}")
-def profile(request: Request, steam64: int, viewer: CurrentUser = None):
+def profile(
+    request: Request,
+    steam64: int,
+    viewer: CurrentUser = None,
+    season: int | None = None,
+):
     with opendb() as db:
-        matches = data.MatchResult.latestFor(steam64)
+        seasons = data.Season.all()
+        viewing = data.Season.find(season) or data.Season.current()
+        isCurrent = viewing.id == seasons[0].id
+
+        stat = data.Stat.forSeason(steam64, viewing.id)
+        # A match carries no season of its own, so a season's matches are the ones
+        # played while it was the one being played.
+        matches = [
+            m for m in data.MatchResult.latestFor(steam64) if viewing.covers(m.endTime)
+        ]
+        rank = data.Stat.rankFor(steam64)
         return templates.TemplateResponse(
             request=request,
             name="pages/profile.html",
@@ -238,22 +253,38 @@ def profile(request: Request, steam64: int, viewer: CurrentUser = None):
                 "userData": db.query(data.User)
                 .where(data.User.steam64 == steam64)
                 .first(),
-                "statsData": db.query(data.Stat)
-                .where(data.Stat.steam64 == steam64)
-                .all(),
+                "stat": stat,
+                "seasons": seasons,
+                "viewing": viewing,
                 "kitData": db.query(data.Kit).where(data.Kit.steam64 == steam64).all(),
                 "matches": matches,
                 "eloHistory": _eloHistory(matches, str(steam64)),
                 "steam64Str": str(steam64),
                 "steamData": data.User.getSteamData(steam64),
+                # Only the live ladder has places to stand in; an archived season's
+                # seats were handed out when it ended.
+                "place": data.Stat.ladderPosition(steam64) if isCurrent else None,
+                # Only counted for the players whose rank card shows a position instead
+                # of a bar, which is the tier under Apollo and Apollo itself.
+                "worldPosition": (
+                    data.Stat.worldPosition(steam64)
+                    if isCurrent and stat and rank.standsOnPosition
+                    else None
+                ),
                 # Moderation lives on the profile because this is the page somebody is
                 # already on when they decide a player needs dealing with. Everything
                 # below is drawn only for an admin; for everyone else the profile is
                 # exactly what it was.
                 "viewerIsAdmin": viewer is not None and viewer.getPermission("admin"),
                 "viewerSteam64": str(viewer.steam64) if viewer else "",
-                "viewerName": data.User.getSteamData(viewer.steam64).name if viewer else "",
-                "banHistory": data.UserBan.historyFor(steam64) if (viewer and viewer.getPermission("admin")) else [],
+                "viewerName": (
+                    data.User.getSteamData(viewer.steam64).name if viewer else ""
+                ),
+                "banHistory": (
+                    data.UserBan.historyFor(steam64)
+                    if (viewer and viewer.getPermission("admin"))
+                    else []
+                ),
                 # Compared against each ban's endTime in the template, so a row can say
                 # whether it is still in force without the template doing arithmetic.
                 "now": int(time()),
@@ -263,8 +294,50 @@ def profile(request: Request, steam64: int, viewer: CurrentUser = None):
         )
 
 
+def _rankAfter(summary: dict, steam64) -> data.Rank | None:
+    """The badge a player came out of a match wearing, or None if the match did not
+    move any Elo.
+
+    An unranked gamemode records no "Elo Change", and neither did anything played
+    before Elo existed, so those have no rank to show rather than a change of zero to
+    show. Ladder position is read as it stands now rather than as it stood then, which
+    is what keeps a badge here identical to the one on the same player's profile.
+    """
+    if "Elo Change" not in summary or "Current Elo" not in summary:
+        return None
+    elo = summary["Current Elo"] + summary["Elo Change"]
+    return data.Rank.forElo(elo, data.Stat.ladderPosition(steam64))
+
+
+def _yourProgress(results: dict, steam64: int | None) -> dict | None:
+    """The reader's own Elo movement in this match, or None if they were not in it.
+
+    The results table below already lists what everybody scored. This is the only part
+    of the page that is about the person reading it, so it is worked out here rather
+    than picked back out of that table in the template.
+    """
+    summary = results.get(str(steam64)) if steam64 else None
+    if not summary:
+        return None
+
+    rank = _rankAfter(summary, steam64)
+    if rank is None:
+        return None
+
+    before = summary["Current Elo"]
+    was = data.Rank.forElo(before, data.Stat.ladderPosition(steam64))
+    return {
+        "rank": rank,
+        "bar": rank.bar(before),
+        "delta": summary["Elo Change"],
+        "elo": rank.elo,
+        "promoted": rank.floor > was.floor,
+        "demoted": rank.floor < was.floor,
+    }
+
+
 @router.get("/match/{matchid}")
-def match_detail(request: Request, matchid: int):
+def match_detail(request: Request, matchid: int, user: CurrentUser):
     """A finished match's result and kill log — public, same as /u/{steam64}. The
     kill-by-kill map/graph view is still a concept; this is the plain data it will sit on
     top of."""
@@ -282,15 +355,24 @@ def match_detail(request: Request, matchid: int):
             )
 
         results = result.data.get("results", {})
+        rings = data.User.ringsFor(results.keys())
         return templates.TemplateResponse(
             request=request,
             name="pages/match_detail.html",
             context={
                 "result": result,
                 "players": [
-                    {"steam64": s64, "user": steam.User(int(s64)), **summary}
+                    {
+                        "steam64": s64,
+                        "user": steam.User(int(s64)),
+                        "rank": _rankAfter(summary, s64),
+                        "place": data.Stat.ladderPosition(s64),
+                        "ring": rings.get(str(s64)),
+                        **summary,
+                    }
                     for s64, summary in results.items()
                 ],
+                "you": _yourProgress(results, user.steam64 if user else None),
                 "kills": result.data.get("kills", []),
                 "round": round,
                 "max": max,

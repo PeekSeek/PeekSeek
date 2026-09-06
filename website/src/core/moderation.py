@@ -89,9 +89,7 @@ def taintedMatches(db, steam64) -> list:
     refunded nobody.
     """
     key = str(steam64)
-    rows = (
-        db.query(data.MatchResult).order_by(data.MatchResult.endTime.asc()).all()
-    )
+    rows = db.query(data.MatchResult).order_by(data.MatchResult.endTime.asc()).all()
     return [row for row in rows if key in (row.data.get("results") or {})]
 
 
@@ -144,15 +142,17 @@ def previewBan(steam64) -> dict:
             "players": len(refunds),
             "eloReturned": sum(r["elo"] for r in refunds),
             "refunds": refunds,
-            "stats": {
-                "elo": stats.elo,
-                "kills": stats.kills,
-                "deaths": stats.deaths,
-                "wins": stats.wins,
-                "losses": stats.losses,
-            }
-            if stats
-            else None,
+            "stats": (
+                {
+                    "elo": stats.elo,
+                    "kills": stats.kills,
+                    "deaths": stats.deaths,
+                    "wins": stats.wins,
+                    "losses": stats.losses,
+                }
+                if stats
+                else None
+            ),
         }
 
 

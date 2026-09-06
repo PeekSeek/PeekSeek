@@ -387,13 +387,15 @@ def _player(steam64: int) -> dict:
         "matchId": matchId or None,
         "relayTo": match.connectCode() if match else None,
         "choose": _choices(match, steam64) if match else None,
-        "ban": {
-            "reason": ban.reason,
-            "expires": ban.endTime,
-            "permanent": ban.permanent,
-        }
-        if ban
-        else None,
+        "ban": (
+            {
+                "reason": ban.reason,
+                "expires": ban.endTime,
+                "permanent": ban.permanent,
+            }
+            if ban
+            else None
+        ),
     }
 
 

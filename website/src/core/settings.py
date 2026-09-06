@@ -34,8 +34,16 @@ class Settings:
         self.max_team_elo_gap: int = toml["matchmaking"]["max_team_elo_gap"]
         self.rematch_cooldown: int = toml["matchmaking"]["rematch_cooldown"]
 
+        self.ranks: list[dict] = list(toml["ranks"]["tiers"])
+
+        self.season_carry_cap: int = toml["season"]["carry_cap"]
+        self.season_carry_drop: int = toml["season"]["carry_drop"]
+        self.season_carry_floor: int = toml["season"]["carry_floor"]
+        self.season_carry_keep: int = toml["season"]["carry_keep"]
+
         self.lobby_connect_code: str = toml["lobby"]["connect_code"]
 
+        self.discord_guild: str = toml["discord"]["guild"]
         self.discord_client_id: str = toml["discord"]["client_id"]
         self.discord_invite_url: str = toml["discord"]["invite_url"]
         self.counter_channel: str = toml["discord"]["counter_channel"]

@@ -19,8 +19,10 @@ def liveMatch(players: list, claimed="85568392936415589") -> data.Match:
             time=int(time()),
             region="paris",
             gamemode=0,
-            teams=[{"name": "a", "users": [str(players[0])]},
-                   {"name": "b", "users": [str(players[1])]}],
+            teams=[
+                {"name": "a", "users": [str(players[0])]},
+                {"name": "b", "users": [str(players[1])]},
+            ],
             meta={"map": "Alpha Valley", "userData": {}, "hostedAt": time()},
             claimed=claimed,
             finished=False,
@@ -92,6 +94,7 @@ def test_nothing_is_sent_before_there_is_anywhere_to_go(user_factory, monkeypatc
 
 def test_discord_being_down_does_not_stop_the_match(user_factory, monkeypatch):
     """This runs inside the session poll that hands a server its match."""
+
     def explode(*a, **kw):
         raise RuntimeError("discord is down")
 

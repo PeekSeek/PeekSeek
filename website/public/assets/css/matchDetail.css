@@ -30,6 +30,24 @@
   font-weight: 700;
 }
 
+/* The reader's own result, above the table rather than inside it, because it is the
+   only row on the page they came back to see. */
+.yourRank {
+  margin-bottom: 20px;
+}
+
+/* The densest place a player card is drawn on the site. The cells are the page's own
+   colour rather than a panel's, which is what the crest knocks its ring and its badge
+   out in, and they carry a little more height than the rest of the table needs because
+   the badge hangs below the avatar it sits on. */
+.statTable {
+  --pcav: 30px;
+  --pcpanel: #0a0a0a;
+} .statTable td:has(.pc) {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
 .matchHeading {
   margin: 0;
 }

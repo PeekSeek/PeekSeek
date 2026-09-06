@@ -112,7 +112,10 @@ def test_preview_writes_nothing(user_factory):
     moderation.previewBan(cheat.steam64)
 
     with opendb() as db:
-        assert db.query(data.Stat).where(data.Stat.steam64 == victim.steam64).first().elo == 276
+        assert (
+            db.query(data.Stat).where(data.Stat.steam64 == victim.steam64).first().elo
+            == 276
+        )
         assert db.query(data.UserBan).count() == 0
 
 
@@ -134,14 +137,28 @@ def test_a_cheating_ban_refunds_both_directions(user_factory):
         },
     )
 
-    moderation.issueBan(cheat.steam64, preset="cheating", byName="Homeless", bySteam64=1)
+    moderation.issueBan(
+        cheat.steam64, preset="cheating", byName="Homeless", bySteam64=1
+    )
 
     with opendb() as db:
-        assert db.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first().elo == 300
-        assert db.query(data.Stat).where(data.Stat.steam64 == winner.steam64).first().elo == 300
+        assert (
+            db.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first().elo
+            == 300
+        )
+        assert (
+            db.query(data.Stat).where(data.Stat.steam64 == winner.steam64).first().elo
+            == 300
+        )
         # Counters come back too, not just Elo.
-        assert db.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first().deaths == 0
-        assert db.query(data.Stat).where(data.Stat.steam64 == winner.steam64).first().wins == 0
+        assert (
+            db.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first().deaths
+            == 0
+        )
+        assert (
+            db.query(data.Stat).where(data.Stat.steam64 == winner.steam64).first().wins
+            == 0
+        )
 
 
 def test_a_cheating_ban_deletes_their_stats(user_factory):
@@ -151,7 +168,9 @@ def test_a_cheating_ban_deletes_their_stats(user_factory):
     moderation.issueBan(cheat.steam64, preset="cheating")
 
     with opendb() as db:
-        assert db.query(data.Stat).where(data.Stat.steam64 == cheat.steam64).count() == 0
+        assert (
+            db.query(data.Stat).where(data.Stat.steam64 == cheat.steam64).count() == 0
+        )
 
 
 def test_a_cheating_ban_voids_the_matches(user_factory):
@@ -182,9 +201,14 @@ def test_a_toxicity_ban_touches_nobody_elses_stats(user_factory):
     moderation.issueBan(cheat.steam64, preset="toxicity")
 
     with opendb() as db:
-        assert db.query(data.Stat).where(data.Stat.steam64 == victim.steam64).first().elo == 276
+        assert (
+            db.query(data.Stat).where(data.Stat.steam64 == victim.steam64).first().elo
+            == 276
+        )
         # Their own stats survive a ban that is not about cheating.
-        assert db.query(data.Stat).where(data.Stat.steam64 == cheat.steam64).count() == 1
+        assert (
+            db.query(data.Stat).where(data.Stat.steam64 == cheat.steam64).count() == 1
+        )
         assert db.query(data.MatchResult).first().data.get("results") is not None
 
 
@@ -274,8 +298,10 @@ def liveMatch(players: list) -> int:
             time=int(now()),
             region="paris",
             gamemode=0,
-            teams=[{"name": "a", "users": [str(players[0])]},
-                   {"name": "b", "users": [str(players[1])]}],
+            teams=[
+                {"name": "a", "users": [str(players[0])]},
+                {"name": "b", "users": [str(players[1])]},
+            ],
             meta={"map": "Alpha Valley", "userData": {}},
             finished=False,
         )
@@ -354,7 +380,9 @@ def test_a_cheating_ban_on_an_unknown_player_works_too(monkeypatch):
 
     assert summary["matches"] == 0
     with opendb() as db:
-        assert db.query(data.User).where(data.User.steam64 == unknown).first() is not None
+        assert (
+            db.query(data.User).where(data.User.steam64 == unknown).first() is not None
+        )
 
 
 def test_banning_a_known_player_does_not_duplicate_them(user_factory):
@@ -363,4 +391,6 @@ def test_banning_a_known_player_does_not_duplicate_them(user_factory):
     moderation.issueBan(player.steam64, preset="toxicity")
 
     with opendb() as db:
-        assert db.query(data.User).where(data.User.steam64 == player.steam64).count() == 1
+        assert (
+            db.query(data.User).where(data.User.steam64 == player.steam64).count() == 1
+        )

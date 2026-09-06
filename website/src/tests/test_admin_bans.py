@@ -51,7 +51,9 @@ def test_the_drawer_gets_everything_in_one_call(client, login, admin, user_facto
     assert set(body["presets"]) == {"cheating", "matchfixing", "toxicity"}
 
 
-def test_the_drawer_shows_an_active_ban_and_the_history(client, login, admin, user_factory):
+def test_the_drawer_shows_an_active_ban_and_the_history(
+    client, login, admin, user_factory
+):
     target = user_factory()
     ban(target.steam64, endTime=int(time()) - 60, reason="Toxicity")
     ban(target.steam64, reason="Cheating")
@@ -71,7 +73,9 @@ def test_a_non_admin_cannot_open_the_drawer(client, login, user_factory):
     assert client.get(f"/admin/player/{target.steam64}").status_code == 401
 
 
-def test_banning_from_the_dashboard_uses_the_same_path(client, login, admin, user_factory):
+def test_banning_from_the_dashboard_uses_the_same_path(
+    client, login, admin, user_factory
+):
     target = user_factory()
     login(client, admin)
 
@@ -108,7 +112,9 @@ def test_a_custom_ban_takes_its_days(client, login, admin, user_factory):
     assert abs(stored.endTime - (time() + 3 * 86400)) < 10
 
 
-def test_overturning_keeps_the_row_and_says_who_lifted_it(client, login, admin, user_factory):
+def test_overturning_keeps_the_row_and_says_who_lifted_it(
+    client, login, admin, user_factory
+):
     """Deleting it would show an admin a clean record for a repeat offender."""
     target = user_factory()
     banId = ban(target.steam64)
@@ -125,7 +131,9 @@ def test_overturning_keeps_the_row_and_says_who_lifted_it(client, login, admin, 
     assert "overturned by" in row.moderatorNote
 
 
-def test_ban_chips_come_back_for_a_whole_card_at_once(client, login, admin, user_factory):
+def test_ban_chips_come_back_for_a_whole_card_at_once(
+    client, login, admin, user_factory
+):
     banned = user_factory()
     prior = user_factory()
     clean = user_factory()
@@ -155,9 +163,6 @@ def test_a_banned_player_still_gets_the_site(client, login, user_factory):
     assert "You are currently banned for" in r.text
     assert "Toxicity" in r.text
     assert "another 5 days" in r.text or "another 6 days" in r.text
-
-
-
 
 
 def test_an_unbanned_player_sees_no_banner(client, login, user_factory):
@@ -210,7 +215,9 @@ def test_a_logged_out_visitor_gets_no_moderation(client, user_factory):
     assert "moderation.js" not in body
 
 
-def test_a_ban_row_says_whether_it_is_still_in_force(client, login, admin, user_factory):
+def test_a_ban_row_says_whether_it_is_still_in_force(
+    client, login, admin, user_factory
+):
     target = user_factory()
     ban(target.steam64, endTime=int(time()) - 60, reason="Toxicity")
     ban(target.steam64, reason="Cheating")
@@ -253,7 +260,9 @@ def event(owner, startsIn: int):
         return row.id
 
 
-def test_a_ban_ending_before_the_event_does_not_block_signup(client, login, user_factory):
+def test_a_ban_ending_before_the_event_does_not_block_signup(
+    client, login, user_factory
+):
     """Somebody banned for a week can enter an event three weeks out. Holding the whole
     event against a ban that will have expired punishes them twice."""
     player = user_factory()
@@ -288,7 +297,9 @@ def test_a_permanent_ban_blocks_every_event(client, login, user_factory):
     ban(player.steam64, reason="Cheating")
     login(client, player)
 
-    assert client.post(f"/esports/signup?eventId={eventId}&team=Nope").status_code == 403
+    assert (
+        client.post(f"/esports/signup?eventId={eventId}&team=Nope").status_code == 403
+    )
 
 
 def test_an_unbanned_player_signs_up_fine(client, login, user_factory):
@@ -296,4 +307,6 @@ def test_an_unbanned_player_signs_up_fine(client, login, user_factory):
     eventId = event(player, startsIn=2 * 86400)
     login(client, player)
 
-    assert client.post(f"/esports/signup?eventId={eventId}&team=Fine").status_code == 200
+    assert (
+        client.post(f"/esports/signup?eventId={eventId}&team=Fine").status_code == 200
+    )
