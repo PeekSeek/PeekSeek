@@ -8,6 +8,12 @@ from .settings import settings
 
 DISCORD_API = "https://discord.com/api/v10"
 
+# Every Discord call is made from inside a request, and the game server poll is the one
+# that cannot afford to wait: matchmaking runs in it, so a DM that hangs holds a match
+# open with nobody told about it. `requests` has no default timeout at all, so without
+# this a Discord outage does not fail, it just never returns.
+DISCORD_TIMEOUT = 5
+
 
 def _headers() -> dict | None:
     """Bot auth headers, or None when this environment has no token.
@@ -47,7 +53,10 @@ def send_discord_channel(
 
     try:
         response = requests.post(
-            f"{DISCORD_API}/channels/{channel_id}/messages", headers=headers, json=body
+            f"{DISCORD_API}/channels/{channel_id}/messages",
+            headers=headers,
+            json=body,
+            timeout=DISCORD_TIMEOUT,
         )
         response.raise_for_status()
         return True
@@ -90,6 +99,7 @@ def send_discord_dm(
             f"{DISCORD_API}/users/@me/channels",
             headers=headers,
             json={"recipient_id": discord_id},
+            timeout=DISCORD_TIMEOUT,
         )
         if dm.status_code != 200:
             logging.error("Failed to open DM: %s %s", dm.status_code, dm.text)
@@ -117,6 +127,7 @@ def send_discord_dm(
             f"{DISCORD_API}/channels/{channel_id}/messages",
             headers=headers,
             json=body,
+            timeout=DISCORD_TIMEOUT,
         )
     except Exception as e:
         logging.error("Error sending discord notification: %s", e)
@@ -162,7 +173,10 @@ def refresh_player_counter() -> None:
 
     try:
         response = requests.patch(
-            f"{DISCORD_API}/channels/{channel}", headers=headers, json={"name": name}
+            f"{DISCORD_API}/channels/{channel}",
+            headers=headers,
+            json={"name": name},
+            timeout=DISCORD_TIMEOUT,
         )
         response.raise_for_status()
         refresh_player_counter.last_name = name

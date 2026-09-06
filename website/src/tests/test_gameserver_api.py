@@ -201,10 +201,17 @@ def test_a_server_that_reports_itself_free_releases_the_match_it_abandoned(
     gameserver, user_factory
 ):
     """A server's result report is a match's only "I'm done" signal. When one never
-    arrives, that server saying it is free again is the only thing left to go on."""
+    arrives, that server saying it is free again is the only thing left to go on.
+
+    Handed over through the loop rather than poked into place, because only a match a
+    server was actually told to host can have been abandoned by it. One it was given but
+    never heard about is a delivery that failed, and gets handed back instead.
+    """
     first, second = user_factory(), user_factory()
     match = makeMatch(first, second)
     match.assignTo(SERVER_CODE)
+    endSelection(match.id)
+    assert poll(gameserver, match.id)["action"] == "host"
 
     poll(gameserver)
 
@@ -597,6 +604,38 @@ def test_a_stranger_can_be_matched_and_scored_like_anyone_else(
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "recorded"
     assert data.Stat.getElo(stranger) != 300, "the stranger's Elo moved"
+
+
+def test_a_lost_answer_hands_the_same_match_back_rather_than_making_another(
+    gameserver, user_factory
+):
+    """The poll that builds a match is also the one that delivers it, so an answer that
+    never arrives — a poll that timed out on a slow Steam or Discord call, a server that
+    restarted — leaves a server holding a match it has never heard of.
+
+    Asking again as a free server has to finish that delivery. Abandoning the match and
+    matchmaking a fresh one is what produced the same pairing over and over, a new
+    "Match started" post every few seconds, because the lobby puts those players
+    straight back in the queue the moment their match stops counting.
+    """
+    first, second = user_factory(), user_factory()
+    queue(first, second)
+
+    made = poll(gameserver)
+    assert made["action"] == "wait", made
+
+    for user in (first, second):
+        gameserver.put(
+            f"/server/v1/players/{user.steam64}/queue",
+            params={"gamemodes": GAMEMODE_BIT},
+        )
+
+    again = poll(gameserver)
+
+    assert again["action"] == "wait", again
+    assert again["matchId"] == made["matchId"], "a second match was built"
+    with opendb() as db:
+        assert db.query(data.Match).count() == 1
 
 
 def test_a_second_server_polling_cannot_form_the_same_pairing_twice(gameserver):

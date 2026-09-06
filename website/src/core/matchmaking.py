@@ -38,7 +38,12 @@ def matchForServer(region: str, serverCode: str) -> "data.Match | None":
     """
     waiting = data.Match.pendingFor(region)
     if waiting:
-        return waiting.assignTo(serverCode)
+        # None when another server claimed it between the read and the write. Falling
+        # through rather than returning it is the point: this server is still free, and
+        # the queue may well have a match in it for them.
+        taken = waiting.assignTo(serverCode)
+        if taken:
+            return taken
 
     return _matchFromQueue(region, serverCode)
 

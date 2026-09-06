@@ -242,13 +242,29 @@ class Match(SQLModel, table=True):
             for user in self.meta["userData"].values()
         )
 
-    def assignTo(self, serverCode: str) -> "Match":
-        """Hand this match to a game server. From here on that server is the only one
-        that can host it, and the only one whose result report will be believed."""
+    def assignTo(self, serverCode: str) -> "Match | None":
+        """Hand this match to a game server, if it is still going spare. From here on
+        that server is the only one that can host it, and the only one whose result
+        report will be believed.
+
+        The update *is* the claim, which is why `claimed IS NULL` is in the WHERE and
+        the row count is checked: two free servers in one region both find the same
+        pending match, and this is what tells the second one it lost. Written
+        unconditionally, both wrote their own code over the other's and both went on to
+        host the same match — the pending-match twin of the queue race `UserHB.claim`
+        already closes. None means somebody else got there first.
+        """
         from src.core.db import open
 
         with open() as db:
-            db.query(Match).where(Match.id == self.id).update({"claimed": serverCode})
+            taken = (
+                db.query(Match)
+                .where(Match.id == self.id, Match.claimed.is_(None))
+                .update({"claimed": serverCode})
+            )
+        if not taken:
+            return None
+
         self.claimed = serverCode
         return self
 
@@ -342,6 +358,41 @@ class Match(SQLModel, table=True):
             )
 
     @staticmethod
+    def undeliveredFor(serverCode: str) -> "Match | None":
+        """A match this server holds but has never been told to host.
+
+        Matchmaking runs inside the poll that asks for work, so the match exists before
+        the answer describing it does. Lose that answer — the poll timed out on a slow
+        Steam or Discord call, the server restarted — and the server comes back asking
+        as a free server while already holding a match it has never heard of. Left
+        alone, the next poll abandoned that match and built a second one for the same
+        players, and the poll after that a third: one pairing, a new match and a new
+        "Match started" post every few seconds.
+
+        Handing the same match back instead is what makes the poll idempotent for a
+        match that has been created but not yet delivered, the way `markHosting` already
+        makes it idempotent for one that has.
+
+        Only ever a match that was never hosted. One this server was actually running
+        and has now gone quiet about is abandoned rather than handed back, which is the
+        line `releaseAbandoned` draws from the other side.
+        """
+        if not serverCode or serverCode == "0":
+            return None
+
+        from src.core.db import open
+
+        with open() as db:
+            held = (
+                db.query(Match)
+                .where(Match.finished.is_(False), Match.claimed == serverCode)
+                .order_by(Match.time)
+                .all()
+            )
+
+        return next((match for match in held if not match.meta.get("hostedAt")), None)
+
+    @staticmethod
     def playersInAMatch() -> set[str]:
         """Every steam64 that is on a match which has not finished.
 
@@ -373,6 +424,11 @@ class Match(SQLModel, table=True):
         left to say about it. The match is recorded as abandoned rather than merely
         closed: nobody's Elo moves, because no winner was ever reported, but the match
         stops being invisible.
+
+        A match this server was never told to host is the one exception, and it is
+        given its selection window plus the host grace before being written off. That
+        is a match the site created and then failed to deliver, not one a server
+        dropped, and `undeliveredFor` is about to hand it straight back.
         """
         if not serverCode or serverCode == "0":
             return
@@ -387,6 +443,14 @@ class Match(SQLModel, table=True):
                 .where(Match.finished.is_(False), Match.claimed == serverCode)
                 .all()
             ):
+                # Never handed over, so there is nothing here to have been abandoned:
+                # the answer that would have told this server about it was lost.
+                # `undeliveredFor` gives it back on this same poll instead, and only
+                # once that window has run out is it written off like any other.
+                deadline = match.selectionEndsAt() + settings.host_grace
+                if not match.meta.get("hostedAt") and time() < deadline:
+                    continue
+
                 match.finished = True
                 abandoned.append(match.id)
 

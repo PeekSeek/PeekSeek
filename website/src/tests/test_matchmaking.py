@@ -494,7 +494,37 @@ def test_claimed_match_released_when_its_server_polls_idle(user_factory):
     goes back to reporting itself free — even if its result report never landed, that
     next free poll must still close the match out, or every player in it stays stuck
     unable to queue again."""
-    first, second = user_factory(), user_factory()
+    _heldBy("90071992547409931", user_factory(), user_factory(), age=STALE)
+
+    data.Match.releaseAbandoned("90071992547409931")
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).first().finished is True
+
+
+def test_a_match_a_server_was_never_told_about_is_not_released_yet(user_factory):
+    """The same shape from the other side. A match created inside a poll whose answer
+    was lost is one this server holds and has never heard of, not one it dropped —
+    written off here, the very next poll builds a second match for the same players.
+
+    It is handed back instead (see the session tests), and only once its window has run
+    out with nobody having started it is it written off like any other.
+    """
+    _heldBy("90071992547409931", user_factory(), user_factory())
+
+    data.Match.releaseAbandoned("90071992547409931")
+
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).first().finished is False
+
+
+# Old enough that selection has closed and the host grace has run out too, which is what
+# separates a match still waiting to be handed over from one nobody is ever coming for.
+STALE = settings.mmconfig["selectKitsTime"] + settings.host_grace + 1
+
+
+def _heldBy(serverCode: str, first, second, age: int = 0) -> None:
+    """A match claimed by one server and never hosted, created `age` seconds ago."""
     with core_db.open() as db:
         db.add(
             data.Match(
@@ -506,13 +536,8 @@ def test_claimed_match_released_when_its_server_polls_idle(user_factory):
             )
         )
     with Session(core_db.engine) as s:
-        s.query(data.Match).update({"claimed": "90071992547409931"})
+        s.query(data.Match).update({"claimed": serverCode, "time": int(time()) - age})
         s.commit()
-
-    data.Match.releaseAbandoned("90071992547409931")
-
-    with Session(core_db.engine) as s:
-        assert s.query(data.Match).first().finished is True
 
 
 def test_release_abandoned_ignores_the_shared_legacy_code(user_factory):
@@ -768,6 +793,38 @@ def test_half_a_roster_left_in_the_queue_is_put_back(user_factory):
     assert data.UserHB.claim([first.steam64, second.steam64]) is False
     with Session(core_db.engine) as s:
         assert s.query(data.UserHB).count() == 1, "the one still queued stayed queued"
+
+
+def test_a_pending_match_can_only_be_taken_by_one_server(user_factory):
+    """The other half of the same race, on the other kind of match. A custom or event
+    pairing is created without a server and waits for one, so both free servers in the
+    region find it in the same poll and both used to write their own code over it — two
+    servers running one match, its players told to join whichever they heard about last.
+
+    Sequential like its queue-side twin, and for the same reason: what closes the race
+    is that the assignment is itself the claim, so the loser is told so rather than
+    quietly overwriting the winner.
+    """
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        pending = data.Match(
+            gamemode=0,
+            teams=[
+                {"name": "one", "users": [str(first.steam64)]},
+                {"name": "two", "users": [str(second.steam64)]},
+            ],
+        )
+        db.add(pending)
+        db.flush()
+        db.refresh(pending)
+        db.expunge(pending)
+
+    assert pending.assignTo(SERVER_CODE) is not None
+    assert pending.assignTo("90071992547409932") is None
+
+    with Session(core_db.engine) as s:
+        stored = s.query(data.Match).where(data.Match.id == pending.id).one()
+        assert stored.claimed == SERVER_CODE
 
 
 def _onlyMatch() -> data.Match:
