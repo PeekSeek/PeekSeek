@@ -8,6 +8,7 @@ import requests
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
+from src.core.notify import DISCORD_TIMEOUT
 from src.core.settings import settings
 from src.core.db import open as opendb
 from src.core import models as data
@@ -107,6 +108,14 @@ def discord(request: Request):
     if not request.state.user:
         return _back(request)
 
+    # Without the secret the token exchange at the other end cannot succeed, so there is
+    # nothing to be gained by walking the player over to Discord and failing them on the
+    # way back. Dev deliberately runs without one; production losing it is a
+    # misconfiguration, and this is what says so rather than a stack trace.
+    if not settings.discord_client_secret:
+        request.session["lastError"] = "Discord linking is not set up on this site."
+        return _back(request)
+
     query = urllib.parse.urlencode(
         {
             "client_id": settings.discord_client_id,
@@ -122,24 +131,41 @@ def discord(request: Request):
 
 @router.get("/callback/discord/")
 def discord_callback(request: Request, code: str):
-    r = requests.post(
-        f"{DISCORD_API}/oauth2/token",
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        data={
-            "client_id": settings.discord_client_id,
-            "client_secret": settings.discord_client_secret,
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": str(request.url_for("discord_callback")),
-            "scope": "identify connections guilds",
-        },
-    )
-    r.raise_for_status()
-    me = requests.get(
-        f"{DISCORD_API}/users/@me",
-        headers={"authorization": "Bearer " + r.json()["access_token"]},
-    )
-    me.raise_for_status()
+    """Finish a Discord link.
+
+    Every way this can fail sends the player back with something to read. It used to
+    raise instead, so a site whose DISCORD_CLIENT_SECRET had gone missing or been
+    rotated answered the button with a 500 and a stack trace: Discord replies 401 to the
+    token exchange when it cannot authenticate the app, and `requests` drops a None
+    secret from the form entirely, so an unset one looks exactly the same as a wrong one.
+    The reason is logged here, where an operator can see it, rather than shown.
+    """
+    try:
+        token = requests.post(
+            f"{DISCORD_API}/oauth2/token",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "client_id": settings.discord_client_id,
+                "client_secret": settings.discord_client_secret,
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": str(request.url_for("discord_callback")),
+                "scope": "identify connections guilds",
+            },
+            timeout=DISCORD_TIMEOUT,
+        )
+        token.raise_for_status()
+
+        me = requests.get(
+            f"{DISCORD_API}/users/@me",
+            headers={"authorization": "Bearer " + token.json()["access_token"]},
+            timeout=DISCORD_TIMEOUT,
+        )
+        me.raise_for_status()
+    except requests.RequestException as error:
+        logging.error("Discord link failed: %s", error)
+        request.session["lastError"] = "Could not link your Discord account."
+        return _back(request)
 
     with opendb() as db:
         db.query(data.User).where(data.User.uuid == request.session["uuid"]).update(
