@@ -356,6 +356,20 @@ def profileLinks(target) -> discord.ui.View:
     return view
 
 
+def inPeekSeek(interaction: discord.Interaction) -> bool:
+    """Whether this command was run in PeekSeek's own server.
+
+    A record shown there is worth showing to the channel: it is already public on the
+    profile the embed links to, and half of why anybody runs /stats on somebody else is
+    to put the answer in front of the people arguing about it. Anywhere else the bot is
+    a guest and keeps its replies to whoever asked.
+    """
+    return (
+        interaction.guild is not None
+        and str(interaction.guild.id) == settings.discord_guild
+    )
+
+
 async def sendStats(interaction: discord.Interaction, target) -> None:
     """One player's record. Deliberately says nothing about bans: that belongs to
     /unban, which is the command that acts on them."""
@@ -370,7 +384,14 @@ async def sendStats(interaction: discord.Interaction, target) -> None:
     embed.add_field(name="Steam64", value=f"`{target}`", inline=True)
 
     if record:
-        embed.add_field(name="Elo", value=str(record.elo), inline=True)
+        # The badge leads and the Elo trails it, because the badge is the thing players
+        # talk in and the number is how it was earned. PNG rather than the SVG the site
+        # draws: Discord will not render an SVG in an embed.
+        rank = record.rank
+        embed.add_field(
+            name="Rank", value=f"{rank.name} *{record.elo}ELO*", inline=True
+        )
+        embed.set_thumbnail(url=f"{settings.base_url}/static/ranks/{rank.icon}.png")
         embed.add_field(
             name="Record",
             value=f"{record.wins}W {record.losses}L - {record.kills}K {record.deaths}D",
@@ -378,10 +399,10 @@ async def sendStats(interaction: discord.Interaction, target) -> None:
         )
         embed.add_field(name="Headshots", value=f"{record.headshotPercent}%", inline=True)
     else:
-        embed.add_field(name="Elo", value="Never played a ranked match", inline=True)
+        embed.add_field(name="Rank", value="Never played a ranked match", inline=True)
 
     await interaction.response.send_message(
-        embed=embed, view=profileLinks(target), ephemeral=True
+        embed=embed, view=profileLinks(target), ephemeral=not inPeekSeek(interaction)
     )
 
 

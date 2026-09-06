@@ -482,7 +482,12 @@ def test_profile_page_shows_the_rank_the_elo_earns(client, user_factory):
     assert r.status_code == 200
     assert 'data-rank="immune"' in r.text
     assert "/static/ranks/immune.svg" in r.text
-    assert "50 Elo to Immune 1" in r.text
+    # The bar runs from this badge to the next one, and states the Elo each starts at
+    # rather than the distance between them.
+    assert "/static/ranks/immune1.svg" in r.text
+    assert '<span class="mark">750</span>' in r.text
+    assert '<span class="mark">800</span>' in r.text
+    assert "Elo to" not in r.text
 
 
 def _finishedMatchFor(player, **summary):
@@ -588,7 +593,7 @@ def test_leaderboard_badges_the_players_it_lists(client, login, user_factory):
 
     # getTop10 caches for a minute, and an earlier test's ladderPosition call will have
     # filled it with rows that no longer exist by the time this one runs.
-    statModule._top10Cache[1] = 0
+    statModule.Stat.forgetTop()
 
     login(client, top)
     r = client.get("/esports/")
@@ -597,7 +602,10 @@ def test_leaderboard_badges_the_players_it_lists(client, login, user_factory):
     assert "/static/ranks/immune.svg" in r.text
     assert '<span class="tier">Immune</span>' in r.text
     assert "750ELO" in r.text
-    assert "50 Elo to Immune 1" in r.text
+    # Your own panel is a reminder of who you are on a page about everybody else, so it
+    # carries the number and nothing that explains it.
+    assert '<span class="youElo">750</span>' in r.text
+    assert "Elo to" not in r.text
     # The badge rides on the avatar, and it is still the badge: mounted in the crest
     # beside the picture rather than cropped and rounded off like one.
     assert 'class="crest"' in r.text
@@ -618,7 +626,7 @@ def test_a_top_three_place_outranks_a_permission_ring(client, user_factory):
         permissions=2 ** settings.permissions.index("admin"), discord=99
     )
     data.Stat.append(admin.steam64, "unt", elo=600)
-    statModule._top10Cache[1] = 0
+    statModule.Stat.forgetTop()
 
     r = client.get(f"/u/{admin.steam64}")
 
@@ -637,7 +645,7 @@ def test_a_linked_discord_rings_a_player_who_is_off_the_podium(client, user_fact
 
     player = user_factory(discord=1234)
     data.Stat.append(player.steam64, "unt", elo=50)
-    statModule._top10Cache[1] = 0
+    statModule.Stat.forgetTop()
 
     r = client.get(f"/u/{player.steam64}")
 
@@ -648,8 +656,52 @@ def test_a_linked_discord_rings_a_player_who_is_off_the_podium(client, user_fact
     assert "data-place=" not in r.text
 
 
+def test_an_ordinary_page_never_rebuilds_the_top_ten(client, login, user_factory):
+    """The sidebar's badge must not be the thing that asks Steam about ten players.
+
+    getTop10 caches for a minute and rebuilds by looking up ten profiles, one blocking
+    call each. page_context runs on every render of every page, so a badge there that
+    forced the rebuild put that whole cost on whichever page happened to be next.
+    """
+    from src.core.models import stat as statModule
+
+    me = user_factory()
+    login(client, me)
+    statModule.Stat.forgetTop()
+
+    assert client.get(f"/u/{me.steam64}").status_code == 200
+    # The ids behind a ring are one cheap query; the ten Steam profiles behind the
+    # leaderboard are not, and this page did not ask for them.
+    assert statModule._top10Cache[0] is None
+
+
+def test_the_tier_under_a_capped_one_shows_a_position_instead_of_a_bar(
+    client, user_factory
+):
+    """At Immune 1 the bar would fill to the end and the badge still not change, because
+    Apollo is five seats rather than a threshold. The place on the ladder is the only
+    thing left that says how far there is to go."""
+    from src.core import models as data
+
+    player = user_factory()
+    data.Stat.append(player.steam64, "unt", elo=550)  # 850, past the 800 ceiling
+    # Five seats, all taken, so this player is sixth and wears Immune 1 on the same Elo
+    # that would otherwise be Apollo.
+    for _ in range(5):
+        data.Stat.append(user_factory().steam64, "unt", elo=700)
+
+    r = client.get(f"/u/{player.steam64}")
+
+    assert r.status_code == 200
+    assert 'class="rankStanding"' in r.text
+    assert "rankProgress" not in r.text
+    # Only the numbers are bold; ELO and # are labels on them.
+    assert "<b>850</b>ELO #<b>6</b>" in r.text
+    assert "worldwide" not in r.text
+
+
 def test_leaderboard_renders_for_a_signed_out_visitor(client):
     from src.core.models import stat as statModule
 
-    statModule._top10Cache[1] = 0
+    statModule.Stat.forgetTop()
     assert client.get("/esports/").status_code == 200

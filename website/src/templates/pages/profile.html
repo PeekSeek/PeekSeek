@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "_player.html" import playerCard %}
+{% from "_player.html" import playerCard, rankProgress %}
 
 {% block title %}{{steamData.name}}'s profile{% endblock %}
 {% block titleEmbed %}{{steamData.name}}'s profile{% endblock %}
@@ -13,35 +13,37 @@
 {# A profile is one player and several unrelated answers about them, which is what a
    bento reads well: the identity tile is the page's subject and everything else is a
    tile sized to how much it has to say, rather than a column of equal-weight blocks. #}
-{% set stat = statsData[0] if statsData else None %}
 {% set played = (stat.wins + stat.losses) if stat else 0 %}
 {% set showBans = viewerIsAdmin and banHistory %}
+
+<div class="seasonBar">
+  <form class="seasonPicker" method="get">
+  <select name="season" aria-label="Season" onchange="this.form.submit()">
+    {% for s in seasons %}
+    <option value="{{s.id}}"{{ " selected" if s.id == viewing.id else "" }}>{{s.name}}</option>
+    {% endfor %}
+  </select>
+</form>
+</div>
 
 <div class="bento{{ ' withBans' if showBans else '' }}">
 
   <section class="tile identity">
     {{ playerCard(steamData, rank=stat.rank if stat else None, place=place, ring=userData.ring if userData else None, axis="column", sub=false) }}
 
-    {% if stat %}
-    <div class="rankLine">
-      <b class="tier">{{stat.rank.name}}</b>
-      <span class="eloNow">{{stat.elo}} ELO</span>
+    {# Where they stand, in one group: the ladder first and the account under it, close
+       enough together to read as one answer and clear of the name above. #}
+    <div class="profileStanding">
+        {% if stat %}{{ rankProgress(stat.rank, worldPosition) }}
+      {% else %}<span class="rankStanding">No matches in {{viewing.name}}</span>{% endif %}
+      <span class="profileRank">
+        {%- if not userData %}No user data
+        {%- elif userData.getPermission("admin") %}Admin
+        {%- elif userData.getPermission("premium") %}Premium
+        {%- elif userData.discord %}Discord Linked
+        {%- else %}Regular
+        {%- endif %}</span>
     </div>
-    <div class="rankBar" data-rank="{{stat.rank.icon}}"><i style="width:{{stat.rank.progress}}%"></i></div>
-    <span class="rankGoal">{{stat.rank.goal}}</span>
-    {% endif %}
-
-    <span class="profileRank">
-      {% if userData %}
-        {% if userData.getPermission("admin") %}Admin
-        {% elif userData.getPermission("premium") %}Supporter
-        {% elif userData.discord %}Discord Linked
-        {% else %}Regular
-        {% endif %}
-      {% else %}
-        No user data
-      {% endif %}
-    </span>
 
     {# Everything you can do about this player, on the tile that names them. The Ban
        button is drawn only for an admin; for everyone else the profile is exactly what

@@ -184,6 +184,41 @@
     margin-top: 5px;
 }
 
+/* The picker sits over first place, not over the middle of the panel.
+
+   The podium is three 30%-wide slots inside a box pulled 40px left and 60px right of
+   its grid column, which puts #1 at 45% of that box rather than at 50%. This rebuilds
+   the same box and the same three slots and drops the picker into the middle one, so
+   the two stay lined up as the grid changes underneath them -- an offset in pixels
+   would only be right at one window width. */
+.seasonBar {
+    display: grid;
+    grid-template-columns: 1fr 540px 1fr;
+    gap: 50px;
+}
+
+.seasonBarInner {
+    grid-column: 2;
+    display: flex;
+    margin-left: -40px;
+    margin-right: -60px;
+} .seasonBarInner > span,
+.seasonBarInner > .seasonBarMid {
+    max-width: 200px;
+    width: 30%;
+}
+
+/* Wider than its slot on purpose: it is centred on #1 and allowed to spill either side
+   of it, which is what keeps the centres together rather than the edges. */
+.seasonBarMid {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+} .seasonBarMid > * {
+    flex-shrink: 0;
+}
+
 /* ---- Leaderboard: the podium and the rest of the top ten ---------------- */
 
 /* The boxes are unchanged -- same widths, same 250px podium, same scale transforms,
@@ -350,12 +385,10 @@
     align-items: center;
     justify-content: center;
     position: relative;
-} .youCard .rankGoal {
-    text-align: center;
-    font-size: 11px;
-    color: #fff7;
-    margin-top: 6px;
-    padding: 0 10px;
+} .youCard .youElo {
+    font-size: 10px;
+    color: #8a8a8a;
+    font-variant-numeric: tabular-nums;
 } .youCard i {
     position: absolute;
     top: 5px;
@@ -367,15 +400,19 @@
 /* Below 1500px the "you" panel is the first thing to go, since the player it names is
    the one person on the page who already knows their own rank. */
 @media (max-width: 1500px) {
-    .fullstats {
+    .fullstats, .seasonBar {
         grid-template-columns: 540px 1fr;
     }
 
+    .seasonBarInner { grid-column: 1; }
+
     .aboutyou { display: none; }
 } @media (max-width: 1240px) {
-    .fullstats {
+    .fullstats, .seasonBar {
         grid-template-columns: 1fr;
     }
+
+    .seasonBarInner { grid-column: 1; }
 
     .top10container {
         justify-content: flex-start;

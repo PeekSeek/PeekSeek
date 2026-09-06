@@ -228,9 +228,19 @@ def public_reputation(steam64: int):
 
 @router.get("/user/{steam64}")
 @router.get("/u/{steam64}")
-def profile(request: Request, steam64: int, viewer: CurrentUser = None):
+def profile(
+    request: Request, steam64: int, viewer: CurrentUser = None, season: int | None = None
+):
     with opendb() as db:
-        matches = data.MatchResult.latestFor(steam64)
+        seasons = data.Season.all()
+        viewing = data.Season.find(season) or data.Season.current()
+        isCurrent = viewing.id == seasons[0].id
+
+        stat = data.Stat.forSeason(steam64, viewing.id)
+        # A match carries no season of its own, so a season's matches are the ones
+        # played while it was the one being played.
+        matches = [m for m in data.MatchResult.latestFor(steam64) if viewing.covers(m.endTime)]
+        rank = data.Stat.rankFor(steam64)
         return templates.TemplateResponse(
             request=request,
             name="pages/profile.html",
@@ -238,15 +248,24 @@ def profile(request: Request, steam64: int, viewer: CurrentUser = None):
                 "userData": db.query(data.User)
                 .where(data.User.steam64 == steam64)
                 .first(),
-                "statsData": db.query(data.Stat)
-                .where(data.Stat.steam64 == steam64)
-                .all(),
+                "stat": stat,
+                "seasons": seasons,
+                "viewing": viewing,
                 "kitData": db.query(data.Kit).where(data.Kit.steam64 == steam64).all(),
                 "matches": matches,
                 "eloHistory": _eloHistory(matches, str(steam64)),
                 "steam64Str": str(steam64),
                 "steamData": data.User.getSteamData(steam64),
-                "place": data.Stat.ladderPosition(steam64),
+                # Only the live ladder has places to stand in; an archived season's
+                # seats were handed out when it ended.
+                "place": data.Stat.ladderPosition(steam64) if isCurrent else None,
+                # Only counted for the players whose rank card shows a position instead
+                # of a bar, which is the tier under Apollo and Apollo itself.
+                "worldPosition": (
+                    data.Stat.worldPosition(steam64)
+                    if isCurrent and stat and rank.standsOnPosition
+                    else None
+                ),
                 # Moderation lives on the profile because this is the page somebody is
                 # already on when they decide a player needs dealing with. Everything
                 # below is drawn only for an admin; for everyone else the profile is

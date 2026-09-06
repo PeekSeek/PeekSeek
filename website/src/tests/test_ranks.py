@@ -11,11 +11,15 @@ from src.core.settings import settings
 
 def test_configured_tiers_ascend_and_have_artwork():
     """Rank.forElo walks the tiers in order and stops at the first one an Elo does not
-    reach, so a list out of order silently hands out the wrong badge, and progressAt
-    divides by the gap between two tiers, so a repeated Elo is a division by zero on
-    every page that draws a bar."""
+    reach, so a list out of order silently hands out the wrong badge.
+
+    Ascending rather than strictly ascending: the capped tier shares the floor of the
+    one below it, because what separates those two is a seat and not Elo. progressAt
+    divides by the gap between two tiers and returns a full bar rather than dividing by
+    that zero.
+    """
     elos = [tier["elo"] for tier in settings.ranks]
-    assert elos == sorted(set(elos))
+    assert elos == sorted(elos)
 
     for tier in settings.ranks:
         assert (settings.public / "ranks" / f"{tier['icon']}.svg").exists()
@@ -53,6 +57,12 @@ def test_elo_below_the_ladder_still_gets_the_bottom_badge():
 
 
 def test_apollo_needs_a_seat_as_well_as_the_elo():
+    # Apollo and Immune 1 open together at 800; from there the badge is decided by the
+    # seat and not by another hundred Elo.
+    assert Rank.forElo(800, position=1).name == "Apollo"
+    assert Rank.forElo(799, position=1).name == "Immune"
+    assert Rank.forElo(850, position=5).name == "Apollo"
+    assert Rank.forElo(850, position=6).name == "Immune 1"
     assert Rank.forElo(900, position=1).name == "Apollo"
     assert Rank.forElo(2000, position=5).name == "Apollo"
     assert Rank.forElo(2000, position=6).name == "Immune 1"

@@ -17,12 +17,53 @@
 
 {% from "_player.html" import playerCard %}
 
+<div class="mainElement seasonBar">
+  {# Three slots, the same three the podium is built from, so the picker sits over
+     first place rather than over the middle of the panel. #}
+  <div class="seasonBarInner">
+    <span></span>
+    <div class="seasonBarMid">
+  <form class="seasonPicker" method="get">
+  <select name="season" aria-label="Season" onchange="this.form.submit()">
+    {% for s in seasons %}
+    <option value="{{s.id}}"{{ " selected" if s.id == viewing.id else "" }}>{{s.name}}</option>
+    {% endfor %}
+  </select>
+</form>
+
+  {% if rawUser and getPermission("season_manager") %}
+  {# The word "Season" is added for them, so the prompt asks for the part that is
+     theirs. A new season files everybody's standings and starts the ladder empty, so
+     it asks twice before it does it. #}
+  <form method="post" action="/esports/season" id="newSeasonForm">
+    <input type="hidden" name="name" id="newSeasonName">
+    <button type="button" class="settingsButton" onclick="startSeason()">New season</button>
+  </form>
+  <script>
+    function startSeason() {
+      const name = prompt("Name the season. \"Season\" is added for you, so 26Q3 becomes Season 26Q3.");
+      if (!name) return;
+      if (!confirm(`Start Season ${name}? Everyone's standings are filed under {{viewing.name}} and the ladder starts empty.`)) return;
+      document.getElementById("newSeasonName").value = name;
+      document.getElementById("newSeasonForm").submit();
+    }
+  </script>
+  {% endif %}
+    </div>
+    <span></span>
+  </div>
+</div>
+
 <div class="mainElement fullstats">
     <section class="aboutyou">
         <div class="youCard">
         {% if user %}
-            {{ playerCard(user, rank=rank, elo=elo, place=place, ring=rawUser.ring, axis="column") }}
-            <span class="rankGoal">{{rank.goal}}</span>
+            {{ playerCard(user, rank=rank if played else None, place=place, ring=rawUser.ring, axis="column", sub=false) }}
+            {# Just the number. Where this Elo sits between one badge and the next is
+               the profile's job; this panel is a reminder of who you are on a page
+               about everybody else. #}
+            {% if played %}<span class="youElo">{{elo}}</span>
+            {% else %}<span class="youElo">Not in {{viewing.name}} yet</span>{% endif %}
             <i>*You</i>
         {% else %}
             <img class="logoTile" src="/static/img/logo.png" alt="PeekSeek">

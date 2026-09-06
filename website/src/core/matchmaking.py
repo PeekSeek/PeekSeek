@@ -12,12 +12,14 @@ nowhere to be played.
 """
 
 import logging
+import threading
 from itertools import combinations
 from time import time
 
 from .db import open
 from .settings import settings
 from . import models as data
+from . import notify
 
 mmconfig = settings.mmconfig
 
@@ -376,6 +378,14 @@ def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
     loss like any other rather than a way to keep your Elo.
     """
     players = [normalizePlayerResult(u) for u in users]
+
+    # Before anything is read: a player returning after a new season opened plays this
+    # match on their carried-over Elo, and it has to be the Elo the match is scored
+    # against as well as the one the result lands on.
+    if gamemodeInfo["usesElo"]:
+        for player in players:
+            data.Stat.startSeason(player["steam64"])
+
     avgElo = sum(data.Stat.getElo(p["steam64"]) for p in players) / len(players)
     results: dict = {}
 
@@ -414,7 +424,26 @@ def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
             damageTaken=player["damageTaken"],
         )
 
+    if gamemodeInfo["usesElo"]:
+        _syncRankRoles([p["steam64"] for p in players])
+
     return results, int(avgElo)
+
+
+def _syncRankRoles(steam64s: list) -> None:
+    """Bring everybody's Discord rank role in line with the badge this match left them
+    on, off the request that reported it.
+
+    Two Discord calls per player, against a game server waiting to hear its result was
+    recorded. The roles are decoration and the result is not, so they go on a thread and
+    the report returns without them -- the same trade Steam profile lookups make.
+    """
+
+    def run():
+        for steam64 in steam64s:
+            notify.sync_rank_role(steam64)
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def _eloDelta(

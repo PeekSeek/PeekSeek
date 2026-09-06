@@ -155,6 +155,8 @@ content .main {
   display: flex;
   flex-direction: column;
   padding: 0;
+} .info.flexrow {
+  margin-bottom: 10px !important;
 }
 
 .infoli h1 {
@@ -291,6 +293,9 @@ content .main {
   align-items: center;
   gap: calc(var(--av) * 0.26);
   min-width: 0;
+  /* The whole affordance. Nothing here lights up on hover -- a card is a link, and the
+     pointer is what says so. */
+  cursor: pointer;
 }
 
 /* Top three first, always: a player who is both second on the ladder and an admin
@@ -394,6 +399,40 @@ content .main {
   width: 100%;
 }
 
+
+/* The season picker, and whatever sits beside it. Its own row above the thing it
+   filters, because it changes what every panel under it is about. */
+.seasonBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: -50px;
+}
+
+.seasonPicker select {
+  background-color: transparent;
+  color: #fff;
+  border: 0;
+  outline: 0;
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+} .seasonPicker select:focus-visible {
+  outline: 2px solid #47bbe9;
+  outline-offset: 2px;
+}
+
+/* Long enough to be deliberate: it files everybody's standings and empties the ladder. */
+.seasonBar .settingsButton {
+  width: auto;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
 .steamlogin {
   background-color: #fff;
   color: #000;
@@ -458,8 +497,8 @@ content .main {
 [data-rank="bronze"], [data-rank="bronze1"] { --rank: #d9784a; color: #d9784a; }
 [data-rank="silver"], [data-rank="silver1"] { --rank: #e3e9ef; color: #e3e9ef; }
 [data-rank="gold"],   [data-rank="gold1"]   { --rank: #f9c948; color: #f9c948; }
-[data-rank="immune"], [data-rank="immune1"] { --rank: #35d97a; color: #35d97a; }
-[data-rank="apollo"]                        { --rank: #f55da6; color: #f55da6; }
+[data-rank="immune"], [data-rank="immune1"] { --rank: #a960f0; color: #a960f0; }
+[data-rank="apollo"]                        { --rank: #f5335f; color: #f5335f; }
 
 /* The badge art is the whole element. It is never cropped, framed or ringed, so a
    page that rounds off its avatars has to say it means the avatars. */
@@ -557,6 +596,63 @@ content .main {
    never moves again, so this is the only chance the page gets to show the Elo landing
    rather than presenting it as though it had always been there. `from` alone, because
    the width it grows to is the inline one the template worked out. */
+/* Above 800 there is no bar, because there is no threshold left to cross: the badge
+   above is a seat. The Elo and the place in the queue for one are the whole answer, and
+   only the two numbers are bold -- ELO and # are labels, there to be looked past. */
+.rankStanding {
+  font-size: 13px;
+  color: #8a8a8a;
+  font-variant-numeric: tabular-nums;
+} .rankStanding b {
+  color: inherit;
+  font-weight: 800;
+}
+
+/* Where a player sits between the badge they wear and the one above it: the two badges
+   are the ends of the bar, with the Elo each one starts at under them. No sentence about
+   the distance -- both numbers are on screen and the subtraction is the reader's.
+
+   The bar runs behind both badges rather than between them, and each badge cuts its own
+   gap out of it with the same knockout the avatar's ring uses, so the fill reads as
+   passing under the badge and arriving at the next one. */
+.rankProgress {
+  --tick: 22px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  row-gap: 4px;
+  width: 100%;
+} .rankProgress .tick {
+  --knock: 4px;
+  position: relative;
+  z-index: 1;
+  height: var(--tick);
+  width: var(--tick);
+  filter:
+    drop-shadow(var(--knock) 0 0 var(--pcpanel, #0a0a0a))
+    drop-shadow(calc(var(--knock) * -1) 0 0 var(--pcpanel, #0a0a0a))
+    drop-shadow(0 var(--knock) 0 var(--pcpanel, #0a0a0a))
+    drop-shadow(0 calc(var(--knock) * -1) 0 var(--pcpanel, #0a0a0a));
+} .rankProgress .rankBar {
+  /* Half a badge into each end, so the bar runs from the centre of the badge you wear
+     to the centre of the one above rather than stopping at their edges: empty means
+     standing on this badge, full means standing on the next. The knockout above then
+     cuts the gap back out around each.
+
+     width:auto matters. The bar carries width:100% for every other use, and a box with
+     a definite width does not grow when you give it negative margins -- it slides. The
+     bar was landing half a badge to the left of where it belonged and stopping half a
+     badge short of the one it is meant to arrive at. */
+  width: auto;
+  margin: 0 calc(var(--tick) / -2);
+  z-index: 0;
+} .rankProgress .mark {
+  font-size: 11px;
+  color: #8a8a8a;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 @keyframes rankBarGrow { from { width: 0; } }
 
 .rankBar .gained, .rankBar .lost {

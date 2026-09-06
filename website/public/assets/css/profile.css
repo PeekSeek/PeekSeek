@@ -70,6 +70,14 @@
   font-size: 14px;
 }
 
+/* The three lists have no panel of their own: a column of rows does not need a box
+   drawn round it as well, so the rows carry the colour the tile used to and the tile
+   carries nothing. Declared after .tile because it is .tile it has to beat. */
+.history, .kits, .bans {
+  background-color: transparent;
+  padding: 0;
+}
+
 /* The subject of the page, so it is the one tile that is square-ish and centred rather
    than a list with a heading. */
 .identity {
@@ -78,27 +86,22 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 8px;
+  gap: 16px;
 }
 
-.identity .rankLine {
+/* Three groups, and the gaps say so: who they are, where they stand, what you can do
+   about them. Inside a group the lines sit tight enough to read as one thing; the
+   tile's own gap is what separates the groups from each other. */
+.identity .profileStanding {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 10px;
-} .identity .rankLine .tier {
-  font-size: 19px;
-  font-weight: 800;
-} .identity .rankLine .eloNow {
-  color: #8a8a8a;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
 }
 
-.identity .rankBar {
-  max-width: 260px;
-} .identity .rankGoal {
-  max-width: 300px;
+.identity .rankProgress {
+  max-width: 240px;
 }
 
 .identity .accountLine {
@@ -114,15 +117,6 @@
 
 /* A button that has to read as part of the sentence it sits in, so it drops every
    button style rather than adding one. */
-.inlineButton {
-  all: unset;
-  cursor: pointer;
-  color: #8a8a8a;
-  text-decoration: underline;
-} .inlineButton:hover {
-  color: #fff;
-}
-
 .chart {
   min-height: 0;
 }
@@ -165,7 +159,7 @@
      half a tile tall each. */
   align-content: start;
 } .kits .statcard {
-  background-color: #1a1a1a;
+  background-color: #121212;
   border-radius: 6px;
   padding: 9px 12px;
 }
@@ -199,11 +193,9 @@
   gap: 14px;
   border-radius: 6px;
   padding: 10px 14px;
-  transition: background-color 0.15s ease;
-  background-color: #1a1a1a;
+  background-color: #121212;
   flex-shrink: 0;
-} .matchrow:hover {
-  background-color: #222;
+  cursor: pointer;
 } .matchrow .map {
   display: flex;
   flex-direction: column;
@@ -233,10 +225,6 @@
   color: #7ee08a;
 } .matchrow .elo.neg {
   color: #ff4444;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .matchrow { transition: none; }
 }
 
 /* The same bento narrower, and then stacked. The profile keeps its fixed column for as
@@ -310,11 +298,12 @@
     flex-wrap: wrap;
 }
 
-/* A secondary label here rather than the 20px it was beside the name: the badge and
-   the rank line above it are what the tile leads with. */
+/* The quietest line in the group and the smallest: what a player has is worth saying
+   once, under where they stand, and never louder than it. */
 .profileRank {
     color: #8a8a8a;
-    font-size: 13px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
 }
 
 /* The site's filled-white button, at the size a row of them wants to be. */

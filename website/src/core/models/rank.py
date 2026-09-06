@@ -15,6 +15,7 @@ class Rank:
     """
 
     def __init__(self, tier: dict, elo: int, above: dict | None):
+        self._tier = tier
         self.name: str = tier["name"]
         self.icon: str = tier["icon"]
         self.floor: int = tier["elo"]
@@ -46,8 +47,40 @@ class Rank:
         return Rank(tiers[held], elo, above)
 
     @property
+    def role(self) -> str | None:
+        """The Discord role this badge grants, if the server has one for it."""
+        return self._tier.get("role")
+
+    @property
     def nextName(self) -> str | None:
         return self._above["name"] if self._above else None
+
+    @property
+    def standsOnPosition(self) -> bool:
+        """Whether what is left between this player and the tier above is people rather
+        than Elo.
+
+        True on the tier under a capped one, where the bar can fill to the end and the
+        badge still not change because the seats are taken, and true at the top, where
+        there is nothing above to fill towards. Both are cases where a progress bar
+        would draw a promotion that earning Elo cannot deliver, so the ladder position
+        is shown instead.
+        """
+        return self._above is None or bool(self._above.get("places"))
+
+    @property
+    def nextIcon(self) -> str | None:
+        return self._above["icon"] if self._above else None
+
+    @property
+    def nextFloor(self) -> int | None:
+        """The Elo the tier above starts at.
+
+        Drawn at the far end of the progress bar instead of the distance to it, so the
+        subtraction is the reader's: a bar between 438 and 500 says how far there is to
+        go without anybody having to be told.
+        """
+        return self._above["elo"] if self._above else None
 
     @property
     def toNext(self) -> int:
@@ -77,6 +110,11 @@ class Rank:
         if not self._above:
             return 100.0
         span = self._above["elo"] - self.floor
+        # Immune 1 and Apollo share a floor, so the tier below the cap has no Elo range
+        # of its own to be somewhere inside. Full, because by Elo there is nothing left
+        # to earn -- what is missing is a seat, which no bar can draw.
+        if span <= 0:
+            return 100.0
         return round(min(max((elo - self.floor) / span * 100, 0.0), 100.0), 1)
 
     def bar(self, before: int) -> dict:

@@ -22,30 +22,59 @@ def _get_events(db):
 
 
 @router.get("/")
-def index(request: Request, user: CurrentUser):
+def index(request: Request, user: CurrentUser, season: int | None = None):
     with opendb() as db:
-        elo = 300
-        position = data.Stat.ladderPosition(user.steam64) if user else None
-        if user:
-            stat = db.query(data.Stat).where(data.Stat.steam64 == user.steam64).first()
-            if stat:
-                elo = stat.elo
+        seasons = data.Season.all()
+        viewing = data.Season.find(season) or data.Season.current()
+        isCurrent = viewing.id == seasons[0].id
+
+        # Your own standing in whichever season is on screen. A finished one has no
+        # seats left to hand out, so the ring and the "#1" only belong to the live
+        # ladder -- on an archived season they would be saying something about today.
+        standing = data.Stat.forSeason(user.steam64, viewing.id) if user else None
+        position = (
+            data.Stat.ladderPosition(user.steam64) if user and isCurrent else None
+        )
+        elo = standing.elo if standing else 300
 
         return templates.TemplateResponse(
             request=request,
             name="esports/index.html",
             context={
                 "events": _get_events(db),
-                "top10": data.Stat.getTop10(),
+                "top10": data.Stat.leaderboard(viewing.id),
                 "elo": elo,
                 # The signed-in player's own badge, which the top ten cannot supply
                 # because they are usually not in it.
-                "rank": data.Rank.forElo(elo, position),
+                "rank": standing.rank if standing else data.Rank.forElo(elo, position),
                 # Drawn as the ring around their own avatar, the same one they wear on
                 # the podium, so a player recognises themselves in both places.
                 "place": position,
+                "seasons": seasons,
+                "viewing": viewing,
+                "played": standing is not None,
             },
         )
+
+
+@router.post("/season")
+def start_season(request: Request, user: CurrentUser, values: RequestValues):
+    """Open a new season. The name is the manager's; the word "Season" is the site's."""
+    if not user or not user.getPermission("season_manager"):
+        return PlainTextResponse("Not authorized", status_code=403)
+
+    name = (values.get("name") or "").strip()
+    if not name:
+        return PlainTextResponse("A season needs a name", status_code=400)
+
+    try:
+        season = data.Season.start(name)
+    except ValueError as error:
+        return PlainTextResponse(str(error), status_code=400)
+
+    # Everybody's standings just moved out from under the leaderboard's cache.
+    data.Stat.forgetTop()
+    return RedirectResponse(f"/esports/?season={season.id}", status_code=302)
 
 
 @router.post("/signup")

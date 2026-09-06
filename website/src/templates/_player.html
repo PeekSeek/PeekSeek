@@ -29,3 +29,30 @@
   </span>
 </a>
 {% endmacro %}
+
+{#- Where a player is between the badge they wear and the one above it.
+
+    The two ends are the badges themselves with their Elo under them, and the bar runs
+    behind both, so the eye travels from one badge to the other rather than reading a
+    sentence about the distance. Nothing here names the gap: the reader has both
+    numbers and can do the subtraction. -#}
+{% macro rankProgress(rank, worldPosition=None) %}
+{%- if rank.standsOnPosition %}
+{# No bar and no badge here: above 800 the badge above is a seat rather than a
+   threshold, so what is left to climb is the list itself. Two numbers say it, and only
+   the numbers are bold -- ELO and # are there to label them, not to be read. #}
+<div class="rankStanding"><b>{{rank.elo}}</b>ELO{% if worldPosition %} #<b>{{worldPosition}}</b>{% endif %}</div>
+{%- else %}
+<div class="rankProgress" data-rank="{{rank.icon}}">
+  <img class="tick" src="/static/ranks/{{rank.icon}}.svg" alt="" title="{{rank.name}}">
+  <div class="rankBar"><i style="width:{{rank.progress}}%"></i></div>
+  {% if rank.nextIcon %}
+  <img class="tick" src="/static/ranks/{{rank.nextIcon}}.svg" alt="" title="{{rank.nextName}}">
+  {% else %}<span></span>{% endif %}
+
+  <span class="mark">{{rank.elo}}</span>
+  <span></span>
+  {% if rank.nextFloor %}<span class="mark">{{rank.nextFloor}}</span>{% else %}<span></span>{% endif %}
+</div>
+{%- endif %}
+{% endmacro %}
