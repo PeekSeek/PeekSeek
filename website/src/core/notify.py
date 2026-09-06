@@ -187,3 +187,64 @@ async def keep_player_counter_current() -> None:
         except Exception as error:
             logging.error("Player counter pass failed: %s", error)
         await asyncio.sleep(settings.counter_interval)
+
+
+def rank_role_ids() -> set[str]:
+    """Every role the ladder hands out.
+
+    Needed as a set because giving somebody a rank means taking the other ranks off
+    them, and nothing else they have earned on the server may be touched on the way.
+    """
+    return {tier["role"] for tier in settings.ranks if tier.get("role")}
+
+
+def sync_rank_role(steam64) -> bool:
+    """Put this player in the Discord role for the badge they now wear, and take the
+    other rank roles off them. Returns whether anything actually changed.
+
+    Quiet about every reason it might not happen, because none of them are the match's
+    problem: this environment has no bot token, the account has no Discord linked, the
+    member has left the server, Discord is having a moment. A ranked match has to finish
+    recording either way, so nothing in here raises.
+    """
+    from src.core.models.stat import Stat
+    from src.core.models.user import User
+    from src.core.db import open as opendb
+
+    headers = _headers()
+    if not headers:
+        return False
+
+    with opendb() as db:
+        user = db.query(User).where(User.steam64 == int(steam64)).first()
+        discordId = user.discord if user else None
+    if not discordId:
+        return False
+
+    wanted = Stat.rankFor(steam64).role
+    if not wanted:
+        return False
+
+    guild = settings.discord_guild
+    base = f"{DISCORD_API}/guilds/{guild}/members/{discordId}"
+    try:
+        member = requests.get(base, headers=headers, timeout=10)
+        if member.status_code == 404:
+            return False
+        member.raise_for_status()
+        held = set(member.json().get("roles", []))
+
+        # Only the ranks they should not have. A player whose badge has not moved since
+        # their last match costs nothing here beyond the lookup above.
+        stale = (held & rank_role_ids()) - {wanted}
+        changed = False
+        for role in stale:
+            requests.delete(f"{base}/roles/{role}", headers=headers, timeout=10)
+            changed = True
+        if wanted not in held:
+            requests.put(f"{base}/roles/{wanted}", headers=headers, timeout=10)
+            changed = True
+        return changed
+    except requests.RequestException as error:
+        logging.error("Failed to sync rank role for %s: %s", steam64, error)
+        return False

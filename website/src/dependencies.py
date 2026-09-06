@@ -159,6 +159,11 @@ def page_context(request: Request) -> dict:
         "uuid": request.session.get("uuid") or request.query_params.get("uuid"),
         "rawUser": user,
         "user": data.User.getSteamData(user) if user else None,
+        # The sidebar draws the same card as the leaderboard, so it needs the same two
+        # facts on every page. Deliberately not named "rank"/"place": a context
+        # processor runs after the route's own context and would overwrite those.
+        "userRank": data.Stat.rankFor(user.steam64) if user else None,
+        "userPlace": data.Stat.ladderPosition(user.steam64) if user else None,
         "match": user.getCurrentMatchId() if user else None,
         "discord": user.discord if user else None,
         # Six accounts in seven have no Discord linked, so six players in seven cannot

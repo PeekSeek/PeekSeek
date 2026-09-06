@@ -109,7 +109,11 @@ def send(
     channel = channel or settings.report_channel
     staffRole = staffRole or settings.staff_role
     if not settings.bot_token or not channel:
-        logging.info("Report from %s about %s not sent: no Discord configured", reporter, reported)
+        logging.info(
+            "Report from %s about %s not sent: no Discord configured",
+            reporter,
+            reported,
+        )
         return False
 
     reportedName = _name(reported)
@@ -122,7 +126,11 @@ def send(
         # cannot be mistaken for the site saying so.
         "description": f"> {reason}",
         "fields": [
-            {"name": "Reported", "value": f"`{reported}`\n{reportedName}", "inline": True},
+            {
+                "name": "Reported",
+                "value": f"`{reported}`\n{reportedName}",
+                "inline": True,
+            },
             {"name": "By", "value": f"`{reporter}`\n{_name(reporter)}", "inline": True},
             {"name": "Where", "value": where, "inline": True},
             {"name": "This round", "value": _statLines(stats), "inline": False},

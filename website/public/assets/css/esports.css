@@ -176,27 +176,55 @@
     text-decoration: none;
 }
 
-.esuser {
-    font-weight: 200;
-    font-size: 16px;
-    height: 16px;
-    display: flex;
-    flex-wrap: nowrap;
-    text-wrap: nowrap;
-} .esuser img {
-    height: 32px;
-    width: 32px;
-    border-radius: 5px;
-}
-
 .usercontainer {
+    --pcav: 32px;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 12px;
     margin-top: 5px;
 }
 
+/* The picker sits over first place, not over the middle of the panel.
+
+   The podium is three 30%-wide slots inside a box pulled 40px left and 60px right of
+   its grid column, which puts #1 at 45% of that box rather than at 50%. This rebuilds
+   the same box and the same three slots and drops the picker into the middle one, so
+   the two stay lined up as the grid changes underneath them -- an offset in pixels
+   would only be right at one window width. */
+.seasonBar {
+    display: grid;
+    grid-template-columns: 1fr 540px 1fr;
+    gap: 50px;
+}
+
+.seasonBarInner {
+    grid-column: 2;
+    display: flex;
+    margin-left: -40px;
+    margin-right: -60px;
+} .seasonBarInner > span,
+.seasonBarInner > .seasonBarMid {
+    max-width: 200px;
+    width: 30%;
+}
+
+/* Wider than its slot on purpose: it is centred on #1 and allowed to spill either side
+   of it, which is what keeps the centres together rather than the edges. */
+.seasonBarMid {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+} .seasonBarMid > * {
+    flex-shrink: 0;
+}
+
 /* ---- Leaderboard: the podium and the rest of the top ten ---------------- */
+
+/* The boxes are unchanged -- same widths, same 250px podium, same scale transforms,
+   same margins. What is inside them is now one .pc (default.css) instead of a hand
+   written avatar/name/badge stack, so the rules here name the card's parts and set
+   --pcav, and nothing else about the layout moved. */
 
 .top3 {
     display: flex;
@@ -215,7 +243,13 @@
     justify-content: center;
 }
 
-.top3 a {
+.top3 .pc {
+    --pcpanel: #121212;
+    /* Half the card, as `.top3 a img { width: 50% }` was. The ring replaces the 3px
+       border and 5px padding that used to sit around it, and lands on the same
+       outside edge. */
+    --pcav: 100px;
+
     background-color: #121212;
     display: flex;
     justify-content: center;
@@ -227,7 +261,7 @@
 
     width: 100%;
     height: 100%;
-} .top3 a h1 {
+} .top3 .pc .name {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -235,56 +269,34 @@
     width: 80%;
     font-size: 22px;
     text-align: center;
-    flex-direction: row;
-    gap: 5px;
+} .top3 .pc .sub {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: #8a8a8a;
 }
 
-.top3 a img {
-    width: 50%;
-    border-radius: 50%;
-} .top3 span {
-    color: #334;
-}
-
+/* The medal borders and the h1::before numbers are gone: the ring and the "#1" are the
+   card's own, so every place the site names a top-three player says it the same way. */
 .t1 {
     box-shadow: 0 0 3px 5px #0a0a0a;
     z-index: 5;
     position: relative;
     background: #222;
+    --pcpanel: #222;
     color: #fff;
     overflow: hidden;
-    font-family: monospace;
-} .t1 img {
-    border: #FFD700 3px solid;
-    padding: 5px;
-} .t1 h1::before {
-    content: "#1";
-    color: #FFD700;
-    margin-right: 5px;
 } .t1 * {
     z-index: 7;
 }
 
 .t2 {
     transform: scale(.85) translate(30px, 0);
-} .t2 img {
-    border: #C0C0C0 3px solid;
-    padding: 5px;
-} .t2 h1::before {
-    content: "#2";
-    color: #C0C0C0;
-    margin-right: 5px;
+    gap: 8px;
 }
 
 .t3 {
     transform: scale(.75) translate(-40px, 0);
-} .t3 img {
-    border: #CD7F32 3px solid;
-    padding: 5px;
-} .t3 h1::before {
-    content: "#3";
-    color: #CD7F32;
-    margin-right: 5px;
+    gap: 8px;
 }
 
 /* A slow gold sweep across first place, once every ten seconds. Long enough between
@@ -341,29 +353,18 @@
     gap: 10px;
 }
 
-.top10u {
-    height: 28px;
+/* No fill and no card: these rows sit straight on the page, as they always have. The
+   only thing that changed is that the rank now reads under the name. */
+.top10 .pc {
+    --pcav: 28px;
+
     padding-right: 5px;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
     border-radius: 5px;
-    color: #334;
-} .top10u img {
-    height: 100%;
-    border-radius: 5px;
-    transform: scale(1.25);
-    margin-right: 5px;
-} .top10u h1 {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 16px;
+} .top10 .pc .name {
     max-width: 200px;
-    margin: 0 5px;
 }
 
-.top10 div span {
+.top10 > div > span {
     width: 30px;
     text-align: right;
     color: #222;
@@ -373,47 +374,45 @@
     display: grid;
     grid-template-columns: 200px 1fr;
     gap: 10px;
-} .aboutyou div {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
 }
 
-.aboutyou img {
-    width: 50px;
-    border-radius: 50%;
-} .aboutyou a span {
-    text-align: center;
-    color: #334;
-}
+.youCard {
+    --pcav: 50px;
 
-.aboutyou a {
     border-radius: 15px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     position: relative;
-}
-
-.aboutyou a i {
+} .youCard .youElo {
+    font-size: 10px;
+    color: #8a8a8a;
+    font-variant-numeric: tabular-nums;
+} .youCard i {
     position: absolute;
     top: 5px;
     color: #333;
+} .youCard .logoTile {
+    width: 50px;
 }
 
 /* Below 1500px the "you" panel is the first thing to go, since the player it names is
    the one person on the page who already knows their own rank. */
 @media (max-width: 1500px) {
-    .fullstats {
+    .fullstats, .seasonBar {
         grid-template-columns: 540px 1fr;
     }
 
+    .seasonBarInner { grid-column: 1; }
+
     .aboutyou { display: none; }
 } @media (max-width: 1240px) {
-    .fullstats {
+    .fullstats, .seasonBar {
         grid-template-columns: 1fr;
     }
+
+    .seasonBarInner { grid-column: 1; }
 
     .top10container {
         justify-content: flex-start;

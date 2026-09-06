@@ -15,33 +15,75 @@
 
 {% block content %}
 
+{% from "_player.html" import playerCard %}
+
+<div class="mainElement seasonBar">
+  {# Three slots, the same three the podium is built from, so the picker sits over
+     first place rather than over the middle of the panel. #}
+  <div class="seasonBarInner">
+    <span></span>
+    <div class="seasonBarMid">
+  <form class="seasonPicker" method="get">
+  <select name="season" aria-label="Season" onchange="this.form.submit()">
+    {% for s in seasons %}
+    <option value="{{s.id}}"{{ " selected" if s.id == viewing.id else "" }}>{{s.name}}</option>
+    {% endfor %}
+  </select>
+</form>
+
+  {% if rawUser and getPermission("season_manager") %}
+  {# The word "Season" is added for them, so the prompt asks for the part that is
+     theirs. A new season files everybody's standings and starts the ladder empty, so
+     it asks twice before it does it. #}
+  <form method="post" action="/esports/season" id="newSeasonForm">
+    <input type="hidden" name="name" id="newSeasonName">
+    <button type="button" class="settingsButton" onclick="startSeason()">New season</button>
+  </form>
+  <script>
+    function startSeason() {
+      const name = prompt("Name the season. \"Season\" is added for you, so 26Q3 becomes Season 26Q3.");
+      if (!name) return;
+      if (!confirm(`Start Season ${name}? Everyone's standings are filed under {{viewing.name}} and the ladder starts empty.`)) return;
+      document.getElementById("newSeasonName").value = name;
+      document.getElementById("newSeasonForm").submit();
+    }
+  </script>
+  {% endif %}
+    </div>
+    <span></span>
+  </div>
+</div>
+
 <div class="mainElement fullstats">
     <section class="aboutyou">
+        <div class="youCard">
         {% if user %}
-        <a href="/u/{{user.steam64}}">
-            <img src="{{user.avatar}}" alt="">
-            <h1>{{user.name}}</h1>
-            <span>{{elo}}ELO</span>
+            {{ playerCard(user, rank=rank if played else None, place=place, ring=rawUser.ring, axis="column", sub=false) }}
+            {# Just the number. Where this Elo sits between one badge and the next is
+               the profile's job; this panel is a reminder of who you are on a page
+               about everybody else. #}
+            {% if played %}<span class="youElo">{{elo}}</span>
+            {% else %}<span class="youElo">Not in {{viewing.name}} yet</span>{% endif %}
             <i>*You</i>
-        </a>
         {% else %}
-        <a>
-            <img src="/static/img/logo.png" alt="PeekSeek">
-        </a>
+            <img class="logoTile" src="/static/img/logo.png" alt="PeekSeek">
         {% endif %}
+        </div>
     </section>
     <div class="top3">
-        {% for n, place in ((1, "t2"), (0, "t1"), (2, "t3")) %}
+        {% for n, slot in ((1, "t2"), (0, "t1"), (2, "t3")) %}
         {% if top10|length > n %}
-        <div><a class="{{place}}" href="/u/{{top10[n].u.steam64}}">
-            <img src="{{top10[n].u.avatar}}" alt=""><h1>{{top10[n].u.name}}</h1><span>{{top10[n].elo}}ELO</span></a></div>
+        <div>{{ playerCard(top10[n].u, rank=top10[n].rank, elo=top10[n].elo, place=n + 1, ring=top10[n].ring, axis="column", extra=slot) }}</div>
         {% endif %}
         {% endfor %}
     </div>
     <div class="top10container">
         <div class="top10">
             {% for entry in top10[3:] %}
-            <div><span>#{{loop.index + 3}}</span><a class="top10u" href="/u/{{entry.u.steam64}}"><img src="{{entry.u.avatar}}" alt="{{entry.u.name}}"><h1>{{entry.u.name}}</h1>{{entry.elo}}ELO</a></div>
+            <div>
+                <span>#{{loop.index + 3}}</span>
+                {{ playerCard(entry.u, rank=entry.rank, elo=entry.elo, ring=entry.ring) }}
+            </div>
             {% endfor %}
         </div>
     </div>

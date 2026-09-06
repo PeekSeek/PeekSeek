@@ -321,23 +321,29 @@ def player(steam64: LoggedInSteam64, target: int):
         "known": user is not None,
         "name": profile.get("name") or "Nameless",
         "avatar": profile.get("avatar") or steam.DEFAULT_AVATAR,
-        "stats": {
-            "elo": record.elo,
-            "kills": record.kills,
-            "deaths": record.deaths,
-            "wins": record.wins,
-            "losses": record.losses,
-            "headshotPercent": record.headshotPercent,
-        }
-        if record
-        else None,
+        "stats": (
+            {
+                "elo": record.elo,
+                "kills": record.kills,
+                "deaths": record.deaths,
+                "wins": record.wins,
+                "losses": record.losses,
+                "headshotPercent": record.headshotPercent,
+            }
+            if record
+            else None
+        ),
         "ban": _banSummary(active) if active else None,
         "history": [_banSummary(b) for b in data.UserBan.historyFor(target)],
         # What a cheating ban would cost everyone else. Computed for every player the
         # drawer opens on, so the numbers are already there when the preset is picked.
         "preview": moderation.previewBan(target),
         "presets": {
-            key: {"label": p["label"], "summary": p["summary"], "voids": p["voidsHistory"]}
+            key: {
+                "label": p["label"],
+                "summary": p["summary"],
+                "voids": p["voidsHistory"],
+            }
             for key, p in moderation.PRESETS.items()
         },
     }

@@ -12,6 +12,34 @@ party_timeout = 600  # seconds with nobody looking at a party before it disbands
 max_team_elo_gap = 400   # widest average-Elo gap allowed between the teams in one match
 rematch_cooldown = 300   # seconds before the same two players can be put against each other again
 
+[ranks]
+# The badge a player's Elo earns them. `elo` is where a tier starts and it runs until
+# the next tier's does, so the list has to stay sorted by it; test_ranks asserts that.
+# `icon` names a file in public/ranks, and `role` the Discord role it grants. A tier-1
+# badge shares its base tier's role: the ladder shows Immune 1, Discord shows Immune.
+#
+# The ladder starts at 100 because _eloDelta refuses to take anybody below it, and a
+# new account is seeded at 300, so Silver is where everyone begins and Bronze is
+# somewhere you fall to rather than somewhere you start.
+tiers = [
+    { name = "Bronze",   elo = 100, icon = "bronze", role = "1546224903437688922" },
+    { name = "Bronze 1", elo = 200, icon = "bronze1", role = "1546224903437688922" },
+    { name = "Silver",   elo = 300, icon = "silver", role = "1546224908302942301" },
+    { name = "Silver 1", elo = 400, icon = "silver1", role = "1546224908302942301" },
+    { name = "Gold",     elo = 500, icon = "gold", role = "1546224913784901733" },
+    { name = "Gold 1",   elo = 600, icon = "gold1", role = "1546224913784901733" },
+    { name = "Immune",   elo = 700, icon = "immune", role = "1400869409517473922" },
+    { name = "Immune 1", elo = 800, icon = "immune1", role = "1400869409517473922" },
+    # `places` is what makes Apollo scarce, and it shares Immune 1's floor on purpose:
+    # 800 Elo is the whole ladder's ceiling, and what separates the two badges above it
+    # is a seat rather than a number. A player sitting sixth on 950 wears Immune 1 and
+    # the way up is passing a person.
+    # Only the top tier may carry this: Rank.forElo stops at a capped tier it cannot
+    # award rather than looking past it, so a capped tier in the middle would hide
+    # every tier above it.
+    { name = "Apollo",   elo = 800, icon = "apollo", role = "1546224919094886451", places = 5 },
+]
+
 [lobby]
 # The DeathMatch server's Steam server code, which is what /lobby hands to Unturned.
 #
@@ -30,10 +58,28 @@ mmconfig = "mmconfig.json"
 kits = "kits.json"
 
 [permissions]
-# Bit order matters — a permission's index is its bit in Users.permissions.
-list = ["admin", "canWriteBlog", "premium"]
+# Bit order matters — a permission's index is its bit in Users.permissions. Append only:
+# reordering this list silently rewrites what every existing account is allowed to do.
+list = ["admin", "canWriteBlog", "premium", "season_manager"]
+
+[season]
+# What a new season keeps of the last one. Applied once per player, on their first
+# ranked match after the season opens -- the "refresher" -- so the carry-over lands with
+# a result on it rather than silently overnight.
+#
+# A season is a soft reset: you come back near where you were, never above the cap, and
+# always at least `drop` below where you finished.
+carry_cap = 600     # Gold 1's floor. The top of the ladder is re-earned every season.
+carry_drop = 150    # What a season always takes off, so nobody opens where they closed.
+carry_floor = 300   # The seed a new account gets. Nobody starts a season under it, and
+                    # anybody who finished under it is brought back up to it.
+carry_keep = 50     # Finishing clear of that seed is worth something: a season takes the
+                    # rest of the clearance but never the last of it, so a player who was
+                    # ahead still opens ahead. Only applies above floor + keep.
 
 [discord]
+# The server rank roles are handed out in.
+guild = "1309223629271339068"
 client_id = "1317158396629094451"
 invite_url = "https://discord.gg/NKgTe6RnvH"
 
