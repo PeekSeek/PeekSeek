@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "_player.html" import playerCard %}
 
 {% block title %}{{steamData.name}}'s profile{% endblock %}
 {% block titleEmbed %}{{steamData.name}}'s profile{% endblock %}
@@ -9,89 +10,81 @@
 
 {% block content %}
 
-<div class="mainElement">
-  <div class="container profileContainer">
-    {# Avatar spans both lines: who they are on the first, what you can do about them
-       on the second. One block rather than rows separated by <br>. #}
-    <div class="profileHeader">
-      <img class="profileAvatar" src="{{steamData.avatar}}" alt="">
-      <div class="profileIdentity">
-        <div class="profileNameRow">
-          <b class="profileName">{{steamData.name}}</b>
-          <span class="profileRank">
-            {% if userData %}
-              {% if userData.getPermission("admin") %}Admin
-              {% elif userData.getPermission("premium") %}Supporter
-              {% elif userData.discord %}Discord Linked
-              {% else %}Regular
-              {% endif %}
-            {% else %}
-              No user data
-            {% endif %}
-          </span>
-        </div>
+{# A profile is one player and several unrelated answers about them, which is what a
+   bento reads well: the identity tile is the page's subject and everything else is a
+   tile sized to how much it has to say, rather than a column of equal-weight blocks. #}
+{% set stat = statsData[0] if statsData else None %}
+{% set played = (stat.wins + stat.losses) if stat else 0 %}
+{% set showBans = viewerIsAdmin and banHistory %}
 
-        <div class="profileActions">
-          <a class="profileButton" href="https://steamcommunity.com/profiles/{{steamData.steam64}}"
-             target="_blank" rel="noopener">
-            <img src="/static/img/steam.png" alt="" height="16">Steam
-          </a>
+<div class="bento{{ ' withBans' if showBans else '' }}">
 
-          <button type="button" class="profileButton"
-                  onclick="navigator.clipboard.writeText('{{steamData.steam64}}');alert('Copied!')">
-            <img src="/static/img/copy.png" alt="" height="16">Copy Steam64
-          </button>
+  <section class="tile identity">
+    {{ playerCard(steamData, rank=stat.rank if stat else None, place=place, ring=userData.ring if userData else None, axis="column", sub=false) }}
 
-          {% if viewerIsAdmin %}
-            <button type="button" class="profileButton" onclick="openDrawer('{{ steam64Str }}')">
-              <img src="/static/img/admin.png" alt="" height="16">Ban
-            </button>
-          {% endif %}
-        </div>
-      </div>
+    {% if stat %}
+    <div class="rankLine">
+      <b class="tier">{{stat.rank.name}}</b>
+      <span class="eloNow">{{stat.elo}} ELO</span>
     </div>
-
-    {# Bans read as rows for the same reason matches do: they are a list of things that
-       happened to this account, and the shape that already works for one works for the
-       other. Admin-only, and drawn at all only when there is something to draw. #}
-    {% if viewerIsAdmin and banHistory %}
-      <div class="matchlist banlist">
-        {% for b in banHistory %}
-        <div class="matchrow {{ 'loss' if b.endTime > now else 'win' }}">
-          <span class="banState">{{ "Active" if b.endTime > now else ("Lifted" if b.endTime == 0 else "Expired") }}</span>
-          <span class="map">
-            <span class="name">{{ b.reason }}</span>
-            <span class="when">{{ b.created_at.strftime("%d/%m/%Y") if b.created_at else "" }} &middot; {{ b.expiryLabel }}</span>
-          </span>
-          <span class="banNote">{{ b.moderatorNote or "" }}</span>
-        </div>
-        {% endfor %}
-      </div>
+    <div class="rankBar" data-rank="{{stat.rank.icon}}"><i style="width:{{stat.rank.progress}}%"></i></div>
+    <span class="rankGoal">{{stat.rank.goal}}</span>
     {% endif %}
 
-    <br>
+    <span class="profileRank">
+      {% if userData %}
+        {% if userData.getPermission("admin") %}Admin
+        {% elif userData.getPermission("premium") %}Supporter
+        {% elif userData.discord %}Discord Linked
+        {% else %}Regular
+        {% endif %}
+      {% else %}
+        No user data
+      {% endif %}
+    </span>
 
-    {% if not statsData %}
-      <span>User has no statistics.</span>
-    {% else %}
-      {% for stat in statsData %}
-      <div class="statcards">
-        <div class="statcard"><span class="label">Elo</span><span class="value">{{stat.elo}}</span></div>
-        <div class="statcard"><span class="label">Win %</span><span class="value">{{round(stat.wins / max(stat.losses + stat.wins, 1) * 100, 1)}}</span></div>
-        <div class="statcard"><span class="label">K / D</span><span class="value">{{round(stat.kills / max(stat.deaths, 1), 2)}}</span></div>
-        <div class="statcard"><span class="label">HS %</span><span class="value">{{stat.headshotPercent}}</span></div>
-        <div class="statcard"><span class="label">Dmg / match</span><span class="value">{{round(stat.damageDealt / max(stat.wins + stat.losses, 1))}}</span></div>
-      </div>
-      {% endfor %}
-    {% endif %}
+    {# Everything you can do about this player, on the tile that names them. The Ban
+       button is drawn only for an admin; for everyone else the profile is exactly what
+       it was. #}
+    <div class="profileActions">
+      <a class="profileButton" href="https://steamcommunity.com/profiles/{{steamData.steam64}}"
+         target="_blank" rel="noopener">
+        <img src="/static/img/steam.png" alt="" height="16">Steam
+      </a>
 
+      <button type="button" class="profileButton"
+              onclick="navigator.clipboard.writeText('{{steamData.steam64}}');alert('Copied!')">
+        <img src="/static/img/copy.png" alt="" height="16">Copy Steam64
+      </button>
+
+      {% if viewerIsAdmin %}
+        <button type="button" class="profileButton" onclick="openDrawer('{{ steam64Str }}')">
+          <img src="/static/img/admin.png" alt="" height="16">Ban
+        </button>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="tile chart">
+    <h2>Elo</h2>
     {% if eloHistory|length < 2 %}
-      <span>Not enough ranked matches yet to show a trend.</span>
+      <span class="empty">Not enough ranked matches yet to show a trend.</span>
     {% else %}
-      <div class="eloChartWrap"><canvas id="eloChart" height="90"></canvas></div>
+      <div class="eloChartWrap"><canvas id="eloChart"></canvas></div>
     {% endif %}
+  </section>
+
+  {# Always four, even for a player with no record. The grid names its areas, so a
+     missing tile leaves a hole in the middle of the page rather than closing up. #}
+  <div class="tile statcard s1"><span class="label">Win %</span><span class="value">{{round(stat.wins / max(played, 1) * 100, 1) if stat else "-"}}</span></div>
+  <div class="tile statcard s2"><span class="label">K / D</span><span class="value">{{round(stat.kills / max(stat.deaths, 1), 2) if stat else "-"}}</span></div>
+  <div class="tile statcard s3"><span class="label">HS %</span><span class="value">{{stat.headshotPercent if stat else "-"}}</span></div>
+  <div class="tile statcard s4"><span class="label">Dmg / match</span><span class="value">{{round(stat.damageDealt / max(played, 1)) if stat else "-"}}</span></div>
+
+  <section class="tile history">
+    <h2>Matches</h2>
     {% if not matches %}
-      <span>No matches played yet.</span>
+      <span class="empty">No matches played yet.</span>
     {% else %}
       <div class="matchlist">
         {% for match in matches %}
@@ -110,23 +103,49 @@
         {% endfor %}
       </div>
     {% endif %}
+  </section>
 
+  <section class="tile kits">
+    <h2>Loadouts</h2>
     {% if not kitData %}
-      <span>User has no kit data.</span>
+      <span class="empty">User has no kit data.</span>
     {% else %}
-      <div class="statcards">
+      {# The kit cards show the gun big and its attachments in a row underneath, because
+         an attachment nobody can identify at 20px is still worth counting. #}
+      <div class="kitgrid">
       {% for kit in kitData %}{% if not kit.category in ["outfit"] %}
-
         <div class="statcard kitcard"><span class="label">{{kit.category}}</span><span class="value">
           {% for _, item in kit.data.items() %}{% if item != 0 %}
             <img class="kitimg" src="/static/unturned/{{item}}.png" alt="">
           {% endif %}{% endfor %}
         </span></div>
-
       {%endif %}{% endfor %}
       </div>
     {% endif %}
-  </div>
+  </section>
+
+  {# Bans read as rows for the same reason matches do: they are a list of things that
+     happened to this account, and the shape that already works for one works for the
+     other. The tile exists only when there is something to draw, which is why the grid
+     carries a second set of areas rather than leaving a hole where it would sit. #}
+  {% if showBans %}
+  <section class="tile bans">
+    <h2>Bans</h2>
+    <div class="matchlist banlist">
+      {% for b in banHistory %}
+      <div class="matchrow {{ 'loss' if b.endTime > now else 'win' }}">
+        <span class="banState">{{ "Active" if b.endTime > now else ("Lifted" if b.endTime == 0 else "Expired") }}</span>
+        <span class="map">
+          <span class="name">{{ b.reason }}</span>
+          <span class="when">{{ b.created_at.strftime("%d/%m/%Y") if b.created_at else "" }} &middot; {{ b.expiryLabel }}</span>
+        </span>
+        <span class="banNote">{{ b.moderatorNote or "" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
 </div>
 
 <script>

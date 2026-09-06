@@ -7,6 +7,8 @@ from uuid import uuid4
 from sqlalchemy import BigInteger, Column, ForeignKey, desc
 from sqlmodel import Field, Relationship, SQLModel
 
+from .rank import Rank
+
 _top10Cache: list = [None, 0]
 
 
@@ -98,11 +100,46 @@ class Stat(SQLModel, table=True):
                     for k, v in kw.items():
                         setattr(self, k, v)
 
+            rings = User.ringsFor([r.steam64 for r in results])
             _top10Cache[0] = [
-                _T(u=User.getSteamData(r.steam64), elo=r.elo) for r in results
+                _T(
+                    u=User.getSteamData(r.steam64),
+                    elo=r.elo,
+                    rank=Rank.forElo(r.elo, position),
+                    ring=rings.get(str(r.steam64)),
+                )
+                for position, r in enumerate(results, 1)
             ]
             _top10Cache[1] = time()
             return _top10Cache[0]
+
+    @property
+    def rank(self) -> Rank:
+        return Rank.forElo(self.elo, Stat.ladderPosition(self.steam64))
+
+    @staticmethod
+    def ladderPosition(steam64) -> int | None:
+        """This player's 1-based place on the ladder, or None if they are not near the
+        top of it.
+
+        Only the top is worth answering for, because the one thing position decides is
+        whether a capped tier is held and those caps are a handful of seats. Reads the
+        cached top ten the leaderboard already draws, so asking costs no query.
+        """
+        for position, entry in enumerate(Stat.getTop10(), 1):
+            if int(entry.u.steam64) == int(steam64):
+                return position
+        return None
+
+    @staticmethod
+    def rankFor(steam64) -> Rank:
+        """The badge this player wears, from a steam64 alone.
+
+        For callers holding no Stat row -- the sidebar draws the same card as the
+        leaderboard and only ever has the signed-in user's id. One query: the ladder
+        position behind it comes from the cached top ten.
+        """
+        return Rank.forElo(Stat.getElo(steam64), Stat.ladderPosition(steam64))
 
     @staticmethod
     def getElo(steam64, game: str = "unt") -> int:

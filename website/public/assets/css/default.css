@@ -235,8 +235,27 @@ content .main {
   max-width: 120px;
   text-overflow: ellipsis;
   overflow: hidden;
+  text-wrap: nowrap;
 } .info .userProfile {
   margin-bottom: 10px;
+}
+
+/* The sidebar's own player card: the same card the leaderboard rows draw, at the same
+   size, so a player looks the same in the corner of every page as they do on the
+   ladder. Sized here rather than in the card, which never sets its own --av so that a
+   context can. */
+.info {
+  --pcav: 28px;
+}
+
+/* Lines the picture's centre up with the centre of the Play and Discord icons below it,
+   rather than their left edges: a 36px ring and a 20px icon share no edge worth
+   matching, but they do share a spine. The nav's icons are centred 30px in (20px of
+   padding plus half a 20px icon) and the ring's radius is 18px (half a 28px avatar,
+   plus its 2px gap and 2px ring), so the card starts at 12px. The right stays on the
+   nav's own 20px, since the logout icon has nothing to line up with. */
+.info .flexrow {
+  padding: 0 20px 0 12px;
 }
 
 /* The small avatar used wherever a player is named inside a denser row than the
@@ -248,6 +267,131 @@ content .main {
 } .userProfile.small span {
   font-weight: 200;
   font-size: 14px;
+}
+
+/* ---- The player card ---------------------------------------------------- */
+
+/* One component for every place the site names a player: the podium, the ladder rows,
+   a profile header, a match table, a team roster, the sidebar. A caller sets --av, the
+   avatar's edge, and the crest, the ring, the name and the rank line all size
+   themselves off it, so a new context costs one declaration instead of a new set of
+   rules. This replaced seven of those, which had drifted to five avatar treatments and
+   seven badge sizes between them.
+
+   --pcbg is what the ring's gap and the badge's outline are knocked out in, so a card
+   sitting on a panel has to say so; the page's own colour is the default. */
+.pc {
+  --av: var(--pcav, 34px);
+  --pcbg: var(--pcpanel, #0a0a0a);
+  --gap: max(2px, calc(var(--av) * 0.045));
+  --ringw: max(2px, calc(var(--av) * 0.04));
+  --ring: var(--pcring, #3334);
+
+  display: flex;
+  align-items: center;
+  gap: calc(var(--av) * 0.26);
+  min-width: 0;
+}
+
+/* Top three first, always: a player who is both second on the ladder and an admin
+   wears silver. The ring is the only thing that says either, so the rarer fact wins. */
+.pc[data-ring="discord"] { --ring: #5865f2; }
+.pc[data-ring="premium"] { --ring: #ffa34e; }
+.pc[data-ring="admin"]   { --ring: #ff0000; }
+.pc[data-place="3"]      { --ring: #cd7f32; }
+.pc[data-place="2"]      { --ring: #c0c0c0; }
+.pc[data-place="1"]      { --ring: #ffd700; }
+
+.pc .crest {
+  position: relative;
+  width: var(--av);
+  height: var(--av);
+  flex-shrink: 0;
+  /* The ring is reserved whether or not this player has one, so nothing on the page
+     reflows the day somebody links their Discord. */
+  margin: calc(var(--gap) + var(--ringw));
+} .pc .crest .av {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  /* Drawn outside the image rather than as a border, so the avatar keeps every pixel
+     it was given and the gap between photo and ring stays even at any --av. */
+  box-shadow:
+    0 0 0 var(--gap) var(--pcbg),
+    0 0 0 calc(var(--gap) + var(--ringw)) var(--ring);
+}
+
+/* The badge is mounted on the avatar rather than parked beside the name: a player is
+   their rank, and at a glance the two should arrive as one object. */
+.pc .crest .badge {
+  --badge: max(14px, calc(var(--av) * 0.3));
+  --knock: max(2px, calc(var(--av) * 0.03));
+  position: absolute;
+  left: 50%;
+  /* The badge's centre sits on the bottom of the ring: half of it over the picture,
+     half below, with the ring running through the middle and cut by the badge's own
+     margin. Derived from the ring rather than the avatar so it stays centred on the
+     ring at every --av instead of drifting inside as the ring gets thicker. */
+  bottom: calc(-1 * (var(--gap) + var(--ringw) / 2) - var(--badge) / 2);
+  transform: translateX(-50%);
+  width: var(--badge);
+  height: var(--badge);
+  /* Four hard shadows, one per side, give the art a margin that follows its own
+     silhouette. A disc behind it would read as a frame, and the badge is never framed,
+     cropped or ringed -- but it still has to lift off whatever avatar is under it. */
+  filter:
+    drop-shadow(var(--knock) 0 0 var(--pcbg))
+    drop-shadow(calc(var(--knock) * -1) 0 0 var(--pcbg))
+    drop-shadow(0 var(--knock) 0 var(--pcbg))
+    drop-shadow(0 calc(var(--knock) * -1) 0 var(--pcbg));
+}
+
+.pc .lines {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+} .pc .name {
+  font-weight: 700;
+  font-size: clamp(16px, calc(var(--av) * 0.28), 22px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Only the top three carry a number, and it is the colour of their ring, so the two
+   are read as one fact rather than two. Nothing else gets a prefix: an admin's ring
+   already says it, and a word in front of a name would say it twice. */
+.pc .place {
+  color: var(--ring);
+}
+
+.pc .sub {
+  font-size: clamp(12px, calc(var(--av) * 0.16), 14px);
+  color: #8a8a8a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+} .pc .sub .tier {
+  color: inherit;
+}
+
+/* Stood on its end for the podium and the profile header. The only modifier the card
+   has: same slots, same order, same paddings, one axis. */
+.pc[data-axis="column"] {
+  flex-direction: column;
+  text-align: center;
+  gap: calc(var(--av) * 0.1);
+  /* Fills the tile rather than sizing to the name, which is what gives the name a width
+     to ellipsis against: a content-sized card just grows until it leaves the tile. */
+  align-self: stretch;
+  max-width: 100%;
+} .pc[data-axis="column"] .lines {
+  align-items: center;
+  width: 100%;
 }
 
 .steamlogin {
@@ -299,6 +443,128 @@ content .main {
 
 .clickable {
   cursor: pointer;
+}
+
+/* ---- Rank: the ladder badge, its chip, and the progress bar ------------- */
+
+/* One colour per rank, lifted off the badge art itself, and set as `color` rather than
+   as a background so the bar fill and the rank name can both take it with currentColor.
+   data-rank carries the icon name the template already has, which keeps the nine
+   colours here and out of the nine places a badge gets drawn.
+
+   The global `* { color: #fff }` sets a colour on every element directly instead of
+   letting one cascade, so anything meant to pick up the rank colour has to ask for it
+   back with `color: inherit`. */
+[data-rank="bronze"], [data-rank="bronze1"] { --rank: #d9784a; color: #d9784a; }
+[data-rank="silver"], [data-rank="silver1"] { --rank: #e3e9ef; color: #e3e9ef; }
+[data-rank="gold"],   [data-rank="gold1"]   { --rank: #f9c948; color: #f9c948; }
+[data-rank="immune"], [data-rank="immune1"] { --rank: #35d97a; color: #35d97a; }
+[data-rank="apollo"]                        { --rank: #f55da6; color: #f55da6; }
+
+/* The badge art is the whole element. It is never cropped, framed or ringed, so a
+   page that rounds off its avatars has to say it means the avatars. */
+.rankBadge {
+  height: 34px;
+  width: 34px;
+  flex-shrink: 0;
+  border-radius: 0;
+}
+
+/* The badge at full size with the bar and the next target beside it. Used on a
+   profile, where it answers "where do I stand", and on a finished match, where the bar
+   also carries what that match just did to it. */
+.rankCard {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background-color: #121212;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin: 5px 0;
+} .rankCard .rankBadge {
+  height: 56px;
+  width: 56px;
+} .rankCard .rankCardBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rankCardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+} .rankCardHead b {
+  color: inherit;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.rankGoal {
+  font-size: 12px;
+  color: #8a8a8a;
+}
+
+.rankDelta {
+  font-size: 16px;
+  font-weight: 800;
+} .rankDelta.pos {
+  color: #7ee08a;
+} .rankDelta.neg {
+  color: #ff4444;
+}
+
+/* Only drawn when a match actually moved somebody between tiers, which is the one
+   thing on the page that is not simply a bigger version of a number already shown. */
+.rankMove {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+} .rankMove.up {
+  color: #7ee08a;
+} .rankMove.down {
+  color: #ff4444;
+}
+
+.rankBar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background-color: #1a1a1a;
+  overflow: hidden;
+  width: 100%;
+} .rankBar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  color: inherit;
+  background-color: currentColor;
+  border-radius: 4px;
+}
+
+/* What one match moved, drawn on the same bar as the total rather than beside it: the
+   green sits on the end the player just earned, the red on the end they just gave back.
+   Same two colours the match list already uses for an Elo change. */
+.rankBar .gained { background-color: #7ee08a; }
+.rankBar .lost { background-color: #ff4444; }
+
+/* The changed slice grows in from nothing on load. The bar is server-rendered and
+   never moves again, so this is the only chance the page gets to show the Elo landing
+   rather than presenting it as though it had always been there. `from` alone, because
+   the width it grows to is the inline one the template worked out. */
+@keyframes rankBarGrow { from { width: 0; } }
+
+.rankBar .gained, .rankBar .lost {
+  animation: rankBarGrow 0.7s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rankBar .gained, .rankBar .lost { animation-duration: 0.001s; }
 }
 
 /* ---- Banners: the three notices layout.html and the pages can raise -------- */

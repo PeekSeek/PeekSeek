@@ -1,20 +1,115 @@
-/* pages/profile.html -- a player's stats, Elo trend and match history.
-   Match-first: a slim stat strip up top, the match list takes the visual weight. */
+/* pages/profile.html -- a player's stats, Elo trend, match history and loadouts.
 
-.profileContainer {
+   A bento: six columns, named areas, and every tile a different shape, because the
+   answers on this page are not the same size as each other. The identity tile is tall
+   and narrow -- it is one face and five short lines -- while the Elo trend is the
+   opposite, a wide strip that needs horizontal room for dates and almost no height to
+   read a line against. Splitting the page into equal halves gave both of them the
+   wrong shape at once.
+
+   Rows are a fixed step so the areas below actually hold; anything that can outgrow its
+   tile scrolls inside itself rather than stretching the row and dragging its neighbours
+   with it. */
+
+.bento {
+  /* The profile is a fixed narrow column and everything else divides what is left, so
+     the four stat tiles land one per column with no arithmetic and the identity tile is
+     not tied to their width. Rows are explicit because the shapes are the point: a tall
+     row for the trend, a short one for the four figures under it, and the profile
+     spanning both so its bottom lands on theirs. */
+  display: grid;
+  grid-template-columns: 270px repeat(4, 1fr);
+  grid-template-rows: 240px 96px 190px 190px;
+  gap: 10px;
   width: 100%;
+  grid-template-areas:
+    "id ch ch ch ch"
+    "id s1 s2 s3 s4"
+    "kt kt mt mt mt"
+    "kt kt mt mt mt";
 }
 
-.currentProfile img {
-  width: 100px;
-  height: 100px;
-  margin-right: 20px;
-} .currentProfile span {
-  max-width: none;
+.bento.withBans {
+  grid-template-rows: 240px 96px 190px 190px 210px;
+  grid-template-areas:
+    "id ch ch ch ch"
+    "id s1 s2 s3 s4"
+    "kt kt mt mt mt"
+    "kt kt mt mt mt"
+    "bn bn bn bn bn";
+}
+
+.identity { grid-area: id; }
+.chart    { grid-area: ch; }
+.s1       { grid-area: s1; }
+.s2       { grid-area: s2; }
+.s3       { grid-area: s3; }
+.s4       { grid-area: s4; }
+.history  { grid-area: mt; }
+.kits     { grid-area: kt; }
+.bans     { grid-area: bn; }
+
+.tile {
+  background-color: #121212;
+  border-radius: 10px;
+  padding: 16px;
   display: flex;
-  align-items: flex-start;
-  font-size: 20px;
-  margin-top: 15px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+} .tile h2 {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8a8a8a;
+  margin: 0;
+} .tile .empty {
+  color: #8a8a8a;
+  font-size: 14px;
+}
+
+/* The subject of the page, so it is the one tile that is square-ish and centred rather
+   than a list with a heading. */
+.identity {
+  --pcpanel: #121212;
+  --pcav: 96px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.identity .rankLine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+} .identity .rankLine .tier {
+  font-size: 19px;
+  font-weight: 800;
+} .identity .rankLine .eloNow {
+  color: #8a8a8a;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.identity .rankBar {
+  max-width: 260px;
+} .identity .rankGoal {
+  max-width: 300px;
+}
+
+.identity .accountLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #8a8a8a;
+  font-size: 13px;
+  margin-top: 4px;
+} .identity .accountLine span {
+  color: #8a8a8a;
 }
 
 /* A button that has to read as part of the sentence it sits in, so it drops every
@@ -22,19 +117,29 @@
 .inlineButton {
   all: unset;
   cursor: pointer;
+  color: #8a8a8a;
+  text-decoration: underline;
+} .inlineButton:hover {
+  color: #fff;
 }
 
-.statcards {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin: 5px 0;
-} .statcard {
-  background-color: #121212;
-  border-radius: 6px;
-  padding: 9px 12px;
-  display: flex;
-  flex-direction: column;
+.chart {
+  min-height: 0;
+}
+
+/* Chart.js sizes its canvas to this box, so the box has to have a size of its own --
+   a canvas left to size itself and a parent left to fit the canvas settle nowhere. */
+.eloChartWrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+} .eloChartWrap canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.statcard {
+  justify-content: center;
   gap: 3px;
 } .statcard .label {
   font-size: 10px;
@@ -42,56 +147,75 @@
   letter-spacing: 0.08em;
   color: #8a8a8a;
 } .statcard .value {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 800;
 }
 
-/* The kit cards show the gun big and its attachments in a row underneath, because
-   an attachment nobody can identify at 20px is still worth counting. */
+/* Both lists scroll inside their own tile: a player with forty matches should not make
+   the loadouts tile forty matches tall. */
+.kits .kitgrid {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  /* The grid is stretched to the tile's height so that it can scroll, and a grid whose
+     rows are auto spends that height on the rows. Two kits would otherwise be drawn
+     half a tile tall each. */
+  align-content: start;
+} .kits .statcard {
+  background-color: #1a1a1a;
+  border-radius: 6px;
+  padding: 9px 12px;
+}
+
+/* The kit cards show the gun big and its attachments in a row underneath, because an
+   attachment nobody can identify at 20px is still worth counting. */
 .kitcard .value {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-} .statcard span .kitimg {
+} .kitcard .kitimg {
   width: 20%;
   height: 20px;
   object-fit: contain;
-} .statcard span .kitimg:first-child {
+} .kitcard .kitimg:first-child {
   width: 100%;
   height: 80px;
-}
-
-.eloChartWrap {
-  background-color: #121212;
-  border-radius: 6px;
-  padding: 14px;
-  height: 160px;
-  margin: 5px 0;
 }
 
 .matchlist {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 5px 0;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
 } .matchrow {
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
+  grid-template-columns: auto 1fr auto auto;
   align-items: center;
   gap: 14px;
   border-radius: 6px;
   padding: 10px 14px;
-  text-decoration: none;
   transition: background-color 0.15s ease;
-  background-color: #151515;
+  background-color: #1a1a1a;
+  flex-shrink: 0;
+} .matchrow:hover {
+  background-color: #222;
 } .matchrow .map {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 } .matchrow .map .name {
   font-size: 14px;
   font-weight: 700;
   color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 } .matchrow .map .when {
   font-size: 11px;
   color: #8a8a8a;
@@ -104,63 +228,93 @@
 } .matchrow .elo {
   font-size: 13px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 } .matchrow .elo.pos {
   color: #7ee08a;
 } .matchrow .elo.neg {
   color: #ff4444;
-} .matchrow .result {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #ff4444;
-} .matchrow.loss .result {
-  color: #8a8a8a;
 }
 
-h2 {
-  margin-top: 20px;
+@media (prefers-reduced-motion: reduce) {
+  .matchrow { transition: none; }
 }
 
-/* The identity block: avatar beside a name and, under it, everything you can do about
-   this player. One block rather than rows separated by <br>, which is what made the
-   Moderate button look bolted on. */
-.profileHeader {
-    display: flex;
-    align-items: center;
-    gap: 14px;
+/* The same bento narrower, and then stacked. The profile keeps its fixed column for as
+   long as there is room beside it, because it is the one tile whose width is not
+   supposed to follow the page. */
+@media (max-width: 1240px) {
+  .bento {
+    grid-template-columns: 240px repeat(2, 1fr);
+    grid-template-rows: 210px 96px 96px 320px 300px;
+    grid-template-areas:
+      "id ch ch"
+      "id s1 s2"
+      "id s3 s4"
+      "mt mt mt"
+      "kt kt kt";
+  }
+
+  .bento.withBans {
+    grid-template-rows: 210px 96px 96px 320px 300px 240px;
+    grid-template-areas:
+      "id ch ch"
+      "id s1 s2"
+      "id s3 s4"
+      "mt mt mt"
+      "kt kt kt"
+      "bn bn bn";
+  }
+} @media (max-width: 780px) {
+  .bento {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: minmax(92px, auto);
+    grid-template-areas:
+      "id id"
+      "ch ch"
+      "s1 s2"
+      "s3 s4"
+      "mt mt"
+      "kt kt";
+  }
+
+  .bento.withBans {
+    grid-template-areas:
+      "id id"
+      "ch ch"
+      "s1 s2"
+      "s3 s4"
+      "mt mt"
+      "kt kt"
+      "bn bn";
+  }
+
+  .kitgrid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Rows go auto at this width, so the chart's box has nothing to claim a share of and
+     needs a height of its own again. */
+  .eloChartWrap {
+    min-height: 150px;
+  }
 }
 
-.profileAvatar {
-    width: 56px;
-    height: 56px;
-    border-radius: 10px;
-    flex: none;
-}
-
-.profileIdentity {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-width: 0;
-}
-
-.profileName {
-    font-size: 20px;
-    line-height: 1.1;
-    margin-right: 5px;
-}
-
+/* Everything you can do about this player, sitting under the card that names them.
+   In a 270px column three buttons wrap to two lines, which is what the wrap is for. */
 .profileActions {
+    justify-content: center;
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
 }
 
+/* A secondary label here rather than the 20px it was beside the name: the badge and
+   the rank line above it are what the tile leads with. */
 .profileRank {
-    color: #ccc;
-    font-size: 20px;
+    color: #8a8a8a;
+    font-size: 13px;
 }
 
 /* The site's filled-white button, at the size a row of them wants to be. */
@@ -185,7 +339,11 @@ h2 {
 
 /* Bans reuse the match row, because they are the same shape of thing: a list of
    what has happened to this account. Only the leading column differs. */
-.banlist { margin-top: 14px; }
+.banlist {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
 
 .banState {
     font-size: 11px;

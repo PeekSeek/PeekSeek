@@ -1,0 +1,31 @@
+{#- The one way the site draws a player.
+
+    Every context passes what it knows and leaves out what it does not: a roster has no
+    rank line, a podium has a place, a table row has neither. Sizing is not an argument
+    -- the caller sets --pcav on whatever wrapper it already has, so a page changes the
+    card by one declaration in its own stylesheet rather than by a flag here.
+
+    `ring` is what the player has earned off the ladder (admin, premium, discord) and
+    only shows outside the top three, which take the ring for their place instead. -#}
+{% macro playerCard(user, rank=None, elo=None, place=None, ring=None, axis="row", sub=true, extra="") %}
+<a class="pc {{extra}}" href="/u/{{user.steam64}}" data-axis="{{axis}}"
+  {%- if rank %} data-rank="{{rank.icon}}"{% endif %}
+  {%- if place and place <= 3 %} data-place="{{place}}"{% elif ring %} data-ring="{{ring}}"{% endif %}>
+  <span class="crest">
+    <img class="av" src="{{user.avatar}}" alt="">
+    {%- if rank %}
+    <img class="badge" src="/static/ranks/{{rank.icon}}.svg" alt="" title="{{rank.name}}">
+    {%- endif %}
+  </span>
+  <span class="lines">
+    <span class="name">{% if place and place <= 3 %}<b class="place">#{{place}}</b> {% endif %}{{user.name}}</span>
+    {%- if sub and (rank or elo) %}
+    <span class="sub">
+      {%- if rank %}<span class="tier">{{rank.name}}</span>{% endif %}
+      {%- if rank and elo %} &middot; {% endif %}
+      {%- if elo %}{{elo}}ELO{% endif %}
+    </span>
+    {%- endif %}
+  </span>
+</a>
+{% endmacro %}

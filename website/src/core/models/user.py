@@ -98,6 +98,41 @@ class User(SQLModel, table=True):
         bit = 2 ** settings.permissions.index(item)
         return (permissions & bit) == bit
 
+    @property
+    def ring(self) -> str | None:
+        """The colour drawn around this player's avatar wherever the site names them.
+
+        A ring can only say one thing, so the rarest standing wins and admin is checked
+        first -- getPermission answers True to every permission for an admin, so asking
+        about premium first would call every admin a supporter. A place in the top three
+        outranks all of these, but that is the ladder's to know rather than this
+        account's, so it is applied where the card is drawn.
+        """
+        if self.getPermission("admin"):
+            return "admin"
+        if self.getPermission("premium"):
+            return "premium"
+        if self.discord:
+            return "discord"
+        return None
+
+    @staticmethod
+    def ringsFor(steam64s) -> dict[str, str]:
+        """Every ring on a page in one query, keyed by steam64 as a string.
+
+        A match table names up to ten players and the ring is one column of one row
+        each; asked one at a time that is ten round trips for a colour.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            users = (
+                db.query(User)
+                .where(User.steam64.in_([int(s) for s in steam64s]))
+                .all()
+            )
+            return {str(u.steam64): u.ring for u in users if u.ring}
+
     def setPermission(self, item: str, value: bool) -> None:
         from src.core.db import open
 

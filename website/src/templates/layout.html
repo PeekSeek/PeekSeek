@@ -1,3 +1,4 @@
+{% from "_player.html" import playerCard %}
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
   <head>
@@ -59,7 +60,7 @@
         <div class="info">
           <div class="flexrow">
             {% if user %}
-              <a href="/u/{{user.steam64}}" class="userProfile"> <img src="{{user.avatar}}" alt="" height="40px"> <span>{{user.name}}</span></a>
+              {{ playerCard(user, rank=userRank, elo=userRank.elo, place=userPlace, ring=rawUser.ring) }}
               <a href="/auth/logout"> <img src="/static/img/logout.png" alt="Log out" height="20px"> </a>
             {% else %}
               <a href="/auth/steam"><button type="button" class="steamlogin"> <img src="/static/img/steam.png" alt="" height="25px"> Login</button></a>

@@ -12,6 +12,32 @@ party_timeout = 600  # seconds with nobody looking at a party before it disbands
 max_team_elo_gap = 400   # widest average-Elo gap allowed between the teams in one match
 rematch_cooldown = 300   # seconds before the same two players can be put against each other again
 
+[ranks]
+# The badge a player's Elo earns them. `elo` is where a tier starts and it runs until
+# the next tier's does, so the list has to stay sorted by it; test_ranks asserts that.
+# `icon` names a file in public/ranks.
+#
+# The ladder starts at 100 because _eloDelta refuses to take anybody below it, and a
+# new account is seeded at 300, so Silver is where everyone begins and Bronze is
+# somewhere you fall to rather than somewhere you start.
+tiers = [
+    { name = "Bronze",   elo = 100, icon = "bronze" },
+    { name = "Bronze 1", elo = 200, icon = "bronze1" },
+    { name = "Silver",   elo = 300, icon = "silver" },
+    { name = "Silver 1", elo = 400, icon = "silver1" },
+    { name = "Gold",     elo = 500, icon = "gold" },
+    { name = "Gold 1",   elo = 600, icon = "gold1" },
+    { name = "Immune",   elo = 700, icon = "immune" },
+    { name = "Immune 1", elo = 800, icon = "immune1" },
+    # `places` is what makes Apollo scarce. 900 Elo only puts a player in the running;
+    # the badge itself belongs to whoever holds the top five seats, so a player sitting
+    # sixth on 950 wears Immune 1 and the way up is passing a person, not a number.
+    # Only the top tier may carry this: Rank.forElo stops at a capped tier it cannot
+    # award rather than looking past it, so a capped tier in the middle would hide
+    # every tier above it.
+    { name = "Apollo",   elo = 900, icon = "apollo", places = 5 },
+]
+
 [lobby]
 # The DeathMatch server's Steam server code, which is what /lobby hands to Unturned.
 #

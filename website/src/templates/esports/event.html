@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "_player.html" import playerCard %}
 
 {% block currentPage %}esports{% endblock %}
 
@@ -84,7 +85,7 @@
       
         <div class="usercontainer">
           {% for u in users %}
-            <a class="userProfile esuser" href="/u/{{u.steam64}}"><img src="{{u.avatar}}" alt=""><span>{{u.name}}</span></a>
+            {{ playerCard(u.u, place=u.place, ring=u.ring, sub=false) }}
           {% endfor %}
         </div>
         {% if ownsTeam and signup.users %}

@@ -25,6 +25,7 @@ def _get_events(db):
 def index(request: Request, user: CurrentUser):
     with opendb() as db:
         elo = 300
+        position = data.Stat.ladderPosition(user.steam64) if user else None
         if user:
             stat = db.query(data.Stat).where(data.Stat.steam64 == user.steam64).first()
             if stat:
@@ -37,6 +38,12 @@ def index(request: Request, user: CurrentUser):
                 "events": _get_events(db),
                 "top10": data.Stat.getTop10(),
                 "elo": elo,
+                # The signed-in player's own badge, which the top ten cannot supply
+                # because they are usually not in it.
+                "rank": data.Rank.forElo(elo, position),
+                # Drawn as the ring around their own avatar, the same one they wear on
+                # the podium, so a player recognises themselves in both places.
+                "place": position,
             },
         )
 
@@ -139,8 +146,18 @@ def event(request: Request, event: str, user: CurrentUser):
 
         users = None
         if signup:
+            # A roster draws the same card as the podium does, so it needs the same two
+            # facts. Both are cheap: ladderPosition reads the cached top ten and every
+            # ring on the team comes back in one query.
+            roster = [signup.ownerSteam64, *signup.users]
+            rings = data.User.ringsFor(roster)
             users = [
-                data.User.getSteamData(s) for s in [signup.ownerSteam64, *signup.users]
+                {
+                    "u": data.User.getSteamData(s),
+                    "place": data.Stat.ladderPosition(s),
+                    "ring": rings.get(str(s)),
+                }
+                for s in roster
             ]
 
         return templates.TemplateResponse(

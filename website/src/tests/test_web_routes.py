@@ -207,8 +207,12 @@ def test_profile_page_renders_match_history(client, user_factory):
     r = client.get(f"/u/{player.steam64}")
 
     assert r.status_code == 200
-    assert "statcards" in r.text
+    assert 'class="tile statcard s1"' in r.text
     assert "matchlist" in r.text
+    # One of each tile. A conflict resolution once left a second copy of everything
+    # below the identity tile, which every other assertion here passed straight over.
+    assert r.text.count('class="bento') == 1
+    assert r.text.count("tile history") == 1
     # Only one match, and it has no "Current Elo" paired with the change — not
     # enough to plot a trend.
     assert "Not enough ranked matches yet" in r.text
@@ -464,3 +468,188 @@ def test_lobby_hands_steam_the_launch_command(client):
     assert url in r.text
     # The bare code too, for Connect Directly and for anyone without the handler.
     assert settings.lobby_connect_code in r.text
+
+
+def test_profile_page_shows_the_rank_the_elo_earns(client, user_factory):
+    from src.core import models as data
+
+    player = user_factory()
+    data.Stat.append(player.steam64, "unt", kills=1)
+    data.Stat.append(player.steam64, "unt", elo=450)  # 300 seeded + 450 = 750, Immune
+
+    r = client.get(f"/u/{player.steam64}")
+
+    assert r.status_code == 200
+    assert 'data-rank="immune"' in r.text
+    assert "/static/ranks/immune.svg" in r.text
+    assert "50 Elo to Immune 1" in r.text
+
+
+def _finishedMatchFor(player, **summary):
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    with opendb() as db:
+        match = data.Match(
+            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
+        )
+        db.add(match)
+        db.flush()
+        matchId = match.id
+
+    data.MatchResult.recordFinalResults(
+        matchId,
+        {str(player.steam64): {"Kills": 4, "Deaths": 1, "Won": True, **summary}},
+    )
+    return matchId
+
+
+def test_match_detail_shows_the_reader_their_own_elo_on_the_bar(
+    client, login, user_factory
+):
+    """The bar is the one thing on this page that is about the reader rather than the
+    match, so it is only drawn for the player who was in it."""
+    player = user_factory()
+    matchId = _finishedMatchFor(player, **{"Current Elo": 620, "Elo Change": 30})
+
+    login(client, player)
+    r = client.get(f"/match/{matchId}")
+
+    assert r.status_code == 200
+    assert 'class="rankCard yourRank"' in r.text
+    assert 'data-rank="gold1"' in r.text
+    # 620 into Gold 1 is 20% of the way through it, and the 30 Elo won is another 30%.
+    assert 'style="width:20.0%"' in r.text
+    assert 'class="gained" style="left:20.0%;width:30.0%"' in r.text
+    assert "+30" in r.text
+    assert "50 Elo to Immune" in r.text
+
+
+def test_match_detail_calls_out_a_promotion(client, login, user_factory):
+    player = user_factory()
+    matchId = _finishedMatchFor(player, **{"Current Elo": 590, "Elo Change": 20})
+
+    login(client, player)
+    r = client.get(f"/match/{matchId}")
+
+    assert 'class="rankMove up">Ranked up' in r.text
+    assert 'data-rank="gold1"' in r.text
+    # Promoted, so the bar fills the new tier from empty rather than from where the
+    # Elo sat in the tier below.
+    assert 'class="gained" style="left:0.0%;width:10.0%"' in r.text
+
+
+def test_match_detail_calls_out_a_demotion(client, login, user_factory):
+    player = user_factory()
+    matchId = _finishedMatchFor(player, **{"Current Elo": 610, "Elo Change": -20})
+
+    login(client, player)
+    r = client.get(f"/match/{matchId}")
+
+    assert 'class="rankMove down">Ranked down' in r.text
+    assert 'class="lost" style="left:90.0%;width:10.0%"' in r.text
+
+
+def test_match_detail_draws_no_bar_for_somebody_who_was_not_in_the_match(
+    client, login, user_factory
+):
+    player = user_factory()
+    stranger = user_factory()
+    matchId = _finishedMatchFor(player, **{"Current Elo": 620, "Elo Change": 30})
+
+    login(client, stranger)
+    r = client.get(f"/match/{matchId}")
+
+    assert r.status_code == 200
+    assert "yourRank" not in r.text
+    # The results table still names everybody, and still badges them.
+    assert "/static/ranks/gold1.svg" in r.text
+
+
+def test_match_detail_of_an_unranked_match_has_no_rank_to_show(client, user_factory):
+    """An unranked gamemode records no Elo Change, and neither did anything played
+    before Elo existed, so there is nothing to badge rather than a change of zero."""
+    player = user_factory()
+    matchId = _finishedMatchFor(player)
+
+    r = client.get(f"/match/{matchId}")
+
+    assert r.status_code == 200
+    assert "yourRank" not in r.text
+    assert "/static/ranks/" not in r.text
+
+
+def test_leaderboard_badges_the_players_it_lists(client, login, user_factory):
+    from src.core import models as data
+    from src.core.models import stat as statModule
+
+    top = user_factory()
+    data.Stat.append(top.steam64, "unt", elo=450)  # 750, Immune
+
+    # getTop10 caches for a minute, and an earlier test's ladderPosition call will have
+    # filled it with rows that no longer exist by the time this one runs.
+    statModule._top10Cache[1] = 0
+
+    login(client, top)
+    r = client.get("/esports/")
+
+    assert r.status_code == 200
+    assert "/static/ranks/immune.svg" in r.text
+    assert '<span class="tier">Immune</span>' in r.text
+    assert "750ELO" in r.text
+    assert "50 Elo to Immune 1" in r.text
+    # The badge rides on the avatar, and it is still the badge: mounted in the crest
+    # beside the picture rather than cropped and rounded off like one.
+    assert 'class="crest"' in r.text
+    assert 'class="badge"' in r.text
+
+
+def test_a_top_three_place_outranks_a_permission_ring(client, user_factory):
+    """One ring, one meaning: an admin who is also first on the ladder wears gold.
+
+    The two are drawn the same way, so whichever is rarer has to win outright rather
+    than both being rendered and one covering the other.
+    """
+    from src.core import models as data
+    from src.core.models import stat as statModule
+    from src.core.settings import settings
+
+    admin = user_factory(
+        permissions=2 ** settings.permissions.index("admin"), discord=99
+    )
+    data.Stat.append(admin.steam64, "unt", elo=600)
+    statModule._top10Cache[1] = 0
+
+    r = client.get(f"/u/{admin.steam64}")
+
+    assert r.status_code == 200
+    assert 'data-place="1"' in r.text
+    assert "data-ring=" not in r.text
+    assert "#1" in r.text
+
+
+def test_a_linked_discord_rings_a_player_who_is_off_the_podium(client, user_factory):
+    from src.core import models as data
+    from src.core.models import stat as statModule
+
+    for _ in range(3):
+        data.Stat.append(user_factory().steam64, "unt", elo=600)
+
+    player = user_factory(discord=1234)
+    data.Stat.append(player.steam64, "unt", elo=50)
+    statModule._top10Cache[1] = 0
+
+    r = client.get(f"/u/{player.steam64}")
+
+    assert r.status_code == 200
+    assert 'data-ring="discord"' in r.text
+    # Fourth on the ladder is not a place anybody wears, and only the top three get a
+    # number in front of their name.
+    assert "data-place=" not in r.text
+
+
+def test_leaderboard_renders_for_a_signed_out_visitor(client):
+    from src.core.models import stat as statModule
+
+    statModule._top10Cache[1] = 0
+    assert client.get("/esports/").status_code == 200

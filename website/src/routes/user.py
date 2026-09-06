@@ -246,6 +246,7 @@ def profile(request: Request, steam64: int, viewer: CurrentUser = None):
                 "eloHistory": _eloHistory(matches, str(steam64)),
                 "steam64Str": str(steam64),
                 "steamData": data.User.getSteamData(steam64),
+                "place": data.Stat.ladderPosition(steam64),
                 # Moderation lives on the profile because this is the page somebody is
                 # already on when they decide a player needs dealing with. Everything
                 # below is drawn only for an admin; for everyone else the profile is
@@ -263,8 +264,50 @@ def profile(request: Request, steam64: int, viewer: CurrentUser = None):
         )
 
 
+def _rankAfter(summary: dict, steam64) -> data.Rank | None:
+    """The badge a player came out of a match wearing, or None if the match did not
+    move any Elo.
+
+    An unranked gamemode records no "Elo Change", and neither did anything played
+    before Elo existed, so those have no rank to show rather than a change of zero to
+    show. Ladder position is read as it stands now rather than as it stood then, which
+    is what keeps a badge here identical to the one on the same player's profile.
+    """
+    if "Elo Change" not in summary or "Current Elo" not in summary:
+        return None
+    elo = summary["Current Elo"] + summary["Elo Change"]
+    return data.Rank.forElo(elo, data.Stat.ladderPosition(steam64))
+
+
+def _yourProgress(results: dict, steam64: int | None) -> dict | None:
+    """The reader's own Elo movement in this match, or None if they were not in it.
+
+    The results table below already lists what everybody scored. This is the only part
+    of the page that is about the person reading it, so it is worked out here rather
+    than picked back out of that table in the template.
+    """
+    summary = results.get(str(steam64)) if steam64 else None
+    if not summary:
+        return None
+
+    rank = _rankAfter(summary, steam64)
+    if rank is None:
+        return None
+
+    before = summary["Current Elo"]
+    was = data.Rank.forElo(before, data.Stat.ladderPosition(steam64))
+    return {
+        "rank": rank,
+        "bar": rank.bar(before),
+        "delta": summary["Elo Change"],
+        "elo": rank.elo,
+        "promoted": rank.floor > was.floor,
+        "demoted": rank.floor < was.floor,
+    }
+
+
 @router.get("/match/{matchid}")
-def match_detail(request: Request, matchid: int):
+def match_detail(request: Request, matchid: int, user: CurrentUser):
     """A finished match's result and kill log — public, same as /u/{steam64}. The
     kill-by-kill map/graph view is still a concept; this is the plain data it will sit on
     top of."""
@@ -282,15 +325,24 @@ def match_detail(request: Request, matchid: int):
             )
 
         results = result.data.get("results", {})
+        rings = data.User.ringsFor(results.keys())
         return templates.TemplateResponse(
             request=request,
             name="pages/match_detail.html",
             context={
                 "result": result,
                 "players": [
-                    {"steam64": s64, "user": steam.User(int(s64)), **summary}
+                    {
+                        "steam64": s64,
+                        "user": steam.User(int(s64)),
+                        "rank": _rankAfter(summary, s64),
+                        "place": data.Stat.ladderPosition(s64),
+                        "ring": rings.get(str(s64)),
+                        **summary,
+                    }
                     for s64, summary in results.items()
                 ],
+                "you": _yourProgress(results, user.steam64 if user else None),
                 "kills": result.data.get("kills", []),
                 "round": round,
                 "max": max,

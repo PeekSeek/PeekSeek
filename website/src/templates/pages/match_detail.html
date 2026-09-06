@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "_player.html" import playerCard %}
 
 {% block title %}Match #{{result.matchId}}{% endblock %}
 {% block titleEmbed %}Match #{{result.matchId}}{% endblock %}
@@ -13,15 +14,37 @@
     <h1 class="matchHeading">{{result.data.get("map") or "Unknown map"}}</h1>
     <span class="matchWhen">Match #{{result.matchId}} &middot; {{result.endTime.strftime("%d/%m/%Y %H:%M")}}</span>
 
+    {% if you %}
+    {# Everything below this is the match. This is the reader, which is the one thing the
+       results table cannot tell them: where the Elo they just won or lost puts them. #}
+    <div class="rankCard yourRank" data-rank="{{you.rank.icon}}">
+      <img class="rankBadge" src="/static/ranks/{{you.rank.icon}}.svg" alt="" title="{{you.rank.name}}">
+      <div class="rankCardBody">
+        <div class="rankCardHead">
+          <b>{{you.rank.name}}</b>
+          {% if you.promoted %}<span class="rankMove up">Ranked up</span>{% elif you.demoted %}<span class="rankMove down">Ranked down</span>{% endif %}
+          <span class="rankDelta {{ 'pos' if you.delta >= 0 else 'neg' }}">{{ "+" if you.delta >= 0 else "" }}{{you.delta}}</span>
+        </div>
+        <div class="rankBar">
+          <i style="width:{{you.bar.held}}%"></i>
+          <i class="{{you.bar.direction}}" style="left:{{you.bar.held}}%;width:{{you.bar.changed}}%"></i>
+        </div>
+        <span class="rankGoal">{{you.elo}} Elo. {{you.rank.goal}}</span>
+      </div>
+    </div>
+    {% endif %}
+
     <h2>Result</h2>
     {% if not players %}
       <span>No result recorded for this match.</span>
     {% else %}
       <table class="statTable">
+        {# No Rank column: the badge rides on the avatar, which is a column back for a
+           table that has to fit six numbers next to a name. #}
         <tr><th>Player</th><th>Kills</th><th>Deaths</th><th>HS%</th><th>Elo</th><th></th></tr>
         {% for p in players %}
         <tr>
-          <td><a class="userProfile small" href="/u/{{p.steam64}}"><img src="{{p.user.avatar}}" alt="">{{p.user.name}}</a></td>
+          <td>{{ playerCard(p.user, rank=p.rank, place=p.place, ring=p.ring, sub=false) }}</td>
           <td>{{p.get("Kills", 0)}}</td>
           <td>{{p.get("Deaths", 0)}}</td>
           <td>{{round(p.get("Headshots", 0) / max(p.get("Kills", 0), 1) * 100, 1)}}</td>
