@@ -123,12 +123,12 @@ class Season(SQLModel, table=True):
                 db.query(Season).where(Season.id < self.id).order_by(Season.id).first()
             )
             later = (
-                db.query(Season)
-                .where(Season.id > self.id)
-                .order_by(Season.id)
-                .first()
+                db.query(Season).where(Season.id > self.id).order_by(Season.id).first()
             )
-        return (self.created_at if earlier else None, later.created_at if later else None)
+        return (
+            self.created_at if earlier else None,
+            later.created_at if later else None,
+        )
 
     def covers(self, when) -> bool:
         """Whether something that happened at `when` happened during this season."""

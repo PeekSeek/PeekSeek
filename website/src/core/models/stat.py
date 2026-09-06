@@ -228,9 +228,7 @@ class Stat(SQLModel, table=True):
             if not row:
                 return None
             return (
-                db.query(Stat)
-                .where(Stat.season == season, Stat.elo > row.elo)
-                .count()
+                db.query(Stat).where(Stat.season == season, Stat.elo > row.elo).count()
                 + 1
             )
 
@@ -242,9 +240,7 @@ class Stat(SQLModel, table=True):
         leaderboard and only ever has the signed-in user's id. Two cheap queries and no
         Steam: this runs on every render of every page.
         """
-        return Rank.forElo(
-            Stat.getElo(steam64), Stat.ladderPosition(steam64)
-        )
+        return Rank.forElo(Stat.getElo(steam64), Stat.ladderPosition(steam64))
 
     @staticmethod
     def startSeason(steam64) -> None:

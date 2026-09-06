@@ -127,9 +127,7 @@ class User(SQLModel, table=True):
 
         with open() as db:
             users = (
-                db.query(User)
-                .where(User.steam64.in_([int(s) for s in steam64s]))
-                .all()
+                db.query(User).where(User.steam64.in_([int(s) for s in steam64s])).all()
             )
             return {str(u.steam64): u.ring for u in users if u.ring}
 

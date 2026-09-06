@@ -40,8 +40,18 @@ def main() -> int:
         # -strip and -depth 8 because a badge is flat colour: 16-bit and metadata
         # tripled the file size for nothing anybody can see at thumbnail size.
         result = subprocess.run(
-            [magick, "-background", "none", source, "-resize", SIZE,
-             "-depth", "8", "-strip", target],
+            [
+                magick,
+                "-background",
+                "none",
+                source,
+                "-resize",
+                SIZE,
+                "-depth",
+                "8",
+                "-strip",
+                target,
+            ],
             capture_output=True,
             text=True,
         )

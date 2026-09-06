@@ -216,7 +216,9 @@ class ConfirmBan(discord.ui.View):
 )
 @app_commands.choices(
     reason=[
-        app_commands.Choice(name="Cheating (permanent, voids history)", value="cheating"),
+        app_commands.Choice(
+            name="Cheating (permanent, voids history)", value="cheating"
+        ),
         app_commands.Choice(name="Matchfixing (1 month)", value="matchfixing"),
         app_commands.Choice(name="Toxicity (1 week)", value="toxicity"),
         app_commands.Choice(name="Custom", value="custom"),
@@ -397,7 +399,9 @@ async def sendStats(interaction: discord.Interaction, target) -> None:
             value=f"{record.wins}W {record.losses}L - {record.kills}K {record.deaths}D",
             inline=True,
         )
-        embed.add_field(name="Headshots", value=f"{record.headshotPercent}%", inline=True)
+        embed.add_field(
+            name="Headshots", value=f"{record.headshotPercent}%", inline=True
+        )
     else:
         embed.add_field(name="Rank", value="Never played a ranked match", inline=True)
 
@@ -450,7 +454,9 @@ class BanSelect(discord.ui.Select):
 
         options = []
         for ban in bans[:25]:
-            issued = ban.created_at.strftime("%d %b %Y") if ban.created_at else "unknown"
+            issued = (
+                ban.created_at.strftime("%d %b %Y") if ban.created_at else "unknown"
+            )
             if ban.endTime == 0:
                 state = "overturned"
             elif ban.endTime > int(time()):
@@ -476,7 +482,9 @@ class BanSelect(discord.ui.Select):
             moderation.overturnBan, banId, self.byName, self.bySteam64
         )
         if lifted is None:
-            await interaction.followup.send("That ban no longer exists.", ephemeral=True)
+            await interaction.followup.send(
+                "That ban no longer exists.", ephemeral=True
+            )
             return
 
         await interaction.followup.send(
@@ -504,14 +512,18 @@ class PickBanToOverturn(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.invoker:
-            await interaction.response.send_message("That menu is not yours.", ephemeral=True)
+            await interaction.response.send_message(
+                "That menu is not yours.", ephemeral=True
+            )
             return False
         return True
 
     async def on_error(self, interaction, error, item):
         """Without this a failing menu leaves Discord's "interaction failed" and nothing
         in the log, which is indistinguishable from the bot being down."""
-        logging.error("Unban menu failed: %s", "".join(traceback.format_exception(error)))
+        logging.error(
+            "Unban menu failed: %s", "".join(traceback.format_exception(error))
+        )
         message = "That failed. It is logged; nothing was changed."
         if interaction.response.is_done():
             await interaction.followup.send(message, ephemeral=True)
@@ -588,7 +600,9 @@ class BanNote(discord.ui.Modal):
     """
 
     def __init__(self, preset: str, target, admin):
-        super().__init__(title=f"{moderation.PRESETS.get(preset, {}).get('label', 'Custom')} ban")
+        super().__init__(
+            title=f"{moderation.PRESETS.get(preset, {}).get('label', 'Custom')} ban"
+        )
         self.preset = preset
         self.target = target
         self.admin = admin
@@ -607,7 +621,10 @@ class BanNote(discord.ui.Modal):
                 label="Days", placeholder="7", max_length=4, required=True
             )
             self.reason = discord.ui.TextInput(
-                label="Reason", placeholder="What it is for", max_length=100, required=True
+                label="Reason",
+                placeholder="What it is for",
+                max_length=100,
+                required=True,
             )
             self.add_item(self.days)
             self.add_item(self.reason)
@@ -650,7 +667,8 @@ class BanNote(discord.ui.Modal):
             )
             length = moderation.PRESETS[self.preset]["summary"].lower()
             await interaction.response.send_message(
-                f"**{displayName(self.target)}** is banned for {length}.", ephemeral=True
+                f"**{displayName(self.target)}** is banned for {length}.",
+                ephemeral=True,
             )
             return
 
@@ -660,7 +678,11 @@ class BanNote(discord.ui.Modal):
         await interaction.followup.send(
             embed=cheatingPreviewEmbed(self.target, preview),
             view=ConfirmBan(
-                interaction.user.id, self.target, str(self.note), byName, self.admin.steam64
+                interaction.user.id,
+                self.target,
+                str(self.note),
+                byName,
+                self.admin.steam64,
             ),
             ephemeral=True,
         )
@@ -698,7 +720,9 @@ class PickPreset(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.invoker:
-            await interaction.response.send_message("That menu is not yours.", ephemeral=True)
+            await interaction.response.send_message(
+                "That menu is not yours.", ephemeral=True
+            )
             return False
         return True
 
@@ -944,7 +968,9 @@ async def on_message(message: discord.Message):
 
     if message.author.id == bot.user.id:
         return
-    if not settings.sticky_channel or message.channel.id != int(settings.sticky_channel):
+    if not settings.sticky_channel or message.channel.id != int(
+        settings.sticky_channel
+    ):
         return
 
     if stickyPending:
@@ -1048,7 +1074,9 @@ def leaderboardEmbed() -> discord.Embed:
     lines = []
     for place, row in enumerate(data.Stat.getTop10(), start=1):
         name = getattr(row.u, "name", None) or "Nameless"
-        lines.append("`" + str(place).rjust(2) + ".` **" + name + "** " + str(row.elo) + " Elo")
+        lines.append(
+            "`" + str(place).rjust(2) + ".` **" + name + "** " + str(row.elo) + " Elo"
+        )
 
     return discord.Embed(
         title="Top 10 this week",
@@ -1086,8 +1114,13 @@ async def postWeekly() -> None:
 
         message = (
             "**" + str(week["played"]) + " matches**, " + str(week["wins"]) + " won.\n"
-            "**" + format(week["elo"], "+d") + " Elo** this week.\n"
-            + str(week["kills"]) + " kills, " + str(week["deaths"]) + " deaths."
+            "**"
+            + format(week["elo"], "+d")
+            + " Elo** this week.\n"
+            + str(week["kills"])
+            + " kills, "
+            + str(week["deaths"])
+            + " deaths."
         )
         await asyncio.to_thread(
             send_discord_dm,
