@@ -229,7 +229,10 @@ def public_reputation(steam64: int):
 @router.get("/user/{steam64}")
 @router.get("/u/{steam64}")
 def profile(
-    request: Request, steam64: int, viewer: CurrentUser = None, season: int | None = None
+    request: Request,
+    steam64: int,
+    viewer: CurrentUser = None,
+    season: int | None = None,
 ):
     with opendb() as db:
         seasons = data.Season.all()
@@ -239,7 +242,9 @@ def profile(
         stat = data.Stat.forSeason(steam64, viewing.id)
         # A match carries no season of its own, so a season's matches are the ones
         # played while it was the one being played.
-        matches = [m for m in data.MatchResult.latestFor(steam64) if viewing.covers(m.endTime)]
+        matches = [
+            m for m in data.MatchResult.latestFor(steam64) if viewing.covers(m.endTime)
+        ]
         rank = data.Stat.rankFor(steam64)
         return templates.TemplateResponse(
             request=request,
@@ -272,8 +277,14 @@ def profile(
                 # exactly what it was.
                 "viewerIsAdmin": viewer is not None and viewer.getPermission("admin"),
                 "viewerSteam64": str(viewer.steam64) if viewer else "",
-                "viewerName": data.User.getSteamData(viewer.steam64).name if viewer else "",
-                "banHistory": data.UserBan.historyFor(steam64) if (viewer and viewer.getPermission("admin")) else [],
+                "viewerName": (
+                    data.User.getSteamData(viewer.steam64).name if viewer else ""
+                ),
+                "banHistory": (
+                    data.UserBan.historyFor(steam64)
+                    if (viewer and viewer.getPermission("admin"))
+                    else []
+                ),
                 # Compared against each ban's endTime in the template, so a row can say
                 # whether it is still in force without the template doing arithmetic.
                 "now": int(time()),
