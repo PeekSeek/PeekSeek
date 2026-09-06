@@ -22,7 +22,7 @@
     {%- if sub and (rank or elo) %}
     <span class="sub">
       {%- if rank %}<span class="tier">{{rank.name}}</span>{% endif %}
-      {%- if rank and elo %} &middot; {% endif %}
+      {%- if rank and elo %} {% endif %}
       {%- if elo %}{{elo}}ELO{% endif %}
     </span>
     {%- endif %}
