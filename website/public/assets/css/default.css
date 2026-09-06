@@ -155,7 +155,7 @@ content .main {
   display: flex;
   flex-direction: column;
   padding: 0;
-} .info.flexrow {
+} .info .flexrow {
   margin-bottom: 10px !important;
 }
 

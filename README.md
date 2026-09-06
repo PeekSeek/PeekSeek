@@ -43,8 +43,8 @@ forking the platform for another game.
 # website
 cd website
 pip install -r requirements.txt
-cp .env.example .env          # fill in the values
-uvicorn src.app:app --reload  # :8000, docs at /docs
+cp .env.example .env
+uvicorn src.app:app --reload
 pytest -v
 
 # either plugin
