@@ -1,5 +1,6 @@
 import requests
 
+from .notify import DISCORD_TIMEOUT
 from .settings import settings
 
 
@@ -27,7 +28,11 @@ class Webhook:
             embed["description"] = description
 
         try:
-            r = requests.post(self.url, json={"username": self.name, "embeds": [embed]})
+            r = requests.post(
+                self.url,
+                json={"username": self.name, "embeds": [embed]},
+                timeout=DISCORD_TIMEOUT,
+            )
             r.raise_for_status()
             return True
         except requests.exceptions.HTTPError:

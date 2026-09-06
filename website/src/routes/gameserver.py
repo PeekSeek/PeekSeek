@@ -119,9 +119,16 @@ def session(server: GameServer, serverCode: str = "0", matchId: int = 0):
     data.Match.releaseAbandoned(serverCode)
     data.Match.resolveExpiredPicks()
 
+    # A match this server already holds but was never told about comes back to it before
+    # any new one is built. Matchmaking runs inside this call, so a poll whose answer
+    # got lost still created a match — and without this the next poll built a second one
+    # for the same players rather than finishing the delivery of the first.
+    #
     # Assign before cancelling, or a match could be scrapped in the same breath as the
     # server that was about to take it reported itself free.
-    match = matchmaking.matchForServer(server.region, serverCode)
+    match = data.Match.undeliveredFor(serverCode) or matchmaking.matchForServer(
+        server.region, serverCode
+    )
     data.Match.cancelStranded()
 
     answer = _hostOrWait(match) if match else {"action": "idle"}

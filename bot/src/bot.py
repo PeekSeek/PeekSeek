@@ -372,52 +372,100 @@ def inPeekSeek(interaction: discord.Interaction) -> bool:
     )
 
 
-async def sendStats(interaction: discord.Interaction, target) -> None:
-    """One player's record. Deliberately says nothing about bans: that belongs to
-    /unban, which is the command that acts on them."""
-    with opendb() as db:
-        record = db.query(data.Stat).where(data.Stat.steam64 == int(target)).first()
+def rankColour(rank) -> int:
+    """The colour of the Discord role this badge grants.
+
+    Read off the role rather than kept beside the tier, so the embed is whatever colour
+    the ladder already paints that rank in Discord and there is one place to change it.
+    The guild is looked up by id rather than taken from the interaction, so /stats run
+    from a DM or another server is still coloured.
+
+    GREY when there is no role, no guild in the cache, or the role was left on Discord's
+    default colour -- that last one renders as no colour at all on an embed, which reads
+    as a bug rather than as a choice.
+    """
+    if not (settings.discord_guild and rank.role):
+        return GREY
+
+    guild = bot.get_guild(int(settings.discord_guild))
+    role = guild.get_role(int(rank.role)) if guild else None
+    return role.colour.value if role and role.colour.value else GREY
+
+
+async def sendStats(interaction: discord.Interaction, target, seasonId=None) -> None:
+    """One player's record for one season. Deliberately says nothing about bans: that
+    belongs to /unban, which is the command that acts on them.
+
+    No season means the one being played. `forSeason` is what makes those the same
+    call: the season being played is read off the live standing, and a finished one out
+    of its archive, so nothing here has to know which of the two it is holding.
+    """
+    season = data.Season.find(seasonId) or data.Season.current()
+    record = data.Stat.forSeason(int(target), season.id)
 
     embed = discord.Embed(
         title=displayName(target),
         url=f"{settings.base_url}/u/{target}",
-        colour=GREY,
+        colour=rankColour(record.rank) if record else GREY,
     )
-    embed.add_field(name="Steam64", value=f"`{target}`", inline=True)
+    # The season names itself above the title, because the footer is the steam64's and
+    # an embed that does not say which season it is answering for is worse than one
+    # that cannot be filtered at all.
+    embed.set_author(name=season.name)
+    embed.set_footer(text=f"Steam64: {target}")
 
     if record:
         # The badge leads and the Elo trails it, because the badge is the thing players
         # talk in and the number is how it was earned. PNG rather than the SVG the site
         # draws: Discord will not render an SVG in an embed.
         rank = record.rank
+        embed.set_thumbnail(url=f"{settings.base_url}/static/ranks/{rank.icon}.png")
         embed.add_field(
             name="Rank", value=f"{rank.name} *{record.elo}ELO*", inline=True
         )
-        embed.set_thumbnail(url=f"{settings.base_url}/static/ranks/{rank.icon}.png")
-        embed.add_field(
-            name="Record",
-            value=f"{record.wins}W {record.losses}L - {record.kills}K {record.deaths}D",
-            inline=True,
-        )
+        embed.add_field(name="Wins", value=str(record.wins), inline=True)
+        embed.add_field(name="Losses", value=str(record.losses), inline=True)
+        embed.add_field(name="Kills", value=str(record.kills), inline=True)
+        embed.add_field(name="Deaths", value=str(record.deaths), inline=True)
         embed.add_field(
             name="Headshots", value=f"{record.headshotPercent}%", inline=True
         )
     else:
-        embed.add_field(name="Rank", value="Never played a ranked match", inline=True)
+        embed.add_field(
+            name="Rank", value=f"No ranked matches in {season.name}", inline=True
+        )
 
     await interaction.response.send_message(
         embed=embed, view=profileLinks(target), ephemeral=not inPeekSeek(interaction)
     )
 
 
+async def seasonOptions(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[int]]:
+    """The season picker. Autocomplete rather than a fixed list of choices because
+    seasons are made as the ladder is played, and a static list would go stale the day
+    a manager opens the next one."""
+    typed = current.strip().lower()
+    return [
+        app_commands.Choice(name=season.name, value=season.id)
+        for season in data.Season.all()
+        if typed in season.name.lower()
+    ][:25]
+
+
 @bot.tree.command(name="stats", description="Look up a player's PeekSeek record.")
 @app_commands.describe(
-    player="The Discord account of the player.", steam64="Or their steam64."
+    player="The Discord account of the player.",
+    steam64="Or their steam64.",
+    season="Which season. Defaults to the one being played.",
 )
+@app_commands.autocomplete(season=seasonOptions)
 async def stats(
     interaction: discord.Interaction,
     player: discord.User | None = None,
     steam64: str | None = None,
+    season: int | None = None,
 ):
     """Open to everyone. A player's Elo and K/D are already public on their profile,
     so gating the command that reads them out would only make it less useful."""
@@ -437,7 +485,7 @@ async def stats(
             await interaction.response.send_message(error, ephemeral=True)
             return
 
-    await sendStats(interaction, target)
+    await sendStats(interaction, target, season)
 
 
 class BanSelect(discord.ui.Select):
