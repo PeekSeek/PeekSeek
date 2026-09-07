@@ -290,14 +290,17 @@ internal static class SiegeWorld {
 
     /// Everything a player carries into a round: their saved kit, the gamemode's
     /// default items, and the one option they picked off the board.
-    internal static void Kit(Player player, SiegeOption option) {
+    /// Dress a player in their own loadout and nothing else.
+    ///
+    /// This is what a builder gets: the gun and outfit they configured on the site, with
+    /// none of the gamemode's default items. A dressing and a painkiller are things you
+    /// want going into a fight, not going into a build phase, and turning up holding
+    /// them is confusing rather than generous.
+    internal static void Outfit(Player player) {
         ClearInventory(player);
 
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
         foreach (SiegeItem item in RemoteAPI.KitFor(steam64)) Give(player, item);
-
-        Give(player, PeekSeekSiege.Config.DefaultItems);
-        if (option != null) Give(player, option.Items);
 
         // A kit with no outfit in it — or one that never arrived because the site was
         // unreachable — leaves somebody naked with almost no inventory space, which is
@@ -309,10 +312,17 @@ internal static class SiegeWorld {
 
         ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
 
-        // Passive regeneration is off on PeekSeek servers, so a round is the only
-        // moment anybody gets health back. Kitting is what "a round is starting" means
-        // here, so it is where the top-up belongs.
+        // Passive regeneration is off on PeekSeek servers, so this is the only moment
+        // anybody gets health back.
         player.life.serverModifyHealth(100);
+    }
+
+    internal static void Kit(Player player, SiegeOption option) {
+        Outfit(player);
+
+        Give(player, PeekSeekSiege.Config.DefaultItems);
+        if (option != null) Give(player, option.Items);
+
     }
 
     internal static void Give(Player player, IEnumerable<SiegeItem> items) {

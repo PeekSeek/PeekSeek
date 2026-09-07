@@ -79,7 +79,7 @@ internal class Siege : IGamemode {
     /// In a real match this alternates: a team defends its own base for three rounds and
     /// then goes and attacks the other team's for three. Solo has only one base, so every
     /// round is fought over that one and the tester swaps which end of it they are on.
-    internal int DefendedSite => match != null && match.Solo ? 0 : RoundOrder.Defender(round);
+    internal int DefendedSite => RoundOrder.Defender(round);
 
     /// Whether a player is on the defending side of the round being played.
     internal bool IsDefending(ulong steam64) => SideOf(steam64) == DefendedSite;
@@ -218,6 +218,17 @@ internal class Siege : IGamemode {
         return match.Solo ? [0] : Enumerable.Range(0, sites.Count);
     }
 
+    /// The base to stand at each site.
+    ///
+    /// Solo builds one base and then has to attack something, so that one base is put up
+    /// at both anchors: the tester spends three rounds holding the building they made and
+    /// three attacking a copy of it. In a real match each team has its own.
+    private BaseSnapshot BaseFor(int team) {
+        if (match.Solo) return bases[0];
+
+        return bases.Length > team ? bases[team] : null;
+    }
+
     /// The Unturned group a site's team is in, or 0 before the roster has one.
     private ulong GroupOf(int team) {
         return match != null && match.Teams.Count > team ? match.Teams[team].GroupId : 0;
@@ -234,12 +245,6 @@ internal class Siege : IGamemode {
 
     private void StartRound(int number) {
         round = number;
-
-        // Solo follows the same three-and-three swap a real match does. There is one
-        // base, so "the other team defends now" means the tester stops holding it and
-        // starts trying to take it, which is exactly the half of the round they would
-        // otherwise never see without knowing to type /siege side.
-        if (match.Solo) soloSide = RoundOrder.Defender(round);
 
         RestoreBases();
         int defender = DefendedSite;
@@ -258,7 +263,7 @@ internal class Siege : IGamemode {
     /// according to the rules that make a round playable. This runs before every round
     /// including the first, so round one and round six start from identical ground.
     private void RestoreBases() {
-        foreach (int team in BuiltSites()) {
+        for (int team = 0; team < sites.Count; team++) {
             SiegeSite site = sites[team];
             ulong group = GroupOf(team);
 
@@ -266,7 +271,7 @@ internal class Siege : IGamemode {
             // shot down, so putting a base back means putting its anchor back too.
             BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, []);
             SiegeWorld.PlaceAnchor(site, group);
-            bases[team]?.Restore(site.AnchorPoint, asset => OwnerGroupFor(asset, group));
+            BaseFor(team)?.Restore(site.AnchorPoint, asset => OwnerGroupFor(asset, group));
         }
     }
 
@@ -499,8 +504,8 @@ internal class Siege : IGamemode {
         // A builder wears what they always wear rather than a uniform this gamemode
         // invented, so the only thing that marks them out as building is the planner.
         if (rationed.Add(steam64)) {
-            SiegeWorld.Kit(player, null);
-            SiegeWorld.GiveGear(player, PeekSeekSiege.Config.BuildTools);
+            SiegeWorld.Outfit(player);
+            SiegeWorld.Issue(player, PeekSeekSiege.Config.BuildTools);
             SiegeWorld.Issue(player, PeekSeekSiege.Config.RationedSupplies);
         }
 
@@ -519,7 +524,10 @@ internal class Siege : IGamemode {
         // side a player is on is whichever site is currently open rather than whichever
         // one they last asked to play. Getting this wrong puts the tester back on the
         // finished base and leashes them to it while the clock runs on the other one.
-        if (match.Solo) return phase == SiegePhase.Building ? 0 : soloSide;
+        // Solo is always team 0. The round order does the rest: team 0 defends the first
+        // three rounds and attacks the second three, so the tester holds their base and
+        // then goes and cracks the other one without touching a command.
+        if (match.Solo) return soloSide;
 
         int index = match.TeamIndexOf(steam64);
         return index < 0 ? 0 : index;

@@ -75,10 +75,9 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// little at a time instead.
     public List<SiegeItem> PlentifulSupplies;
 
-    /// What a builder is handed on top of their own loadout, by the name shown on the
-    /// item. Named rather than numbered so a tool can be swapped without anybody having
-    /// to dig its id out of the bundles; `/siege find <text>` reports what exists.
-    public List<string> BuildTools;
+    /// What a builder is handed on top of their own loadout. `/siege find <text>` looks
+    /// an id up in game if one of these ever needs swapping.
+    public List<SiegeItem> BuildTools;
 
     /// Clothing given only to a player whose own kit did not dress them — because the
     /// site was unreachable, or their loadout has no outfit in it. Anybody with a kit
@@ -152,31 +151,39 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         AnchorFloorItemId = 369;
         AnchorMarkerItemId = 1158;
 
-        // Ids are read off the server's own Bundles/Items rather than guessed: the metal
-        // block is not in the order its names suggest (370 is the doorway, 373 the
-        // roof), and birch is a different block again.
+        // Ids are read off the server's own Bundles/Items rather than guessed, and none
+        // of the three materials is a contiguous block in the order its names suggest.
         //
-        // Metal: 369 floor, 371 wall, 378 door, 1332 hatch.
+        // Brick: 1210 doorway, 1212 pillar, 1215 wall, 1216 window, 1984 roof.
         // Birch: 49 doorway, 51 floor, 53 pillar, 55 roof, 57 wall, 59 window, 318 stairs.
+        // Metal: 378 door, 1332 hatch.
+        //
+        // Brick is the scarce material rather than metal: at 1650 health it takes real
+        // explosives to open, and it is what a team spends its one allowance on. Doors
+        // and hatches stay metal because they are the ways a team moves through its own
+        // building and should not be the soft spot.
         RationedSupplies = [
-            new SiegeItem(371, 4),
-            new SiegeItem(373, 4),
+            new SiegeItem(1215, 6),
+            new SiegeItem(1984, 4),
+            new SiegeItem(1212, 4),
+            new SiegeItem(1210, 2),
+            new SiegeItem(1216, 2),
             new SiegeItem(378, 2),
             new SiegeItem(1332, 2)
         ];
 
         PlentifulSupplies = [
-            new SiegeItem(57, 8),
-            new SiegeItem(49, 4),
-            new SiegeItem(59, 4),
-            new SiegeItem(53, 8),
-            new SiegeItem(55, 8),
-            new SiegeItem(318, 4)
+            new SiegeItem(57, 30),
+            new SiegeItem(49, 12),
+            new SiegeItem(59, 12),
+            new SiegeItem(53, 24),
+            new SiegeItem(55, 20),
+            new SiegeItem(318, 8)
         ];
 
         SupplyRefillSeconds = 5;
-        HandsWidth = 12;
-        HandsHeight = 10;
+        HandsWidth = 14;
+        HandsHeight = 20;
 
         OffBaseDamagePerSecond = 12;
         OffBaseGraceSeconds = 2f;
@@ -228,35 +235,39 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             }
         ];
 
+        // Raiders are the explosive side. Nothing here is a placed barricade: attackers
+        // are in a different group from the site they are attacking, so the defenders'
+        // claim bubble refuses them any placement inside it, which is the whole base.
+        // C4 is a sticky throwable rather than a placed charge, so it works.
+        //
+        // 254 fragmentation grenade, 519 rocket launcher, 520 rocket, 1100 C4,
+        // 1520 impact grenade. The launcher does 1000 structure damage, so it comes
+        // with less of everything else.
         RaidOptions = [
-            // Nothing an attacker carries may be a placed barricade. They are in a
-            // different group from the site they are attacking, so the defenders' claim
-            // bubble refuses them any placement inside it — which is the whole base. A
-            // breach charge would simply never go down.
+            new SiegeOption {
+                Name = "Rocket Launcher",
+                Blurb = "Two rockets. Opens brick, and nothing else you carry will.",
+                Items = [new SiegeItem(519, 1), new SiegeItem(520, 2)]
+            },
+            new SiegeOption {
+                Name = "C4",
+                Blurb = "Four sticky charges. Put them on the wall you want gone.",
+                Items = [new SiegeItem(1100, 4)]
+            },
+            new SiegeOption {
+                Name = "Impact Grenades",
+                Blurb = "Six, and they go off where they land.",
+                Items = [new SiegeItem(1520, 6)]
+            },
+            new SiegeOption {
+                Name = "Frags",
+                Blurb = "Six grenades. Clear a room without entering it.",
+                Items = [new SiegeItem(254, 6)]
+            },
             new SiegeOption {
                 Name = "Field Medic",
                 Blurb = "Two medkits and a dressing. Survive the first room.",
                 Items = [new SiegeItem(95, 2), new SiegeItem(1103, 1)]
-            },
-            new SiegeOption {
-                Name = "Frags",
-                Blurb = "Three grenades. Clear a room without entering it.",
-                Items = [new SiegeItem(254, 3)]
-            },
-            new SiegeOption {
-                Name = "Sledge",
-                Blurb = "Quiet entry, straight through the soft walls.",
-                Items = [new SiegeItem(17, 1), new SiegeItem(1838, 1)]
-            },
-            new SiegeOption {
-                Name = "Smoke",
-                Blurb = "Cover the approach. They cannot shoot what they cannot see.",
-                Items = [new SiegeItem(1408, 3)]
-            },
-            new SiegeOption {
-                Name = "Ammo",
-                Blurb = "Spare magazines and a vest. Win the long fight.",
-                Items = [new SiegeItem(1838, 4), new SiegeItem(125, 1)]
             }
         ];
 

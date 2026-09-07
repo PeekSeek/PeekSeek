@@ -72,16 +72,50 @@ public class ConfigurationTests {
         }
     }
 
-    /// Metal is the scarce material, so none of it may appear in the list that is topped
-    /// back up every few seconds. The metal wall matters most: it is what a breach charge
-    /// has to be spent on.
+    /// Brick is the scarce material, so none of it may appear in the list that is topped
+    /// back up every few seconds. The brick wall matters most: it is what a rocket has to
+    /// be spent on. Doors and hatches are rationed for the same reason.
     [Fact]
-    public void MetalIsNeverPlentiful() {
+    public void BrickAndDoorsAreNeverPlentiful() {
         PeekSeekSiegeConfiguration config = new();
         config.LoadDefaults();
 
-        foreach (ushort metal in new ushort[] { 369, 371, 378, 1332 }) {
-            Assert.DoesNotContain(config.PlentifulSupplies, item => item.ItemId == metal);
+        foreach (ushort scarce in new ushort[] { 1210, 1212, 1215, 1216, 1984, 378, 1332 }) {
+            Assert.DoesNotContain(config.PlentifulSupplies, item => item.ItemId == scarce);
+            Assert.Contains(config.RationedSupplies, item => item.ItemId == scarce);
+        }
+    }
+
+    /// Attackers may not be given anything that has to be placed. They are in a different
+    /// group from the site they are attacking, so the defenders' claim bubble refuses them
+    /// every placement inside it — which is the whole base — and a placed charge would
+    /// simply never go down. 519 is the rocket launcher and 1100 is C4, both of which are
+    /// carried rather than placed.
+    [Fact]
+    public void RaidersCarryNothingThatMustBePlaced() {
+        PeekSeekSiegeConfiguration config = new();
+        config.LoadDefaults();
+
+        ushort[] placeable = [
+            1215,
+            1212,
+            1210,
+            1216,
+            1984,
+            57,
+            49,
+            59,
+            53,
+            55,
+            318,
+            378,
+            1332,
+            1158,
+            1234
+        ];
+
+        foreach (SiegeItem item in config.RaidOptions.SelectMany(option => option.Items)) {
+            Assert.DoesNotContain(placeable, id => id == item.ItemId);
         }
     }
 
