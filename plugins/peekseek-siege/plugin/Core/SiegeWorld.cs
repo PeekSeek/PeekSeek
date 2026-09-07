@@ -293,17 +293,19 @@ internal static class SiegeWorld {
     internal static void Kit(Player player, SiegeOption option) {
         ClearInventory(player);
 
-        // Clothing before anything else, and before the site's kit gets a say. A kit
-        // that has no outfit in it — or one that never arrived because the site was
-        // unreachable — would otherwise leave somebody naked with no inventory space,
-        // which is what "my gear is gone" looks like from the inside.
-        GiveGear(player, PeekSeekSiege.Config.BuildGear, clothingOnly: true);
-
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
         foreach (SiegeItem item in RemoteAPI.KitFor(steam64)) Give(player, item);
 
         Give(player, PeekSeekSiege.Config.DefaultItems);
         if (option != null) Give(player, option.Items);
+
+        // A kit with no outfit in it — or one that never arrived because the site was
+        // unreachable — leaves somebody naked with almost no inventory space, which is
+        // what "my gear is gone" looks like from the inside. Only then does the fallback
+        // outfit appear, so a player who has a loadout keeps wearing their own.
+        if (player.clothing.backpack == 0) {
+            GiveGear(player, PeekSeekSiege.Config.FallbackOutfit, clothingOnly: true);
+        }
 
         ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
 
@@ -340,7 +342,7 @@ internal static class SiegeWorld {
             int held = CountHeld(player, item.ItemId);
 
             for (int i = held; i < item.Amount; i++) {
-                player.inventory.forceAddItemAuto(new Item(item.ItemId, true), false, false, false);
+                if (!Offer(player, item.ItemId)) break;
             }
         }
     }
@@ -351,9 +353,19 @@ internal static class SiegeWorld {
     internal static void Issue(Player player, IEnumerable<SiegeItem> allowance) {
         foreach (SiegeItem item in allowance) {
             for (byte i = 0; i < item.Amount; i++) {
-                player.inventory.forceAddItemAuto(new Item(item.ItemId, true), false, false, false);
+                if (!Offer(player, item.ItemId)) break;
             }
         }
+    }
+
+    /// Put one item in a player's inventory, or leave it out.
+    ///
+    /// Deliberately not forceAddItem: that one drops whatever will not fit onto the
+    /// ground, which is how a build phase ends up with a pile of walls at everybody's
+    /// feet. Supplies that do not fit are simply not given, and the next top-up will
+    /// offer them again once there is room.
+    private static bool Offer(Player player, ushort itemId) {
+        return player.inventory.tryAddItemAuto(new Item(itemId, true), false, false, false, false);
     }
 
     private static int CountHeld(Player player, ushort itemId) {
@@ -402,6 +414,17 @@ internal static class SiegeWorld {
     }
 
     private static readonly Dictionary<string, ItemAsset> ByNameCache = [];
+
+    /// Every item whose name contains `text`, for working out what something is called
+    /// without digging through the bundles.
+    internal static List<ItemAsset> Search(string text) {
+        List<ItemAsset> all = [];
+        Assets.find(all);
+
+        return all.FindAll(item =>
+            item.itemName != null
+            && item.itemName.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0);
+    }
 
     private static ItemAsset ByName(string name) {
         if (ByNameCache.TryGetValue(name, out ItemAsset cached)) return cached;

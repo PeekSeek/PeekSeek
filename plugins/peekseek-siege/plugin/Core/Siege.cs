@@ -60,7 +60,9 @@ internal class Siege : IGamemode {
     private float nextTick;
 
     /// Solo only: which side of the one base the lone tester is currently playing. 0 is
-    /// holding it, 1 is attacking it. A real match takes this from the roster.
+    /// holding it, 1 is attacking it. Set from the round order at the start of every
+    /// round, and overridable for that round with /siege side. A real match takes this
+    /// from the roster instead.
     private int soloSide;
 
     /// The items this gamemode places itself. They are never captured into a snapshot
@@ -232,6 +234,12 @@ internal class Siege : IGamemode {
 
     private void StartRound(int number) {
         round = number;
+
+        // Solo follows the same three-and-three swap a real match does. There is one
+        // base, so "the other team defends now" means the tester stops holding it and
+        // starts trying to take it, which is exactly the half of the round they would
+        // otherwise never see without knowing to type /siege side.
+        if (match.Solo) soloSide = RoundOrder.Defender(round);
 
         RestoreBases();
         int defender = DefendedSite;
@@ -453,7 +461,6 @@ internal class Siege : IGamemode {
 
         if (phase == SiegePhase.Building) {
             player.teleportToLocationUnsafe(SiegeWorld.StandingSpot(own), own.Yaw);
-            SiegeWorld.ClearInventory(player);
             Supply(player);
             return;
         }
@@ -488,13 +495,16 @@ internal class Siege : IGamemode {
     private void Supply(Player player) {
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
 
-        SiegeWorld.GiveGear(player, PeekSeekSiege.Config.BuildGear);
-        SiegeWorld.ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
-
+        // Once per build phase: their own loadout, the tools, and the metal allowance.
+        // A builder wears what they always wear rather than a uniform this gamemode
+        // invented, so the only thing that marks them out as building is the planner.
         if (rationed.Add(steam64)) {
+            SiegeWorld.Kit(player, null);
+            SiegeWorld.GiveGear(player, PeekSeekSiege.Config.BuildTools);
             SiegeWorld.Issue(player, PeekSeekSiege.Config.RationedSupplies);
         }
 
+        SiegeWorld.ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
         SiegeWorld.TopUp(player, PeekSeekSiege.Config.PlentifulSupplies);
     }
 

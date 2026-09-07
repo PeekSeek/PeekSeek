@@ -98,6 +98,11 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
         { "start_nothing_running", "No match is running." },
 
         { "siege_state", "Phase <color=white>{0}</color>, round <color=white>{1}</color>, <color=white>{2}s</color> left. <color=white>{3}</color> defends." },
-        { "side_solo_only", "<color=white>/siege side</color> is for solo tests only." }
+        { "side_solo_only", "<color=white>/siege side</color> is for solo tests only." },
+
+        { "find_usage", "<color=white>/siege find <text></color> looks an item up by name." },
+        { "find_none", "Nothing is called anything like \"{0}\"." },
+        { "find_hit", "<color=white>{0}</color> — id <color=white>{1}</color>" },
+        { "find_more", "...and <color=white>{0}</color> more." }
     };
 }

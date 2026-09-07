@@ -75,13 +75,15 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// little at a time instead.
     public List<SiegeItem> PlentifulSupplies;
 
-    /// What a builder wears and holds, by the name shown on the item.
-    ///
-    /// Named rather than numbered because these are incidental to the gamemode: a
-    /// backpack is "whatever holds the most", not a specific id worth maintaining. The
-    /// bag and the vest are what make the supplies below fit at all, and the planner is
-    /// what makes five minutes enough to put up a real building.
-    public List<string> BuildGear;
+    /// What a builder is handed on top of their own loadout, by the name shown on the
+    /// item. Named rather than numbered so a tool can be swapped without anybody having
+    /// to dig its id out of the bundles; `/siege find <text>` reports what exists.
+    public List<string> BuildTools;
+
+    /// Clothing given only to a player whose own kit did not dress them — because the
+    /// site was unreachable, or their loadout has no outfit in it. Anybody with a kit
+    /// keeps wearing their own.
+    public List<string> FallbackOutfit;
 
     /// How often, in seconds, the plentiful supplies are topped back up.
     public int SupplyRefillSeconds;
