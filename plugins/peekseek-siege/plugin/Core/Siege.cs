@@ -52,12 +52,15 @@ internal class Siege : IGamemode {
     /// before off-base damage can be measured. Absent means they are on a base now.
     private readonly Dictionary<ulong, float> offBaseSince = [];
 
+    /// Who has already drawn their one metal allowance this build phase. Cleared when a
+    /// build phase opens, so solo drawing at the second site is a fresh allowance.
+    private readonly HashSet<ulong> rationed = [];
+
     private float nextSupplyRefill;
     private float nextTick;
 
-    /// Solo only: which site the lone tester is currently building, and which side
-    /// they are playing. A real match takes both from the roster.
-    private int soloBuildSite;
+    /// Solo only: which side of the one base the lone tester is currently playing. 0 is
+    /// holding it, 1 is attacking it. A real match takes this from the roster.
     private int soloSide;
 
     /// The items this gamemode places itself. They are never captured into a snapshot
@@ -66,8 +69,18 @@ internal class Siege : IGamemode {
     /// the first and pick whichever one suited the round.
     private HashSet<ushort> Fixtures => [
         PeekSeekSiege.Config.AnchorFloorItemId,
-        PeekSeekSiege.Config.AnchorClaimFlagItemId
+        PeekSeekSiege.Config.AnchorMarkerItemId
     ];
+
+    /// The site being attacked this round, which is the site its owners are defending.
+    ///
+    /// In a real match this alternates: a team defends its own base for three rounds and
+    /// then goes and attacks the other team's for three. Solo has only one base, so every
+    /// round is fought over that one and the tester swaps which end of it they are on.
+    internal int DefendedSite => match != null && match.Solo ? 0 : RoundOrder.Defender(round);
+
+    /// Whether a player is on the defending side of the round being played.
+    internal bool IsDefending(ulong steam64) => SideOf(steam64) == DefendedSite;
 
     internal SiegePhase Phase => phase;
     internal int Round => round;
@@ -83,7 +96,6 @@ internal class Siege : IGamemode {
         round = 0;
         score[0] = 0;
         score[1] = 0;
-        soloBuildSite = 0;
         soloSide = 0;
 
         SiegeWorld.Hook(this);
@@ -92,7 +104,7 @@ internal class Siege : IGamemode {
         Chat.Announce(PeekSeekSiege.Instance.Translate("match_intro",
             RoundOrder.RegulationHalf, PeekSeekSiege.Config.BuildSeconds / 60));
 
-        StartBuilding(soloBuildSite);
+        StartBuilding(0);
     }
 
     public void End() {
@@ -157,17 +169,15 @@ internal class Siege : IGamemode {
         phase = SiegePhase.Building;
         phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.BuildSeconds;
         nextSupplyRefill = 0f;
+        rationed.Clear();
 
-        for (int team = 0; team < sites.Count; team++) {
+        foreach (int team in BuiltSites()) {
             SiegeSite site = sites[team];
             BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, Fixtures);
             SiegeWorld.PlaceAnchor(site);
         }
 
-        foreach (Player player in Players()) {
-            Place(player);
-            Supply(player);
-        }
+        foreach (Player player in Players()) Place(player);
 
         Chat.Announce(PeekSeekSiege.Instance.Translate("build_start",
             PeekSeekSiege.Config.BuildSeconds / 60,
@@ -192,22 +202,18 @@ internal class Siege : IGamemode {
     /// In solo this loops back for the second site instead, because the tester has
     /// only built one of the two buildings so far.
     internal void FinishBuilding() {
-        if (match.Solo && soloBuildSite == 0) {
-            bases[0] = Snapshot(0);
-            soloBuildSite = 1;
-            Chat.Announce(PeekSeekSiege.Instance.Translate("build_solo_next", sites[1].Name));
-            StartBuilding(1);
-            return;
-        }
-
-        for (int team = 0; team < sites.Count; team++) {
-            bases[team] ??= Snapshot(team);
-        }
+        foreach (int team in BuiltSites()) bases[team] = Snapshot(team);
 
         Chat.Announce(PeekSeekSiege.Instance.Translate("build_done",
             bases[0]?.Count ?? 0, bases[1]?.Count ?? 0));
 
         StartRound(1);
+    }
+
+    /// Which sites get a base built on them. Every team builds its own, except in solo,
+    /// where there is one tester, one base, and one place the whole match is fought.
+    private IEnumerable<int> BuiltSites() {
+        return match.Solo ? [0] : Enumerable.Range(0, sites.Count);
     }
 
     private BaseSnapshot Snapshot(int team) {
@@ -221,9 +227,9 @@ internal class Siege : IGamemode {
 
     private void StartRound(int number) {
         round = number;
-        int defender = RoundOrder.Defender(round);
 
         RestoreBases();
+        int defender = DefendedSite;
 
         phase = SiegePhase.Picking;
         phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.PickSeconds;
@@ -239,7 +245,7 @@ internal class Siege : IGamemode {
     /// according to the rules that make a round playable. This runs before every round
     /// including the first, so round one and round six start from identical ground.
     private void RestoreBases() {
-        for (int team = 0; team < sites.Count; team++) {
+        foreach (int team in BuiltSites()) {
             SiegeSite site = sites[team];
             ulong group = match.Teams.Count > team ? match.Teams[team].GroupId : 0;
 
@@ -293,7 +299,7 @@ internal class Siege : IGamemode {
         // same moment. Solo asks SideOf rather than the roster, so the lone tester gets
         // the board for whichever side they are currently playing.
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
-            bool defending = SideOf(viewer.playerID.steamID.m_SteamID) == defender;
+            bool defending = IsDefending(viewer.playerID.steamID.m_SteamID);
 
             board.Open(
                 viewer,
@@ -328,7 +334,7 @@ internal class Siege : IGamemode {
         PunishOffBase();
         Countdown("round_countdown");
 
-        int defender = RoundOrder.Defender(round);
+        int defender = DefendedSite;
 
         if (SecondsLeft <= 0) {
             EndRound(defender, "round_won_clock");
@@ -381,11 +387,9 @@ internal class Siege : IGamemode {
     /// meant to do. Two seconds is long enough to cover all of it and short enough that
     /// nobody crosses open ground on it.
     private void PunishOffBase() {
-        int defender = RoundOrder.Defender(round);
-
         foreach (Player player in Players()) {
             ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
-            if (SideOf(steam64) != defender || player.life.isDead) continue;
+            if (!IsDefending(steam64) || player.life.isDead) continue;
 
             if (SiegeWorld.IsStandingOnBuilt(player)) {
                 offBaseSince.Remove(steam64);
@@ -439,12 +443,14 @@ internal class Siege : IGamemode {
             return;
         }
 
-        if (side == RoundOrder.Defender(round)) {
-            player.teleportToLocationUnsafe(SiegeWorld.StandingSpot(own), own.Yaw);
+        SiegeSite defended = sites[DefendedSite];
+
+        if (IsDefending(steam64)) {
+            player.teleportToLocationUnsafe(SiegeWorld.StandingSpot(defended), defended.Yaw);
             return;
         }
 
-        SiegeSite target = sites.Other(side);
+        SiegeSite target = defended;
         int index = IndexInTeam(steam64);
         player.teleportToLocationUnsafe(
             SiegeWorld.OnGround(target.AttackerSpawn(index, Math.Max(1, TeamSize(1 - side)))),
@@ -456,9 +462,24 @@ internal class Siege : IGamemode {
     /// Order is the whole point. Unturned inventory space comes from clothing, so a
     /// player with no backpack and no vest has almost none — hand them forty walls
     /// before the bag and most of it lands on the floor.
+    /// Kit a builder out: what they wear, then their one allowance of metal, then as
+    /// much wood as they can carry.
+    ///
+    /// Order is the whole point. Unturned inventory space comes from clothing, so a
+    /// player with no backpack has almost none, and handing them materials first puts
+    /// most of it on the floor. The allowance is issued once per build phase and never
+    /// again — that is what makes metal a decision — while the wood is topped up on
+    /// every refill.
     private void Supply(Player player) {
+        ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+
         SiegeWorld.GiveGear(player, PeekSeekSiege.Config.BuildGear);
-        SiegeWorld.Give(player, PeekSeekSiege.Config.BuildSupplies);
+
+        if (rationed.Add(steam64)) {
+            SiegeWorld.Issue(player, PeekSeekSiege.Config.RationedSupplies);
+        }
+
+        SiegeWorld.TopUp(player, PeekSeekSiege.Config.PlentifulSupplies);
     }
 
     // ---- who is who -----------------------------------------------------------
@@ -472,7 +493,7 @@ internal class Siege : IGamemode {
         // side a player is on is whichever site is currently open rather than whichever
         // one they last asked to play. Getting this wrong puts the tester back on the
         // finished base and leashes them to it while the clock runs on the other one.
-        if (match.Solo) return phase == SiegePhase.Building ? soloBuildSite : soloSide;
+        if (match.Solo) return phase == SiegePhase.Building ? 0 : soloSide;
 
         int index = match.TeamIndexOf(steam64);
         return index < 0 ? 0 : index;

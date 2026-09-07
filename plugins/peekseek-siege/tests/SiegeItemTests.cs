@@ -57,32 +57,50 @@ public class ConfigurationTests {
         }
     }
 
-    /// No floors in the build supplies. This is the rule that forces a team to build off
-    /// the anchor instead of laying a second foundation somewhere better, and it is easy
-    /// to break by pasting an id in without checking what it is.
+    /// Floors are rationed, never plentiful. A team with an endless supply of them could
+    /// lay a second base beside the anchor and pick whichever one suited the round, which
+    /// is the thing the single anchor exists to prevent.
     [Fact]
-    public void BuildSuppliesContainNoFloors() {
+    public void FloorsAreNeverPlentiful() {
         PeekSeekSiegeConfiguration config = new();
         config.LoadDefaults();
 
-        Assert.DoesNotContain(config.BuildSupplies, item => item.ItemId == config.AnchorFloorItemId);
+        Assert.DoesNotContain(config.PlentifulSupplies, item => item.ItemId == config.AnchorFloorItemId);
+        Assert.Contains(config.RationedSupplies, item => item.ItemId == config.AnchorFloorItemId);
     }
 
-    /// The anchor is placed by the gamemode and never handed out, so neither of its two
-    /// pieces may appear in anything a player is given.
+    /// Metal is the scarce material, so none of it may appear in the list that is topped
+    /// back up every few seconds. The metal wall matters most: it is what a breach charge
+    /// has to be spent on.
     [Fact]
-    public void NobodyIsEverGivenAnAnchorPiece() {
+    public void MetalIsNeverPlentiful() {
         PeekSeekSiegeConfiguration config = new();
         config.LoadDefaults();
 
-        var handedOut = config.BuildSupplies
+        foreach (ushort metal in new ushort[] { 369, 371, 378, 1332 }) {
+            Assert.DoesNotContain(config.PlentifulSupplies, item => item.ItemId == metal);
+        }
+    }
+
+    /// The site marker is placed by the gamemode and never handed out. If a player could
+    /// carry one they could stand a second marker on their own plot, and the anchor is
+    /// what every base restore is measured from.
+    [Fact]
+    public void NobodyIsEverGivenASiteMarker() {
+        PeekSeekSiegeConfiguration config = new();
+        config.LoadDefaults();
+
+        var handedOut = config.RationedSupplies
+            .Concat(config.PlentifulSupplies)
             .Concat(config.DefaultItems)
             .Concat(config.DefenceOptions.SelectMany(o => o.Items))
             .Concat(config.RaidOptions.SelectMany(o => o.Items));
 
+        // The anchor floor is the one exception: a rationed metal floor is the same item
+        // the anchor is made of, and that is fine, because the anchor is protected from
+        // salvage and damage by id wherever it stands.
         foreach (SiegeItem item in handedOut) {
-            Assert.NotEqual(config.AnchorFloorItemId, item.ItemId);
-            Assert.NotEqual(config.AnchorClaimFlagItemId, item.ItemId);
+            Assert.NotEqual(config.AnchorMarkerItemId, item.ItemId);
         }
     }
 }

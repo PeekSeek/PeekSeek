@@ -55,22 +55,39 @@ internal static class SiegeWorld {
     /// enforce.
     internal static void PlaceAnchor(SiegeSite site) {
         Vector3 anchor = site.AnchorPoint;
-        Quaternion flat = Quaternion.Euler(0f, site.Yaw, 0f);
+
+        // Unturned's structure and barricade prefabs are authored facing forward and
+        // laid down by a quarter turn on X, so an upright or flat piece is
+        // Euler(-90, yaw, 0). Euler(0, yaw, 0) is what stands a floor on its edge.
+        Quaternion placed = Quaternion.Euler(-90f, site.Yaw, 0f);
 
         if (Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorFloorItemId) is ItemStructureAsset floor) {
             StructureManager.dropReplicatedStructure(
-                new Structure(floor, floor.health), anchor, flat, 0, 0);
+                new Structure(floor, floor.health), anchor, placed, 0, 0);
         }
 
-        if (Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorClaimFlagItemId) is ItemBarricadeAsset flag) {
+        // Barricades standing on the ground are rotated a quarter turn off the
+        // structure convention: an upright one is Euler(-90, yaw, 0), and Euler(0, ...)
+        // lays it on its side. The lift clears the anchor floor's own thickness, which
+        // is what was burying it up to the waist.
+        if (Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorMarkerItemId) is ItemBarricadeAsset marker) {
             BarricadeManager.dropNonPlantedBarricade(
-                new Barricade(flag, flag.health, flag.getState()),
-                anchor + Vector3.up * 0.1f,
-                flat,
+                new Barricade(marker, marker.health, marker.getState()),
+                // `offset` on a barricade asset is how far its pivot sits above the
+                // ground it is standing on — 1.12 on a claim flag, 5 on a metal flag —
+                // so it is the correction that stops a marker being buried up to the
+                // waist, whatever marker somebody configures. The extra clears the
+                // anchor floor's own thickness.
+                anchor + Vector3.up * (marker.offset + AnchorFloorClearance),
+                placed,
                 0,
                 0);
         }
     }
+
+    /// Half the anchor floor's thickness, so things resting on it start at its surface
+    /// rather than at its middle.
+    private const float AnchorFloorClearance = 0.25f;
 
     /// Somewhere to stand on a site: on top of the anchor floor, facing the way the
     /// site faces. Used for build-phase spawns, the leash, and defender spawns, all of
@@ -119,8 +136,10 @@ internal static class SiegeWorld {
         }
 
         if (siege.Phase == SiegePhase.Playing) {
-            SiegeSite defended = sites[RoundOrder.Defender(siege.Round)];
-            return defended.Contains(point);
+            // Asked of the gamemode rather than worked out from the round number, so
+            // that solo — which has one base and fights every round over it — opens the
+            // same plot the round is actually being played on.
+            return sites[siege.DefendedSite].Contains(point);
         }
 
         return false;
@@ -178,7 +197,7 @@ internal static class SiegeWorld {
     private static bool IsFixture(ItemAsset asset) {
         return asset != null
             && (asset.id == PeekSeekSiege.Config.AnchorFloorItemId
-                || asset.id == PeekSeekSiege.Config.AnchorClaimFlagItemId);
+                || asset.id == PeekSeekSiege.Config.AnchorMarkerItemId);
     }
 
     // ---- standing on something ------------------------------------------------
@@ -226,6 +245,54 @@ internal static class SiegeWorld {
         }
     }
 
+    /// Top a builder back up to the working set they are meant to be carrying.
+    ///
+    /// This counts what they already hold and adds only the difference, rather than
+    /// handing over another full set. Inventory space in Unturned comes from the worn
+    /// clothing asset and cannot be enlarged from a plugin — the client sizes each page
+    /// from the backpack it was told to wear, so a server-side resize only desyncs — and
+    /// an Alicepack does not hold forty walls. Keeping a small set continuously topped
+    /// up gives the same "never run out" feeling as a huge inventory would, without
+    /// needing one, and without pouring the overflow onto the floor.
+    ///
+    /// So `Amount` on a build supply means "how many you keep on you", not "how many you
+    /// are given".
+    internal static void TopUp(Player player, IEnumerable<SiegeItem> wanted) {
+        foreach (SiegeItem item in wanted) {
+            int held = CountHeld(player, item.ItemId);
+
+            for (int i = held; i < item.Amount; i++) {
+                player.inventory.forceAddItemAuto(new Item(item.ItemId, true), false, false, false);
+            }
+        }
+    }
+
+    /// Hand over a fixed allowance, in full, without counting what is already held.
+    /// Used for the rationed half of the supplies, which is issued once and is meant to
+    /// run out.
+    internal static void Issue(Player player, IEnumerable<SiegeItem> allowance) {
+        foreach (SiegeItem item in allowance) {
+            for (byte i = 0; i < item.Amount; i++) {
+                player.inventory.forceAddItemAuto(new Item(item.ItemId, true), false, false, false);
+            }
+        }
+    }
+
+    private static int CountHeld(Player player, ushort itemId) {
+        int held = 0;
+
+        for (byte page = 0; page < PlayerInventory.PAGES - 1; page++) {
+            Items items = player.inventory.items[page];
+            if (items == null) continue;
+
+            for (byte i = 0; i < items.getItemCount(); i++) {
+                if (items.getItem(i)?.item?.id == itemId) held++;
+            }
+        }
+
+        return held;
+    }
+
     /// Hand over what a builder wears and holds, named rather than numbered.
     ///
     /// These are looked up by the name a player sees on the item, because they are
@@ -237,8 +304,22 @@ internal static class SiegeWorld {
             ItemAsset asset = ByName(name);
             if (asset == null) continue;
 
+            // Only what they are missing. This runs whenever somebody is placed, and a
+            // builder who already has their pack does not want a second one on the floor.
+            if (CountHeld(player, asset.id) > 0 || IsWorn(player, asset.id)) continue;
+
             player.inventory.forceAddItemAuto(new Item(asset.id, true), true, true, true);
         }
+    }
+
+    /// Clothing that has been equipped is no longer in the inventory, so counting slots
+    /// alone would hand out a second backpack to somebody already wearing the first.
+    private static bool IsWorn(Player player, ushort itemId) {
+        PlayerClothing worn = player.clothing;
+
+        return worn.backpack == itemId || worn.vest == itemId || worn.shirt == itemId
+            || worn.pants == itemId || worn.hat == itemId || worn.mask == itemId
+            || worn.glasses == itemId;
     }
 
     private static readonly Dictionary<string, ItemAsset> ByNameCache = [];

@@ -38,14 +38,42 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     public int RoundSeconds;
 
     /// The pieces this gamemode places itself and must never treat as part of a
-    /// team's base: the anchor floor, and the claim flag standing on it.
+    /// team's base: the anchor floor, and the flag standing on it that marks the middle
+    /// of the site.
+    ///
+    /// The marker is deliberately a plain flag rather than a claim flag. A claim flag
+    /// registers a claim bubble, and a bubble owned by nobody — which is what keeps the
+    /// anchor unsalvageable — matches nobody, so it refuses building to the very team
+    /// whose site it marks. Worse, the refusal happens on the client, which rebuilds the
+    /// bubble from the replicated owner and group and will not even send a placement
+    /// request, so no server-side patch can undo it. Nothing was lost: Siege decides who
+    /// may build where in SiegeWorld, which is a better rule than a radius around a
+    /// flag, and the anchor is protected from salvage and damage directly.
     public ushort AnchorFloorItemId;
-    public ushort AnchorClaimFlagItemId;
+    public ushort AnchorMarkerItemId;
 
-    /// What each team is given to build with. No floors in here on purpose: a team
-    /// that cannot make a second floor has to build off the anchor, which is what
-    /// keeps one base to a site instead of three shacks in a field.
-    public List<SiegeItem> BuildSupplies;
+    /// The scarce half of a team's materials: metal, and floors of any kind.
+    ///
+    /// Issued once per player at the start of the build phase and never topped up, so
+    /// the amounts here are a budget for the whole five minutes. Metal is what survives
+    /// a breach charge, so how much of a building is metal and which parts is the most
+    /// interesting decision a team makes — and it stops being a decision the moment the
+    /// metal is unlimited. Floors are rationed for a second reason: a team with plenty
+    /// of them could lay a second base beside the anchor and pick whichever suited the
+    /// round.
+    public List<SiegeItem> RationedSupplies;
+
+    /// The plentiful half: birch. Topped back up continuously, so nobody ever stands
+    /// still waiting for wood.
+    ///
+    /// `Amount` here means "how many you keep on you", not "how many you are given" —
+    /// what a player holds is counted and only the difference is handed over. That is
+    /// what makes a small inventory behave like an unlimited one. Unturned decides
+    /// inventory size from the clothing a player wears and a plugin cannot change it
+    /// (the client sizes each page from the backpack asset it was told to wear, so a
+    /// server-side resize only desyncs), so the supply has to come to the player a
+    /// little at a time instead.
+    public List<SiegeItem> PlentifulSupplies;
 
     /// What a builder wears and holds, by the name shown on the item.
     ///
@@ -55,9 +83,7 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// what makes five minutes enough to put up a real building.
     public List<string> BuildGear;
 
-    /// How often, in seconds, build supplies are topped back up during the build
-    /// phase. Running out of metal with two minutes left is not an interesting
-    /// constraint, it is just a player standing still.
+    /// How often, in seconds, the plentiful supplies are topped back up.
     public int SupplyRefillSeconds;
 
     /// Damage per second to a defender who is not standing on their base, and how
@@ -94,9 +120,9 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     public short PickUIKey;
 
     public void LoadDefaults() {
-        szAPIURL = "https://api.peekseek.com";
+        szAPIURL = "https://peekseek.net";
         KitCategory = "meta";
-        ChatIconURL = "";
+        ChatIconURL = "https://peekseek.net/public/img/logo.png/";
 
         // Melee and a dressing, matching what the site hands out as `defaultItems` on
         // the competitive gamemodes.
@@ -110,28 +136,32 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         RoundSeconds = 180;
 
         AnchorFloorItemId = 369;
-        AnchorClaimFlagItemId = 1158;
+        AnchorMarkerItemId = 1234;
 
-        // Metal for everything that should stay up, birch walls as the soft walls a
-        // team can cut new openings through, and metal doors and hatches for the ways
-        // in the team itself needs to use.
+        // Ids are read off the server's own Bundles/Items rather than guessed: the metal
+        // block is not in the order its names suggest (370 is the doorway, 373 the
+        // roof), and birch is a different block again.
         //
-        // Ids are read off the server's own Bundles/Items rather than guessed, because
-        // the metal structure block is not in the order its names suggest: 370 is the
-        // doorway and 373 the roof, not the other way round.
-        BuildSupplies = [
-            new SiegeItem(371, 40),   // Metal Wall
-            new SiegeItem(370, 10),   // Metal Doorway
-            new SiegeItem(372, 10),   // Metal Window
-            new SiegeItem(374, 30),   // Metal Pillar
-            new SiegeItem(373, 20),   // Metal Roof
-            new SiegeItem(375, 8),    // Metal Stairs
-            new SiegeItem(57, 20),    // Birch Wall, the soft one
-            new SiegeItem(378, 8),    // Metal Door
-            new SiegeItem(1332, 8)    // Metal Hatch
+        // Metal: 369 floor, 371 wall, 378 door, 1332 hatch.
+        // Birch: 49 doorway, 51 floor, 53 pillar, 55 roof, 57 wall, 59 window, 318 stairs.
+        RationedSupplies = [
+            new SiegeItem(369, 2),
+            new SiegeItem(371, 4),
+            new SiegeItem(51, 4),
+            new SiegeItem(378, 2),
+            new SiegeItem(1332, 2)
         ];
-        BuildGear = ["Alicepack", "Military Vest", "Housing Planner"];
-        SupplyRefillSeconds = 30;
+
+        PlentifulSupplies = [
+            new SiegeItem(57, 8),
+            new SiegeItem(49, 4),
+            new SiegeItem(59, 4),
+            new SiegeItem(53, 8),
+            new SiegeItem(55, 6),
+            new SiegeItem(318, 3)
+        ];
+
+        SupplyRefillSeconds = 5;
 
         OffBaseDamagePerSecond = 12;
         OffBaseGraceSeconds = 2f;

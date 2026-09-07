@@ -11,7 +11,8 @@ namespace PeekSeekSiege.Core;
 /// actually reading for, and the same chat icon a match server uses. Rich text is on,
 /// because the translations are written with it.
 internal static class Chat {
-    private static readonly Color Base = new(0.78f, 0.78f, 0.78f);
+    /// #a0a0a0, the grey the match servers and the warm-up lobby already send at.
+    private static readonly Color Base = new(0.627f, 0.627f, 0.627f);
 
     internal static void Whisper(SteamPlayer to, string message) {
         ChatManager.serverSendMessage(
