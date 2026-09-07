@@ -53,7 +53,7 @@ internal static class SiegeWorld {
     /// intended; a team that cannot has to build off this floor, which is what makes
     /// "one base per site" a fact about the world rather than a rule anybody has to
     /// enforce.
-    internal static void PlaceAnchor(SiegeSite site) {
+    internal static void PlaceAnchor(SiegeSite site, ulong teamGroup) {
         Vector3 anchor = site.AnchorPoint;
 
         // Unturned's structure and barricade prefabs are authored facing forward and
@@ -70,6 +70,21 @@ internal static class SiegeWorld {
         // structure convention: an upright one is Euler(-90, yaw, 0), and Euler(0, ...)
         // lays it on its side. The lift clears the anchor floor's own thickness, which
         // is what was burying it up to the waist.
+        // The marker goes down in the team's group, and that is not the same thing as
+        // giving it to them.
+        //
+        // A claim flag registers a 32m bubble, and ClaimManager.checkCanBuild lets you
+        // build inside one only if you match its owner or its group — so a bubble owned
+        // by nobody blocks everybody, including the team whose site it marks. The client
+        // builds that bubble itself from the replicated barricade, so no server-side
+        // patch can soften it. The group is therefore the only whitelist there is, and
+        // it is the one the site's own team needs.
+        //
+        // Salvage is a separate question with a separate answer: it is decided from the
+        // barricade's data, and OnSalvage/OnDamage below refuse both by item id, for
+        // everybody, in every phase. So the team can build around their flag and still
+        // cannot take it down or move it, which is what the group was originally being
+        // withheld to prevent.
         if (Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorMarkerItemId) is ItemBarricadeAsset marker) {
             BarricadeManager.dropNonPlantedBarricade(
                 new Barricade(marker, marker.health, marker.getState()),
@@ -81,7 +96,7 @@ internal static class SiegeWorld {
                 anchor + Vector3.up * (marker.offset + AnchorFloorClearance),
                 placed,
                 0,
-                0);
+                teamGroup);
         }
     }
 
@@ -176,12 +191,16 @@ internal static class SiegeWorld {
         if (IsFixture(drop.asset)) shouldAllow = false;
     }
 
-    /// The anchor is also not shootable.
+    /// The anchor floor is never shootable, and the marker is shootable only while a
+    /// round is being played.
     ///
-    /// The claim flag is `Vulnerable` with 50 health, so without this an attacker could
-    /// simply delete the other team's site with a few rounds from outside it — and the
-    /// site is what every restore is measured from. Salvage protection alone does not
-    /// cover this, because destroying something is not salvaging it.
+    /// The marker is the objective: attackers win a round by bringing the flag down, and
+    /// defenders win by keeping it up until the clock runs out. So it has to be
+    /// destructible exactly when that race is on, and indestructible the rest of the
+    /// time — during the build phase it is the thing every base is measured from, and a
+    /// stray shot into it would move the site.
+    private static bool MarkerIsDestructible => siege != null && siege.Phase == SiegePhase.Playing;
+
     private static void OnDamageStructure(
         CSteamID instigator, Transform structure, ref ushort damage,
         ref bool shouldAllow, EDamageOrigin origin) {
@@ -191,8 +210,38 @@ internal static class SiegeWorld {
     private static void OnDamageBarricade(
         CSteamID instigator, Transform barricade, ref ushort damage,
         ref bool shouldAllow, EDamageOrigin origin) {
-        if (IsFixture(BarricadeManager.FindBarricadeByRootTransform(barricade)?.asset)) shouldAllow = false;
+        ItemAsset asset = BarricadeManager.FindBarricadeByRootTransform(barricade)?.asset;
+        if (asset == null) return;
+
+        if (asset.id == PeekSeekSiege.Config.AnchorMarkerItemId) {
+            if (!MarkerIsDestructible) shouldAllow = false;
+            return;
+        }
+
+        if (IsFixture(asset)) shouldAllow = false;
     }
+
+    /// Whether a site's marker is still standing. This is the round's win condition, so
+    /// it is asked once a second while a round runs.
+    internal static bool MarkerStands(Vector3 anchor) {
+        List<RegionCoordinate> around = [];
+        Regions.getRegionsInRadius(anchor, MarkerSearchRadius, around);
+
+        foreach (RegionCoordinate coordinate in around) {
+            foreach (BarricadeDrop drop in BarricadeManager.regions[coordinate.x, coordinate.y].drops) {
+                if (drop.asset == null || drop.asset.id != PeekSeekSiege.Config.AnchorMarkerItemId) continue;
+                if ((drop.GetServersideData().point - anchor).sqrMagnitude > MarkerSearchRadius * MarkerSearchRadius) continue;
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// Generous enough to find a marker that settled slightly off the anchor, tight
+    /// enough not to find the other site's.
+    private const float MarkerSearchRadius = 8f;
 
     private static bool IsFixture(ItemAsset asset) {
         return asset != null
@@ -216,6 +265,27 @@ internal static class SiegeWorld {
             origin, Vector3.down, 1.2f, RayMasks.BARRICADE | RayMasks.STRUCTURE);
     }
 
+    /// Give a player hands big enough to carry a building.
+    ///
+    /// Unturned does replicate a page resize, contrary to what the shape of the API
+    /// suggests: Items.resize fires PlayerInventory.onItemsResized, which sends SendSize
+    /// to that player's own client, so the server can set a page to whatever it likes and
+    /// the client will draw it. The hands page is the one worth growing — it is always
+    /// there, unlike the backpack and vest pages, which the game resizes back to the worn
+    /// asset every time somebody changes clothes.
+    ///
+    /// Re-applied whenever supplies are, because equipping clothing rebuilds the pages.
+    internal static void ExpandHands(Player player, byte width, byte height) {
+        Items hands = player.inventory.items[HandsPage];
+        if (hands == null || (hands.width == width && hands.height == height)) return;
+
+        hands.resize(width, height);
+    }
+
+    /// Pages 0 and 1 are the two weapon slots, so the general-purpose page a player
+    /// carries things in is the one straight after them.
+    private static readonly byte HandsPage = PlayerInventory.SLOTS;
+
     // ---- kit ------------------------------------------------------------------
 
     /// Everything a player carries into a round: their saved kit, the gamemode's
@@ -223,11 +293,19 @@ internal static class SiegeWorld {
     internal static void Kit(Player player, SiegeOption option) {
         ClearInventory(player);
 
+        // Clothing before anything else, and before the site's kit gets a say. A kit
+        // that has no outfit in it — or one that never arrived because the site was
+        // unreachable — would otherwise leave somebody naked with no inventory space,
+        // which is what "my gear is gone" looks like from the inside.
+        GiveGear(player, PeekSeekSiege.Config.BuildGear, clothingOnly: true);
+
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
         foreach (SiegeItem item in RemoteAPI.KitFor(steam64)) Give(player, item);
 
         Give(player, PeekSeekSiege.Config.DefaultItems);
         if (option != null) Give(player, option.Items);
+
+        ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
 
         // Passive regeneration is off on PeekSeek servers, so a round is the only
         // moment anybody gets health back. Kitting is what "a round is starting" means
@@ -299,10 +377,11 @@ internal static class SiegeWorld {
     /// incidental to the gamemode and their ids are not worth anybody maintaining: a
     /// backpack is "whatever holds the most", not a specific number. A name that matches
     /// nothing is logged once and skipped, so a typo is visible instead of silent.
-    internal static void GiveGear(Player player, List<string> names) {
+    internal static void GiveGear(Player player, List<string> names, bool clothingOnly = false) {
         foreach (string name in names) {
             ItemAsset asset = ByName(name);
             if (asset == null) continue;
+            if (clothingOnly && asset is not ItemClothingAsset) continue;
 
             // Only what they are missing. This runs whenever somebody is placed, and a
             // builder who already has their pack does not want a second one on the floor.

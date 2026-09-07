@@ -57,16 +57,19 @@ public class ConfigurationTests {
         }
     }
 
-    /// Floors are rationed, never plentiful. A team with an endless supply of them could
-    /// lay a second base beside the anchor and pick whichever one suited the round, which
-    /// is the thing the single anchor exists to prevent.
+    /// Nobody is given a floor, of any material, in either tier. A team that could lay
+    /// its own floor could start a second base beside the anchor and pick whichever one
+    /// suited the round; with only roofs to build upwards on, the anchor is the only
+    /// foundation there is. 369 and 51 are the metal and birch floors.
     [Fact]
-    public void FloorsAreNeverPlentiful() {
+    public void NobodyIsGivenAFloor() {
         PeekSeekSiegeConfiguration config = new();
         config.LoadDefaults();
 
-        Assert.DoesNotContain(config.PlentifulSupplies, item => item.ItemId == config.AnchorFloorItemId);
-        Assert.Contains(config.RationedSupplies, item => item.ItemId == config.AnchorFloorItemId);
+        foreach (ushort floor in new ushort[] { 369, 51 }) {
+            Assert.DoesNotContain(config.RationedSupplies, item => item.ItemId == floor);
+            Assert.DoesNotContain(config.PlentifulSupplies, item => item.ItemId == floor);
+        }
     }
 
     /// Metal is the scarce material, so none of it may appear in the list that is topped

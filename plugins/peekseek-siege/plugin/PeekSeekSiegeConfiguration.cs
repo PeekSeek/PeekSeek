@@ -33,22 +33,22 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// How long the option board stays up before it picks for you.
     public int PickSeconds;
 
-    /// The round clock. Running it out is a defender win, which is what makes
-    /// attacking a race rather than a siege.
+    /// The round clock. Running it out with the flag still standing is a defender win,
+    /// which is what makes attacking a race rather than a siege. Short while the
+    /// gamemode is being tested end to end; a real match wants 180.
     public int RoundSeconds;
 
     /// The pieces this gamemode places itself and must never treat as part of a
     /// team's base: the anchor floor, and the flag standing on it that marks the middle
     /// of the site.
     ///
-    /// The marker is deliberately a plain flag rather than a claim flag. A claim flag
-    /// registers a claim bubble, and a bubble owned by nobody — which is what keeps the
-    /// anchor unsalvageable — matches nobody, so it refuses building to the very team
-    /// whose site it marks. Worse, the refusal happens on the client, which rebuilds the
-    /// bubble from the replicated owner and group and will not even send a placement
-    /// request, so no server-side patch can undo it. Nothing was lost: Siege decides who
-    /// may build where in SiegeWorld, which is a better rule than a radius around a
-    /// flag, and the anchor is protected from salvage and damage directly.
+    /// The marker is a claim flag, and it is placed in the site team's group so that the
+    /// team can build inside its own 32m bubble. That is the only whitelist a claim flag
+    /// has: ClaimManager.checkCanBuild admits you if you match the bubble's owner or its
+    /// group, and the bubble is built on the client from the replicated barricade, so
+    /// there is nothing a server-side patch can do about it. Being in the group does not
+    /// make it theirs to take down — salvage and damage are refused by item id in
+    /// SiegeWorld, for everybody, in every phase.
     public ushort AnchorFloorItemId;
     public ushort AnchorMarkerItemId;
 
@@ -85,6 +85,16 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
 
     /// How often, in seconds, the plentiful supplies are topped back up.
     public int SupplyRefillSeconds;
+
+    /// How big a builder's hands page is, in inventory cells.
+    ///
+    /// Unturned does replicate a page resize — Items.resize tells the owning client the
+    /// new size — so this is a real answer to "a backpack does not hold a building"
+    /// rather than a workaround. The hands page is the one worth growing: it is always
+    /// there, where the backpack and vest pages get resized back to the worn asset every
+    /// time somebody changes clothes.
+    public byte HandsWidth;
+    public byte HandsHeight;
 
     /// Damage per second to a defender who is not standing on their base, and how
     /// long they may be off it before that starts.
@@ -131,12 +141,14 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             new SiegeItem(1103, 1)
         ];
 
-        BuildSeconds = 300;
+        // Short on purpose while the gamemode is being tested end to end; a real match
+        // wants 300.
+        BuildSeconds = 30;
         PickSeconds = 20;
-        RoundSeconds = 180;
+        RoundSeconds = 30;
 
         AnchorFloorItemId = 369;
-        AnchorMarkerItemId = 1234;
+        AnchorMarkerItemId = 1158;
 
         // Ids are read off the server's own Bundles/Items rather than guessed: the metal
         // block is not in the order its names suggest (370 is the doorway, 373 the
@@ -145,9 +157,8 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         // Metal: 369 floor, 371 wall, 378 door, 1332 hatch.
         // Birch: 49 doorway, 51 floor, 53 pillar, 55 roof, 57 wall, 59 window, 318 stairs.
         RationedSupplies = [
-            new SiegeItem(369, 2),
             new SiegeItem(371, 4),
-            new SiegeItem(51, 4),
+            new SiegeItem(373, 4),
             new SiegeItem(378, 2),
             new SiegeItem(1332, 2)
         ];
@@ -157,11 +168,13 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             new SiegeItem(49, 4),
             new SiegeItem(59, 4),
             new SiegeItem(53, 8),
-            new SiegeItem(55, 6),
-            new SiegeItem(318, 3)
+            new SiegeItem(55, 8),
+            new SiegeItem(318, 4)
         ];
 
         SupplyRefillSeconds = 5;
+        HandsWidth = 12;
+        HandsHeight = 10;
 
         OffBaseDamagePerSecond = 12;
         OffBaseGraceSeconds = 2f;
@@ -214,10 +227,14 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         ];
 
         RaidOptions = [
+            // Nothing an attacker carries may be a placed barricade. They are in a
+            // different group from the site they are attacking, so the defenders' claim
+            // bubble refuses them any placement inside it — which is the whole base. A
+            // breach charge would simply never go down.
             new SiegeOption {
-                Name = "Breach Charge",
-                Blurb = "Puts a hole where there was a wall.",
-                Items = [new SiegeItem(519, 2), new SiegeItem(1838, 2)]
+                Name = "Field Medic",
+                Blurb = "Two medkits and a dressing. Survive the first room.",
+                Items = [new SiegeItem(95, 2), new SiegeItem(1103, 1)]
             },
             new SiegeOption {
                 Name = "Frags",

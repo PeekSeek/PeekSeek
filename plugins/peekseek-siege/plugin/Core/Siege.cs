@@ -174,7 +174,7 @@ internal class Siege : IGamemode {
         foreach (int team in BuiltSites()) {
             SiegeSite site = sites[team];
             BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, Fixtures);
-            SiegeWorld.PlaceAnchor(site);
+            SiegeWorld.PlaceAnchor(site, GroupOf(team));
         }
 
         foreach (Player player in Players()) Place(player);
@@ -216,6 +216,11 @@ internal class Siege : IGamemode {
         return match.Solo ? [0] : Enumerable.Range(0, sites.Count);
     }
 
+    /// The Unturned group a site's team is in, or 0 before the roster has one.
+    private ulong GroupOf(int team) {
+        return match != null && match.Teams.Count > team ? match.Teams[team].GroupId : 0;
+    }
+
     private BaseSnapshot Snapshot(int team) {
         SiegeSite site = sites[team];
         BaseSnapshot taken = BaseSnapshot.Capture(site.AnchorPoint, site.BuildRadius, Fixtures);
@@ -247,9 +252,12 @@ internal class Siege : IGamemode {
     private void RestoreBases() {
         foreach (int team in BuiltSites()) {
             SiegeSite site = sites[team];
-            ulong group = match.Teams.Count > team ? match.Teams[team].GroupId : 0;
+            ulong group = GroupOf(team);
 
-            BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, Fixtures);
+            // Nothing is skipped here, marker included. A round can end with the flag
+            // shot down, so putting a base back means putting its anchor back too.
+            BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, []);
+            SiegeWorld.PlaceAnchor(site, group);
             bases[team]?.Restore(site.AnchorPoint, asset => OwnerGroupFor(asset, group));
         }
     }
@@ -335,6 +343,13 @@ internal class Siege : IGamemode {
         Countdown("round_countdown");
 
         int defender = DefendedSite;
+
+        // The flag is the objective. Attackers win by bringing it down; defenders win by
+        // still having it up when the clock runs out.
+        if (!SiegeWorld.MarkerStands(sites[defender].AnchorPoint)) {
+            EndRound(1 - defender, "round_won_flag");
+            return;
+        }
 
         if (SecondsLeft <= 0) {
             EndRound(defender, "round_won_clock");
@@ -474,6 +489,7 @@ internal class Siege : IGamemode {
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
 
         SiegeWorld.GiveGear(player, PeekSeekSiege.Config.BuildGear);
+        SiegeWorld.ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
 
         if (rationed.Add(steam64)) {
             SiegeWorld.Issue(player, PeekSeekSiege.Config.RationedSupplies);

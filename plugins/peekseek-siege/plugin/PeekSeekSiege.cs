@@ -66,10 +66,11 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
         { "build_done", "<color=white>Bases locked.</color> {0} and {1} pieces. Nothing about them changes from here." },
 
         { "round_start", "<color=white>Round {0}.</color> <color=white>{1}</color> defends. Score <color=white>{2}-{3}</color>." },
-        { "round_live", "<color=white>Go.</color> {0} seconds on the clock." },
+        { "round_live", "<color=white>Go.</color> {0} seconds. Attackers take the flag down, defenders keep it up." },
         { "round_countdown", "<color=white>{0}s</color> left." },
         { "round_won_wipe", "<color=white>{0}</color> take round {1}. <color=white>{2}-{3}</color>." },
-        { "round_won_clock", "<color=white>{0}</color> hold round {1}. The clock ran out. <color=white>{2}-{3}</color>." },
+        { "round_won_clock", "<color=white>{0}</color> hold round {1}. The flag is still standing. <color=white>{2}-{3}</color>." },
+        { "round_won_flag", "<color=white>{0}</color> took the flag down. Round {1} theirs. <color=white>{2}-{3}</color>." },
         { "round_won_skipped", "Round {1} given to <color=white>{0}</color>. <color=white>{2}-{3}</color>." },
         { "overtime", "Level after the swap. <color=white>Overtime</color>: {0} rounds each until somebody is ahead." },
         { "match_won", "<color=white>{0}</color> win it <color=white>{1}-{2}</color>. Well played." },
