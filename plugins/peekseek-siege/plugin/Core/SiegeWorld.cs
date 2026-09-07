@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using PeekSeekSiege.Core.Models;
 using SDG.Unturned;
 using Steamworks;
 using UnityEngine;
+using Logger = Rocket.Core.Logging.Logger;
 
 namespace PeekSeekSiege.Core;
 
@@ -215,7 +217,51 @@ internal static class SiegeWorld {
     }
 
     internal static void Give(Player player, IEnumerable<SiegeItem> items) {
-        foreach (SiegeItem item in items) Give(player, item);
+        // Clothing first, always. Inventory space in Unturned comes from what you are
+        // wearing, so handing somebody forty walls before their backpack puts most of it
+        // on the floor. The kit the site returns lists a gun and an outfit in no
+        // particular order, so the ordering is imposed here rather than assumed.
+        foreach (SiegeItem item in items.OrderBy(item => IsClothing(item.ItemId) ? 0 : 1)) {
+            Give(player, item);
+        }
+    }
+
+    /// Hand over what a builder wears and holds, named rather than numbered.
+    ///
+    /// These are looked up by the name a player sees on the item, because they are
+    /// incidental to the gamemode and their ids are not worth anybody maintaining: a
+    /// backpack is "whatever holds the most", not a specific number. A name that matches
+    /// nothing is logged once and skipped, so a typo is visible instead of silent.
+    internal static void GiveGear(Player player, List<string> names) {
+        foreach (string name in names) {
+            ItemAsset asset = ByName(name);
+            if (asset == null) continue;
+
+            player.inventory.forceAddItemAuto(new Item(asset.id, true), true, true, true);
+        }
+    }
+
+    private static readonly Dictionary<string, ItemAsset> ByNameCache = [];
+
+    private static ItemAsset ByName(string name) {
+        if (ByNameCache.TryGetValue(name, out ItemAsset cached)) return cached;
+
+        List<ItemAsset> all = [];
+        Assets.find(all);
+
+        ItemAsset found = all.Find(
+            item => string.Equals(item.itemName, name, StringComparison.OrdinalIgnoreCase));
+
+        if (found == null) {
+            Logger.LogWarning($"No item is called \"{name}\". Check BuildGear in the config.");
+        }
+
+        ByNameCache[name] = found;
+        return found;
+    }
+
+    private static bool IsClothing(ushort itemId) {
+        return Assets.find(EAssetType.ITEM, itemId) is ItemClothingAsset;
     }
 
     private static void Give(Player player, SiegeItem item) {
@@ -225,7 +271,10 @@ internal static class SiegeWorld {
             Item created = new(item.ItemId, true);
             if (state.Length > 0) created.state = state;
 
-            player.inventory.forceAddItem(created, true);
+            // Auto-equip rather than just adding: a kit's outfit has to end up worn for
+            // the player to have any inventory space at all, and a gun in the bag is not
+            // a gun in your hands.
+            player.inventory.forceAddItemAuto(created, true, true, true);
         }
     }
 

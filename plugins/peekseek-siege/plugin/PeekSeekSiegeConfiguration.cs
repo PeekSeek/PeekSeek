@@ -47,6 +47,14 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// keeps one base to a site instead of three shacks in a field.
     public List<SiegeItem> BuildSupplies;
 
+    /// What a builder wears and holds, by the name shown on the item.
+    ///
+    /// Named rather than numbered because these are incidental to the gamemode: a
+    /// backpack is "whatever holds the most", not a specific id worth maintaining. The
+    /// bag and the vest are what make the supplies below fit at all, and the planner is
+    /// what makes five minutes enough to put up a real building.
+    public List<string> BuildGear;
+
     /// How often, in seconds, build supplies are topped back up during the build
     /// phase. Running out of metal with two minutes left is not an interesting
     /// constraint, it is just a player standing still.
@@ -122,6 +130,7 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             new SiegeItem(378, 8),    // Metal Door
             new SiegeItem(1332, 8)    // Metal Hatch
         ];
+        BuildGear = ["Alicepack", "Military Vest", "Housing Planner"];
         SupplyRefillSeconds = 30;
 
         OffBaseDamagePerSecond = 12;

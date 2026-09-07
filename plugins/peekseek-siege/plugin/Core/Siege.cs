@@ -287,13 +287,16 @@ internal class Siege : IGamemode {
         List<SiegeOption> defence = PeekSeekSiege.Config.DefenceOptions;
         List<SiegeOption> raid = PeekSeekSiege.Config.RaidOptions;
 
-        // Solo has one player who is on whichever side they last asked for, so the
-        // board they get is the board for that side rather than for their team.
+        board.Reset();
+
+        // One board each, because the two sides are choosing from different lists at the
+        // same moment. Solo asks SideOf rather than the roster, so the lone tester gets
+        // the board for whichever side they are currently playing.
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
             bool defending = SideOf(viewer.playerID.steamID.m_SteamID) == defender;
 
             board.Open(
-                [viewer],
+                viewer,
                 defending ? defence : raid,
                 PeekSeekSiege.Instance.Translate(
                     defending ? "board_defend" : "board_attack", round, sites[defender].Name));
@@ -448,7 +451,13 @@ internal class Siege : IGamemode {
             target.AttackerBearing + 180f);
     }
 
+    /// Kit a builder out: what they wear and hold first, then the materials.
+    ///
+    /// Order is the whole point. Unturned inventory space comes from clothing, so a
+    /// player with no backpack and no vest has almost none — hand them forty walls
+    /// before the bag and most of it lands on the floor.
     private void Supply(Player player) {
+        SiegeWorld.GiveGear(player, PeekSeekSiege.Config.BuildGear);
         SiegeWorld.Give(player, PeekSeekSiege.Config.BuildSupplies);
     }
 
