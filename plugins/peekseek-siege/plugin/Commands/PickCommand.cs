@@ -16,7 +16,7 @@ public class PickCommand : IRocketCommand {
     public string Name => "pick";
     public string Help => "Take one of the five options on the board.";
     public string Syntax => "<1-5>";
-    public List<string> Aliases => ["p"];
+    public List<string> Aliases => [];
     public List<string> Permissions => [];
 
     public void Execute(IRocketPlayer caller, string[] command) {

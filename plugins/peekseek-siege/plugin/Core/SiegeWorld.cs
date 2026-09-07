@@ -25,6 +25,8 @@ internal static class SiegeWorld {
         BarricadeManager.onDeployBarricadeRequested += OnDeployBarricade;
         StructureDrop.OnSalvageRequested_Global += OnSalvageStructure;
         BarricadeDrop.OnSalvageRequested_Global += OnSalvageBarricade;
+        StructureManager.onDamageStructureRequested += OnDamageStructure;
+        BarricadeManager.onDamageBarricadeRequested += OnDamageBarricade;
     }
 
     internal static void Unhook() {
@@ -32,6 +34,8 @@ internal static class SiegeWorld {
         BarricadeManager.onDeployBarricadeRequested -= OnDeployBarricade;
         StructureDrop.OnSalvageRequested_Global -= OnSalvageStructure;
         BarricadeDrop.OnSalvageRequested_Global -= OnSalvageBarricade;
+        StructureManager.onDamageStructureRequested -= OnDamageStructure;
+        BarricadeManager.onDamageBarricadeRequested -= OnDamageBarricade;
 
         siege = null;
     }
@@ -133,6 +137,24 @@ internal static class SiegeWorld {
 
     private static void OnSalvageBarricade(BarricadeDrop drop, SteamPlayer instigator, ref bool shouldAllow) {
         if (IsFixture(drop.asset)) shouldAllow = false;
+    }
+
+    /// The anchor is also not shootable.
+    ///
+    /// The claim flag is `Vulnerable` with 50 health, so without this an attacker could
+    /// simply delete the other team's site with a few rounds from outside it — and the
+    /// site is what every restore is measured from. Salvage protection alone does not
+    /// cover this, because destroying something is not salvaging it.
+    private static void OnDamageStructure(
+        CSteamID instigator, Transform structure, ref ushort damage,
+        ref bool shouldAllow, EDamageOrigin origin) {
+        if (IsFixture(StructureManager.FindStructureByRootTransform(structure)?.asset)) shouldAllow = false;
+    }
+
+    private static void OnDamageBarricade(
+        CSteamID instigator, Transform barricade, ref ushort damage,
+        ref bool shouldAllow, EDamageOrigin origin) {
+        if (IsFixture(BarricadeManager.FindBarricadeByRootTransform(barricade)?.asset)) shouldAllow = false;
     }
 
     private static bool IsFixture(ItemAsset asset) {

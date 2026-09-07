@@ -107,17 +107,20 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         // Metal for everything that should stay up, birch walls as the soft walls a
         // team can cut new openings through, and metal doors and hatches for the ways
         // in the team itself needs to use.
+        //
+        // Ids are read off the server's own Bundles/Items rather than guessed, because
+        // the metal structure block is not in the order its names suggest: 370 is the
+        // doorway and 373 the roof, not the other way round.
         BuildSupplies = [
-            new SiegeItem(366, 40),
-            new SiegeItem(367, 10),
-            new SiegeItem(368, 10),
-            new SiegeItem(371, 30),
-            new SiegeItem(370, 20),
-            new SiegeItem(373, 8),
-            new SiegeItem(372, 8),
-            new SiegeItem(30, 20),
-            new SiegeItem(1097, 8),
-            new SiegeItem(1098, 8)
+            new SiegeItem(371, 40),   // Metal Wall
+            new SiegeItem(370, 10),   // Metal Doorway
+            new SiegeItem(372, 10),   // Metal Window
+            new SiegeItem(374, 30),   // Metal Pillar
+            new SiegeItem(373, 20),   // Metal Roof
+            new SiegeItem(375, 8),    // Metal Stairs
+            new SiegeItem(57, 20),    // Birch Wall, the soft one
+            new SiegeItem(378, 8),    // Metal Door
+            new SiegeItem(1332, 8)    // Metal Hatch
         ];
         SupplyRefillSeconds = 30;
 
@@ -157,7 +160,7 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             new SiegeOption {
                 Name = "Reinforce",
                 Blurb = "Spare metal to close a hole mid-round.",
-                Items = [new SiegeItem(366, 6), new SiegeItem(371, 4)]
+                Items = [new SiegeItem(371, 6), new SiegeItem(374, 4)]
             },
             new SiegeOption {
                 Name = "Watchtower",
