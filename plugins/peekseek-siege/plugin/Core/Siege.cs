@@ -444,7 +444,7 @@ internal class Siege : IGamemode {
         SiegeSite target = sites.Other(side);
         int index = IndexInTeam(steam64);
         player.teleportToLocationUnsafe(
-            target.AttackerSpawn(index, Math.Max(1, TeamSize(1 - side))),
+            SiegeWorld.OnGround(target.AttackerSpawn(index, Math.Max(1, TeamSize(1 - side)))),
             target.AttackerBearing + 180f);
     }
 
@@ -458,7 +458,12 @@ internal class Siege : IGamemode {
     /// asked for, so one person can walk both halves of the same round.
     internal int SideOf(ulong steam64) {
         if (match == null) return 0;
-        if (match.Solo) return soloSide;
+
+        // Solo builds the two sites one after the other, so during the build phase the
+        // side a player is on is whichever site is currently open rather than whichever
+        // one they last asked to play. Getting this wrong puts the tester back on the
+        // finished base and leashes them to it while the clock runs on the other one.
+        if (match.Solo) return phase == SiegePhase.Building ? soloBuildSite : soloSide;
 
         int index = match.TeamIndexOf(steam64);
         return index < 0 ? 0 : index;

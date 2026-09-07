@@ -77,6 +77,22 @@ internal static class SiegeWorld {
         return site.AnchorPoint + Vector3.up * 1.5f;
     }
 
+    /// Drop a point onto whatever is under it.
+    ///
+    /// Attacker spawns are worked out as a bearing and a distance from the site anchor,
+    /// which is flat arithmetic on a map that is not flat. Seventy metres out from a
+    /// site on Alpha Valley can be well above or well below the anchor, and teleporting
+    /// somebody into the middle of a hillside leaves them stuck in it. The ray starts
+    /// high and takes the first ground it finds; if it finds none, the point is used as
+    /// calculated, because falling is recoverable and being inside a hill is not.
+    internal static Vector3 OnGround(Vector3 point) {
+        Vector3 sky = new(point.x, point.y + 200f, point.z);
+
+        return Physics.Raycast(sky, Vector3.down, out RaycastHit hit, 400f, RayMasks.BLOCK_STANCE)
+            ? hit.point + Vector3.up * 0.5f
+            : point;
+    }
+
     // ---- may I build here -----------------------------------------------------
 
     /// Whether a point belongs to either site at all. The claim patch asks this first,
