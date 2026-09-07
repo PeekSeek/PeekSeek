@@ -1,0 +1,91 @@
+name: peekseek-siege
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ["plugins/peekseek-siege/**", ".github/workflows/peekseek-siege.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["plugins/peekseek-siege/**", ".github/workflows/peekseek-siege.yml"]
+  workflow_dispatch: # path filters mean a shared change may not trigger this on its own
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: plugins/peekseek-siege
+
+jobs:
+  lint:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet format PeekSeekSiege.sln --verify-no-changes
+
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test PeekSeekSiege.sln --configuration Release
+
+  release:
+    # Releases are cut from main only. develop runs the same lint and tests,
+    # but a staging push must never tag or publish.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # Tags are prefixed because this repo releases more than one plugin.
+      - name: Read version from PeekSeekSiege.csproj
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$csproj = Get-Content plugin/PeekSeekSiege.csproj
+          $version = $csproj.Project.PropertyGroup.Version
+          "version=$version"                >> $env:GITHUB_OUTPUT
+          "tag=peekseek-siege-v$version"    >> $env:GITHUB_OUTPUT
+
+      # A release only happens when the version was actually bumped, so pushing
+      # again without touching it is a no-op rather than a failed duplicate tag.
+      - name: Check if tag already exists
+        id: check
+        shell: bash
+        run: |
+          if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build
+        if: steps.check.outputs.exists == 'false'
+        run: dotnet build PeekSeekSiege.sln --configuration Release
+
+      - name: Package artifact
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $out = "PeekSeekSiege-${{ steps.version.outputs.version }}.zip"
+          Compress-Archive -Path plugin/bin/Release/net48/* -DestinationPath $out
+          "artifact=plugins/peekseek-siege/$out" >> $env:GITHUB_ENV
+
+      - name: Create GitHub release
+        if: steps.check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: ${{ env.artifact }}
