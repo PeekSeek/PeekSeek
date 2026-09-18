@@ -111,10 +111,19 @@ That folder is the mod. Two ways to load it:
   server's workshop files (`Assets.ApplyServerAssetMapping`), so a `Sandbox/` mod is
   there in singleplayer and gone the moment you join. A map's `Bundles/` folder is part
   of the map's origin and not part of its hash, so it rides along.
-- **For players**, publish it to the Steam Workshop as a content mod (in game: Workshop
-  > Submit, pick the folder), then put the published file id in `File_IDs` in
-  `Servers/unturned/WorkshopDownloadConfig.json` so the server fetches it and tells
-  clients to.
+- **For players**, it is Workshop item **3803930118** (unlisted), and the debug server
+  lists it in `File_IDs` in `Servers/unturned/WorkshopDownloadConfig.json`, so the
+  server fetches it at boot and every client is handed it on join. After a rebuild:
+
+  ```
+  cd tools/WorkshopUpload
+  dotnet run -c Release -- ../../Build/PeekSeekSiegeUI --update 3803930118 --changes "what changed"
+  ```
+
+  That goes through the Steam client logged in on this machine; there is no password,
+  key or token involved, because Steam takes Workshop uploads no other way. Leave off
+  `--update` to create a new item. The server sees the update within ten minutes and
+  restarts itself for it (`Should_Monitor_Updates`).
 
 The plugin's `PickUIEffectGUID` defaults to the GUID in `PickBoard.dat`, so a server
 that has the mod draws the board without a config change, and one that does not logs a

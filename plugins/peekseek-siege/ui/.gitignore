@@ -5,8 +5,10 @@
 /obj/
 /UserSettings/
 /Build/
-*.csproj
-*.sln
+/*.csproj
+/*.sln
+/tools/WorkshopUpload/bin/
+/tools/WorkshopUpload/obj/
 # Unity writes the rest of ProjectSettings/ on first open; only the version is ours.
 /ProjectSettings/*
 !/ProjectSettings/ProjectVersion.txt
