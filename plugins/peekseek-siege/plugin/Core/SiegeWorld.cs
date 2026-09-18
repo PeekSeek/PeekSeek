@@ -44,15 +44,16 @@ internal static class SiegeWorld {
 
     // ---- the anchor -----------------------------------------------------------
 
-    /// Drop the one piece of a site that is not part of anybody's base: a metal floor
-    /// with a claim flag standing on it, in the middle of the plot.
+    /// Drop what a site is before anybody builds: a three-by-three grid of metal floors
+    /// with the claim flag standing in the middle.
     ///
-    /// Both go down owned by nobody and in no group, which in Unturned means nobody can
-    /// salvage them and nobody can move them. That is the point. A team that could pick
-    /// its anchor up could carry it to a corner and build a base the round system never
-    /// intended; a team that cannot has to build off this floor, which is what makes
-    /// "one base per site" a fact about the world rather than a rule anybody has to
-    /// enforce.
+    /// The floors go down owned by nobody and in no group, which in Unturned means
+    /// nobody can salvage them and nobody can move them. That is the point. A team that
+    /// could pick its anchor up could carry it to a corner and build a base the round
+    /// system never intended; a team that cannot has to build off this floor, which is
+    /// what makes "one base per site" a fact about the world rather than a rule anybody
+    /// has to enforce. Six metres is the housing grid (HousingConnections.EDGE_LENGTH),
+    /// so the nine tiles link like nine a player laid.
     internal static void PlaceAnchor(SiegeSite site, ulong teamGroup) {
         Vector3 anchor = site.AnchorPoint;
 
@@ -60,21 +61,22 @@ internal static class SiegeWorld {
         // laid down by a quarter turn on X, so an upright or flat piece is
         // Euler(-90, yaw, 0). Euler(0, yaw, 0) is what stands a floor on its edge.
         Quaternion placed = Quaternion.Euler(-90f, site.Yaw, 0f);
+        Quaternion heading = Quaternion.Euler(0f, site.Yaw, 0f);
 
         if (Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorFloorItemId) is ItemStructureAsset floor) {
-            StructureManager.dropReplicatedStructure(
-                new Structure(floor, floor.health), anchor, placed, 0, 0);
+            for (int across = -1; across <= 1; across++) {
+                for (int along = -1; along <= 1; along++) {
+                    Vector3 tile = anchor + heading * new Vector3(across * FloorEdge, 0f, along * FloorEdge);
+                    StructureManager.dropReplicatedStructure(new Structure(floor, floor.health), tile, placed, 0, 0);
+                }
+            }
         }
 
-        // Barricades standing on the ground are rotated a quarter turn off the
-        // structure convention: an upright one is Euler(-90, yaw, 0), and Euler(0, ...)
-        // lays it on its side. The lift clears the anchor floor's own thickness, which
-        // is what was burying it up to the waist.
         // The marker goes down in the team's group, and that is not the same thing as
         // giving it to them.
         //
         // A claim flag registers a 32m bubble, and ClaimManager.checkCanBuild lets you
-        // build inside one only if you match its owner or its group — so a bubble owned
+        // build inside one only if you match its owner or its group, so a bubble owned
         // by nobody blocks everybody, including the team whose site it marks. The client
         // builds that bubble itself from the replicated barricade, so no server-side
         // patch can soften it. The group is therefore the only whitelist there is, and
@@ -83,13 +85,12 @@ internal static class SiegeWorld {
         // Salvage is a separate question with a separate answer: it is decided from the
         // barricade's data, and OnSalvage/OnDamage below refuse both by item id, for
         // everybody, in every phase. So the team can build around their flag and still
-        // cannot take it down or move it, which is what the group was originally being
-        // withheld to prevent.
+        // cannot take it down or move it.
         if (Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorMarkerItemId) is ItemBarricadeAsset marker) {
             BarricadeManager.dropNonPlantedBarricade(
                 new Barricade(marker, marker.health, marker.getState()),
                 // `offset` on a barricade asset is how far its pivot sits above the
-                // ground it is standing on — 1.12 on a claim flag, 5 on a metal flag —
+                // ground it is standing on, 1.12 on a claim flag, 5 on a metal flag,
                 // so it is the correction that stops a marker being buried up to the
                 // waist, whatever marker somebody configures. The extra clears the
                 // anchor floor's own thickness.
@@ -99,6 +100,32 @@ internal static class SiegeWorld {
                 teamGroup);
         }
     }
+
+    /// A metal pillar on each outer corner of the grid, once, when the build phase
+    /// opens. Unlike the floors these belong to the team: they are placed in its group,
+    /// so a team whose plan wants that corner clear can salvage one, and they are
+    /// captured with the base like anything else the team left standing.
+    internal static void PlacePillars(SiegeSite site, ulong teamGroup) {
+        if (Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorPillarItemId) is not ItemStructureAsset pillar) return;
+
+        Quaternion placed = Quaternion.Euler(-90f, site.Yaw, 0f);
+        Quaternion heading = Quaternion.Euler(0f, site.Yaw, 0f);
+        float corner = FloorEdge * 1.5f;
+        float pivot = AnchorFloorClearance + HalfWallHeight;
+
+        foreach (float across in new[] { -corner, corner }) {
+            foreach (float along in new[] { -corner, corner }) {
+                Vector3 at = site.AnchorPoint + heading * new Vector3(across, pivot, along);
+                StructureManager.dropReplicatedStructure(new Structure(pillar, pillar.health), at, placed, 0, teamGroup);
+            }
+        }
+    }
+
+    /// Unturned's housing grid: HousingConnections.EDGE_LENGTH and HALF_WALL_HEIGHT. A
+    /// floor is six metres square and a pillar's pivot sits half a wall above the floor
+    /// it stands on.
+    private const float FloorEdge = 6f;
+    private const float HalfWallHeight = 2.125f;
 
     /// Half the anchor floor's thickness, so things resting on it start at its surface
     /// rather than at its middle.
@@ -165,6 +192,32 @@ internal static class SiegeWorld {
         ref float angleX, ref float angleY, ref float angleZ,
         ref ulong owner, ref ulong group, ref bool shouldAllow) {
         if (!MayBuildAt(point)) shouldAllow = false;
+        else if (IsFloor(asset) && !TouchesAFloor(point)) shouldAllow = false;
+    }
+
+    private static bool IsFloor(ItemStructureAsset asset) {
+        return asset.construct == EConstruct.FLOOR || asset.construct == EConstruct.FLOOR_POLY;
+    }
+
+    /// Whether a floor at `point` would sit beside, or one storey above, a floor that is
+    /// already standing. A base has to grow out of its anchor: a floor that touches
+    /// nothing is a second base, or a bridge to one, and the whole design rests on there
+    /// being exactly one.
+    private static bool TouchesAFloor(Vector3 point) {
+        List<RegionCoordinate> around = [];
+        Regions.getRegionsInRadius(point, FloorEdge * 2f, around);
+
+        foreach (RegionCoordinate coordinate in around) {
+            foreach (StructureDrop drop in StructureManager.regions[coordinate.x, coordinate.y].drops) {
+                if (drop.asset == null || !IsFloor(drop.asset)) continue;
+
+                Vector3 gap = drop.GetServersideData().point - point;
+                float flat = Mathf.Sqrt(gap.x * gap.x + gap.z * gap.z);
+                if (flat <= FloorEdge + 0.5f && Mathf.Abs(gap.y) <= HalfWallHeight * 2f + 0.5f) return true;
+            }
+        }
+
+        return false;
     }
 
     private static void OnDeployBarricade(
@@ -288,6 +341,32 @@ internal static class SiegeWorld {
 
     // ---- kit ------------------------------------------------------------------
 
+    /// Dress a builder: their own clothes, the planner in their hands, and no gun. A
+    /// build phase is for building, and a rifle in the first slot is what got equipped
+    /// instead of the planner.
+    internal static void DressForBuilding(Player player) {
+        ClearInventory(player);
+
+        ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+        foreach (SiegeItem item in RemoteAPI.KitFor(steam64)) {
+            if (IsClothing(item.ItemId)) Give(player, item);
+        }
+        if (player.clothing.backpack == 0) {
+            GiveGear(player, PeekSeekSiege.Config.FallbackOutfit, clothingOnly: true);
+        }
+
+        ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
+        Heal(player);
+
+        // Added with the useable auto-equip on and nothing else in hand, which is what
+        // puts the planner in their hands rather than in the bag.
+        foreach (SiegeItem tool in PeekSeekSiege.Config.BuildTools) {
+            for (byte i = 0; i < tool.Amount; i++) {
+                player.inventory.forceAddItemAuto(new Item(tool.ItemId, true), false, true, false);
+            }
+        }
+    }
+
     /// Dress a player in their own loadout and nothing else.
     ///
     /// This is what a builder gets: the gun and outfit they configured on the site, with
@@ -310,9 +389,13 @@ internal static class SiegeWorld {
 
         ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
 
-        // Passive regeneration is off on PeekSeek servers, so this is the only moment
-        // anybody gets health back. Bleeding and broken legs go with it: a wound from
-        // the last round is not something to carry into this one.
+        Heal(player);
+    }
+
+    /// Passive regeneration is off on PeekSeek servers, so this is the only moment
+    /// anybody gets health back. Bleeding and broken legs go with it: a wound from the
+    /// last round is not something to carry into this one.
+    private static void Heal(Player player) {
         player.life.serverModifyHealth(100);
         player.life.serverSetBleeding(false);
         player.life.serverSetLegsBroken(false);
@@ -349,25 +432,6 @@ internal static class SiegeWorld {
         // particular order, so the ordering is imposed here rather than assumed.
         foreach (SiegeItem item in items.OrderBy(item => IsClothing(item.ItemId) ? 0 : 1)) {
             Give(player, item);
-        }
-    }
-
-    /// Top a builder back up to the working set they are meant to be carrying.
-    ///
-    /// This counts what they already hold and adds only the difference, rather than
-    /// handing over another full set. Even with the hands page grown, a building's worth
-    /// of wood does not fit at once; keeping a small set continuously topped up gives
-    /// the same "never run out" feeling without pouring the overflow onto the floor.
-    ///
-    /// So `Amount` on a build supply means "how many you keep on you", not "how many you
-    /// are given".
-    internal static void TopUp(Player player, IEnumerable<SiegeItem> wanted) {
-        foreach (SiegeItem item in wanted) {
-            int held = CountHeld(player, item.ItemId);
-
-            for (int i = held; i < item.Amount; i++) {
-                if (!Offer(player, item.ItemId)) break;
-            }
         }
     }
 

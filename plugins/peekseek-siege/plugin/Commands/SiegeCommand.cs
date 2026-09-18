@@ -109,3 +109,28 @@ public class SiegeCommand : IRocketCommand {
             siege.TeamName(RoundOrder.Defender(Math.Max(1, siege.Round)))));
     }
 }
+
+/// `/overlay`: the HUD on or off, for you. It sits over the game's own compass and
+/// arena counter, which cannot be switched off on an Arena map any other way, so the
+/// same command is how a player who wants the compass gets it back.
+public class OverlayCommand : IRocketCommand {
+    public AllowedCaller AllowedCaller => AllowedCaller.Player;
+    public string Name => "overlay";
+    public string Help => "Show or hide the match HUD.";
+    public string Syntax => "";
+    public List<string> Aliases => [];
+    public List<string> Permissions => [];
+
+    public void Execute(IRocketPlayer caller, string[] command) {
+        UnturnedPlayer player = (UnturnedPlayer)caller;
+        Siege siege = SiegeHost.Current;
+
+        if (siege == null) {
+            StartCommand.Reply(caller, PeekSeekSiege.Instance.Translate("start_nothing_running"));
+            return;
+        }
+
+        bool shown = siege.ToggleHud(player.CSteamID.m_SteamID);
+        StartCommand.Reply(caller, PeekSeekSiege.Instance.Translate(shown ? "overlay_on" : "overlay_off"));
+    }
+}

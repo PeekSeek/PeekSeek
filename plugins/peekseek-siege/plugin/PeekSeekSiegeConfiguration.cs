@@ -38,54 +38,43 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// gamemode is being tested end to end; a real match wants 180.
     public int RoundSeconds;
 
-    /// The pieces this gamemode places itself and must never treat as part of a
-    /// team's base: the anchor floor, and the flag standing on it that marks the middle
-    /// of the site.
+    /// The pieces this gamemode places itself. A site starts as a three-by-three grid of
+    /// metal floors with a pillar on each outer corner and the claim flag in the middle.
     ///
-    /// The marker is a claim flag, and it is placed in the site team's group so that the
-    /// team can build inside its own 32m bubble. That is the only whitelist a claim flag
-    /// has: ClaimManager.checkCanBuild admits you if you match the bubble's owner or its
-    /// group, and the bubble is built on the client from the replicated barricade, so
-    /// there is nothing a server-side patch can do about it. Being in the group does not
-    /// make it theirs to take down — salvage and damage are refused by item id in
-    /// SiegeWorld, for everybody, in every phase.
+    /// The floors and the flag are fixtures: never part of a snapshot, never salvageable,
+    /// never damaged, by anybody, in any phase, refused by item id in SiegeWorld. A team
+    /// that could move its anchor could build a second base beside the first and pick
+    /// whichever suited the round. The pillars are not fixtures: they go down in the
+    /// team's group so the team can pull one out if the plan needs the corner, and from
+    /// then on they are just part of the base.
+    ///
+    /// The flag is placed in the site team's group so that the team can build inside its
+    /// own 32m bubble. That is the only whitelist a claim flag has: ClaimManager.
+    /// checkCanBuild admits you if you match the bubble's owner or its group, and the
+    /// bubble is built on the client from the replicated barricade, so there is nothing
+    /// a server-side patch can do about it.
     public ushort AnchorFloorItemId;
+    public ushort AnchorPillarItemId;
     public ushort AnchorMarkerItemId;
 
-    /// The scarce half of a team's materials: metal, and floors of any kind.
+    /// A team's materials for the whole build phase, issued once. Everything is a
+    /// budget: metal is what survives a charge, so how much of a building is metal and
+    /// which parts is the most interesting decision a team makes, and it stops being
+    /// one the moment anything is unlimited.
     ///
-    /// Issued once per player at the start of the build phase and never topped up, so
-    /// the amounts here are a budget for the whole five minutes. Metal is what survives
-    /// a breach charge, so how much of a building is metal and which parts is the most
-    /// interesting decision a team makes — and it stops being a decision the moment the
-    /// metal is unlimited. Floors are rationed for a second reason: a team with plenty
-    /// of them could lay a second base beside the anchor and pick whichever suited the
-    /// round.
-    public List<SiegeItem> RationedSupplies;
+    /// Floors are in the kit, and any floor placed has to touch a floor that is already
+    /// standing (SiegeWorld refuses the rest), so the base grows out from the anchor
+    /// rather than being laid beside it.
+    public List<SiegeItem> BuildSupplies;
 
-    /// The plentiful half: birch. Topped back up continuously, so nobody ever stands
-    /// still waiting for wood.
-    ///
-    /// `Amount` here means "how many you keep on you", not "how many you are given" —
-    /// what a player holds is counted and only the difference is handed over. That is
-    /// what makes a small inventory behave like an unlimited one. Unturned decides
-    /// inventory size from the clothing a player wears and a plugin cannot change it
-    /// (the client sizes each page from the backpack asset it was told to wear, so a
-    /// server-side resize only desyncs), so the supply has to come to the player a
-    /// little at a time instead.
-    public List<SiegeItem> PlentifulSupplies;
-
-    /// What a builder is handed on top of their own loadout. `/siege find <text>` looks
-    /// an id up in game if one of these ever needs swapping.
+    /// What a builder is handed on top of their clothes: the housing planner, which is
+    /// force-equipped, and nothing else. `/siege find <text>` looks an id up in game.
     public List<SiegeItem> BuildTools;
 
     /// Clothing given only to a player whose own kit did not dress them — because the
     /// site was unreachable, or their loadout has no outfit in it. Anybody with a kit
     /// keeps wearing their own.
     public List<string> FallbackOutfit;
-
-    /// How often, in seconds, the plentiful supplies are topped back up.
-    public int SupplyRefillSeconds;
 
     /// How big a builder's hands page is, in inventory cells.
     ///
@@ -149,7 +138,7 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     public void LoadDefaults() {
         szAPIURL = "https://peekseek.net";
         KitCategory = "meta";
-        ChatIconURL = "https://peekseek.net/public/img/logo.png/";
+        ChatIconURL = "https://peekseek.net/static/img/logo.png";
 
         // Melee and a dressing, matching what the site hands out as `defaultItems` on
         // the competitive gamemodes.
@@ -166,35 +155,20 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
 
         AnchorFloorItemId = 369;
         AnchorMarkerItemId = 1158;
+        AnchorPillarItemId = 374;
 
-        // Ids are read off the server's own Bundles/Items rather than guessed, and none
-        // of the three materials is a contiguous block in the order its names suggest.
-        //
-        // Brick: 1210 doorway, 1212 pillar, 1215 wall, 1216 window, 1984 roof.
-        // Birch: 49 doorway, 51 floor, 53 pillar, 55 roof, 57 wall, 59 window, 318 stairs.
-        // Metal: 378 door, 1332 hatch.
-        //
-        // Brick is the scarce material rather than metal: at 1650 health it takes real
-        // explosives to open, and it is what a team spends its one allowance on. Doors
-        // and hatches stay metal because they are the ways a team moves through its own
-        // building and should not be the soft spot.
-        RationedSupplies = [
-            new SiegeItem(1215, 6),
-            new SiegeItem(1984, 4),
-            new SiegeItem(1212, 4),
-            new SiegeItem(1210, 2),
-            new SiegeItem(1216, 2),
-            new SiegeItem(378, 2),
-            new SiegeItem(1332, 2)
-        ];
-
-        PlentifulSupplies = [
-            new SiegeItem(57, 30),
-            new SiegeItem(49, 12),
-            new SiegeItem(59, 12),
-            new SiegeItem(53, 24),
-            new SiegeItem(55, 20),
-            new SiegeItem(318, 8)
+        // Ids are read off the server's own Bundles/Items rather than guessed. Maple:
+        // 31 floor, 32 doorway, 33 wall, 35 roof, 36 pillar, 322 ramp. Metal: 369 floor,
+        // 373 roof, 374 pillar, 378 door.
+        BuildSupplies = [
+            new SiegeItem(36, 50),
+            new SiegeItem(33, 20),
+            new SiegeItem(35, 20),
+            new SiegeItem(32, 5),
+            new SiegeItem(31, 5),
+            new SiegeItem(378, 5),
+            new SiegeItem(322, 3),
+            new SiegeItem(373, 3)
         ];
 
         // 1764 is the housing planner: the one tool that says "builder" and makes the
@@ -203,9 +177,10 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         BuildTools = [new SiegeItem(1764, 1)];
         FallbackOutfit = ["Alicepack"];
 
-        SupplyRefillSeconds = 5;
         HandsWidth = 14;
-        HandsHeight = 20;
+        // Grown to hold the whole kit at once: a hundred and ten pieces at two or four
+        // cells each is more than a backpack.
+        HandsHeight = 26;
 
         OffBaseDamagePerSecond = 12;
         OffBaseGraceSeconds = 2f;

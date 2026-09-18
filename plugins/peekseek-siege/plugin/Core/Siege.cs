@@ -54,16 +54,15 @@ internal class Siege : IGamemode {
     /// before off-base damage can be measured. Absent means they are on a base now.
     private readonly Dictionary<ulong, float> offBaseSince = [];
 
-    /// Who has already drawn their one metal allowance this build phase. Cleared when a
-    /// build phase opens.
-    private readonly HashSet<ulong> rationed = [];
+    /// Who has been kitted out this build phase. Cleared when a build phase opens, so a
+    /// player who dies or rejoins mid-build is dressed again but not resupplied.
+    private readonly HashSet<ulong> supplied = [];
 
     /// Who has died this round. A death is what takes a player out of a round, and it
     /// has to be remembered rather than read off `isDead`, because solo lets the tester
     /// respawn and a real match only respawns everyone when the next round starts.
     private readonly HashSet<ulong> deadThisRound = [];
 
-    private float nextSupplyRefill;
     private float nextTick;
 
     /// Solo only: which side of the one base the lone tester is playing, 0 holding it
@@ -199,18 +198,26 @@ internal class Siege : IGamemode {
         RefreshHud();
     }
 
+    /// Show or hide the HUD for one player. It covers the game's own compass and arena
+    /// text on purpose, so turning it off is also how a player gets those back.
+    internal bool ToggleHud(ulong steam64) {
+        bool shown = hud.Toggle(steam64);
+        RefreshHud();
+        return shown;
+    }
+
     // ---- build phase ----------------------------------------------------------
 
     private void StartBuilding() {
         phase = SiegePhase.Building;
         phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.BuildSeconds;
-        nextSupplyRefill = 0f;
-        rationed.Clear();
+        supplied.Clear();
 
         foreach (int team in BuiltSites()) {
             SiegeSite site = sites[team];
             BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, Fixtures);
             SiegeWorld.PlaceAnchor(site, GroupOf(team));
+            SiegeWorld.PlacePillars(site, GroupOf(team));
         }
 
         foreach (Player player in Players()) Place(player);
@@ -223,11 +230,6 @@ internal class Siege : IGamemode {
     }
 
     private void TickBuilding() {
-        if (Time.realtimeSinceStartup >= nextSupplyRefill) {
-            nextSupplyRefill = Time.realtimeSinceStartup + PeekSeekSiege.Config.SupplyRefillSeconds;
-            foreach (Player player in Players()) Supply(player);
-        }
-
         Leash();
         Countdown("build_countdown");
 
@@ -543,28 +545,18 @@ internal class Siege : IGamemode {
             defended.AttackerBearing + 180f);
     }
 
-    /// Kit a builder out: what they wear, then their one allowance of metal, then as
-    /// much wood as they can carry.
+    /// Kit a builder out, once per build phase: their clothes, the planner in hand, and
+    /// the whole budget of materials. Nothing is topped up; the amounts in BuildSupplies
+    /// are the base.
     ///
-    /// Order is the whole point. Unturned inventory space comes from clothing, so a
-    /// player with no backpack has almost none, and handing them materials first puts
-    /// most of it on the floor. The allowance is issued once per build phase and never
-    /// again — that is what makes metal a decision — while the wood is topped up on
-    /// every refill.
+    /// A player placed again mid-build (a respawn, a rejoin) is dressed again but not
+    /// resupplied, or dying would be a way to double the kit.
     private void Supply(Player player) {
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+        bool first = supplied.Add(steam64);
 
-        // Once per build phase: their own loadout, the tools, and the metal allowance.
-        // A builder wears what they always wear rather than a uniform this gamemode
-        // invented, so the only thing that marks them out as building is the planner.
-        if (rationed.Add(steam64)) {
-            SiegeWorld.Outfit(player);
-            SiegeWorld.Issue(player, PeekSeekSiege.Config.BuildTools);
-            SiegeWorld.Issue(player, PeekSeekSiege.Config.RationedSupplies);
-        }
-
-        SiegeWorld.ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
-        SiegeWorld.TopUp(player, PeekSeekSiege.Config.PlentifulSupplies);
+        SiegeWorld.DressForBuilding(player);
+        if (first) SiegeWorld.Issue(player, PeekSeekSiege.Config.BuildSupplies);
     }
 
     private static void AllowRespawn(Player player) {

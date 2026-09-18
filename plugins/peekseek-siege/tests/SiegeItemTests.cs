@@ -96,33 +96,32 @@ public class ConfigurationTests {
         return dir?.FullName ?? Directory.GetCurrentDirectory();
     }
 
-    /// Nobody is given a floor, of any material, in either tier. A team that could lay
-    /// its own floor could start a second base beside the anchor and pick whichever one
-    /// suited the round; with only roofs to build upwards on, the anchor is the only
-    /// foundation there is. 369 and 51 are the metal and birch floors.
+    /// Nobody is ever handed the anchor's own pieces. The anchor floor and the flag are
+    /// protected from salvage and damage by item id wherever they stand, so a player
+    /// carrying one would be laying pieces nobody, including them, could ever remove,
+    /// and a snapshot would skip them: a base built out of anchor floors would vanish
+    /// at the first restore.
     [Fact]
-    public void NobodyIsGivenAFloor() {
+    public void NobodyIsGivenAnAnchorPiece() {
         PeekSeekSiegeConfiguration config = new();
         config.LoadDefaults();
 
-        foreach (ushort floor in new ushort[] { 369, 51 }) {
-            Assert.DoesNotContain(config.RationedSupplies, item => item.ItemId == floor);
-            Assert.DoesNotContain(config.PlentifulSupplies, item => item.ItemId == floor);
+        foreach (ushort fixture in new[] { config.AnchorFloorItemId, config.AnchorMarkerItemId }) {
+            Assert.DoesNotContain(config.BuildSupplies, item => item.ItemId == fixture);
         }
     }
 
-    /// Brick is the scarce material, so none of it may appear in the list that is topped
-    /// back up every few seconds. The brick wall matters most: it is what a rocket has to
-    /// be spent on. Doors and hatches are rationed for the same reason.
+    /// The whole kit has to fit in the hands page at once, because it is issued once
+    /// and never topped up: what does not fit is silently not given. Structures are two
+    /// or four cells each; the count here is the worst case, every piece four cells.
     [Fact]
-    public void BrickAndDoorsAreNeverPlentiful() {
+    public void TheBuildKitFitsInTheHands() {
         PeekSeekSiegeConfiguration config = new();
         config.LoadDefaults();
 
-        foreach (ushort scarce in new ushort[] { 1210, 1212, 1215, 1216, 1984, 378, 1332 }) {
-            Assert.DoesNotContain(config.PlentifulSupplies, item => item.ItemId == scarce);
-            Assert.Contains(config.RationedSupplies, item => item.ItemId == scarce);
-        }
+        int cells = config.BuildSupplies.Sum(item => item.Amount * (item.ItemId == 36 ? 2 : 4));
+        Assert.True(cells <= config.HandsWidth * config.HandsHeight,
+            $"{cells} cells of kit for {config.HandsWidth * config.HandsHeight} cells of hands.");
     }
 
     /// Attackers may not be given anything that has to be placed. They are in a different
@@ -166,15 +165,11 @@ public class ConfigurationTests {
         PeekSeekSiegeConfiguration config = new();
         config.LoadDefaults();
 
-        var handedOut = config.RationedSupplies
-            .Concat(config.PlentifulSupplies)
+        var handedOut = config.BuildSupplies
             .Concat(config.DefaultItems)
             .Concat(config.DefenceOptions.SelectMany(o => o.Items))
             .Concat(config.RaidOptions.SelectMany(o => o.Items));
 
-        // The anchor floor is the one exception: a rationed metal floor is the same item
-        // the anchor is made of, and that is fine, because the anchor is protected from
-        // salvage and damage by id wherever it stands.
         foreach (SiegeItem item in handedOut) {
             Assert.NotEqual(config.AnchorMarkerItemId, item.ItemId);
         }

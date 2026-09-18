@@ -166,14 +166,11 @@ internal class PickBoard {
             return;
         }
 
-        for (int i = 0; i < seat.Options.Count; i++) {
-            EffectManager.sendUIEffectVisibility(
-                PeekSeekSiege.Config.PickUIKey, player.transportConnection, true,
-                $"Option{i}_Taken", i == seat.Pick);
-        }
-
-        // The board stays up as a receipt until the round starts, but it stops holding
-        // the mouse: a player who has chosen wants to look around, not at a cursor.
+        // The board goes the moment they pick. Left up as a receipt, its panel sat under
+        // the locked cursor and the game read every click as "over UI": nothing fired,
+        // nothing could be picked up, for as long as the pick phase ran. The receipt is
+        // the pick icon on the HUD.
+        EffectManager.askEffectClearByID(asset.id, player.transportConnection);
         Modal(player, false);
     }
 

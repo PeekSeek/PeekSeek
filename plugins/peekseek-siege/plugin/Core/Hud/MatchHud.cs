@@ -59,7 +59,24 @@ internal class MatchHud {
     /// can be sent as the difference rather than as everything.
     private readonly Dictionary<ulong, HudState> shown = [];
 
+    /// Who has turned the HUD off with /overlay. It covers the game's compass and arena
+    /// text, so this is also how a player gets those back.
+    private readonly HashSet<ulong> hidden = [];
+
     internal bool IsAvailable => Effect() != null;
+
+    /// Flip one player's HUD. Returns whether it is now shown.
+    internal bool Toggle(ulong steam64) {
+        if (hidden.Remove(steam64)) return true;
+
+        hidden.Add(steam64);
+        shown.Remove(steam64);
+
+        SteamPlayer viewer = PlayerTool.getSteamPlayer(new CSteamID(steam64));
+        EffectAsset asset = Effect();
+        if (viewer != null && asset != null) EffectManager.askEffectClearByID(asset.id, viewer.transportConnection);
+        return false;
+    }
 
     /// Put the HUD up for everybody, or bring it up to date if it already is. Cheap to
     /// call after any change: only fields that differ from what a viewer last saw are
@@ -69,6 +86,7 @@ internal class MatchHud {
 
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
             ulong steam64 = viewer.playerID.steamID.m_SteamID;
+            if (hidden.Contains(steam64)) continue;
             HudState mine = FromTheViewpointOf(state, steam64);
 
             if (shown.TryGetValue(steam64, out HudState last) && SameRoster(last, mine)) {

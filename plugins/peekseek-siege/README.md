@@ -42,10 +42,16 @@ exceptions:
   Metal walls, every floor and every pillar stay unowned, so a base cannot be dismantled
   into a better base while a round is running.
 
-**One base per site.** Each plot gets a metal floor with a claim flag on it, dropped by
-the gamemode, owned by nobody, and impossible to salvage or move. Teams are given no
-floors of their own, so the only place to build is off that anchor. Nobody ends up with
-three shacks in a field and a choice about which one to defend.
+**One base per site.** Each plot starts as a three-by-three grid of metal floors with a
+claim flag in the middle and a metal pillar on each outer corner, dropped by the
+gamemode. The floors and the flag are owned by nobody and impossible to salvage, damage
+or move; the pillars belong to the team, so a plan that wants a corner clear can pull
+one. Teams do get floors, but a floor only goes down beside or above one that is already
+standing, so the base grows out of the anchor. Nobody ends up with three shacks in a
+field and a choice about which one to defend.
+
+**A builder builds.** The build phase hands out clothes, the housing planner in hand, and
+one budget of maple and metal for the whole phase. No gun, and nothing is topped up.
 
 Plus the leash: both sites are on one map, and during the build phase you cannot leave
 your own plot. Walk too far and you are put back. That is what keeps the first round worth
@@ -69,6 +75,7 @@ then runs the rounds normally with you on whichever side you ask for.
 /siege skip           end the current phase (a round goes to the defenders, as the clock would)
 /siege skip atk       end the round, give it to the attackers
 /siege side           swap which side you are playing, solo only
+/overlay              the HUD off or on for you; off also brings back the game's compass
 ```
 
 `/siege skip` is what makes a bug in round four findable in under a minute instead of

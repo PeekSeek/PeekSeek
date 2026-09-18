@@ -84,7 +84,7 @@ def pick_board(round8):
     canvas(root, sorting_order=0)
 
     board = root.add(centered("Board", 0, 40, BOARD_W, BOARD_H))
-    image(board, PAGE, 0.94, sprite=round8, raycast=True)
+    image(board, PAGE, 0.94, sprite=round8)
 
     text(board.add(top_left("Headline", PANEL_PAD, PANEL_PAD, 880, HEADLINE_H)),
          "Round 2. You are defending North.", size=20, colour=TEXT, bold=True)
@@ -120,79 +120,73 @@ def pick_board(round8):
 
 
 # ---- the match HUD -------------------------------------------------------------------
+#
+# One block, not a notch with cards around it. It sits exactly where Unturned's own
+# arena text (y 0-50, x +-180) and compass (y 60-110) are drawn on an Arena map, at a
+# canvas sort order above the game's (15), so it covers both: there is no flag or config
+# that turns either off on an Arena level. The shape is still the overlay's notch, only
+# wide enough for two rosters, with the inverse fillets at its ends.
 
-NOTCH_H = 48            # 2.5vw
-NOTCH_PAD = 21          # 1.1vw
-NOTCH_GAP = 10          # 0.55vw
-TEAM_W = 120
-SCORE_W = 44
-MID_W = 120
-NOTCH_W = NOTCH_PAD * 2 + TEAM_W * 2 + SCORE_W * 2 + MID_W + NOTCH_GAP * 4
-
-CARD_W, CARD_H = 120, 48
-CARD_GAP = 8
-CARD_Y = 6
-AVATAR = 36
-CARD_PAD = 6
+HUD_H = 112
+HUD_PAD = 16
+SEAT_W = 36             # a 32px face and a 4px gap
+AVATAR = 32
+ROSTER_W = SEATS * SEAT_W - 4
+CENTER_W = 140
+HUD_W = HUD_PAD * 2 + ROSTER_W * 2 + 12 * 2 + CENTER_W
+ROW2_Y = 58
 
 
 def match_hud(round6, notch_sprite, flare_l, flare_r):
     root = Node("Effect")
-    canvas(root, sorting_order=0)
+    canvas(root, sorting_order=16)
 
-    notch = root.add(top_center("Notch", 0, 0, NOTCH_W, NOTCH_H))
-    image(notch, FLAT, 0.9, sprite=notch_sprite)
+    block = root.add(top_center("Block", 0, 0, HUD_W, HUD_H))
+    image(block, FLAT, 0.9, sprite=notch_sprite)
 
-    # The fillets sit just outside the notch, flush with the top edge.
-    flare_left = notch.add(Node("FlareL", anchor_min=(0, 1), anchor_max=(0, 1), pivot=(1, 1), size=(NOTCH_R, NOTCH_R)))
+    flare_left = block.add(Node("FlareL", anchor_min=(0, 1), anchor_max=(0, 1), pivot=(1, 1), size=(NOTCH_R, NOTCH_R)))
     image(flare_left, FLAT, 0.9, sprite=flare_l)
-    flare_right = notch.add(Node("FlareR", anchor_min=(1, 1), anchor_max=(1, 1), pivot=(0, 1), size=(NOTCH_R, NOTCH_R)))
+    flare_right = block.add(Node("FlareR", anchor_min=(1, 1), anchor_max=(1, 1), pivot=(0, 1), size=(NOTCH_R, NOTCH_R)))
     image(flare_right, FLAT, 0.9, sprite=flare_r)
 
-    x = NOTCH_PAD
-    text(notch.add(top_left("Team0_Name", x, 0, TEAM_W, NOTCH_H)), "North",
+    # Row one: names over each roster, scores and the clock in the middle.
+    center_x = HUD_PAD + ROSTER_W + 12
+    text(block.add(top_left("Team0_Name", HUD_PAD, 8, ROSTER_W, 40)), "North",
          size=18, colour=TEAM_NAME, halign=RIGHT, bold=True)
-    x += TEAM_W + NOTCH_GAP
-    text(notch.add(top_left("Score0", x, 0, SCORE_W, NOTCH_H)), "0",
+    text(block.add(top_left("Score0", center_x, 8, 40, 40)), "0",
          size=28, colour=INK, halign=CENTER, bold=True)
-    x += SCORE_W + NOTCH_GAP
-    text(notch.add(top_left("Mid", x, 7, MID_W, 14)), "Round 1",
-         size=12, colour=MUTED, halign=CENTER, bold=True, uppercase=True, spacing=10)
-    text(notch.add(top_left("Timer", x, 22, MID_W, 22)), "0:30",
-         size=18, colour=INK, halign=CENTER, bold=True)
-    x += MID_W + NOTCH_GAP
-    text(notch.add(top_left("Score1", x, 0, SCORE_W, NOTCH_H)), "0",
+    text(block.add(top_left("Timer", center_x + 40, 8, 60, 40)), "0:30",
+         size=24, colour=INK, halign=CENTER, bold=True)
+    text(block.add(top_left("Score1", center_x + 100, 8, 40, 40)), "0",
          size=28, colour=INK, halign=CENTER, bold=True)
-    x += SCORE_W + NOTCH_GAP
-    text(notch.add(top_left("Team1_Name", x, 0, TEAM_W, NOTCH_H)), "South",
+    text(block.add(top_left("Team1_Name", center_x + CENTER_W + 12, 8, ROSTER_W, 40)), "South",
          size=18, colour=TEAM_NAME, halign=LEFT, bold=True)
 
-    # Cards run outward from the notch, the viewer's own team on the left. Each is one
-    # flat chip: the site's avatar-and-name, then the overlay's loadout run under it.
-    first_edge = NOTCH_W / 2 + NOTCH_R + CARD_GAP
-    for side, prefix, sign in (("left", "L", -1), ("right", "R", 1)):
+    # Row two: the round label under the clock, a seat per player under each name.
+    text(block.add(top_left("Mid", center_x, ROW2_Y + 4, CENTER_W, 16)), "Round 1",
+         size=12, colour=MUTED, halign=CENTER, bold=True, uppercase=True, spacing=10)
+
+    for prefix, place in (("L", top_left), ("R", top_right)):
         for i in range(SEATS):
-            edge = first_edge + i * (CARD_W + CARD_GAP)
-            card = root.add(top_center(f"{prefix}{i}", sign * (edge + CARD_W / 2), CARD_Y, CARD_W, CARD_H, active=False))
-            image(card, FLAT, 0.9, sprite=round6)
+            x = HUD_PAD + i * SEAT_W
+            seat = block.add(place(f"{prefix}{i}", x, ROW2_Y, AVATAR, HUD_H - ROW2_Y - 6, active=False))
 
-            place = top_left if side == "left" else top_right
-            halign = LEFT if side == "left" else RIGHT
-
-            frame = card.add(place(f"{prefix}{i}_Frame", CARD_PAD, CARD_PAD, AVATAR, AVATAR))
+            frame = seat.add(top_left(f"{prefix}{i}_Frame", 0, 0, AVATAR, AVATAR))
             image(frame, "#ffffff", sprite=round6)
             mask(frame)
             image(frame.add(stretch(f"{prefix}{i}_Avatar")), "#ffffff", enabled=False)
 
-            column = CARD_PAD + AVATAR + CARD_PAD
-            text(card.add(place(f"{prefix}{i}_Name", column, CARD_PAD, CARD_W - column - CARD_PAD, 18)),
-                 "Player", size=14, colour=INK, halign=halign, bold=True)
-            image(card.add(place(f"{prefix}{i}_Gun", column, 26, 22, 16)), "#ffffff", enabled=False, preserve_aspect=True)
-            image(card.add(place(f"{prefix}{i}_Pick", column + 26, 26, 16, 16)), "#ffffff", enabled=False, preserve_aspect=True)
+            # The loadout run, gun then pick, under the face.
+            image(seat.add(top_left(f"{prefix}{i}_Gun", 0, AVATAR + 2, 16, 14)), "#ffffff", enabled=False, preserve_aspect=True)
+            image(seat.add(top_left(f"{prefix}{i}_Pick", 18, AVATAR + 2, 14, 14)), "#ffffff", enabled=False, preserve_aspect=True)
 
-            # Out of the round: the overlay fades the card to 0.3 rather than removing it,
-            # so the row never reflows mid-round. A cover at 0.7 reads the same.
-            image(card.add(stretch(f"{prefix}{i}_Out", active=False)), FLAT, 0.7, sprite=round6)
+            # Out of the round: the overlay fades the card rather than removing it.
+            image(seat.add(stretch(f"{prefix}{i}_Out", active=False)), FLAT, 0.7)
+
+        # A hairline under each roster. The viewer's own side is ink, the other side is
+        # the overlay's red: for a player, the other team is the jeopardy.
+        rule = block.add(place(f"{prefix}_Rule", HUD_PAD, HUD_H - 4, ROSTER_W, 2))
+        image(rule, INK if prefix == "L" else RED, 0.5 if prefix == "L" else 0.85)
 
     return root
 

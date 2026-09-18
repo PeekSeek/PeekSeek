@@ -106,6 +106,8 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
 
         { "siege_state", "Phase <color=white>{0}</color>, round <color=white>{1}</color>, <color=white>{2}s</color> left. <color=white>{3}</color> defends." },
         { "side_solo_only", "<color=white>/siege side</color> is for solo tests only." },
+        { "overlay_on", "HUD <color=white>on</color>." },
+        { "overlay_off", "HUD <color=white>off</color>. <color=white>/overlay</color> brings it back." },
 
         { "find_usage", "<color=white>/siege find <text></color> looks an item up by name." },
         { "find_none", "Nothing is called anything like \"{0}\"." },
