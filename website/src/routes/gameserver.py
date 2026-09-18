@@ -388,8 +388,15 @@ def _player(steam64: int) -> dict:
     # than only when it next tries to queue them.
     ban = data.UserBan.activeFor(steam64)
 
+    # The Steam persona and picture, so a server can draw a scoreboard with the same
+    # faces the site shows. Served from the same five-minute cache every page uses;
+    # a server that asks first pays one Steam call, and never a raised one.
+    profile = data.User.getSteamData(steam64)
+
     return {
         "steam64": str(steam64),
+        "name": profile.name,
+        "avatar": profile.avatar,
         "elo": data.Stat.getElo(steam64),
         "matchId": matchId or None,
         "relayTo": match.connectCode() if match else None,
