@@ -102,11 +102,15 @@ they only affect what you see in the Editor, never what the game draws.
 
 ## Getting it in front of a player
 
-That folder is the mod. Two ways to load it, and they are the same mechanism:
+That folder is the mod. Two ways to load it:
 
 - **To test**, copy it to `Servers/unturned/Bundles/PeekSeekSiegeUI/` on the server and
-  to `<Unturned install>/Sandbox/PeekSeekSiegeUI/` on your own machine. Both paths are
-  scanned at startup exactly the way workshop items are. Restart both.
+  to `Maps/Alpha Valley/Bundles/PeekSeekSiegeUI/` in your own Unturned install. Restart
+  both. The client path is the map's, not `Sandbox/`, for a reason worth knowing: while
+  connected to a server a client only sees assets from the core game, the map, and the
+  server's workshop files (`Assets.ApplyServerAssetMapping`), so a `Sandbox/` mod is
+  there in singleplayer and gone the moment you join. A map's `Bundles/` folder is part
+  of the map's origin and not part of its hash, so it rides along.
 - **For players**, publish it to the Steam Workshop as a content mod (in game: Workshop
   > Submit, pick the folder), then put the published file id in `File_IDs` in
   `Servers/unturned/WorkshopDownloadConfig.json` so the server fetches it and tells
