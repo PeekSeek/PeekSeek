@@ -3,7 +3,7 @@
 #   .\build.ps1                 uses the version in ProjectSettings/ProjectVersion.txt
 #   .\build.ps1 -Unity <path>   uses that Unity.exe instead
 #
-# Output lands in Build\PeekSeekSiegeUI, which is the folder to upload to the Workshop.
+# Output lands in Build\PeekSeekUI, which is the folder to upload to the Workshop.
 
 param([string]$Unity)
 
@@ -21,10 +21,10 @@ if (-not $Unity) {
 $log = Join-Path $here "build.log"
 if (Test-Path $log) { Remove-Item $log }
 
-& $Unity -batchmode -nographics -quit -projectPath $here -executeMethod BuildPickBoardBundle.Build -logFile $log | Out-Null
+& $Unity -batchmode -nographics -quit -projectPath $here -executeMethod BuildBundle.Build -logFile $log | Out-Null
 $exit = $LASTEXITCODE
 
-Get-Content $log | Select-String -Pattern "Siege UI bundle written|skipping|no .hash|error CS|Exception" | ForEach-Object { $_.Line }
+Get-Content $log | Select-String -Pattern "UI bundle written|Made Assets|skipping|no .hash|error CS|Exception|did not take" | ForEach-Object { $_.Line }
 
 if ($exit -ne 0) { throw "Unity exited with $exit; see $log" }
-Get-ChildItem (Join-Path $here "Build\PeekSeekSiegeUI") -Recurse -File | Select-Object FullName, Length
+Get-ChildItem (Join-Path $here "Build\PeekSeekUI") -Recurse -File | Select-Object FullName, Length

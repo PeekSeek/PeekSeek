@@ -6,6 +6,7 @@ using Rocket.Unturned.Events;
 using Rocket.Unturned.Player;
 using SDG.Unturned;
 using Steamworks;
+using UnityEngine;
 using Logger = Rocket.Core.Logging.Logger;
 
 namespace PeekSeekSiege.Core;
@@ -32,6 +33,7 @@ internal static class SiegeHost {
         Provider.onServerConnected += OnConnected;
         Provider.onServerDisconnected += OnDisconnected;
         UnturnedPlayerEvents.OnPlayerDeath += OnDeath;
+        UnturnedPlayerEvents.OnPlayerRevive += OnRevive;
         EffectManager.onEffectButtonClicked += OnButtonClicked;
 
         RemoteAPI.Init();
@@ -44,6 +46,7 @@ internal static class SiegeHost {
         Provider.onServerConnected -= OnConnected;
         Provider.onServerDisconnected -= OnDisconnected;
         UnturnedPlayerEvents.OnPlayerDeath -= OnDeath;
+        UnturnedPlayerEvents.OnPlayerRevive -= OnRevive;
         EffectManager.onEffectButtonClicked -= OnButtonClicked;
 
         RemoteAPI.Shutdown();
@@ -82,8 +85,8 @@ internal static class SiegeHost {
         }
 
         // Solo puts the tester on team 0 and leaves team 1 empty. Siege reads the side
-        // they are playing from /side rather than from the roster, so an empty team is
-        // exactly what it expects.
+        // they are playing from the round order rather than from the roster, so an
+        // empty team is exactly what it expects.
         for (int i = 0; i < present.Count; i++) {
             int team = solo ? 0 : i % 2;
             ulong steam64 = present[i].playerID.steamID.m_SteamID;
@@ -122,7 +125,25 @@ internal static class SiegeHost {
             return;
         }
 
+        Seat(player);
         running.OnPlayerJoined(player);
+    }
+
+    /// Somebody arriving mid-match joins the side with fewer people. Without a seat they
+    /// would be on nobody's roster: placed as if on team 0, counted by nobody, and
+    /// nowhere on the HUD. In solo there is one side, and it is the tester's.
+    private static void Seat(Player player) {
+        GamemodeMatch match = Current?.Match;
+        ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+        if (match == null || match.TeamOf(steam64) != null) return;
+
+        GamemodeTeam team = match.Solo
+            ? match.Teams[0]
+            : match.Teams.OrderBy(t => t.Players.Count).First();
+
+        team.Players.Add(steam64);
+        AssignGroup(player, team.GroupId);
+        Logger.Log($"{player.channel.owner.playerID.characterName} joined {team.Name} mid-match.");
     }
 
     private static void OnDisconnected(CSteamID steamID) {
@@ -132,6 +153,10 @@ internal static class SiegeHost {
 
     private static void OnDeath(UnturnedPlayer player, EDeathCause cause, ELimb limb, CSteamID murderer) {
         running?.OnPlayerDied(player.Player, murderer);
+    }
+
+    private static void OnRevive(UnturnedPlayer player, Vector3 position, byte angle) {
+        running?.OnPlayerRevived(player.Player);
     }
 
     /// A click on a tile of the Unity board. Chat picks come in through /pick instead

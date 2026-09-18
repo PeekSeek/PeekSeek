@@ -103,8 +103,9 @@ plugin/Core/SiegeWorld.cs       everything Siege does to the world, and the buil
 plugin/Core/BaseSnapshot.cs     photographing a base and re-laying it
 plugin/Core/RoundOrder.cs       who defends round N, and when a match can end
 plugin/Core/PickBoard.cs        the five-option board, both ways of drawing it
+plugin/Core/Hud/MatchHud.cs     the score, clock and player cards along the top; any gamemode can drive it
 plugin/Core/IGamemode.cs        the seam the main PeekSeek plugin will drive this through
-ui/                             the Unity project the real board is built from
+ui/                             the Unity project the board and the HUD are built from
 ```
 
 ## The gamemode seam

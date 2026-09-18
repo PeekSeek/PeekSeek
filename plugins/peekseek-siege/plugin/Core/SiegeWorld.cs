@@ -288,8 +288,6 @@ internal static class SiegeWorld {
 
     // ---- kit ------------------------------------------------------------------
 
-    /// Everything a player carries into a round: their saved kit, the gamemode's
-    /// default items, and the one option they picked off the board.
     /// Dress a player in their own loadout and nothing else.
     ///
     /// This is what a builder gets: the gun and outfit they configured on the site, with
@@ -313,16 +311,35 @@ internal static class SiegeWorld {
         ExpandHands(player, PeekSeekSiege.Config.HandsWidth, PeekSeekSiege.Config.HandsHeight);
 
         // Passive regeneration is off on PeekSeek servers, so this is the only moment
-        // anybody gets health back.
+        // anybody gets health back. Bleeding and broken legs go with it: a wound from
+        // the last round is not something to carry into this one.
         player.life.serverModifyHealth(100);
+        player.life.serverSetBleeding(false);
+        player.life.serverSetLegsBroken(false);
     }
 
+    /// The gun in the player's primary slot, or the secondary if that is all they have,
+    /// or 0. The HUD shows it, so it reads the inventory rather than the kit: what they
+    /// are actually holding, not what they were handed.
+    internal static ushort PrimaryWeapon(Player player) {
+        for (byte page = 0; page < PlayerInventory.SLOTS; page++) {
+            Items slot = player.inventory.items[page];
+            if (slot == null || slot.getItemCount() == 0) continue;
+
+            ushort id = slot.getItem(0)?.item?.id ?? 0;
+            if (id != 0) return id;
+        }
+
+        return 0;
+    }
+
+    /// Everything a player carries into a round: their saved kit, the gamemode's
+    /// default items, and the one option they picked off the board.
     internal static void Kit(Player player, SiegeOption option) {
         Outfit(player);
 
         Give(player, PeekSeekSiege.Config.DefaultItems);
         if (option != null) Give(player, option.Items);
-
     }
 
     internal static void Give(Player player, IEnumerable<SiegeItem> items) {
@@ -338,12 +355,9 @@ internal static class SiegeWorld {
     /// Top a builder back up to the working set they are meant to be carrying.
     ///
     /// This counts what they already hold and adds only the difference, rather than
-    /// handing over another full set. Inventory space in Unturned comes from the worn
-    /// clothing asset and cannot be enlarged from a plugin — the client sizes each page
-    /// from the backpack it was told to wear, so a server-side resize only desyncs — and
-    /// an Alicepack does not hold forty walls. Keeping a small set continuously topped
-    /// up gives the same "never run out" feeling as a huge inventory would, without
-    /// needing one, and without pouring the overflow onto the floor.
+    /// handing over another full set. Even with the hands page grown, a building's worth
+    /// of wood does not fit at once; keeping a small set continuously topped up gives
+    /// the same "never run out" feeling without pouring the overflow onto the floor.
     ///
     /// So `Amount` on a build supply means "how many you keep on you", not "how many you
     /// are given".
@@ -446,7 +460,7 @@ internal static class SiegeWorld {
             item => string.Equals(item.itemName, name, StringComparison.OrdinalIgnoreCase));
 
         if (found == null) {
-            Logger.LogWarning($"No item is called \"{name}\". Check BuildGear in the config.");
+            Logger.LogWarning($"No item is called \"{name}\". Check BuildTools and FallbackOutfit in the config.");
         }
 
         ByNameCache[name] = found;

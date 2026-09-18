@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using PeekSeekSiege.Core.Hud;
 using PeekSeekSiege.Core.Models;
 using SDG.Unturned;
 using Steamworks;
@@ -47,22 +48,28 @@ internal class Siege : IGamemode {
     private readonly BaseSnapshot[] bases = new BaseSnapshot[2];
 
     private readonly PickBoard board = new();
+    private readonly MatchHud hud = new();
 
     /// When each player was last standing on something built, so the grace period
     /// before off-base damage can be measured. Absent means they are on a base now.
     private readonly Dictionary<ulong, float> offBaseSince = [];
 
     /// Who has already drawn their one metal allowance this build phase. Cleared when a
-    /// build phase opens, so solo drawing at the second site is a fresh allowance.
+    /// build phase opens.
     private readonly HashSet<ulong> rationed = [];
+
+    /// Who has died this round. A death is what takes a player out of a round, and it
+    /// has to be remembered rather than read off `isDead`, because solo lets the tester
+    /// respawn and a real match only respawns everyone when the next round starts.
+    private readonly HashSet<ulong> deadThisRound = [];
 
     private float nextSupplyRefill;
     private float nextTick;
 
-    /// Solo only: which side of the one base the lone tester is currently playing. 0 is
-    /// holding it, 1 is attacking it. Set from the round order at the start of every
-    /// round, and overridable for that round with /siege side. A real match takes this
-    /// from the roster instead.
+    /// Solo only: which side of the one base the lone tester is playing, 0 holding it
+    /// and 1 attacking it. The round order flips who defends, so leaving this at 0
+    /// walks the tester through both halves; /siege side overrides it for a look at the
+    /// other half of the same round.
     private int soloSide;
 
     /// The items this gamemode places itself. They are never captured into a snapshot
@@ -104,14 +111,18 @@ internal class Siege : IGamemode {
 
         Chat.Announce(Chat.Rule);
         Chat.Announce(PeekSeekSiege.Instance.Translate("match_intro",
-            RoundOrder.RegulationHalf, PeekSeekSiege.Config.BuildSeconds / 60));
+            RoundOrder.RegulationHalf, Wording.Duration(PeekSeekSiege.Config.BuildSeconds)));
 
-        StartBuilding(0);
+        StartBuilding();
     }
 
     public void End() {
         board.Close();
+        hud.Hide();
         SiegeWorld.Unhook();
+
+        foreach (Player player in Players()) AllowRespawn(player);
+
         phase = SiegePhase.Idle;
         match = null;
     }
@@ -124,6 +135,8 @@ internal class Siege : IGamemode {
         // they would sixty times, and the raycast in particular is not free.
         if (Time.realtimeSinceStartup < nextTick) return;
         nextTick = Time.realtimeSinceStartup + 1f;
+
+        hud.Countdown(SecondsLeft);
 
         switch (phase) {
             case SiegePhase.Building:
@@ -145,29 +158,50 @@ internal class Siege : IGamemode {
             phase.ToString().ToLowerInvariant(), round, score[0], score[1]));
 
         Place(player);
+        RefreshHud();
     }
 
     public void OnPlayerLeft(CSteamID steamID) {
         offBaseSince.Remove(steamID.m_SteamID);
+        hud.Forget(steamID.m_SteamID);
+        RefreshHud();
     }
 
     public void OnPlayerDied(Player player, CSteamID killer) {
-        offBaseSince.Remove(player.channel.owner.playerID.steamID.m_SteamID);
-        if (phase != SiegePhase.Playing) return;
+        ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+        offBaseSince.Remove(steam64);
 
-        // A death can end the round, so the check runs on the next tick rather than
-        // here: the player is dead but Unturned has not finished moving them yet, and
-        // counting the living from inside the death event reads the old numbers.
-        nextTick = 0f;
+        if (phase == SiegePhase.Playing) {
+            deadThisRound.Add(steam64);
+
+            // Dead is dead until the round is over. Unturned would otherwise offer the
+            // respawn button after its own timer and put them back on a map spawn, alive
+            // and counted. Solo has nobody to be unfair to, so the tester respawns.
+            if (!match.Solo) player.setPluginWidgetFlag(EPluginWidgetFlags.ShowDeathMenu, false);
+
+            // A death can end the round, so the check runs on the next tick rather than
+            // here: the player is dead but Unturned has not finished moving them yet, and
+            // counting the living from inside the death event reads the old numbers.
+            nextTick = 0f;
+        }
+
+        RefreshHud();
+    }
+
+    /// Back from the dead, on Unturned's own respawn: put them where the phase says and
+    /// dress them for it. Without this a respawn lands on a random map spawn with an
+    /// empty inventory, which is what "the gamemode broke" looked like from the inside.
+    public void OnPlayerRevived(Player player) {
+        if (match == null) return;
+
+        Place(player);
+        if (phase != SiegePhase.Building) SiegeWorld.Outfit(player);
+        RefreshHud();
     }
 
     // ---- build phase ----------------------------------------------------------
 
-    /// Open the build phase.
-    ///
-    /// Solo runs this twice, once per site, because one person testing has to be able
-    /// to build both buildings before there is anything to attack.
-    private void StartBuilding(int siteIndex) {
+    private void StartBuilding() {
         phase = SiegePhase.Building;
         phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.BuildSeconds;
         nextSupplyRefill = 0f;
@@ -182,8 +216,10 @@ internal class Siege : IGamemode {
         foreach (Player player in Players()) Place(player);
 
         Chat.Announce(PeekSeekSiege.Instance.Translate("build_start",
-            PeekSeekSiege.Config.BuildSeconds / 60,
-            match.Solo ? sites[siteIndex].Name : "your site"));
+            Wording.Duration(PeekSeekSiege.Config.BuildSeconds),
+            match.Solo ? sites[0].Name : "your site"));
+
+        RefreshHud();
     }
 
     private void TickBuilding() {
@@ -200,9 +236,6 @@ internal class Siege : IGamemode {
     }
 
     /// Freeze what has been built and move on.
-    ///
-    /// In solo this loops back for the second site instead, because the tester has
-    /// only built one of the two buildings so far.
     internal void FinishBuilding() {
         foreach (int team in BuiltSites()) bases[team] = Snapshot(team);
 
@@ -245,18 +278,37 @@ internal class Siege : IGamemode {
 
     private void StartRound(int number) {
         round = number;
+        deadThisRound.Clear();
 
         RestoreBases();
+
+        // Everything a round left on the ground: the loot a death dropped, the wall
+        // somebody never placed. Siege has no world loot, so there is nothing to keep.
+        ItemManager.askClearAllItems();
+
         int defender = DefendedSite;
 
         phase = SiegePhase.Picking;
         phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.PickSeconds;
+
+        // Whoever died last round comes back now, and everybody is put where the round
+        // says they belong before the board goes up, so nobody spends the pick phase
+        // standing in a base that is being re-laid around them.
+        foreach (Player player in Players()) {
+            if (player.life.isDead) {
+                AllowRespawn(player);
+                player.life.ServerRespawn(false);
+                continue;
+            }
+            Place(player);
+        }
 
         Chat.Announce(Chat.Rule);
         Chat.Announce(PeekSeekSiege.Instance.Translate("round_start",
             round, sites[defender].Name, score[0], score[1]));
 
         OpenBoard(defender);
+        RefreshHud();
     }
 
     /// Put both buildings back exactly as they were built, then hand the pieces out
@@ -349,6 +401,7 @@ internal class Siege : IGamemode {
         }
 
         Chat.Announce(PeekSeekSiege.Instance.Translate("round_live", PeekSeekSiege.Config.RoundSeconds));
+        RefreshHud();
     }
 
     private void TickPlaying() {
@@ -392,9 +445,11 @@ internal class Siege : IGamemode {
         int matchWinner = RoundOrder.Winner(round, score[0], score[1]);
         if (matchWinner >= 0) {
             phase = SiegePhase.Over;
+            board.Close();
             Chat.Announce(Chat.Rule);
             Chat.Announce(PeekSeekSiege.Instance.Translate("match_won",
                 TeamName(matchWinner), score[0], score[1]));
+            RefreshHud();
             return;
         }
 
@@ -429,7 +484,8 @@ internal class Siege : IGamemode {
                 continue;
             }
 
-            if (Time.realtimeSinceStartup - since < PeekSeekSiege.Config.OffBaseGraceSeconds) continue;
+            float off = Time.realtimeSinceStartup - since;
+            if (off < PeekSeekSiege.Config.OffBaseGraceSeconds) continue;
 
             player.life.askDamage(
                 PeekSeekSiege.Config.OffBaseDamagePerSecond,
@@ -439,7 +495,11 @@ internal class Siege : IGamemode {
                 CSteamID.Nil,
                 out EPlayerKill _);
 
-            Chat.Whisper(player.channel.owner, PeekSeekSiege.Instance.Translate("off_base"));
+            // Said once, as the damage starts. Every second after that the health bar
+            // is saying it, and a line of chat per second is noise nobody reads.
+            if (off < PeekSeekSiege.Config.OffBaseGraceSeconds + 1f) {
+                Chat.Whisper(player.channel.owner, PeekSeekSiege.Instance.Translate("off_base"));
+            }
         }
     }
 
@@ -477,18 +537,12 @@ internal class Siege : IGamemode {
             return;
         }
 
-        SiegeSite target = defended;
         int index = IndexInTeam(steam64);
         player.teleportToLocationUnsafe(
-            SiegeWorld.OnGround(target.AttackerSpawn(index, Math.Max(1, TeamSize(1 - side)))),
-            target.AttackerBearing + 180f);
+            SiegeWorld.OnGround(defended.AttackerSpawn(index, Math.Max(1, TeamSize(side)))),
+            defended.AttackerBearing + 180f);
     }
 
-    /// Kit a builder out: what they wear and hold first, then the materials.
-    ///
-    /// Order is the whole point. Unturned inventory space comes from clothing, so a
-    /// player with no backpack and no vest has almost none — hand them forty walls
-    /// before the bag and most of it lands on the floor.
     /// Kit a builder out: what they wear, then their one allowance of metal, then as
     /// much wood as they can carry.
     ///
@@ -513,20 +567,16 @@ internal class Siege : IGamemode {
         SiegeWorld.TopUp(player, PeekSeekSiege.Config.PlentifulSupplies);
     }
 
+    private static void AllowRespawn(Player player) {
+        player.setPluginWidgetFlag(EPluginWidgetFlags.ShowDeathMenu, true);
+    }
+
     // ---- who is who -----------------------------------------------------------
 
-    /// Which side a player is on. Solo answers with whichever side the tester last
-    /// asked for, so one person can walk both halves of the same round.
+    /// Which side a player is on. Solo answers with whichever side the tester is
+    /// playing, so one person can walk both halves of the same round.
     internal int SideOf(ulong steam64) {
         if (match == null) return 0;
-
-        // Solo builds the two sites one after the other, so during the build phase the
-        // side a player is on is whichever site is currently open rather than whichever
-        // one they last asked to play. Getting this wrong puts the tester back on the
-        // finished base and leashes them to it while the clock runs on the other one.
-        // Solo is always team 0. The round order does the rest: team 0 defends the first
-        // three rounds and attacks the second three, so the tester holds their base and
-        // then goes and cracks the other one without touching a command.
         if (match.Solo) return soloSide;
 
         int index = match.TeamIndexOf(steam64);
@@ -542,6 +592,7 @@ internal class Siege : IGamemode {
                 SiegeWorld.Kit(player, board.Chosen(player.channel.owner.playerID.steamID.m_SteamID));
             }
         }
+        RefreshHud();
     }
 
     internal string TeamName(int team) {
@@ -562,7 +613,7 @@ internal class Siege : IGamemode {
 
         return match.Teams[team].Players.Count(steam64 => {
             Player player = PlayerTool.getPlayer(new CSteamID(steam64));
-            return player != null && !player.life.isDead;
+            return player != null && !player.life.isDead && !deadThisRound.Contains(steam64);
         });
     }
 
@@ -581,5 +632,64 @@ internal class Siege : IGamemode {
         if (!CalledOut.Contains(left)) return;
 
         Chat.Announce(PeekSeekSiege.Instance.Translate(key, left));
+    }
+
+    // ---- the HUD ----------------------------------------------------------------
+
+    /// Everything the HUD shows, rebuilt from the match on every change. The HUD only
+    /// sends what differs from what each viewer last saw, so this can be called freely.
+    private void RefreshHud() {
+        if (match == null) return;
+        hud.Show(HudState());
+    }
+
+    private HudState HudState() {
+        HudState state = new() {
+            SecondsLeft = SecondsLeft,
+            Label = PeekSeekSiege.Instance.Translate("hud_round", Math.Max(1, round)),
+        };
+
+        if (phase == SiegePhase.Building) {
+            state.Label = PeekSeekSiege.Instance.Translate("hud_building");
+        } else if (phase == SiegePhase.Over) {
+            state.Label = PeekSeekSiege.Instance.Translate("hud_final");
+            state.Jeopardy = true;
+        } else if (round > RoundOrder.RegulationHalf * 2) {
+            state.Label = PeekSeekSiege.Instance.Translate("hud_overtime");
+        } else if (RoundOrder.EndsABlock(round) && score[0] != score[1]) {
+            // The last round of a block with one side ahead: this round can end it.
+            state.Label = PeekSeekSiege.Instance.Translate("hud_match_point");
+            state.Jeopardy = true;
+        }
+
+        for (int team = 0; team < 2; team++) {
+            state.Teams[team].Name = TeamName(team);
+            state.Teams[team].Score = score[team];
+
+            if (match.Teams.Count <= team) continue;
+            foreach (ulong steam64 in match.Teams[team].Players) {
+                state.Teams[team].Seats.Add(Seat(steam64));
+            }
+        }
+
+        return state;
+    }
+
+    private HudSeat Seat(ulong steam64) {
+        Player player = PlayerTool.getPlayer(new CSteamID(steam64));
+        RemoteAPI.Profile profile = RemoteAPI.ProfileFor(steam64);
+
+        // The pick shows once it is made, and stays on the card for the round it was
+        // made for: that is the "what did they bring" a teammate glances up for.
+        bool picked = phase == SiegePhase.Playing || board.HasAnswered(steam64);
+
+        return new HudSeat {
+            Steam64 = steam64,
+            Name = profile?.Name ?? player?.channel.owner.playerID.characterName ?? steam64.ToString(),
+            AvatarUrl = profile?.Avatar ?? PeekSeekSiege.Config.DefaultAvatarURL,
+            GunItemId = player == null ? (ushort)0 : SiegeWorld.PrimaryWeapon(player),
+            PickItemId = picked ? board.Chosen(steam64)?.IconItemId ?? 0 : (ushort)0,
+            Alive = player != null && !player.life.isDead && !deadThisRound.Contains(steam64)
+        };
     }
 }

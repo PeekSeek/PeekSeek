@@ -29,6 +29,20 @@ internal static class RemoteAPI {
 
     private static readonly Dictionary<ulong, List<SiegeItem>> Kits = [];
 
+    /// A player's name and picture as the site shows them, for the HUD. Fetched with
+    /// the kit, and for the same reason: a scoreboard is drawn the moment a match
+    /// starts, not after a round trip.
+    internal class Profile {
+        internal string Name;
+        internal string Avatar;
+    }
+
+    private static readonly Dictionary<ulong, Profile> Profiles = [];
+
+    internal static Profile ProfileFor(ulong steam64) {
+        return Profiles.TryGetValue(steam64, out Profile profile) ? profile : null;
+    }
+
     internal static void Init() {
         Client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         Client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -47,18 +61,40 @@ internal static class RemoteAPI {
 
     internal static void Forget(ulong steam64) {
         Kits.Remove(steam64);
+        Profiles.Remove(steam64);
     }
 
-    /// Pull one player's configured kit category and remember it.
+    /// Pull one player's configured kit category and their profile, and remember both.
     internal static void Fetch(ulong steam64) {
         if (Client == null) return;
 
         Task.Run(async () => {
             List<SiegeItem> items = await Read(steam64);
-            if (items == null) return;
+            if (items != null) TaskDispatcher.QueueOnMainThread(() => Kits[steam64] = items);
 
-            TaskDispatcher.QueueOnMainThread(() => Kits[steam64] = items);
+            Profile profile = await ReadProfile(steam64);
+            if (profile != null) TaskDispatcher.QueueOnMainThread(() => Profiles[steam64] = profile);
         });
+    }
+
+    /// `GET /players/{steam64}` carries `name` and `avatar` alongside the rank and
+    /// whereabouts a lobby reads off it. Either may be missing on a site that has not
+    /// deployed them yet, in which case there is no profile rather than half of one.
+    private static async Task<Profile> ReadProfile(ulong steam64) {
+        try {
+            HttpResponseMessage response = await Client.GetAsync($"{Base}/players/{steam64}");
+            if (!response.IsSuccessStatusCode) return null;
+
+            JObject body = JObject.Parse(await response.Content.ReadAsStringAsync());
+            string name = (string)body["name"];
+            string avatar = (string)body["avatar"];
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(avatar)) return null;
+
+            return new Profile { Name = name, Avatar = avatar };
+        } catch (Exception ex) {
+            Logger.LogError($"Failed to fetch profile for {steam64}: {ex.Message}");
+            return null;
+        }
     }
 
     private static async Task<List<SiegeItem>> Read(ulong steam64) {

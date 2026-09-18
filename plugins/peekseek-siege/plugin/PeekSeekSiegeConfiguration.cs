@@ -136,6 +136,16 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// cleared after it is sent.
     public short PickUIKey;
 
+    /// The match HUD along the top of the screen, from the same workshop item as the
+    /// board: `Effects/MatchHud/MatchHud.dat` in `ui/`. Its own key, so the board and
+    /// the HUD can be up at the same time.
+    public string MatchHudEffectGUID;
+    public short MatchHudKey;
+
+    /// The picture on a HUD card for a player the site has no picture for yet: Steam's
+    /// own placeholder, the same one the site falls back to.
+    public string DefaultAvatarURL;
+
     public void LoadDefaults() {
         szAPIURL = "https://peekseek.net";
         KitCategory = "meta";
@@ -186,6 +196,12 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             new SiegeItem(55, 20),
             new SiegeItem(318, 8)
         ];
+
+        // 1764 is the housing planner: the one tool that says "builder" and makes the
+        // placing itself less of a fight. A kitless player gets a bag or their supplies
+        // land on the floor; the name is looked up, so it survives an id change.
+        BuildTools = [new SiegeItem(1764, 1)];
+        FallbackOutfit = ["Alicepack"];
 
         SupplyRefillSeconds = 5;
         HandsWidth = 14;
@@ -280,6 +296,9 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
 
         PickUIEffectGUID = "69fcf241396b44dbb536cf4fc08abbe3";
         PickUIKey = 27310;
+        MatchHudEffectGUID = "5398e1499dcf4fda9e4f8a6c4d73faea";
+        MatchHudKey = 27311;
         ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
+        DefaultAvatarURL = "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg";
     }
 }

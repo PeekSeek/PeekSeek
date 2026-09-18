@@ -58,12 +58,19 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
 
         // Said once, at the top, before anybody has done anything. It is the only place
         // the shape of the whole match is explained, so it says the shape and nothing else.
-        { "match_intro", "<color=white>Siege.</color> Build a base, then take turns cracking each other's. <color=white>{0}</color> rounds each side. You get <color=white>{1} minutes</color> to build." },
+        { "match_intro", "<color=white>Siege.</color> Build a base, then take turns cracking each other's. <color=white>{0}</color> rounds each side. You get <color=white>{1}</color> to build." },
 
-        { "build_start", "<color=white>Build.</color> {0} minutes at <color=white>{1}</color>. Supplies top up as you go. You cannot leave your plot, and there are no floors — build off the metal floor you are standing on." },
+        { "build_start", "<color=white>Build.</color> {0} at <color=white>{1}</color>. Supplies top up as you go. You cannot leave your plot, and there are no floors — build off the metal floor you are standing on." },
         { "build_countdown", "<color=white>{0}s</color> of building left." },
-        { "build_solo_next", "Base saved. Now build the other one at <color=white>{0}</color>." },
         { "build_done", "<color=white>Bases locked.</color> {0} and {1} pieces. Nothing about them changes from here." },
+
+        // The small label over the HUD clock. Short, because the slot is, and the last
+        // two are the ones drawn in red.
+        { "hud_building", "Build" },
+        { "hud_round", "Round {0}" },
+        { "hud_overtime", "Overtime" },
+        { "hud_match_point", "Match point" },
+        { "hud_final", "Final" },
 
         { "round_start", "<color=white>Round {0}.</color> <color=white>{1}</color> defends. Score <color=white>{2}-{3}</color>." },
         { "round_live", "<color=white>Go.</color> {0} seconds. Attackers take the flag down, defenders keep it up." },

@@ -1,0 +1,7 @@
+GUID 5398e1499dcf4fda9e4f8a6c4d73faea
+Type Effect
+ID 43111
+
+// The match HUD: score, round, clock, and a card per player. Kept up for a whole
+// match by the plugin, so no Lifetime, and nothing to pool.
+Preload 0

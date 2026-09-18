@@ -113,9 +113,11 @@ internal class PickBoard {
             SteamPlayer viewer = PlayerTool.getSteamPlayer(new CSteamID(steam64));
             if (viewer == null) continue;
 
+            // Red for the last five seconds: the one thing on the board that is jeopardy,
+            // so the one place the overlay's red belongs.
+            string clock = secondsLeft <= 5 ? $"<color=#ff4f4f>{secondsLeft}</color>" : secondsLeft.ToString();
             EffectManager.sendUIEffectText(
-                PeekSeekSiege.Config.PickUIKey, viewer.transportConnection, true,
-                "Timer", secondsLeft.ToString());
+                PeekSeekSiege.Config.PickUIKey, viewer.transportConnection, true, "Timer", clock);
         }
     }
 

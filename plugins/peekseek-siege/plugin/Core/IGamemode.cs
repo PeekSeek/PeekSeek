@@ -60,5 +60,10 @@ internal interface IGamemode {
     /// Called after the player is already dead, so `player.life.isDead` is true.
     void OnPlayerDied(Player player, CSteamID killer);
 
+    /// Called when Unturned has respawned the player, wherever it put them. A mode that
+    /// cares where its players stand has to answer this, or a respawn lands on a map
+    /// spawn with nothing in hand.
+    void OnPlayerRevived(Player player);
+
     void End();
 }

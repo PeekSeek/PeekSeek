@@ -47,8 +47,8 @@ try {
     Console.WriteLine($"Logged in as {SteamClient.Name} ({SteamClient.SteamId}).");
 
     Editor editor = (existing == 0 ? Editor.NewCommunityFile : new Editor(existing))
-        .WithTitle("PeekSeek Siege UI")
-        .WithDescription("The option board for PeekSeek's Siege gamemode. Servers running it list this item so it downloads on join; there is nothing to do with it on its own.")
+        .WithTitle("PeekSeek UI")
+        .WithDescription("The screens PeekSeek servers draw in game: the pick board and the match HUD. Servers list this item so it downloads on join; there is nothing to do with it on its own.")
         .WithContent(new DirectoryInfo(folder))
         .WithTag("Object")
         .AddKeyValueTag("compatibility_version", CompatibilityVersion)

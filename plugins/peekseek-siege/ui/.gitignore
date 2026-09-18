@@ -12,3 +12,9 @@
 # Unity writes the rest of ProjectSettings/ on first open; only the version is ours.
 /ProjectSettings/*
 !/ProjectSettings/ProjectVersion.txt
+# Made by BuildBundle.cs from the .ttf files beside them, under GUIDs the prefabs know.
+/Assets/PeekSeek/Fonts/*.asset
+/Assets/PeekSeek/Fonts/*.asset.meta
+# Unpacked by BuildBundle.cs from the TextMesh Pro package: shaders a font asset needs.
+/Assets/TextMesh Pro/
+/Assets/TextMesh Pro.meta
