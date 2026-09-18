@@ -1,0 +1,12 @@
+# Everything Unity regenerates from Assets/ and Packages/.
+/Library/
+/Temp/
+/Logs/
+/obj/
+/UserSettings/
+/Build/
+*.csproj
+*.sln
+# Unity writes the rest of ProjectSettings/ on first open; only the version is ours.
+/ProjectSettings/*
+!/ProjectSettings/ProjectVersion.txt

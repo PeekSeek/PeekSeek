@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using PeekSeekSiege.Core.Models;
 using Xunit;
@@ -55,6 +56,44 @@ public class ConfigurationTests {
             Assert.False(string.IsNullOrWhiteSpace(option.Blurb));
             Assert.NotEmpty(option.Items);
         }
+    }
+
+    /// Every tile shows a picture, and the picture is an item the site has one for. The
+    /// icons come from the same folder the site's loadout editor reads, so this walks up
+    /// to the repo and looks in it: an option pointing at an item with no icon is a
+    /// blank tile in game, and nothing else would say so before a player saw it.
+    [Fact]
+    public void EveryOptionHasAnIconTheSiteServes() {
+        PeekSeekSiegeConfiguration config = new();
+        config.LoadDefaults();
+
+        string icons = Path.Combine(RepoRoot(), "website", "public", "unturned");
+        Assert.True(Directory.Exists(icons), $"Expected the site's icon folder at {icons}");
+
+        foreach (SiegeOption option in config.DefenceOptions.Concat(config.RaidOptions)) {
+            Assert.NotEqual(0, option.IconItemId);
+            Assert.True(
+                File.Exists(Path.Combine(icons, option.IconItemId + ".png")),
+                $"{option.Name} shows item {option.IconItemId}, which the site has no icon for.");
+        }
+    }
+
+    /// The board asks for `Icon` when it is set and the first item otherwise, so an
+    /// option only has to say which item it is a picture of when that is not obvious.
+    [Fact]
+    public void AnOptionIsPicturedAsItsFirstItemUnlessItSaysOtherwise() {
+        SiegeOption plain = new() { Items = [new SiegeItem(519, 1), new SiegeItem(520, 2)] };
+        SiegeOption chosen = new() { Icon = 1408, Items = [new SiegeItem(254, 2), new SiegeItem(1408, 1)] };
+
+        Assert.Equal(519, plain.IconItemId);
+        Assert.Equal(1408, chosen.IconItemId);
+        Assert.Equal(0, new SiegeOption().IconItemId);
+    }
+
+    private static string RepoRoot() {
+        DirectoryInfo dir = new(Directory.GetCurrentDirectory());
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "website"))) dir = dir.Parent;
+        return dir?.FullName ?? Directory.GetCurrentDirectory();
     }
 
     /// Nobody is given a floor, of any material, in either tier. A team that could lay

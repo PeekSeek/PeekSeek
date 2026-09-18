@@ -100,6 +100,7 @@ internal class PickBoard {
 
         foreach (SteamPlayer viewer in Provider.clients) {
             EffectManager.askEffectClearByID(asset.id, viewer.transportConnection);
+            Modal(viewer, false);
         }
     }
 
@@ -132,11 +133,24 @@ internal class PickBoard {
         EffectManager.sendUIEffectText(key, viewer.transportConnection, true, "Headline", seat.Headline);
 
         for (int i = 0; i < seat.Options.Count; i++) {
-            EffectManager.sendUIEffectText(
-                key, viewer.transportConnection, true, $"Option{i}_Name", seat.Options[i].Name);
-            EffectManager.sendUIEffectText(
-                key, viewer.transportConnection, true, $"Option{i}_Blurb", seat.Options[i].Blurb);
+            SiegeOption option = seat.Options[i];
+            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Option{i}_Name", option.Name);
+            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Option{i}_Blurb", option.Blurb);
+            EffectManager.sendUIEffectImageURL(
+                key, viewer.transportConnection, true, $"Option{i}_Icon", IconUrl(option));
         }
+
+        // A tile cannot be clicked without a cursor, and Unturned only shows one while a
+        // plugin says it is modal. Released the moment they pick, or when the board goes.
+        Modal(viewer, true);
+    }
+
+    private static string IconUrl(SiegeOption option) {
+        return string.Format(PeekSeekSiege.Config.ItemIconURL, option.IconItemId);
+    }
+
+    private static void Modal(SteamPlayer viewer, bool on) {
+        viewer.player.setPluginWidgetFlag(EPluginWidgetFlags.Modal, on);
     }
 
     /// Mark the taken tile, or say what was taken. Only the state that changed, so a
@@ -155,6 +169,10 @@ internal class PickBoard {
                 PeekSeekSiege.Config.PickUIKey, player.transportConnection, true,
                 $"Option{i}_Taken", i == seat.Pick);
         }
+
+        // The board stays up as a receipt until the round starts, but it stops holding
+        // the mouse: a player who has chosen wants to look around, not at a cursor.
+        Modal(player, false);
     }
 
     /// The board as lines of chat. Same information, same order, same numbers as the

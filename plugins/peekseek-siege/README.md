@@ -82,14 +82,16 @@ already downloaded — so a UI cannot ship in a `.dll`, only in a workshop mod.
 
 The board is written against both:
 
-- Set `PickUIEffectGUID` in the config and it draws the real Unity layout, five clickable
-  tiles, with the timer ticking down in place.
-- Leave it empty and it draws the same five options to chat, answered with `/pick`.
+- A server that has the `ui/` mod loaded draws the real Unity layout: five clickable
+  tiles with the item's picture on each, the timer ticking down in place, and a red
+  border on the one you took.
+- One that does not logs a line at the first pick phase and draws the same five options
+  to chat, answered with `/pick`.
 
-`ui/README.md` is the prefab spec — the child object names the plugin writes into, and
-the build steps. The chat form is not a placeholder waiting to be deleted: a player whose
-client is still downloading the bundle needs to be able to answer the board too, and a
-round is never going to wait for them.
+`ui/` is the Unity project that mod is built from, and `ui/README.md` says how it works
+and how to build it. The chat form is not a placeholder waiting to be deleted: a player
+whose client is still downloading the bundle needs to be able to answer the board too,
+and a round is never going to wait for them.
 
 ## Where things are
 
@@ -102,7 +104,7 @@ plugin/Core/BaseSnapshot.cs     photographing a base and re-laying it
 plugin/Core/RoundOrder.cs       who defends round N, and when a match can end
 plugin/Core/PickBoard.cs        the five-option board, both ways of drawing it
 plugin/Core/IGamemode.cs        the seam the main PeekSeek plugin will drive this through
-ui/                             the Unity prefab spec for the real board
+ui/                             the Unity project the real board is built from
 ```
 
 ## The gamemode seam

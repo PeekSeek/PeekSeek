@@ -119,11 +119,17 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// EffectAsset in a workshop bundle the server pushes to clients.
     ///
     /// Unturned has no way to draw a custom UI from plugin code alone: the layout has
-    /// to exist as a prefab inside an asset bundle the client already has. Until that
-    /// bundle is published this stays empty and the board is drawn to chat instead,
-    /// which is worse to look at but plays identically. See the plugin README for the
-    /// prefab this GUID has to point at.
+    /// to exist as a prefab inside an asset bundle the client already has. The default
+    /// is the GUID in ui/Assets/PeekSeekSiege/Bundles/Effects/PickBoard/PickBoard.dat,
+    /// so a server that has the workshop item draws the board and one that does not
+    /// logs a line and draws it to chat instead, which is worse to look at but plays
+    /// identically. See ui/README.md.
     public string PickUIEffectGUID;
+
+    /// Where the board fetches an option's picture, with `{0}` standing for the item id.
+    /// The site already serves every item's icon for its loadout editor, so the tiles
+    /// show the same pictures a player picked their kit from.
+    public string ItemIconURL;
 
     /// The channel the UI is sent on. Any small number no other plugin on the server
     /// is using will do; it only has to be stable, so the board can be updated and
@@ -226,6 +232,7 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             new SiegeOption {
                 Name = "Watchtower",
                 Blurb = "Grenades and a scope. See them coming, and greet them.",
+                Icon = 1408,
                 Items = [new SiegeItem(254, 2), new SiegeItem(1408, 1)]
             },
             new SiegeOption {
@@ -271,7 +278,8 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             }
         ];
 
-        PickUIEffectGUID = "";
+        PickUIEffectGUID = "69fcf241396b44dbb536cf4fc08abbe3";
         PickUIKey = 27310;
+        ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
     }
 }

@@ -16,6 +16,14 @@ public class SiegeOption {
     [XmlAttribute]
     public string Blurb;
 
+    /// The item whose picture the tile shows, or 0 for the first item in the list.
+    /// Only worth setting when the first item is not what the option is about: a
+    /// grenade is a poor picture of a watchtower.
+    [XmlAttribute]
+    public ushort Icon;
+
     [XmlArray]
     public List<SiegeItem> Items = [];
+
+    public ushort IconItemId => Icon != 0 ? Icon : Items.Count > 0 ? Items[0].ItemId : (ushort)0;
 }
