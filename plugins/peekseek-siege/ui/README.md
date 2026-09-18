@@ -121,6 +121,13 @@ that has the mod draws the board without a config change, and one that does not 
 line at the first pick phase and draws the board to chat. A server config written before
 this default existed has an empty `<PickUIEffectGUID />` and needs the value pasted in.
 
+The chat fallback covers a *server* without the mod, and nothing else. Once the server
+has it, a client that does not is **kicked** the moment the board is sent to them:
+`missing asset: "PickBoard"`, from the game's asset integrity check, before the plugin
+gets a say. That is what the Workshop id in `WorkshopDownloadConfig.json` is for: a
+client is made to download it on join. Mod folders are also only scanned when the game
+starts, so a copy dropped in while Unturned is running is not there until it restarts.
+
 ## Making it look like PeekSeek
 
 - Near-black ground, `#111` at 94%. Not a translucent grey panel over the game.
