@@ -35,7 +35,6 @@ internal static class SiegeHost {
         UnturnedPlayerEvents.OnPlayerDeath += OnDeath;
         UnturnedPlayerEvents.OnPlayerRevive += OnRevive;
         EffectManager.onEffectButtonClicked += OnButtonClicked;
-        PlayerInput.onPluginKeyTick += OnPluginKey;
 
         RemoteAPI.Init();
     }
@@ -49,7 +48,6 @@ internal static class SiegeHost {
         UnturnedPlayerEvents.OnPlayerDeath -= OnDeath;
         UnturnedPlayerEvents.OnPlayerRevive -= OnRevive;
         EffectManager.onEffectButtonClicked -= OnButtonClicked;
-        PlayerInput.onPluginKeyTick -= OnPluginKey;
 
         RemoteAPI.Shutdown();
         instrument?.UnpatchAll(instrument.Id);
@@ -169,7 +167,4 @@ internal static class SiegeHost {
 
     /// One of the game's five plugin hotkeys, as the client reports it with every
     /// input packet. Only the press matters, and only the gamemode knows what for.
-    private static void OnPluginKey(Player player, uint simulation, byte key, bool state) {
-        Current?.OnPluginKey(player, key, state);
-    }
 }

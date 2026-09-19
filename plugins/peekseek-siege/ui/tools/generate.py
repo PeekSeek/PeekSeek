@@ -26,9 +26,9 @@ from pathlib import Path
 
 import footprints
 import sitemap
-from unityyaml import (CENTER, LEFT, RIGHT, TOP, Node, bottom_left, button, canvas, castle_alpha, centered,
-                       disc_alpha, image, mask, prefab, rounded_alpha, silhouette, sprite, sprite_file, stretch,
-                       swords_alpha, text, top_center, top_left, top_right, top_stretch)
+from unityyaml import (CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, button, canvas,
+                       castle_alpha, centered, disc_alpha, image, mask, prefab, rounded_alpha, silhouette, skull_alpha,
+                       sprite, sprite_file, stretch, swords_alpha, text, top_center, top_left, top_right, top_stretch)
 
 ASSETS = Path(__file__).resolve().parent.parent / "Assets"
 UNTURNED = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r"C:\Program Files (x86)\Steam\steamapps\common\Unturned")
@@ -45,6 +45,11 @@ SELECTED = "#333333"    # #3334 over the sub-panel
 TEXT = "#ffffff"
 SECONDARY = "#aaaaaa"
 SELECTED_LABEL = "#aae0ff"
+CARD = "#161616"        # .powerupbutton, the match page's pick tile
+CARD_LINE = "#262626"
+CARD_HOVER = "#3a3a3a"
+CARD_RED = "#ff2d2d"    # the match page's selected border
+CARD_RED_FILL = "#3b1a1a"  # rgba(255, 45, 45, .16) over the card
 PANEL_RADIUS = 8        # .mainElement border-radius
 PANEL_PAD = 20          # .mainElement padding
 GAP = 10                # the gap inside chips and between tiles
@@ -92,6 +97,7 @@ def write_sprites():
         "round6": sprite(SPRITES, "Round6", "c2a1d3e4f5b6c7d8e9f0a1b2c3d4e5f6", 24, 24, rounded_alpha(24, 24, 6), 6),
         "castle": sprite(SPRITES, "Castle", "c8a7d9e0f1b2c3d4e5f6a7b8c9d0e1f2", 24, 24, castle_alpha(24), 0),
         "swords": sprite(SPRITES, "Swords", "d9b8e0f1a2c3d4e5f6a7b8c9d0e1f2a3", 24, 24, swords_alpha(24), 0),
+        "skull": sprite(SPRITES, "Skull", "c6e5a7b8d9f0a1b2c3d4e5f6a7b8c9d0", 40, 40, skull_alpha(40), 0),
         # Drawn at twice the size they are shown at, so they stay sharp at UI scale 2.
         "square": sprite_file(SPRITES, "FootprintSquare", "e0c9f1a2b3d4e5f6a7b8c9d0e1f2a3b4",
                               footprints.picture("Square", 2 * FIGURE_W, 2 * FIGURE_H, FIGURE_METRES)),
@@ -117,18 +123,19 @@ PICKS = 5
 SHAPES = 2
 SWAPS = 6
 HEADLINE_H = 28
-HINT_H = 18
+ITEMS = 4               # rows on a powerup tile; an option has one or two
 
 FIGURE_W, FIGURE_H = 260, 240
 FIGURE_METRES = 26      # of ground across the picture: the hexagonal base is 23 wide
 
 
-def panel(face, tiles, tile_w, tile_h, headline, hint, fill_tile):
-    """A `.mainElement` with a headline, a timer, `tiles` tiles in a row, and a hint.
-    `fill_tile(tile, name, i)` adds what is particular to a tile under its number."""
+def panel(face, tiles, tile_w, tile_h, headline, make_tile):
+    """A `.mainElement` with a headline, a timer and `tiles` tiles in a row. Nothing
+    else: what a tile is for is on the tile, and a line saying so under it was the
+    one thing on the board nobody read."""
     board_w = PANEL_PAD * 2 + tiles * tile_w + (tiles - 1) * GAP
     tiles_y = PANEL_PAD + HEADLINE_H + 16
-    board_h = tiles_y + tile_h + 14 + HINT_H + PANEL_PAD
+    board_h = tiles_y + tile_h + PANEL_PAD
 
     board = centered(face, 0, 40, board_w, board_h, active=False)
     image(board, PAGE, 0.94, sprite=SPR["round8"])
@@ -137,11 +144,9 @@ def panel(face, tiles, tile_w, tile_h, headline, hint, fill_tile):
          headline, size=20, colour=TEXT, bold=True)
     text(board.add(top_right(f"{face}_Timer", PANEL_PAD, 16, 120, 36)),
          "20", size=28, colour=TEXT, halign=RIGHT, bold=True)
-    text(board.add(bottom_left(f"{face}_Hint", PANEL_PAD, PANEL_PAD - 2, board_w - PANEL_PAD * 2, HINT_H)),
-         hint, size=13, colour=SECONDARY)
 
     for i in range(tiles):
-        tile(board, face, i, PANEL_PAD + i * (tile_w + GAP), tiles_y, tile_w, tile_h, fill_tile)
+        make_tile(board, face, i, PANEL_PAD + i * (tile_w + GAP), tiles_y, tile_w, tile_h)
 
     return board
 
@@ -164,6 +169,44 @@ def tile(parent, face, i, x, y, w, h, fill_tile):
 
     fill_tile(node, f"{face}{i}", i)
     return node
+
+
+POWERUP_W, POWERUP_H = 160, 150
+
+
+def powerup_tile(parent, face, i, x, y, w=POWERUP_W, h=POWERUP_H):
+    """A powerup as the site's match page draws one (`.powerupbutton`): a card with a
+    hairline, the name, then a row per item, `2x` and the item's picture. What you get
+    is the picture, which is the whole point; the number is there to say "I take 2".
+    Selected is the match page's red hairline and tint, with no label."""
+    node = parent.add(top_left(f"Siege{face}{i}", x, y, w, h))
+    # The card's own image is the hairline colour; the fill sits a pixel inside it,
+    # which is the only border uGUI can draw.
+    button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), CARD_LINE, CARD_HOVER, CARD_HOVER)
+    image(node.add(Node("Fill", anchor_min=(0, 0), anchor_max=(1, 1), size=(-2, -2))), CARD, sprite=SPR["round8"])
+
+    taken = node.add(stretch(f"{face}{i}_Taken", active=False))
+    image(taken, CARD_RED, sprite=SPR["round8"])
+    image(taken.add(Node("Fill", anchor_min=(0, 0), anchor_max=(1, 1), size=(-2, -2))), CARD_RED_FILL, sprite=SPR["round8"])
+
+    text(node.add(top_left(f"{face}{i}_Number", 10, 10, 20, 18)), str(i + 1), size=13, colour=MUTED, bold=True)
+    text(node.add(top_left(f"{face}{i}_Name", 28, 10, w - 38, 18)), "Demolition", size=13, colour=MUTED, bold=True)
+
+    for k in range(ITEMS):
+        row = node.add(top_left(f"{face}{i}_Item{k}", 0, 40 + k * 24, w, 24, active=False))
+        text(row.add(top_left(f"{face}{i}_Item{k}_Count", w / 2 - 44, 0, 40, 24)), "3x",
+             size=13, colour=MUTED, halign=RIGHT, bold=True)
+        image(row.add(top_left(f"{face}{i}_Item{k}_Icon", w / 2 + 2, 2, 40, 20)), "#ffffff", enabled=False, preserve_aspect=True)
+
+    return node
+
+
+def option_tile(parent, face, i, x, y, w, h):
+    return tile(parent, face, i, x, y, w, h, pick_tile)
+
+
+def shape_board_tile(parent, face, i, x, y, w, h):
+    return tile(parent, face, i, x, y, w, h, shape_tile)
 
 
 def pick_tile(tile, name, _):
@@ -194,16 +237,9 @@ def boards():
     # other way round. The cursor is at 30000 and always on top.
     canvas(root, sorting_order=0)
 
-    root.add(panel("Pick", PICKS, 200, 220, "Round 2. You are defending North.",
-                   "Click a tile, or type /pick and its number.", pick_tile))
-
-    root.add(panel("Shape", SHAPES, 300, 340, "Your footprint. What the base starts from.",
-                   "Click a tile, or type /pick and its number. The first pick on your team counts.",
-                   shape_tile))
-
-    root.add(panel("Swap", SWAPS, 200, 220, "Metal Wall. Make it something else.",
-                   "Click a tile. The piece you are looking at changes where it stands, and what it was goes back on the pile.",
-                   pick_tile))
+    root.add(panel("Pick", PICKS, POWERUP_W, POWERUP_H, "Powerup", powerup_tile))
+    root.add(panel("Shape", SHAPES, 300, 340, "Footprint. The first pick on the team counts.", shape_board_tile))
+    root.add(panel("Swap", SWAPS, 200, 220, "Metal Wall", option_tile))
 
     root.add(attack_screen())
     return root
@@ -227,16 +263,24 @@ def boards():
 # each, and the plugin shows the site being attacked. The numbers are the plugin's
 # config (Sites in PeekSeekSiegeConfiguration.cs), copied here; change one and
 # change the other.
+#
+# Nothing here is placed by a row count. The canvas is the screen at the player's UI
+# scale, so a 1080-row layout runs off a 768-row screen. Instead the tiles hang off
+# the bottom edge, the map takes whatever is left between them and the HUD as the
+# largest square that fits (an AspectRatioFitter, uGUI's own), and every dot is at a
+# fraction of the map rather than a pixel of it, so the same prefab is right on a
+# laptop and on a 1440p monitor.
 
-MAP_PX = 640            # the map on screen
+MAP_PX = 640            # the map at most; the sprite is twice this
 MAP_METRES = 260        # of ground across it: the furthest spawn is 108 m out
 MAP_Y = 136             # below the HUD's line of faces
+MAP_BOTTOM = 30         # under the tiles
 DOT = 40
 FACE = 24               # a teammate on a dot, the site's .userProfile.small chip
 FACES = 5
 KEEP = 56               # the disc under the keep
 CHIP_H = 44             # the timer chip
-BOARD_W = PICKS * 200 + (PICKS - 1) * GAP
+BOARD_W = PICKS * POWERUP_W + (PICKS - 1) * GAP
 
 SITES = (
     # name, anchor (x, z), the spawns in dot order; all from PeekSeekSiegeConfiguration.cs
@@ -250,8 +294,21 @@ def attack_screen():
     screen = stretch("Attack", active=False)
     image(screen, PAGE, 0.94)
 
-    # The map's frame clips the picture to the site's corners, the way a face is.
-    frame = screen.add(top_center("Attack_Map", 0, MAP_Y, MAP_PX, MAP_PX))
+    # A column down the middle, from under the HUD to just off the bottom edge.
+    column = screen.add(Node("Attack_Column", anchor_min=(0.5, 0), anchor_max=(0.5, 1),
+                             position=(0, (MAP_BOTTOM - MAP_Y) / 2), size=(BOARD_W, -(MAP_Y + MAP_BOTTOM))))
+
+    board = column.add(bottom_center("Attack_Board", 0, 0, BOARD_W, POWERUP_H))
+    for i in range(PICKS):
+        powerup_tile(board, "Attack", i, i * (POWERUP_W + GAP), 0)
+
+    # What is left above the tiles, and the map the largest square in it, at most
+    # the size the picture was drawn for.
+    area = column.add(Node("Attack_MapArea", anchor_min=(0.5, 0), anchor_max=(0.5, 1),
+                           position=(0, (POWERUP_H + 20) / 2), size=(MAP_PX, -(POWERUP_H + 20))))
+    frame = area.add(centered("Attack_Map", 0, 0, MAP_PX, MAP_PX))
+    aspect_fit(frame)
+    # The frame clips the picture to the site's corners, the way a face is.
     image(frame, "#ffffff", sprite=SPR["round8"])
     mask(frame)
 
@@ -260,8 +317,7 @@ def attack_screen():
         image(ground, "#ffffff", sprite=SPR[f"map{site}"], sliced=False)
 
         for i, spawn in enumerate(spawns):
-            x, y = on_map(anchor, spawn)
-            dot(ground, site, i, x, y)
+            dot(ground, site, i, *on_map(anchor, spawn))
 
     keep = frame.add(centered("Keep", 0, 0, KEEP, KEEP))
     image(keep, PAGE, 0.9, sprite=SPR["disc"], sliced=False)
@@ -273,29 +329,21 @@ def attack_screen():
     image(chip, PAGE, 0.9, sprite=SPR["round8"])
     text(chip.add(stretch("Attack_Timer")), "20", size=28, colour=TEXT, halign=CENTER, bold=True)
 
-    board = screen.add(top_center("Attack_Board", 0, MAP_Y + MAP_PX + 20, BOARD_W, 220))
-    for i in range(PICKS):
-        tile(board, "Attack", i, i * (200 + GAP), 0, 200, 220, pick_tile)
-
-    text(screen.add(top_center("Attack_Hint", 0, MAP_Y + MAP_PX + 20 + 220 + 12, BOARD_W, HINT_H)),
-         "Click where you come in, and your powerup. Or /pick a spawn and a powerup by number.",
-         size=13, colour=SECONDARY, halign=CENTER)
-
     return screen
 
 
 def on_map(anchor, point):
-    """Where a world point lands on the map picture, from its top-left corner. North is
-    up, so world z runs up the picture."""
-    scale = MAP_PX / MAP_METRES
-    return (MAP_PX / 2 + (point[0] - anchor[0]) * scale, MAP_PX / 2 - (point[1] - anchor[1]) * scale)
+    """Where a world point lands on the map, as fractions of it from the bottom-left
+    corner, which is how a uGUI anchor counts. North is up, so world z runs up."""
+    return (0.5 + (point[0] - anchor[0]) / MAP_METRES, 0.5 + (point[1] - anchor[1]) / MAP_METRES)
 
 
-def dot(ground, site, i, x, y):
-    """A spawn on the map: a dark disc with its number, the button `SiegeSpawn{site}{i}`.
+def dot(ground, site, i, fx, fy):
+    """A spawn on the map: a dark disc with its number, the button `SiegeSpawn{site}{i}`,
+    anchored at a fraction of the map so it stays on its spawn at any size.
     `Spawn{site}{i}_On` is the same disc in white, shown on the one the viewer chose;
     `Spawn{site}{i}_Face{k}` are the teammates coming in there, in a row beside it."""
-    node = ground.add(top_left(f"SiegeSpawn{site}{i}", x - DOT / 2, y - DOT / 2, DOT, DOT))
+    node = ground.add(Node(f"SiegeSpawn{site}{i}", anchor_min=(fx, fy), anchor_max=(fx, fy), size=(DOT, DOT)))
     button(node, image(node, "#ffffff", sprite=SPR["disc"], sliced=False, raycast=True), PAGE, SUB_HOVER, SELECTED)
     text(node.add(stretch(f"Spawn{site}{i}_Number")), str(i + 1), size=16, colour=TEXT, halign=CENTER, bold=True)
 
@@ -441,7 +489,7 @@ def build_panel():
              size=13, colour=MUTED)
 
     text(board.add(bottom_left("Hint", PANEL_PAD_, PANEL_PAD_, PANEL_W - 2 * PANEL_PAD_, PANEL_HINT)),
-         "Look at a piece and press <plugin_0/> to change what it is made of, or take it down.",
+         "Salvage a piece to change what it is made of, or take it down.",
          size=12, colour=MUTED, valign=TOP, wrap=True)
 
     return root
@@ -461,6 +509,16 @@ FEED_GAP = 4
 NAME_W = 110
 BADGE_W = 24
 WEAPON_W = 40
+LONE_W = 8 + WEAPON_W + 4 + NAME_W + 8
+
+
+def weapon_slot(parent, name, x):
+    """The weapon's silhouette, or the skull when there is no item to show: the plugin
+    turns one on and the other off."""
+    image(parent.add(top_left(f"{name}_Weapon", x, 3, WEAPON_W, FEED_H - 6)), "#ffffff", enabled=False,
+          preserve_aspect=True, material=SILHOUETTE)
+    image(parent.add(top_left(f"{name}_Skull", x + (WEAPON_W - 18) // 2, 4, 18, 18, active=False)), INK,
+          sprite=SPR["skull"], sliced=False)
 
 
 def kill_feed():
@@ -479,15 +537,27 @@ def kill_feed():
         fill = row.add(centered(f"Row{i}_Fill", 0, 0, FEED_W, FEED_H))
         image(fill, FLAT, sprite=SPR["round6"])
 
+        # Two shapes of row. A duel is who, with what, whom. A death with nobody on
+        # the other end of it, a fall, a mine of your own, the open ground, is the
+        # skull and the name, on a shorter fill so it does not read as a kill with the
+        # killer missing. The skull also stands in for a weapon the server cannot name.
+        duel = fill.add(stretch(f"Row{i}_Duel"))
         x = 8
-        text(fill.add(top_left(f"Row{i}_Killer", x, 0, NAME_W, FEED_H)), "Ferret", size=13, colour=INK, halign=RIGHT, bold=True)
+        text(duel.add(top_left(f"Row{i}_Killer", x, 0, NAME_W, FEED_H)), "Ferret", size=13, colour=INK, halign=RIGHT, bold=True)
         x += NAME_W + 4
-        text(fill.add(top_left(f"Row{i}_Streak", x, 0, BADGE_W, FEED_H)), "II", size=11, colour=RED, halign=CENTER, bold=True)
+        text(duel.add(top_left(f"Row{i}_Streak", x, 0, BADGE_W, FEED_H)), "II", size=11, colour=RED, halign=CENTER, bold=True)
         x += BADGE_W + 4
-        image(fill.add(top_left(f"Row{i}_Weapon", x, 3, WEAPON_W, FEED_H - 6)), "#ffffff", enabled=False,
-              preserve_aspect=True, material=SILHOUETTE)
+        weapon_slot(duel, f"Row{i}", x)
         x += WEAPON_W + 4
-        text(fill.add(top_left(f"Row{i}_Victim", x, 0, NAME_W, FEED_H)), "Homeless", size=13, colour=INK, halign=LEFT, bold=True)
+        text(duel.add(top_left(f"Row{i}_Victim", x, 0, NAME_W, FEED_H)), "Homeless", size=13, colour=INK, halign=LEFT, bold=True)
+
+        lone = row.add(top_right(f"Row{i}_Lone", 0, 0, LONE_W + 4, FEED_H + 4, active=False))
+        image(lone.add(stretch(f"Row{i}_Lone_Mine", active=False)), RED, sprite=SPR["round6"])
+        lone_fill = lone.add(centered(f"Row{i}_LoneFill", 0, 0, LONE_W, FEED_H))
+        image(lone_fill, FLAT, sprite=SPR["round6"])
+        weapon_slot(lone_fill, f"Row{i}_Lone", 8)
+        text(lone_fill.add(top_left(f"Row{i}_Lone_Victim", 8 + WEAPON_W + 4, 0, NAME_W, FEED_H)), "Homeless",
+             size=13, colour=INK, halign=LEFT, bold=True)
 
     return root
 

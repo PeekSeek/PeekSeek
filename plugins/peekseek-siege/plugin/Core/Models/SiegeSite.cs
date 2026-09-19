@@ -85,14 +85,6 @@ public class SiegeSite {
     public float YawTowardsAnchor(float x, float z) {
         return (float)(Math.Atan2(Anchor.X - x, Anchor.Z - z) * 180d / Math.PI);
     }
-
-    /// Which way a spawn lies from the base, as a bearing in degrees clockwise from
-    /// north, for saying "north-west" in chat where there is no map to point at.
-    public float BearingOfSpawn(int spawn) {
-        SerializableVector3 point = AttackerSpawns[spawn];
-        double degrees = Math.Atan2(point.X - Anchor.X, point.Z - Anchor.Z) * 180d / Math.PI;
-        return (float)((degrees + 360d) % 360d);
-    }
 }
 
 /// The two sites, in the order the config lists them. Wrapped so the rest of the plugin

@@ -369,10 +369,27 @@ internal static class SiegeWorld {
         int site = SiteAt(drop.GetServersideData().point);
         if (site >= 0 && IsAnchorTile(site, drop)) {
             shouldAllow = false;
+            if (siege != null && siege.Phase == SiegePhase.Building) siege.OfferSwap(instigator, drop, site);
+            return;
+        }
+
+        // During the build a salvage is a question, not an action: the piece stays
+        // and a board asks what it should be instead, take it down being one answer.
+        // Holding a key on a wall is the one gesture every player already knows.
+        if (siege != null && siege.Phase == SiegePhase.Building && site == siege.SideOf(instigator.playerID.steamID.m_SteamID)) {
+            shouldAllow = false;
+            siege.OfferSwap(instigator, drop, site);
             return;
         }
 
         Salvaged(instigator, drop.asset, site);
+    }
+
+    /// How long a salvage takes for this player from now on. The client counts the
+    /// hold itself and the game's default is eight seconds; the server can only set
+    /// the number (PlayerInteract.sendSalvageTimeOverride), so it is set per phase.
+    internal static void SalvageTime(Player player, float seconds) {
+        player.interact.sendSalvageTimeOverride(seconds);
     }
 
     private static void OnSalvageBarricade(BarricadeDrop drop, SteamPlayer instigator, ref bool shouldAllow) {

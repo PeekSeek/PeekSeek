@@ -88,6 +88,13 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// keeps wearing their own.
     public List<string> FallbackOutfit;
 
+    /// How long holding the salvage key takes, in seconds, while building and in a
+    /// round. The game's own is eight. A salvage while building is the swap board,
+    /// so it is as quick as the planner's own half second; in a round it is a birch
+    /// wall coming down, which should be a decision rather than a reflex.
+    public float BuildSalvageSeconds;
+    public float RoundSalvageSeconds;
+
     /// How big a builder's hands page is, in inventory cells.
     ///
     /// Unturned does replicate a page resize — Items.resize tells the owning client the
@@ -232,6 +239,9 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         // land on the floor; the name is looked up, so it survives an id change.
         BuildTools = [new SiegeItem(1764, 1)];
         FallbackOutfit = ["Alicepack"];
+
+        BuildSalvageSeconds = 0.5f;
+        RoundSalvageSeconds = 3f;
 
         HandsWidth = 14;
         // Grown to hold one of every piece at once: thirty kinds at two or four cells

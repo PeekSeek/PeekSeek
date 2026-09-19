@@ -27,16 +27,13 @@ internal enum BoardFace {
 /// The boards a player answers: the round's options, the footprint before building,
 /// the material of a piece while building, and where an attacker comes in.
 ///
-/// There are two ways to draw a board and only one set of rules behind them. Unturned
-/// cannot draw a custom UI from plugin code: EffectManager.SendUIEffect takes an
-/// EffectAsset, and an EffectAsset only exists inside a workshop bundle the client has
-/// already downloaded. So the board is written against whichever is available. Give it
-/// an effect GUID and it draws a real Unity layout with clickable tiles; leave the GUID
-/// empty and it prints the same options to chat and takes /pick instead.
-///
-/// The chat form is not a placeholder that gets deleted later. A player whose client is
-/// still downloading the bundle, or who has UI effects failing for any other reason, has
-/// to be able to answer the board, and this is the answer for them.
+/// Unturned cannot draw a custom UI from plugin code: EffectManager.SendUIEffect takes
+/// an EffectAsset, and an EffectAsset only exists inside a workshop bundle the client
+/// has already downloaded. A server without the bundle gets one loud line in its log
+/// and every board answers itself with its first option; a client without it is kicked
+/// by the game's own asset check before a board reaches them. There is no chat form:
+/// a board is pictures, and a list of numbers in chat was a worse board that nobody
+/// was ever going to see.
 ///
 /// State is per player rather than per board, because the two sides of a round choose at
 /// the same moment from different lists: the defenders are looking at traps while the
@@ -55,14 +52,13 @@ internal class PickBoard {
         /// The option taken, or -1 while the board is up and unanswered.
         internal int Pick = -1;
 
-        /// The attack screen's second question. `Spawns` is how each spawn is said in
-        /// chat ("north-west"), null on a board that asks no spawn; `Site` is whose map
-        /// is shown, which decides which dots are on it.
-        internal List<string> Spawns;
+        /// The attack screen's second question: how many dots are on the map, 0 on a
+        /// board that asks no spawn, and whose map it is, which decides which dots.
+        internal int Spawns;
         internal int Site;
         internal int SpawnPick = -1;
 
-        internal bool Answered => Pick >= 0 && (Spawns == null || SpawnPick >= 0);
+        internal bool Answered => Pick >= 0 && (Spawns == 0 || SpawnPick >= 0);
 
         /// Whether the board is on the player's screen. An answer is only taken from a
         /// board that is up; the answer itself is kept until the next Reset, because the
@@ -81,6 +77,9 @@ internal class PickBoard {
 
     /// How many faces fit beside a dot on the map: a full team.
     private const int FacesPerSpawn = 5;
+
+    /// How many item rows a powerup tile has.
+    private const int ItemRows = 4;
 
     private readonly Dictionary<ulong, Seat> seats = [];
 
@@ -102,7 +101,7 @@ internal class PickBoard {
     /// The spawn an attacker ended up with, defaulting to the first the same way, or
     /// -1 for a player whose board never asked.
     internal int SpawnChosen(ulong steam64) {
-        if (!seats.TryGetValue(steam64, out Seat seat) || seat.Spawns == null) return -1;
+        if (!seats.TryGetValue(steam64, out Seat seat) || seat.Spawns == 0) return -1;
 
         return Math.Max(0, seat.SpawnPick);
     }
@@ -134,10 +133,10 @@ internal class PickBoard {
         Draw(viewer, seat, marked);
     }
 
-    /// Put the attack screen up for one player: the map of site `site` with a dot per
-    /// spawn, and the raid options. `spawns` is each spawn as chat says it, in dot order.
-    internal void OpenAttack(SteamPlayer viewer, List<SiegeOption> choices, string headline, int site, List<string> spawns) {
-        Seat seat = new() { Options = choices, Headline = headline, Face = BoardFace.Attack, Site = site, Spawns = spawns };
+    /// Put the attack screen up for one player: the map of site `site` with `spawns`
+    /// dots on it, and the raid options.
+    internal void OpenAttack(SteamPlayer viewer, List<SiegeOption> choices, int site, int spawns) {
+        Seat seat = new() { Options = choices, Face = BoardFace.Attack, Site = site, Spawns = spawns };
         seats[viewer.playerID.steamID.m_SteamID] = seat;
 
         Draw(viewer, seat, -1);
@@ -174,8 +173,7 @@ internal class PickBoard {
 
         seat.Pick = oneBased - 1;
         SiegeOption taken = seat.Options[seat.Pick];
-        Confirm(player, seat, $"{seat.Face}{seat.Pick}_Taken",
-            PeekSeekSiege.Instance.Translate("pick_locked", taken.Name));
+        Confirm(player, seat, $"{seat.Face}{seat.Pick}_Taken");
         seat.OnAnswer?.Invoke(taken);
         return taken;
     }
@@ -183,11 +181,11 @@ internal class PickBoard {
     /// Record where an attacker comes in, 1-based as the dots are numbered. False when
     /// that number is not a dot on this player's map, or their board asks no spawn.
     internal bool AnswerSpawn(SteamPlayer player, int oneBased) {
-        if (!seats.TryGetValue(player.playerID.steamID.m_SteamID, out Seat seat) || !seat.Up || seat.Spawns == null) return false;
-        if (oneBased < 1 || oneBased > seat.Spawns.Count) return false;
+        if (!seats.TryGetValue(player.playerID.steamID.m_SteamID, out Seat seat) || !seat.Up || seat.Spawns == 0) return false;
+        if (oneBased < 1 || oneBased > seat.Spawns) return false;
 
         seat.SpawnPick = oneBased - 1;
-        Confirm(player, seat, null, PeekSeekSiege.Instance.Translate("spawn_locked", seat.Spawns[seat.SpawnPick]));
+        Confirm(player, seat, null);
 
         // The whole team sees who is coming in where, so every attacker's map is redrawn,
         // not just the one that was clicked.
@@ -208,7 +206,7 @@ internal class PickBoard {
         if (buttonName == null || !seats.TryGetValue(player.playerID.steamID.m_SteamID, out Seat seat)) return null;
 
         string dots = ButtonPrefix + "Spawn" + seat.Site;
-        if (seat.Spawns != null && buttonName.StartsWith(dots)) {
+        if (seat.Spawns > 0 && buttonName.StartsWith(dots)) {
             if (int.TryParse(buttonName.Substring(dots.Length), out int dot)) AnswerSpawn(player, dot + 1);
             return null;
         }
@@ -256,10 +254,7 @@ internal class PickBoard {
 
     private void Draw(SteamPlayer viewer, Seat seat, int marked) {
         EffectAsset asset = Effect();
-        if (asset == null) {
-            DrawToChat(viewer, seat);
-            return;
-        }
+        if (asset == null) return;
 
         short key = PeekSeekSiege.Config.PickUIKey;
         string face = seat.Face.ToString();
@@ -278,17 +273,31 @@ internal class PickBoard {
             if (option == null) continue;
 
             EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{face}{i}_Name", option.Name);
-            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{face}{i}_Blurb", option.Blurb);
             EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{face}{i}_Taken", i == marked);
 
-            // The footprint tiles carry their own picture; the others fetch one.
-            if (seat.Face != BoardFace.Shape) {
-                EffectManager.sendUIEffectImageURL(
-                    key, viewer.transportConnection, true, $"{face}{i}_Icon", IconUrl(option));
+            // A powerup tile is the items themselves, a row each with its count. The
+            // footprint tiles carry their own picture and a line; the swap tiles one
+            // picture and a line with what is left.
+            if (seat.Face is BoardFace.Pick or BoardFace.Attack) {
+                for (int k = 0; k < ItemRows; k++) {
+                    SiegeItem item = option.Items.ElementAtOrDefault(k);
+                    EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{face}{i}_Item{k}", item != null);
+                    if (item == null) continue;
+
+                    EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{face}{i}_Item{k}_Count", $"{item.Amount}x");
+                    EffectManager.sendUIEffectImageURL(key, viewer.transportConnection, true, $"{face}{i}_Item{k}_Icon",
+                        string.Format(PeekSeekSiege.Config.ItemIconURL, item.ItemId));
+                }
+                continue;
+            }
+
+            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{face}{i}_Blurb", option.Blurb);
+            if (seat.Face == BoardFace.Swap) {
+                EffectManager.sendUIEffectImageURL(key, viewer.transportConnection, true, $"{face}{i}_Icon", IconUrl(option));
             }
         }
 
-        if (seat.Spawns != null) {
+        if (seat.Spawns > 0) {
             EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Attack_Map{seat.Site}", true);
             DrawSpawns(viewer, seat);
         }
@@ -304,7 +313,7 @@ internal class PickBoard {
     private void DrawSpawns(SteamPlayer viewer, Seat seat) {
         short key = PeekSeekSiege.Config.PickUIKey;
 
-        for (int dot = 0; dot < seat.Spawns.Count; dot++) {
+        for (int dot = 0; dot < seat.Spawns; dot++) {
             string name = $"Spawn{seat.Site}{dot}";
             EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{name}_On", dot == seat.SpawnPick);
 
@@ -340,40 +349,19 @@ internal class PickBoard {
     /// fired, nothing could be picked up, for as long as the pick phase ran. The
     /// receipt is the pick icon on the HUD. The attack screen stays up between its two
     /// answers, lit where it has been answered, because half a screen is no receipt.
-    private void Confirm(SteamPlayer player, Seat seat, string taken, string said) {
+    private void Confirm(SteamPlayer player, Seat seat, string taken) {
         EffectAsset asset = Effect();
+        if (asset == null) return;
 
-        if (asset == null) {
-            Chat.Whisper(player, said);
-        } else if (taken != null) {
+        if (taken != null) {
             EffectManager.sendUIEffectVisibility(PeekSeekSiege.Config.PickUIKey, player.transportConnection, true, taken, true);
         }
 
         if (!seat.Answered) return;
         seat.Up = false;
 
-        if (asset == null) return;
         EffectManager.askEffectClearByID(asset.id, player.transportConnection);
         Modal(player, false);
-    }
-
-    /// The board as lines of chat. Same information, same order, same numbers as the
-    /// tiles, so a player who moves between the two is reading the same board.
-    private static void DrawToChat(SteamPlayer viewer, Seat seat) {
-        Chat.Whisper(viewer, seat.Headline);
-
-        if (seat.Spawns != null) {
-            for (int i = 0; i < seat.Spawns.Count; i++) {
-                Chat.Whisper(viewer, PeekSeekSiege.Instance.Translate("pick_spawn_option", i + 1, seat.Spawns[i]));
-            }
-        }
-
-        for (int i = 0; i < seat.Options.Count; i++) {
-            Chat.Whisper(viewer, PeekSeekSiege.Instance.Translate(
-                "pick_option", i + 1, seat.Options[i].Name, seat.Options[i].Blurb));
-        }
-
-        Chat.Whisper(viewer, PeekSeekSiege.Instance.Translate(seat.Spawns != null ? "pick_how_attack" : "pick_how"));
     }
 
     /// The configured UI effect, looked up once. A GUID that is set but does not resolve
@@ -387,7 +375,7 @@ internal class PickBoard {
         if (string.IsNullOrWhiteSpace(configured)) return null;
 
         if (!Guid.TryParse(configured, out Guid guid)) {
-            Logger.LogError($"PickUIEffectGUID \"{configured}\" is not a GUID. Falling back to the chat board.");
+            Logger.LogError($"PickUIEffectGUID \"{configured}\" is not a GUID. Every board will answer itself.");
             return null;
         }
 
@@ -395,7 +383,7 @@ internal class PickBoard {
         if (effect == null) {
             Logger.LogError(
                 $"No EffectAsset with GUID {guid} is loaded. Is the UI bundle in "
-                + "WorkshopDownloadConfig.json? Falling back to the chat board.");
+                + "WorkshopDownloadConfig.json? Every board will answer itself.");
         }
 
         return effect;

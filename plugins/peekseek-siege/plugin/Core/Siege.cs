@@ -377,31 +377,12 @@ internal class Siege : IGamemode {
         }
     }
 
-    /// The swap key, while building: aim at one of your own team's pieces and press it
-    /// for a board of the same piece in every other material, and a way to take it
-    /// down. Pressed again with the board up, the board goes.
-    internal void OnPluginKey(Player player, byte key, bool pressed) {
-        if (key != 0 || !pressed || phase != SiegePhase.Building) return;
+    /// A builder salvaged one of their team's pieces: the salvage was refused, and
+    /// this is the board in its place, the same piece in every other material and a
+    /// way to take it down.
+    internal void OfferSwap(SteamPlayer viewer, StructureDrop drop, int site) {
+        if (phase != SiegePhase.Building) return;
 
-        SteamPlayer viewer = player.channel.owner;
-        ulong steam64 = viewer.playerID.steamID.m_SteamID;
-
-        if (board.IsShowing(viewer, BoardFace.Swap)) {
-            board.CloseFor(viewer);
-            swapping.Remove(steam64);
-            return;
-        }
-
-        StructureDrop drop = SiegeWorld.Aimed(player);
-        if (drop == null) return;
-
-        int site = SiegeWorld.SiteAt(drop.GetServersideData().point);
-        if (site != SideOf(steam64)) return;
-
-        OpenSwapBoard(viewer, drop, site);
-    }
-
-    private void OpenSwapBoard(SteamPlayer viewer, StructureDrop drop, int site) {
         ulong steam64 = viewer.playerID.steamID.m_SteamID;
         BuildBudget budget = budgets[site];
         ItemStructureAsset current = drop.asset;
@@ -422,8 +403,7 @@ internal class Siege : IGamemode {
         }
 
         swapping[steam64] = drop.GetServersideData().point;
-        board.Open(viewer, options, PeekSeekSiege.Instance.Translate("board_swap", current.itemName), BoardFace.Swap,
-            taken => Swap(viewer, taken));
+        board.Open(viewer, options, current.itemName, BoardFace.Swap, taken => Swap(viewer, taken));
     }
 
     /// Carry a swap out. The piece is found again by where it stands, because the
@@ -585,11 +565,6 @@ internal class Siege : IGamemode {
         List<SiegeOption> raid = PeekSeekSiege.Config.RaidOptions;
         SiegeSite attacked = sites[defender];
 
-        // Each spawn as chat says it, for the attacker whose client has no map to click.
-        List<string> spawns = Enumerable.Range(0, attacked.AttackerSpawns.Count)
-            .Select(spawn => Wording.Compass(attacked.BearingOfSpawn(spawn)))
-            .ToList();
-
         board.Reset();
 
         // One board each, because the two sides are choosing from different lists at the
@@ -597,10 +572,9 @@ internal class Siege : IGamemode {
         // the board for whichever side they are currently playing.
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
             if (IsDefending(viewer.playerID.steamID.m_SteamID)) {
-                board.Open(viewer, defence, PeekSeekSiege.Instance.Translate("board_defend", round, attacked.Name));
+                board.Open(viewer, defence, PeekSeekSiege.Instance.Translate("board_defend"));
             } else {
-                board.OpenAttack(viewer, raid, PeekSeekSiege.Instance.Translate("board_attack", round, attacked.Name),
-                    defender, spawns);
+                board.OpenAttack(viewer, raid, defender, attacked.AttackerSpawns.Count);
             }
         }
     }
@@ -824,6 +798,12 @@ internal class Siege : IGamemode {
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
         int side = SideOf(steam64);
         SiegeSite own = sites[side];
+
+        // A salvage is the swap while building, so it is quick; in a round it is the
+        // soft wall coming down, which should cost a moment.
+        SiegeWorld.SalvageTime(player, phase == SiegePhase.Building
+            ? PeekSeekSiege.Config.BuildSalvageSeconds
+            : PeekSeekSiege.Config.RoundSalvageSeconds);
 
         switch (phase) {
             case SiegePhase.Shaping:

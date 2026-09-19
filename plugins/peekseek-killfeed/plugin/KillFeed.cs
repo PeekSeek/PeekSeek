@@ -119,12 +119,24 @@ internal class KillFeed {
             EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}", kill != null);
             if (kill == null) continue;
 
-            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Killer", Feed.Fit(kill.KillerName, config.NameLength));
-            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Victim", Feed.Fit(kill.VictimName, config.NameLength));
-            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Streak", Feed.Badge(kill.Streak));
-            EffectManager.sendUIEffectImageURL(key, viewer.transportConnection, true, $"Row{i}_Weapon",
-                kill.Weapon == 0 ? "" : string.Format(config.ItemIconURL, kill.Weapon));
-            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Mine", Feed.Involves(kill, me));
+            // A death with nobody on the other end is its own shape of row: the skull
+            // and the name, not a kill with the killer's column blank. The skull also
+            // stands in for a weapon the game gave no item for, a fist or a fall.
+            bool duel = kill.Killer != 0;
+            string slot = duel ? $"Row{i}" : $"Row{i}_Lone";
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Duel", duel);
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Lone", !duel);
+            if (duel) {
+                EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Killer", Feed.Fit(kill.KillerName, config.NameLength));
+                EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Streak", Feed.Badge(kill.Streak));
+            }
+            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{slot}_Victim", Feed.Fit(kill.VictimName, config.NameLength));
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{slot}_Skull", kill.Weapon == 0);
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{slot}_Weapon", kill.Weapon != 0);
+            if (kill.Weapon != 0) {
+                EffectManager.sendUIEffectImageURL(key, viewer.transportConnection, true, $"{slot}_Weapon", string.Format(config.ItemIconURL, kill.Weapon));
+            }
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{slot}_Mine", Feed.Involves(kill, me));
         }
     }
 

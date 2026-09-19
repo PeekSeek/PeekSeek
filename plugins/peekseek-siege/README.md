@@ -83,14 +83,17 @@ bringing it down, or by wiping the defence; defenders win by the clock.
 **A builder builds from a budget.** The team has one pile of pieces for the whole build
 phase, and a builder carries exactly one of each piece the pile still has. So the housing
 planner lists what can still go down, the panel beside the screen says how many, and
-placing a piece takes one off the pile and puts the next one in your hands. Salvaging a
-piece puts it back on the pile. There is no gun and nothing to top up.
+placing a piece takes one off the pile and puts the next one in your hands. There is no
+gun and nothing to top up.
 
-Any piece already standing can be made of something else: look at it, press the first
-plugin key (`,` unless you rebound it), and a board offers the same piece in every other
-material with what is left of each, plus taking it down. Swap a starting metal floor for
-birch and the metal floor goes on the pile for use elsewhere. That is the whole upgrade
-system, and it works on the starting floors too.
+Any piece already standing can be made of something else: salvage it. During the build
+the salvage is refused and a board offers the same piece in every other material with
+what is left of each, plus taking it down, which puts it back on the pile. Swap a
+starting metal floor for birch and the metal floor goes on the pile for use elsewhere.
+That is the whole upgrade system, it works on the starting floors too, and holding the
+salvage key on a wall is the one gesture nobody has to be taught. The hold is half a
+second while building and three in a round, set per player by the server; the game's
+own eight is for a world where a wall is worth something.
 
 Plus the leash: both sites are on one map, and during the build phase you cannot leave
 your own plot. Walk too far and you are put back. That is what keeps the first round worth
@@ -131,8 +134,6 @@ to nothing.
 /start          two or more players, split into two teams
 /start solo     one player, for testing
 /stop           end it
-/pick 3         answer the option board
-/pick spawn 2   where you come in, as an attacker
 /siege          where the match is
 ```
 
@@ -156,18 +157,16 @@ Unturned cannot draw a custom UI from plugin code. `EffectManager.SendUIEffect` 
 `EffectAsset`, and an `EffectAsset` only exists inside a Unity asset bundle the client has
 already downloaded, so a UI cannot ship in a `.dll`, only in a workshop mod.
 
-The boards are written against both:
-
-- A server that has the `ui/` mod loaded draws the real Unity layouts: the boards, the
-  HUD along the top for everybody all match, and the build panel. The same mod carries
-  the flag and the sentry as items.
-- One that does not logs a line at the first pick phase and draws the same options to
-  chat, answered with `/pick`.
+A server with the `ui/` mod loaded draws the real Unity layouts: the boards, the HUD
+along the top for everybody all match, and the build panel. The same mod carries the
+flag and the sentry as items. A server without it logs a line and every board answers
+itself with its first option; there is no chat form, because a board is pictures and a
+numbered list in chat was a worse board nobody was going to read. A client without the
+mod is kicked by the game's own asset check, which is what the Workshop id in the
+server's `WorkshopDownloadConfig.json` is for.
 
 `ui/` is the Unity project that mod is built from, and `ui/README.md` says how it works
-and how to build it. The chat form is not a placeholder waiting to be deleted: a player
-whose client is still downloading the bundle needs to be able to answer the board too,
-and a round is never going to wait for them.
+and how to build it.
 
 The kill feed is not part of this plugin. It is `plugins/peekseek-killfeed`, its own
 plugin and its own workshop item, because every PeekSeek server wants one.

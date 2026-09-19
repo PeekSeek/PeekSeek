@@ -9,9 +9,8 @@ namespace PeekSeekSiege.Core.Hud;
 /// with its count. The housing planner shows what can go down; this shows how many.
 ///
 /// Drawn whole on every change, like the match HUD. The one line it carries that the
-/// plugin does not send is the hint about the swap key, which is baked into the
-/// prefab because the game replaces `<plugin_0/>` with the player's own binding only
-/// when the effect is spawned.
+/// plugin does not send is baked into the prefab: that salvaging a piece is how it is
+/// changed or taken down, which nothing else on screen says.
 internal class BuildPanel {
     private const int Rows = 16;
 

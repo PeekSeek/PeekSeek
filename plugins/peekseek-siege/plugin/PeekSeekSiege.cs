@@ -61,16 +61,15 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
         { "match_intro", "<color=white>Siege.</color> Build a base, then take turns cracking each other's. <color=white>{0}</color> rounds each side. You get <color=white>{1}</color> to build." },
 
         // The footprint board. Two tiles; the first answer on a team is the team's.
-        { "board_shape", "<color=white>Your footprint.</color> What the base starts from." },
+        { "board_shape", "Footprint. The first pick on the team counts." },
         { "shape_square", "Square" },
         { "shape_square_blurb", "Nine metal floors, three by three. Walls and roofs only." },
         { "shape_hexagonal", "Hexagonal" },
         { "shape_hexagonal_blurb", "Six triangles round the middle, a square on every side. Triangle pieces in the kit." },
 
-        // The swap board, while building: the piece you are looking at in every other
+        // The swap board, while building: the piece you salvaged in every other
         // material, and a way to take it down. {0} is what is left of that material,
         // {1} the piece's health.
-        { "board_swap", "<color=white>{0}.</color> Make it something else." },
         { "swap_left", "{0} left. {1} health." },
         { "swap_none", "None left. {1} health." },
         { "swap_none_left", "No <color=white>{0}</color> left." },
@@ -91,20 +90,9 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
         { "flag_bearer", "<color=white>You have the flag.</color> Stand it anywhere on your base. {0} seconds, or it goes on a free tile." },
         { "flag_leashed", "<color=white>Stay on your base</color> until the flag is down." },
 
-        // The boards. The headline says which side you are and how long you have; the
-        // options are numbered so a one-character answer is one people actually give.
-        // An attacker's chat form also lists the spawns, by where they lie from the
-        // base, since chat has no map to point at.
-        { "board_defend", "<color=white>Round {0}. You are defending {1}.</color> Pick what you hold it with." },
-        { "board_attack", "<color=white>Round {0}. You are taking {1}.</color> Pick where you come in, and what you crack it with." },
-        { "pick_option", "<color=white>{0}</color>  {1}. {2}" },
-        { "pick_spawn_option", "<color=white>{0}</color>  Come in from the {1}." },
-        { "pick_how", "Type <color=white>/pick</color> and a number." },
-        { "pick_how_attack", "Type <color=white>/pick spawn</color> and a number for where you come in, and <color=white>/pick</color> and a number for your powerup." },
-        { "pick_locked", "Locked in: <color=white>{0}</color>." },
-        { "spawn_locked", "Coming in from the <color=white>{0}</color>." },
-        { "pick_no_such", "That is not on the board." },
-        { "pick_closed", "There is nothing to pick right now." },
+        // The defenders' board says the one word it is; the tiles say the rest, and
+        // the HUD already says which round and which side.
+        { "board_defend", "Powerup" },
 
         // The two invented rules. Both are said the moment they bite, because neither
         // is something a player can see coming.

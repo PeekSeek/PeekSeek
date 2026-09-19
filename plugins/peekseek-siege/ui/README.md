@@ -3,8 +3,9 @@
 The Unity UIs PeekSeek draws in game, built from one project into two Workshop items:
 
 - **The boards**, one prefab with four panels: the pick board for a round, five tiles
-  with the item's picture, its name, one line under it, and a number so `/pick 3` reads
-  as the same board; the footprint board before the build, two tiles with the whole
+  as the site's match page draws a powerup, a card with the name and a row per item,
+  `2x` and its picture, numbered so "I take 2" is something you can say; the footprint
+  board before the build, two tiles with the whole
   starting base drawn on each; the swap board while building, the piece you are
   looking at in every other material; and the attack screen, the whole screen dimmed,
   the map of the base being attacked in the middle with a keep on it and a dot on
@@ -88,11 +89,11 @@ it is the only thing on the block besides the score.
 
 **The build panel and the kill feed are the overlay too.** The panel is the block's fill
 at 90% with the site's corner, a row per piece: picture, count in ink, name in muted.
-Its hint carries `<plugin_0/>`, which the game replaces with the player's own binding of
-the first plugin key when the effect is spawned, and only then, which is why the hint is
-baked in rather than sent. A feed row is the block's fill with a red hairline round it
-when the viewer is in it, done as a red rounded rectangle one pixel proud of the black
-one, since uGUI has no border to set. The weapon is drawn with a shader of our own that
+Its one line of text says that salvaging a piece is how you change it, because nothing
+else on screen does. A feed row is the block's fill with a red hairline round it when
+the viewer is in it, done as a red rounded rectangle one pixel proud of the black one,
+since uGUI has no border to set. A death nobody dealt, or one the server cannot put an
+item to, is a shorter row: a skull and the name. The weapon is drawn with a shader of our own that
 takes only the sprite's alpha, so the site's coloured icons come out as white shapes.
 
 **The font is Inter**, with JetBrains Mono for the clock. The site asks for the system
@@ -279,10 +280,9 @@ the moment you join. Mod folders are scanned only when the game starts.
 
 The plugin's `PickUIEffectGUID` and `MatchHudEffectGUID` default to the GUIDs in the two
 `.dat` files, so a server with the mod draws both screens without a config change, and
-one without logs a line and draws the board to chat. A server config written before a
-default existed has an empty element and needs the value pasted in.
+one without logs a line and every board answers itself. A server config written before
+a default existed has an empty element and needs the value pasted in.
 
-The chat fallback covers a *server* without the mod, and nothing else. Once the server
-has it, a client that does not is **kicked** the moment a screen is sent to them:
+A client without the mod is **kicked** the moment a screen is sent to them:
 `missing asset: "PickBoard"`, from the game's asset integrity check, before the plugin
 gets a say. That is what the Workshop id in `WorkshopDownloadConfig.json` is for.

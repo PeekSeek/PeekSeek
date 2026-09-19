@@ -127,17 +127,6 @@ public class SiegeSiteTests {
         Assert.Equal(yaw, site.YawTowardsAnchor(site.Anchor.X + dx, site.Anchor.Z + dz), 2);
     }
 
-    /// Chat says where a spawn lies from the base, so a bearing has to be measured
-    /// clockwise from north: the North site's first spawn is up and to the right.
-    [Fact]
-    public void ASpawnsBearingIsClockwiseFromNorth() {
-        SiegeSite site = North();
-
-        Assert.InRange(site.BearingOfSpawn(0), 30f, 60f);
-        Assert.InRange(site.BearingOfSpawn(1), 240f, 280f);
-        Assert.InRange(site.BearingOfSpawn(2), 165f, 195f);
-    }
-
     private static float Distance(float x1, float z1, float x2, float z2) {
         return (float)Math.Sqrt((x1 - x2) * (x1 - x2) + (z1 - z2) * (z1 - z2));
     }

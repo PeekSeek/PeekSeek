@@ -24,6 +24,7 @@ from pathlib import Path
 IMAGE = "fe87c0e1cc204ed48ad3b37840f39efc"
 BUTTON = "4e29b1a8efbd4b44bb3f3716e73f07ff"
 MASK = "31a19414c41e5ae4aae2af33fee712f6"
+ASPECT_RATIO_FITTER = "86710e43de46f6f4bac7c8e50813a599"
 CANVAS_SCALER = "0cd44c1031e13a943bb63640046fad76"
 GRAPHIC_RAYCASTER = "dc42784cf147c0c48a680349fa168899"
 TEXT_MESH_PRO_UGUI = "f4688fdb7df04437aeb418b961361dc5"
@@ -163,6 +164,11 @@ def top_center(name, x, y, w, h, **kw):
     return Node(name, anchor_min=(0.5, 1), anchor_max=(0.5, 1), pivot=(0.5, 1), position=(x, -y), size=(w, h), **kw)
 
 
+def bottom_center(name, x, y, w, h, **kw):
+    """`x` is the offset of the centre from the parent's centre, `y` up from the bottom."""
+    return Node(name, anchor_min=(0.5, 0), anchor_max=(0.5, 0), pivot=(0.5, 0), position=(x, y), size=(w, h), **kw)
+
+
 def bottom_left(name, x, y, w, h, **kw):
     return Node(name, anchor_min=(0, 0), anchor_max=(0, 0), pivot=(0, 0), position=(x, y), size=(w, h), **kw)
 
@@ -251,6 +257,15 @@ def image(node, colour, alpha=1.0, *, sprite=None, sliced=True, enabled=True, pr
         "m_UseSpriteMesh: 0",
         "m_PixelsPerUnitMultiplier: 1",
     ], enabled=enabled)
+
+
+def aspect_fit(node, ratio=1.0):
+    """uGUI's AspectRatioFitter in FitInParent: the node becomes the largest rectangle
+    of this ratio that fits its parent, whatever the screen is."""
+    node.mono(ASPECT_RATIO_FITTER, [
+        "m_AspectMode: 3",
+        f"m_AspectRatio: {ratio:g}",
+    ])
 
 
 def mask(node):
@@ -440,6 +455,26 @@ def flare_alpha(size, outer_x):
     def inside(px, py):
         dx, dy = px - outer_x, py - size
         return 0 if dx * dx + dy * dy < size * size else 1
+
+    return lambda x, y: coverage(inside, x, y)
+
+
+def skull_alpha(size):
+    """A skull: a round head with two eyes, a jaw under it with two gaps for teeth.
+    The kill feed's mark for a death nobody dealt, and for one the server cannot put
+    an item to."""
+    def inside(px, py):
+        x, y = px / size, py / size
+        for ex in (0.37, 0.63):
+            if (x - ex) ** 2 + (y - 0.42) ** 2 <= 0.085 ** 2:
+                return 0
+        if 0.30 <= x <= 0.70 and 0.70 <= y <= 0.88 and (abs(x - 0.43) < 0.02 or abs(x - 0.57) < 0.02):
+            return 0
+        if (x - 0.5) ** 2 + (y - 0.42) ** 2 <= 0.34 ** 2:
+            return 1
+        if 0.30 <= x <= 0.70 and 0.60 <= y <= 0.88:
+            return 1
+        return 0
 
     return lambda x, y: coverage(inside, x, y)
 
