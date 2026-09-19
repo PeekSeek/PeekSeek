@@ -18,3 +18,9 @@
 # Unpacked by BuildBundle.cs from the TextMesh Pro package: shaders a font asset needs.
 /Assets/TextMesh Pro/
 /Assets/TextMesh Pro.meta
+# Unity writes a .meta beside everything; only the sprites' are ours, with GUIDs
+# generate.py pins and the prefabs reference.
+*.meta
+!/Assets/PeekSeek/Sprites/*.meta
+/Packages/packages-lock.json
+/build.log

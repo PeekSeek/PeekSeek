@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using PeekSeekSiege.Core.Models;
@@ -11,7 +12,8 @@ using Rocket.Core.Utils;
 
 namespace PeekSeekSiege.Core;
 
-/// The one thing Siege asks the PeekSeek site for: what gun a player fights with.
+/// What Siege asks the PeekSeek site for: what gun a player fights with, and what
+/// they look like.
 ///
 /// Siege makes its own matches from whoever is on the server, so it does not use the
 /// session contract the match plugin does. It still uses the site's kits, because a
@@ -29,18 +31,12 @@ internal static class RemoteAPI {
 
     private static readonly Dictionary<ulong, List<SiegeItem>> Kits = [];
 
-    /// A player's name and picture as the site shows them, for the HUD. Fetched with
-    /// the kit, and for the same reason: a scoreboard is drawn the moment a match
-    /// starts, not after a round trip.
-    internal class Profile {
-        internal string Name;
-        internal string Avatar;
-    }
+    /// A player's Steam picture, for the HUD. Fetched with the kit, and for the same
+    /// reason: the bar is drawn the moment a match starts, not after a round trip.
+    private static readonly Dictionary<ulong, string> Avatars = [];
 
-    private static readonly Dictionary<ulong, Profile> Profiles = [];
-
-    internal static Profile ProfileFor(ulong steam64) {
-        return Profiles.TryGetValue(steam64, out Profile profile) ? profile : null;
+    internal static string AvatarFor(ulong steam64) {
+        return Avatars.TryGetValue(steam64, out string avatar) ? avatar : null;
     }
 
     internal static void Init() {
@@ -61,10 +57,10 @@ internal static class RemoteAPI {
 
     internal static void Forget(ulong steam64) {
         Kits.Remove(steam64);
-        Profiles.Remove(steam64);
+        Avatars.Remove(steam64);
     }
 
-    /// Pull one player's configured kit category and their profile, and remember both.
+    /// Pull one player's configured kit category and their picture, and remember both.
     internal static void Fetch(ulong steam64) {
         if (Client == null) return;
 
@@ -72,27 +68,39 @@ internal static class RemoteAPI {
             List<SiegeItem> items = await Read(steam64);
             if (items != null) TaskDispatcher.QueueOnMainThread(() => Kits[steam64] = items);
 
-            Profile profile = await ReadProfile(steam64);
-            if (profile != null) TaskDispatcher.QueueOnMainThread(() => Profiles[steam64] = profile);
+            string avatar = await ReadAvatar(steam64) ?? await ReadAvatarFromSteam(steam64);
+            if (avatar != null) TaskDispatcher.QueueOnMainThread(() => Avatars[steam64] = avatar);
         });
     }
 
-    /// `GET /players/{steam64}` carries `name` and `avatar` alongside the rank and
-    /// whereabouts a lobby reads off it. Either may be missing on a site that has not
-    /// deployed them yet, in which case there is no profile rather than half of one.
-    private static async Task<Profile> ReadProfile(ulong steam64) {
+    /// `GET /players/{steam64}` carries `avatar` alongside the rank and whereabouts a
+    /// lobby reads off it, from the same cache every page of the site uses.
+    private static async Task<string> ReadAvatar(ulong steam64) {
         try {
             HttpResponseMessage response = await Client.GetAsync($"{Base}/players/{steam64}");
             if (!response.IsSuccessStatusCode) return null;
 
             JObject body = JObject.Parse(await response.Content.ReadAsStringAsync());
-            string name = (string)body["name"];
             string avatar = (string)body["avatar"];
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(avatar)) return null;
-
-            return new Profile { Name = name, Avatar = avatar };
+            return string.IsNullOrEmpty(avatar) ? null : avatar;
         } catch (Exception ex) {
             Logger.LogError($"Failed to fetch profile for {steam64}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// Steam's own answer, for a site that does not carry the picture yet: the public
+    /// profile as XML, which needs no key and answers for a private profile too. The
+    /// site is asked first because it is the one place a picture is cached for
+    /// everybody at once; this is what keeps the bar from showing placeholders until
+    /// the next site deploy.
+    private static async Task<string> ReadAvatarFromSteam(ulong steam64) {
+        try {
+            string xml = await Client.GetStringAsync($"https://steamcommunity.com/profiles/{steam64}?xml=1");
+            Match full = Regex.Match(xml, @"<avatarFull><!\[CDATA\[(.*?)\]\]></avatarFull>");
+            return full.Success ? full.Groups[1].Value : null;
+        } catch (Exception ex) {
+            Logger.LogError($"Failed to fetch the Steam picture for {steam64}: {ex.Message}");
             return null;
         }
     }

@@ -69,8 +69,6 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
         { "shape_square_blurb", "Nine metal floors, three by three. Walls and roofs only." },
         { "shape_hexagonal", "Hexagonal" },
         { "shape_hexagonal_blurb", "Six triangles round the flag, a square on every side. Triangle pieces in the kit." },
-        { "shape_round", "Round" },
-        { "shape_round_blurb", "Hexagonal with the gaps filled, twelve sides. Triangle pieces in the kit." },
         { "build_countdown", "<color=white>{0}s</color> of building left." },
         { "build_done", "<color=white>Bases locked.</color> {0} and {1} pieces. Nothing about them changes from here." },
 
@@ -117,8 +115,6 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
 
         { "siege_state", "Phase <color=white>{0}</color>, round <color=white>{1}</color>, <color=white>{2}s</color> left. <color=white>{3}</color> defends." },
         { "side_solo_only", "<color=white>/siege side</color> is for solo tests only." },
-        { "overlay_on", "HUD <color=white>on</color>." },
-        { "overlay_off", "HUD <color=white>off</color>. <color=white>/overlay</color> brings it back." },
 
         { "find_usage", "<color=white>/siege find <text></color> looks an item up by name." },
         { "find_none", "Nothing is called anything like \"{0}\"." },

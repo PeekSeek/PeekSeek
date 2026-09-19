@@ -15,6 +15,7 @@ has TMP's stock one, so a font of our own is left alone. `text()` references the
 Inter assets the build script creates under fixed GUIDs.
 """
 
+import math
 import struct
 import zlib
 from pathlib import Path
@@ -66,11 +67,13 @@ class Node:
     ids = iter(range(100000, 10_000_000))
 
     def __init__(self, name, *, active=True, anchor_min=(0, 0), anchor_max=(1, 1),
-                 pivot=(0.5, 0.5), position=(0, 0), size=(0, 0)):
+                 pivot=(0.5, 0.5), position=(0, 0), size=(0, 0), rotation=0):
         self.name = name
         self.active = active
         self.anchor_min, self.anchor_max, self.pivot = anchor_min, anchor_max, pivot
         self.position, self.size = position, size
+        # Degrees anticlockwise about the pivot, the one axis a flat UI can turn on.
+        self.rotation = rotation
         self.children = []
         self.components = []
         self.id = next(Node.ids)
@@ -115,14 +118,15 @@ class Node:
         out.append("RectTransform:")
         out += HEADER
         out.append(f"  m_GameObject: {{fileID: {self.id}}}")
-        out.append("  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}")
+        half = math.radians(self.rotation) / 2
+        out.append(f"  m_LocalRotation: {{x: 0, y: 0, z: {math.sin(half):.6g}, w: {math.cos(half):.6g}}}")
         out.append("  m_LocalPosition: {x: 0, y: 0, z: 0}")
         out.append("  m_LocalScale: {x: 1, y: 1, z: 1}")
         out.append("  m_ConstrainProportionsScale: 0")
         out.append("  m_Children:" if self.children else "  m_Children: []")
         out += [f"  - {{fileID: {child.rect_id}}}" for child in self.children]
         out.append(f"  m_Father: {{fileID: {parent_rect_id}}}")
-        out.append("  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}")
+        out.append(f"  m_LocalEulerAnglesHint: {{x: 0, y: 0, z: {self.rotation:g}}}")
         out.append(f"  m_AnchorMin: {{x: {self.anchor_min[0]:g}, y: {self.anchor_min[1]:g}}}")
         out.append(f"  m_AnchorMax: {{x: {self.anchor_max[0]:g}, y: {self.anchor_max[1]:g}}}")
         out.append(f"  m_AnchoredPosition: {{x: {self.position[0]:g}, y: {self.position[1]:g}}}")
@@ -218,8 +222,9 @@ def canvas(node, sorting_order=0):
     ])
 
 
-def image(node, colour, alpha=1.0, *, sprite=None, enabled=True, preserve_aspect=False, raycast=False):
-    """A rectangle in a colour. With `sprite` set it is that sprite, nine-sliced, tinted."""
+def image(node, colour, alpha=1.0, *, sprite=None, sliced=True, enabled=True, preserve_aspect=False, raycast=False):
+    """A rectangle in a colour. With `sprite` set it is that sprite, tinted: nine-sliced
+    for a corner or a border that must not stretch, plain for a picture."""
     node.component(222, ["m_CullTransparentMesh: 1"])
     return node.mono(IMAGE, [
         "m_Material: {fileID: 0}",
@@ -231,7 +236,7 @@ def image(node, colour, alpha=1.0, *, sprite=None, enabled=True, preserve_aspect
         "  m_PersistentCalls:",
         "    m_Calls: []",
         f"m_Sprite: {{fileID: 21300000, guid: {sprite}, type: 3}}" if sprite else "m_Sprite: {fileID: 0}",
-        f"m_Type: {1 if sprite else 0}",
+        f"m_Type: {1 if sprite and sliced else 0}",
         f"m_PreserveAspect: {int(preserve_aspect)}",
         "m_FillCenter: 1",
         "m_FillMethod: 4",
@@ -476,9 +481,14 @@ def swords_alpha(size):
 
 
 def sprite(folder, name, guid, width, height, alpha_at, border):
-    """Write `name`.png and the .meta that imports it as a nine-sliced sprite under
-    `guid`. `border` is the slice inset on every side."""
-    Path(folder, name + ".png").write_bytes(png(width, height, alpha_at))
+    """Write `name`.png, white with the alpha `alpha_at` gives, and the .meta that imports
+    it as a sprite under `guid`. `border` is the nine-slice inset on every side."""
+    return sprite_file(folder, name, guid, png(width, height, alpha_at), border)
+
+
+def sprite_file(folder, name, guid, png_bytes, border=0):
+    """Write a finished PNG and the .meta that imports it as a sprite under `guid`."""
+    Path(folder, name + ".png").write_bytes(png_bytes)
     Path(folder, name + ".png.meta").write_text(f"""fileFormatVersion: 2
 guid: {guid}
 TextureImporter:

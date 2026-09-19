@@ -13,7 +13,6 @@ public class BaseLayoutTests {
     [Theory]
     [InlineData(BaseShape.Square, 9, 0)]
     [InlineData(BaseShape.Hexagonal, 6, 6)]
-    [InlineData(BaseShape.Round, 6, 12)]
     public void EachShapeHasItsPieces(BaseShape shape, int squares, int triangles) {
         List<FloorPiece> pieces = BaseLayout.Floors(shape).ToList();
 
@@ -23,14 +22,11 @@ public class BaseLayoutTests {
 
     /// A three-by-three grid has sixteen corners. A hexagon of six triangles has seven
     /// (six round the edge and the one they all share in the middle), and six squares on
-    /// its edges add twelve more. Filling the gaps with triangles adds none: each one's
-    /// corners are the hexagon's vertex and two square corners, which is the whole point
-    /// of the round shape and the thing that would be wrong if the triangles were a hair
-    /// off the squares.
+    /// its edges add twelve more, which would be wrong if a square were a hair off the
+    /// triangle it sits on.
     [Theory]
     [InlineData(BaseShape.Square, 16)]
     [InlineData(BaseShape.Hexagonal, 19)]
-    [InlineData(BaseShape.Round, 19)]
     public void EveryCornerIsCountedOnce(BaseShape shape, int corners) {
         Assert.Equal(corners, BaseLayout.Vertices(shape).Count);
     }
@@ -40,7 +36,6 @@ public class BaseLayoutTests {
     [Theory]
     [InlineData(BaseShape.Square)]
     [InlineData(BaseShape.Hexagonal)]
-    [InlineData(BaseShape.Round)]
     public void EveryPieceSharesAnEdge(BaseShape shape) {
         List<FloorPiece> pieces = BaseLayout.Floors(shape).ToList();
 

@@ -7,14 +7,12 @@ using Logger = Rocket.Core.Logging.Logger;
 
 namespace PeekSeekSiege.Core.Hud;
 
-/// One player's card on the HUD: who they are, what they carry, whether they are still
+/// One player's face on the HUD: who they are, what they picked, whether they are still
 /// in the round. Everything a gamemode has to say about a player, and nothing it has
 /// to be Siege to say.
 internal class HudSeat {
     internal ulong Steam64;
-    internal string Name;
     internal string AvatarUrl;
-    internal ushort GunItemId;
     internal ushort PickItemId;
     internal bool Alive = true;
 }
@@ -30,7 +28,7 @@ internal class HudTeam {
 internal class HudState {
     internal HudTeam[] Teams = [new HudTeam(), new HudTeam()];
 
-    /// The small label over the clock: "Round 3", "Match point", "Overtime".
+    /// The small label under the clock: "Round 3", "Match point", "Overtime".
     internal string Label;
 
     /// True when the label is the kind that should be red: match point, final.
@@ -44,12 +42,16 @@ internal class HudState {
 }
 
 /// The bar along the top of the screen during a match: score and clock in the middle,
-/// a card per player to either side, the viewer's own team always on the left.
+/// a face per player to either side, the viewer's own team always on the left. Up for
+/// everybody, for the whole match; there is no way to turn it off, because it also
+/// stands in front of the game's arena text and compass, which cannot be turned off.
 ///
-/// This is the in-game twin of the stream overlay's notch and cards, and it is built
-/// against the same idea as the overlay's mount-versus-patch split: `Show` sends the
-/// whole thing once, and every later change touches only the field that changed. A
-/// full resend every second would reload every avatar every second.
+/// Every change redraws the whole bar for every viewer. That is thirty small messages
+/// a handful of times a round, and it is what makes the HUD unable to drift: the
+/// server never has to know what a client still has. The earlier version sent only
+/// the fields that changed and kept a record per viewer, and the record survived a
+/// reconnect, so a player who came back got patches to a HUD they no longer had.
+/// Pictures are not re-downloaded by a redraw; the client caches them by URL.
 ///
 /// Nothing here knows what a round is. Siege drives it today; the main match plugin
 /// can drive it tomorrow with the same three calls.
@@ -59,47 +61,19 @@ internal class MatchHud {
     private EffectAsset effect;
     private bool effectLookedUp;
 
-    /// Who is currently looking at the HUD, and what they were last shown, so a change
-    /// can be sent as the difference rather than as everything.
-    private readonly Dictionary<ulong, HudState> shown = [];
-
-    /// Who has turned the HUD off with /overlay. It covers the game's compass and arena
-    /// text, so this is also how a player gets those back.
-    private readonly HashSet<ulong> hidden = [];
+    /// Who has been drawn to since the match started, so the once-a-second clock is
+    /// not sent to a client that has nothing to put it on.
+    private readonly HashSet<ulong> drawn = [];
 
     internal bool IsAvailable => Effect() != null;
 
-    /// Flip one player's HUD. Returns whether it is now shown.
-    internal bool Toggle(ulong steam64) {
-        if (hidden.Remove(steam64)) return true;
-
-        hidden.Add(steam64);
-        shown.Remove(steam64);
-
-        SteamPlayer viewer = PlayerTool.getSteamPlayer(new CSteamID(steam64));
-        EffectAsset asset = Effect();
-        if (viewer != null && asset != null) EffectManager.askEffectClearByID(asset.id, viewer.transportConnection);
-        return false;
-    }
-
-    /// Put the HUD up for everybody, or bring it up to date if it already is. Cheap to
-    /// call after any change: only fields that differ from what a viewer last saw are
-    /// sent, and a viewer who has nothing new gets nothing.
+    /// Put the HUD up for everybody, or bring it up to date if it already is.
     internal void Show(HudState state) {
         if (Effect() == null) return;
 
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
-            ulong steam64 = viewer.playerID.steamID.m_SteamID;
-            if (hidden.Contains(steam64)) continue;
-            HudState mine = FromTheViewpointOf(state, steam64);
-
-            if (shown.TryGetValue(steam64, out HudState last) && SameRoster(last, mine)) {
-                Patch(viewer, last, mine);
-            } else {
-                Draw(viewer, mine);
-            }
-
-            shown[steam64] = mine;
+            Draw(viewer, FromTheViewpointOf(state, viewer.playerID.steamID.m_SteamID));
+            drawn.Add(viewer.playerID.steamID.m_SteamID);
         }
     }
 
@@ -108,21 +82,15 @@ internal class MatchHud {
     internal void Countdown(int secondsLeft) {
         if (Effect() == null) return;
 
-        foreach (KeyValuePair<ulong, HudState> entry in shown.ToList()) {
-            HudState last = entry.Value;
-            if (last.SecondsLeft == secondsLeft) continue;
-            last.SecondsLeft = secondsLeft;
-
-            SteamPlayer viewer = PlayerTool.getSteamPlayer(new CSteamID(entry.Key));
-            if (viewer == null) continue;
-
+        foreach (SteamPlayer viewer in Provider.clients.ToList()) {
+            if (!drawn.Contains(viewer.playerID.steamID.m_SteamID)) continue;
             Send(viewer, "Timer", Clock(secondsLeft));
         }
     }
 
     internal void Hide() {
         EffectAsset asset = Effect();
-        shown.Clear();
+        drawn.Clear();
         if (asset == null) return;
 
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
@@ -130,11 +98,10 @@ internal class MatchHud {
         }
     }
 
-    /// A viewer who has just arrived and is not in `shown` yet gets everything on the
-    /// next Show; one who has left should not keep a stale entry that Countdown would
-    /// try to address.
+    /// A player who has left takes their HUD with them. Called after the leaving
+    /// redraw, because Unturned raises the disconnect while they are still a client.
     internal void Forget(ulong steam64) {
-        shown.Remove(steam64);
+        drawn.Remove(steam64);
     }
 
     // ---- drawing --------------------------------------------------------------
@@ -146,10 +113,11 @@ internal class MatchHud {
         for (int team = 0; team < 2; team++) {
             Send(viewer, $"Team{team}_Name", state.Teams[team].Name);
             Send(viewer, $"Score{team}", state.Teams[team].Score.ToString());
+            Visible(viewer, $"Shield{team}", state.DefendingTeam == team);
+            Visible(viewer, $"Swords{team}", state.DefendingTeam >= 0 && state.DefendingTeam != team);
         }
-        Send(viewer, "Mid", Label(state));
+        Send(viewer, "Mid", state.Jeopardy ? $"<color=#ff4f4f>{state.Label}</color>" : state.Label);
         Send(viewer, "Timer", Clock(state.SecondsLeft));
-        Roles(viewer, state.DefendingTeam);
 
         for (int team = 0; team < 2; team++) {
             string side = team == 0 ? "L" : "R";
@@ -163,58 +131,15 @@ internal class MatchHud {
         }
     }
 
+    /// A face is two pictures of the same download, one at full strength and one at
+    /// half, because nothing a server sends can set an alpha but it can choose which
+    /// of two images is on. Out of the round is the half one.
     private static void DrawSeat(SteamPlayer viewer, string slot, HudSeat seat) {
         Picture(viewer, $"{slot}_Avatar", seat.AvatarUrl);
-        Picture(viewer, $"{slot}_Gun", ItemIcon(seat.GunItemId));
+        Picture(viewer, $"{slot}_Faded", seat.AvatarUrl);
+        Visible(viewer, $"{slot}_Avatar", seat.Alive);
+        Visible(viewer, $"{slot}_Faded", !seat.Alive);
         Picture(viewer, $"{slot}_Pick", ItemIcon(seat.PickItemId));
-        Visible(viewer, $"{slot}_Out", !seat.Alive);
-    }
-
-    /// Send only what differs. The roster is the same shape, so slots line up.
-    private static void Patch(SteamPlayer viewer, HudState last, HudState next) {
-        for (int team = 0; team < 2; team++) {
-            if (last.Teams[team].Name != next.Teams[team].Name) Send(viewer, $"Team{team}_Name", next.Teams[team].Name);
-            if (last.Teams[team].Score != next.Teams[team].Score) Send(viewer, $"Score{team}", next.Teams[team].Score.ToString());
-
-            string side = team == 0 ? "L" : "R";
-            for (int i = 0; i < next.Teams[team].Seats.Count; i++) {
-                HudSeat was = last.Teams[team].Seats[i];
-                HudSeat now = next.Teams[team].Seats[i];
-                string slot = $"{side}{i}";
-
-                if (was.AvatarUrl != now.AvatarUrl) Picture(viewer, $"{slot}_Avatar", now.AvatarUrl);
-                if (was.GunItemId != now.GunItemId) Picture(viewer, $"{slot}_Gun", ItemIcon(now.GunItemId));
-                if (was.PickItemId != now.PickItemId) Picture(viewer, $"{slot}_Pick", ItemIcon(now.PickItemId));
-                if (was.Alive != now.Alive) Visible(viewer, $"{slot}_Out", !now.Alive);
-            }
-        }
-
-        if (Label(last) != Label(next)) Send(viewer, "Mid", Label(next));
-        if (last.SecondsLeft != next.SecondsLeft) Send(viewer, "Timer", Clock(next.SecondsLeft));
-        if (last.DefendingTeam != next.DefendingTeam) Roles(viewer, next.DefendingTeam);
-    }
-
-    /// The shield beside whoever holds, the swords beside whoever attacks, neither
-    /// between rounds.
-    private static void Roles(SteamPlayer viewer, int defending) {
-        for (int team = 0; team < 2; team++) {
-            Visible(viewer, $"Shield{team}", defending == team);
-            Visible(viewer, $"Swords{team}", defending >= 0 && defending != team);
-        }
-    }
-
-    /// Same teams in the same order with the same people: the difference can be patched
-    /// in place. Anything else is redrawn, which is what a player joining costs.
-    private static bool SameRoster(HudState a, HudState b) {
-        for (int team = 0; team < 2; team++) {
-            List<HudSeat> x = a.Teams[team].Seats;
-            List<HudSeat> y = b.Teams[team].Seats;
-            if (x.Count != y.Count) return false;
-            for (int i = 0; i < x.Count; i++) {
-                if (x[i].Steam64 != y[i].Steam64) return false;
-            }
-        }
-        return true;
     }
 
     /// The viewer's own team on the left, the same way every shooter does it. Somebody
@@ -233,10 +158,6 @@ internal class MatchHud {
 
     // ---- the wire ---------------------------------------------------------------
 
-    private static string Label(HudState state) {
-        return state.Jeopardy ? $"<color=#ff4f4f>{state.Label}</color>" : state.Label;
-    }
-
     private static string Clock(int seconds) {
         return $"{seconds / 60}:{seconds % 60:00}";
     }
@@ -254,7 +175,7 @@ internal class MatchHud {
     }
 
     /// An empty URL is sent as an empty URL: the game then leaves the image disabled,
-    /// which is the right look for "no gun" and "no pick yet".
+    /// which is the right look for "no pick yet".
     private static void Picture(SteamPlayer viewer, string child, string url) {
         ITransportConnection to = viewer.transportConnection;
         EffectManager.sendUIEffectImageURL(PeekSeekSiege.Config.MatchHudKey, to, true, child, url ?? "");

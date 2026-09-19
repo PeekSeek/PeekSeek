@@ -169,10 +169,12 @@ internal class Siege : IGamemode {
         RefreshHud();
     }
 
+    /// Unturned raises this while the leaver is still a client, so the redraw goes to
+    /// them too; forgetting them afterwards is what stops the clock following them out.
     public void OnPlayerLeft(CSteamID steamID) {
         offBaseSince.Remove(steamID.m_SteamID);
-        hud.Forget(steamID.m_SteamID);
         RefreshHud();
+        hud.Forget(steamID.m_SteamID);
     }
 
     public void OnPlayerDied(Player player, CSteamID killer) {
@@ -207,18 +209,10 @@ internal class Siege : IGamemode {
         RefreshHud();
     }
 
-    /// Show or hide the HUD for one player. It covers the game's own compass and arena
-    /// text on purpose, so turning it off is also how a player gets those back.
-    internal bool ToggleHud(ulong steam64) {
-        bool shown = hud.Toggle(steam64);
-        RefreshHud();
-        return shown;
-    }
-
     // ---- the footprint ----------------------------------------------------------
 
     /// Before anybody builds, each team says what it is building on: a board with the
-    /// three footprints, up for as long as a pick. The first answer on a team is the
+    /// two footprints, up for as long as a pick. The first answer on a team is the
     /// team's; a team that never answers gets the square.
     private void StartShaping() {
         phase = SiegePhase.Shaping;
@@ -232,7 +226,7 @@ internal class Siege : IGamemode {
         board.Reset();
         List<SiegeOption> footprints = ShapeOptions();
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
-            board.Open(viewer, footprints, PeekSeekSiege.Instance.Translate("board_shape"));
+            board.Open(viewer, footprints, PeekSeekSiege.Instance.Translate("board_shape"), BoardFace.Shape);
         }
 
         RefreshHud();
@@ -254,23 +248,17 @@ internal class Siege : IGamemode {
         StartBuilding();
     }
 
-    /// The three footprints as tiles: the first answer on a team decides for the team.
+    /// The two footprints as tiles, in BaseShape order, which is the order the board's
+    /// pictures are baked in. The first answer on a team decides for the team.
     private static List<SiegeOption> ShapeOptions() {
         return [
             new SiegeOption {
                 Name = PeekSeekSiege.Instance.Translate("shape_square"),
-                Blurb = PeekSeekSiege.Instance.Translate("shape_square_blurb"),
-                Icon = PeekSeekSiege.Config.AnchorFloorItemId
+                Blurb = PeekSeekSiege.Instance.Translate("shape_square_blurb")
             },
             new SiegeOption {
                 Name = PeekSeekSiege.Instance.Translate("shape_hexagonal"),
-                Blurb = PeekSeekSiege.Instance.Translate("shape_hexagonal_blurb"),
-                Icon = PeekSeekSiege.Config.AnchorTriangleItemId
-            },
-            new SiegeOption {
-                Name = PeekSeekSiege.Instance.Translate("shape_round"),
-                Blurb = PeekSeekSiege.Instance.Translate("shape_round_blurb"),
-                Icon = PeekSeekSiege.Config.TriangleSupplies.Count > 0 ? PeekSeekSiege.Config.TriangleSupplies[0].ItemId : (ushort)0
+                Blurb = PeekSeekSiege.Instance.Translate("shape_hexagonal_blurb")
             }
         ];
     }
@@ -772,17 +760,15 @@ internal class Siege : IGamemode {
 
     private HudSeat Seat(ulong steam64) {
         Player player = PlayerTool.getPlayer(new CSteamID(steam64));
-        RemoteAPI.Profile profile = RemoteAPI.ProfileFor(steam64);
 
-        // The pick shows once it is made, and stays on the card for the round it was
-        // made for: that is the "what did they bring" a teammate glances up for.
-        bool picked = phase == SiegePhase.Playing || board.HasAnswered(steam64);
+        // The pick hangs off the face once it is made and stays there for the round it
+        // was made for: that is the "what did they bring" a teammate glances up for.
+        // Nothing hangs there before the first round; the footprint is not a pick.
+        bool picked = phase == SiegePhase.Playing || (phase == SiegePhase.Picking && board.HasAnswered(steam64));
 
         return new HudSeat {
             Steam64 = steam64,
-            Name = profile?.Name ?? player?.channel.owner.playerID.characterName ?? steam64.ToString(),
-            AvatarUrl = profile?.Avatar ?? PeekSeekSiege.Config.DefaultAvatarURL,
-            GunItemId = player == null ? (ushort)0 : SiegeWorld.PrimaryWeapon(player),
+            AvatarUrl = RemoteAPI.AvatarFor(steam64) ?? PeekSeekSiege.Config.DefaultAvatarURL,
             PickItemId = picked ? board.Chosen(steam64)?.IconItemId ?? 0 : (ushort)0,
             Alive = player != null && !player.life.isDead && !deadThisRound.Contains(steam64)
         };

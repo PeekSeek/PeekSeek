@@ -404,21 +404,6 @@ internal static class SiegeWorld {
         player.life.serverSetLegsBroken(false);
     }
 
-    /// The gun in the player's primary slot, or the secondary if that is all they have,
-    /// or 0. The HUD shows it, so it reads the inventory rather than the kit: what they
-    /// are actually holding, not what they were handed.
-    internal static ushort PrimaryWeapon(Player player) {
-        for (byte page = 0; page < PlayerInventory.SLOTS; page++) {
-            Items slot = player.inventory.items[page];
-            if (slot == null || slot.getItemCount() == 0) continue;
-
-            ushort id = slot.getItem(0)?.item?.id ?? 0;
-            if (id != 0) return id;
-        }
-
-        return 0;
-    }
-
     /// Everything a player carries into a round: their saved kit, the gamemode's
     /// default items, and the one option they picked off the board.
     internal static void Kit(Player player, SiegeOption option) {

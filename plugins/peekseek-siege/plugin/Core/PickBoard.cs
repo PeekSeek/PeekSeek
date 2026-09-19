@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using PeekSeekSiege.Core.Models;
 using SDG.Unturned;
 using Steamworks;
@@ -7,14 +8,25 @@ using Logger = Rocket.Core.Logging.Logger;
 
 namespace PeekSeekSiege.Core;
 
-/// The five-option board a player answers between rounds.
+/// Which of the prefab's two panels a board is drawn on. `Pick` is the five-tile board
+/// a round's options go on, each tile's picture fetched from the site; `Shape` is the
+/// two-tile board the footprint is chosen on, with the whole starting base drawn on
+/// each tile and baked into the bundle. The name is the prefix of every child the
+/// plugin addresses on that panel (`Pick_Timer`, `Shape0_Taken`) and of its buttons
+/// (`SiegePick2`, `SiegeShape0`), so one board class draws both.
+internal enum BoardFace {
+    Pick,
+    Shape
+}
+
+/// The board a player answers between rounds, and the one they answer before building.
 ///
 /// There are two ways to draw it and only one set of rules behind them. Unturned cannot
 /// draw a custom UI from plugin code: EffectManager.SendUIEffect takes an EffectAsset,
 /// and an EffectAsset only exists inside a workshop bundle the client has already
 /// downloaded. So the board is written against whichever is available. Give it an effect
-/// GUID and it draws a real Unity layout with five clickable tiles; leave the GUID empty
-/// and it prints the same five options to chat and takes /pick instead.
+/// GUID and it draws a real Unity layout with clickable tiles; leave the GUID empty and
+/// it prints the same options to chat and takes /pick instead.
 ///
 /// The chat form is not a placeholder that gets deleted later. A player whose client is
 /// still downloading the bundle, or who has UI effects failing for any other reason, has
@@ -28,10 +40,16 @@ internal class PickBoard {
     private sealed class Seat {
         internal List<SiegeOption> Options;
         internal string Headline;
+        internal BoardFace Face;
 
         /// The option taken, or -1 while the board is up and unanswered.
         internal int Pick = -1;
     }
+
+    /// How many tiles each panel has. Tiles past the options offered are hidden, so a
+    /// three-option list on the five-tile panel does not show two tiles of whatever the
+    /// prefab was saved with.
+    private static int Tiles(BoardFace face) => face == BoardFace.Shape ? 2 : 5;
 
     private readonly Dictionary<ulong, Seat> seats = [];
 
@@ -69,8 +87,8 @@ internal class PickBoard {
 
     /// Put the board up for one player. `headline` is the one line above the options
     /// that says why they are choosing: which round it is and which side they are on.
-    internal void Open(SteamPlayer viewer, List<SiegeOption> choices, string headline) {
-        Seat seat = new() { Options = choices, Headline = headline };
+    internal void Open(SteamPlayer viewer, List<SiegeOption> choices, string headline, BoardFace face = BoardFace.Pick) {
+        Seat seat = new() { Options = choices, Headline = headline, Face = face };
         seats[viewer.playerID.steamID.m_SteamID] = seat;
 
         Draw(viewer, seat);
@@ -88,11 +106,15 @@ internal class PickBoard {
         return seat.Options[seat.Pick];
     }
 
-    /// Answer from a clicked Unity button. Buttons are named `SiegePick0` upward so a
-    /// stray click on some other plugin's UI cannot land here.
+    /// Answer from a clicked Unity button. Buttons are named `SiegePick0` and
+    /// `SiegeShape0` upward so a stray click on some other plugin's UI cannot land
+    /// here, and a click on the panel this player was not shown is not an answer.
     internal SiegeOption AnswerButton(SteamPlayer player, string buttonName) {
-        if (buttonName == null || !buttonName.StartsWith(ButtonPrefix)) return null;
-        if (!int.TryParse(buttonName.Substring(ButtonPrefix.Length), out int index)) return null;
+        if (!seats.TryGetValue(player.playerID.steamID.m_SteamID, out Seat seat)) return null;
+
+        string prefix = ButtonPrefix + seat.Face;
+        if (buttonName == null || !buttonName.StartsWith(prefix)) return null;
+        if (!int.TryParse(buttonName.Substring(prefix.Length), out int index)) return null;
 
         return Answer(player, index + 1);
     }
@@ -123,11 +145,11 @@ internal class PickBoard {
             // so the one place the overlay's red belongs.
             string clock = secondsLeft <= 5 ? $"<color=#ff4f4f>{secondsLeft}</color>" : secondsLeft.ToString();
             EffectManager.sendUIEffectText(
-                PeekSeekSiege.Config.PickUIKey, viewer.transportConnection, true, "Timer", clock);
+                PeekSeekSiege.Config.PickUIKey, viewer.transportConnection, true, $"{seats[steam64].Face}_Timer", clock);
         }
     }
 
-    private const string ButtonPrefix = "SiegePick";
+    private const string ButtonPrefix = "Siege";
 
     private void Draw(SteamPlayer viewer, Seat seat) {
         EffectAsset asset = Effect();
@@ -137,15 +159,24 @@ internal class PickBoard {
         }
 
         short key = PeekSeekSiege.Config.PickUIKey;
+        string face = seat.Face.ToString();
         EffectManager.SendUIEffect(asset, key, viewer.transportConnection, true);
-        EffectManager.sendUIEffectText(key, viewer.transportConnection, true, "Headline", seat.Headline);
+        EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, face, true);
+        EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{face}_Headline", seat.Headline);
 
-        for (int i = 0; i < seat.Options.Count; i++) {
-            SiegeOption option = seat.Options[i];
-            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Option{i}_Name", option.Name);
-            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Option{i}_Blurb", option.Blurb);
-            EffectManager.sendUIEffectImageURL(
-                key, viewer.transportConnection, true, $"Option{i}_Icon", IconUrl(option));
+        for (int i = 0; i < Tiles(seat.Face); i++) {
+            SiegeOption option = seat.Options.ElementAtOrDefault(i);
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{ButtonPrefix}{face}{i}", option != null);
+            if (option == null) continue;
+
+            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{face}{i}_Name", option.Name);
+            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{face}{i}_Blurb", option.Blurb);
+
+            // The footprint tiles carry their own picture; only the pick tiles fetch one.
+            if (seat.Face == BoardFace.Pick) {
+                EffectManager.sendUIEffectImageURL(
+                    key, viewer.transportConnection, true, $"{face}{i}_Icon", IconUrl(option));
+            }
         }
 
         // A tile cannot be clicked without a cursor, and Unturned only shows one while a

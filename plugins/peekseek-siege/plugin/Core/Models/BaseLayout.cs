@@ -8,11 +8,7 @@ public enum BaseShape {
     Square,
 
     /// Six triangles meeting in the middle, and a square on each of the six edges.
-    Hexagonal,
-
-    /// Hexagonal, plus a triangle in each of the six gaps between the squares, which
-    /// closes the outline into a twelve-sided shape.
-    Round
+    Hexagonal
 }
 
 /// One floor piece of a starting base, relative to the site anchor: where its pivot
@@ -69,16 +65,6 @@ public static class BaseLayout {
             // edge on the hexagon's edge.
             float squareOut = HexApothem + HalfEdge;
             yield return new FloorPiece { X = -squareOut * sin, Z = -squareOut * cos, Yaw = yaw };
-
-            if (shape != BaseShape.Round) continue;
-
-            // The wedge between this square and the next is sixty degrees at the
-            // hexagon's vertex, which is exactly a triangle with its apex on that vertex
-            // pointing outward. It faces inward, like everything else.
-            float vertexYaw = yaw + 30f;
-            (float vsin, float vcos) = Direction(vertexYaw);
-            float out_ = Edge + TriangleApexPivotOffset;
-            yield return new FloorPiece { X = out_ * vsin, Z = out_ * vcos, Yaw = vertexYaw + 180f, Triangle = true };
         }
     }
 

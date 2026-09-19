@@ -44,8 +44,8 @@ exceptions:
   into a better base while a round is running.
 
 **One base per site.** Before the build phase each team picks a footprint: square (nine
-metal floors, three by three), hexagonal (six triangles round the flag with a square on
-every side), or round (hexagonal with the six gaps filled, twelve sides). The gamemode
+metal floors, three by three) or hexagonal (six triangles round the flag with a square
+on every side), from a board that draws the whole starting base on each tile. The gamemode
 drops it with the claim flag in the middle and a maple pillar on every corner of every
 floor, on Unturned's own housing grid to the centimetre, so everything a team attaches
 links. The floors and the flag are owned by nobody and impossible to salvage, damage or
@@ -79,7 +79,6 @@ then runs the rounds normally with you on whichever side you ask for.
 /siege skip           end the current phase (a round goes to the defenders, as the clock would)
 /siege skip atk       end the round, give it to the attackers
 /siege side           swap which side you are playing, solo only
-/overlay              the HUD off or on for you; off also brings back the game's compass
 ```
 
 `/siege skip` is what makes a bug in round four findable in under a minute instead of
@@ -93,11 +92,12 @@ already downloaded — so a UI cannot ship in a `.dll`, only in a workshop mod.
 
 The board is written against both:
 
-- A server that has the `ui/` mod loaded draws the real Unity layout: five clickable
-  tiles with the item's picture on each, the timer ticking down in place, and a red
-  border on the one you took.
-- One that does not logs a line at the first pick phase and draws the same five options
-  to chat, answered with `/pick`.
+- A server that has the `ui/` mod loaded draws the real Unity layout: clickable tiles
+  with the item's picture on each, or the whole starting base on the footprint board,
+  and the timer ticking down in place. It also draws the HUD along the top: score, clock
+  and role in the middle, a face per player to either side, for everybody, all match.
+- One that does not logs a line at the first pick phase and draws the same options to
+  chat, answered with `/pick`.
 
 `ui/` is the Unity project that mod is built from, and `ui/README.md` says how it works
 and how to build it. The chat form is not a placeholder waiting to be deleted: a player
@@ -113,8 +113,8 @@ plugin/Core/SiegeHost.cs        what starts a match and feeds it Unturned's even
 plugin/Core/SiegeWorld.cs       everything Siege does to the world, and the build/salvage gate
 plugin/Core/BaseSnapshot.cs     photographing a base and re-laying it
 plugin/Core/RoundOrder.cs       who defends round N, and when a match can end
-plugin/Core/PickBoard.cs        the five-option board, both ways of drawing it
-plugin/Core/Hud/MatchHud.cs     the score, clock and player cards along the top; any gamemode can drive it
+plugin/Core/PickBoard.cs        the option and footprint boards, both ways of drawing them
+plugin/Core/Hud/MatchHud.cs     the score, clock and faces along the top; any gamemode can drive it
 plugin/Core/IGamemode.cs        the seam the main PeekSeek plugin will drive this through
 ui/                             the Unity project the board and the HUD are built from
 ```
