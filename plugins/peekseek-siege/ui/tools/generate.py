@@ -1,11 +1,15 @@
-"""Write the two screens PeekSeek draws in game, as Unity prefabs and sprites.
+"""Write the screens PeekSeek draws in game, as Unity prefabs and sprites.
 
-    python generate.py
+    python generate.py [<Unturned install>]
 
-Overwrites Assets/PeekSeek/Bundles/Effects/PickBoard/Effect.prefab,
-Assets/PeekSeek/Bundles/Effects/MatchHud/Effect.prefab, and Assets/PeekSeek/Sprites/*.
-If a screen is ever changed inside Unity instead, that edit wins and this file is stale;
-bring the change back here or delete this script, but do not leave the two disagreeing.
+Overwrites every Effect.prefab under Assets/PeekSeek/Bundles/Effects and the kill
+feed's, and Assets/PeekSeek/Sprites/*. If a screen is ever changed inside Unity
+instead, that edit wins and this file is stale; bring the change back here or delete
+this script, but do not leave the two disagreeing.
+
+The attack screen's maps are cropped from Alpha Valley's own Map.png in the Unturned
+install, Steam's usual place unless one is given. Without the game the crops already
+in Sprites/ are kept.
 
 Two screens, two design languages, on purpose. The boards are something you click, so
 they are built like a page of the site: the same panel, the same selectable tile, the
@@ -17,14 +21,17 @@ The font is Inter, because the site asks for the system UI font and Inter is the
 one that reads the same; the game leaves a font that is not TextMeshPro's own alone.
 """
 
+import sys
 from pathlib import Path
 
 import footprints
-from unityyaml import (CENTER, LEFT, RIGHT, TOP, Node, bottom_left, button, canvas, centered, image, mask,
-                       prefab, rounded_alpha, shield_alpha, silhouette, sprite, sprite_file, stretch, swords_alpha,
-                       text, top_center, top_left, top_right, top_stretch)
+import sitemap
+from unityyaml import (CENTER, LEFT, RIGHT, TOP, Node, bottom_left, button, canvas, castle_alpha, centered,
+                       disc_alpha, image, mask, prefab, rounded_alpha, silhouette, sprite, sprite_file, stretch,
+                       swords_alpha, text, top_center, top_left, top_right, top_stretch)
 
 ASSETS = Path(__file__).resolve().parent.parent / "Assets"
+UNTURNED = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r"C:\Program Files (x86)\Steam\steamapps\common\Unturned")
 ROOT = ASSETS / "PeekSeek"
 SPRITES = ROOT / "Sprites"
 EFFECTS = ROOT / "Bundles/Effects"
@@ -46,7 +53,8 @@ GAP = 10                # the gap inside chips and between tiles
 FLAT = "#0f0f0f"        # .flat
 INK = "#f2f2f2"
 MUTED = "#8a8a8a"
-RED = "#ff4f4f"         # jeopardy only
+RED = "#ff4f4f"         # the side attacking, and jeopardy
+BLUE = "#4f9fff"        # the side holding
 
 
 # Every sprite a screen can point at, by the name the code uses. Filled by
@@ -56,15 +64,33 @@ SPR = {}
 
 def write_sprites():
     SPRITES.mkdir(parents=True, exist_ok=True)
+
+    # The maps first, before the folder is cleared: they come from the game's files,
+    # and a machine without the game keeps the ones it has.
+    maps = {}
+    for site, (name, (anchor_x, anchor_z), _) in enumerate(SITES):
+        guid = MAP_GUIDS[site]
+        picture = sitemap.picture(UNTURNED / "Maps" / "Alpha Valley", anchor_x, anchor_z, MAP_METRES, 2 * MAP_PX)
+        kept = (SPRITES / f"Map{name}.png").read_bytes() if picture is None and (SPRITES / f"Map{name}.png").exists() else None
+        if picture is None and kept is None:
+            raise SystemExit(f"No Alpha Valley Map.png under {UNTURNED} and no Sprites/Map{name}.png to keep.")
+        if picture is None:
+            print(f"no Unturned install at {UNTURNED}; keeping Sprites/Map{name}.png")
+        maps[f"map{site}"] = (name, guid, picture or kept)
+
     for stale in SPRITES.glob("*"):
         stale.unlink()
 
+    for key, (name, guid, png_bytes) in maps.items():
+        SPR[key] = sprite_file(SPRITES, f"Map{name}", guid, png_bytes)
+
     SPR.update({
+        "disc": sprite(SPRITES, "Disc", "a4c3e5f6b7d8e9f0a1b2c3d4e5f6a7b8", 64, 64, disc_alpha(64), 0),
+        # The keep on the map, drawn at twice the size it is shown at like the footprints.
+        "keep": sprite(SPRITES, "Keep", "b5d4f6a7c8e9f0a1b2c3d4e5f6a7b8c9", 64, 64, castle_alpha(64), 0),
         "round8": sprite(SPRITES, "Round8", "b1f0c2d3e4a5b6c7d8e9f0a1b2c3d4e5", 32, 32, rounded_alpha(32, 32, 8), 8),
         "round6": sprite(SPRITES, "Round6", "c2a1d3e4f5b6c7d8e9f0a1b2c3d4e5f6", 24, 24, rounded_alpha(24, 24, 6), 6),
-        "notch": sprite(SPRITES, "Notch", "d3b2e4f5a6c7d8e9f0a1b2c3d4e5f6a7", 32, 32,
-                        rounded_alpha(32, 32, 8, corners=("bl", "br")), 8),
-        "shield": sprite(SPRITES, "Shield", "c8a7d9e0f1b2c3d4e5f6a7b8c9d0e1f2", 24, 24, shield_alpha(24), 0),
+        "castle": sprite(SPRITES, "Castle", "c8a7d9e0f1b2c3d4e5f6a7b8c9d0e1f2", 24, 24, castle_alpha(24), 0),
         "swords": sprite(SPRITES, "Swords", "d9b8e0f1a2c3d4e5f6a7b8c9d0e1f2a3", 24, 24, swords_alpha(24), 0),
         # Drawn at twice the size they are shown at, so they stay sharp at UI scale 2.
         "square": sprite_file(SPRITES, "FootprintSquare", "e0c9f1a2b3d4e5f6a7b8c9d0e1f2a3b4",
@@ -115,22 +141,29 @@ def panel(face, tiles, tile_w, tile_h, headline, hint, fill_tile):
          hint, size=13, colour=SECONDARY)
 
     for i in range(tiles):
-        tile = board.add(top_left(f"Siege{face}{i}", PANEL_PAD + i * (tile_w + GAP), tiles_y, tile_w, tile_h))
-        button(tile, image(tile, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
-
-        # First child, so it paints under everything else on the tile: the site's
-        # selected state is a fill and a label, not a border.
-        taken = tile.add(stretch(f"{face}{i}_Taken", active=False))
-        image(taken, SELECTED, sprite=SPR["round8"])
-        text(taken.add(top_right("Label", GAP, 8, 80, 16)), "Selected",
-             size=12, colour=SELECTED_LABEL, halign=RIGHT, bold=True)
-
-        text(tile.add(top_left(f"{face}{i}_Number", GAP, 8, 40, 16)), str(i + 1),
-             size=13, colour=SECONDARY, bold=True)
-
-        fill_tile(tile, f"{face}{i}", i)
+        tile(board, face, i, PANEL_PAD + i * (tile_w + GAP), tiles_y, tile_w, tile_h, fill_tile)
 
     return board
+
+
+def tile(parent, face, i, x, y, w, h, fill_tile):
+    """One selectable tile: the site's `.qgridoption`, and the button the plugin hears
+    as `Siege{face}{i}`."""
+    node = parent.add(top_left(f"Siege{face}{i}", x, y, w, h))
+    button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
+
+    # First child, so it paints under everything else on the tile: the site's
+    # selected state is a fill and a label, not a border.
+    taken = node.add(stretch(f"{face}{i}_Taken", active=False))
+    image(taken, SELECTED, sprite=SPR["round8"])
+    text(taken.add(top_right("Label", GAP, 8, 80, 16)), "Selected",
+         size=12, colour=SELECTED_LABEL, halign=RIGHT, bold=True)
+
+    text(node.add(top_left(f"{face}{i}_Number", GAP, 8, 40, 16)), str(i + 1),
+         size=13, colour=SECONDARY, bold=True)
+
+    fill_tile(node, f"{face}{i}", i)
+    return node
 
 
 def pick_tile(tile, name, _):
@@ -171,29 +204,139 @@ def boards():
     root.add(panel("Swap", SWAPS, 200, 220, "Metal Wall. Make it something else.",
                    "Click a tile. The piece you are looking at changes where it stands, and what it was goes back on the pile.",
                    pick_tile))
+
+    root.add(attack_screen())
     return root
+
+
+# ---- the attack screen ---------------------------------------------------------------
+#
+# The attacker's pick, whole screen: the base they are taking, as the map's own GPS
+# picture cropped round the anchor with a keep on it and a dot on every spawn, and
+# the five raid tiles under it. A dot is a button; the plugin lights the viewer's own
+# and hangs the faces of teammates off whichever dot each of them chose, so the
+# team's spread is on the map without a word. There is no headline: the map says
+# which base and the HUD says which round. The one line of text is the hint.
+#
+# The map sits in the middle third of the screen and nothing of ours is above or left
+# of it, because the game draws chat top-left and a team wants to read each other
+# while they pick. The HUD is on its own canvas over all of this.
+#
+# A dot's place is a position, and a position cannot be sent to a client, only shown or
+# hidden, so the map and its dots are baked per site: one picture and three dots for
+# each, and the plugin shows the site being attacked. The numbers are the plugin's
+# config (Sites in PeekSeekSiegeConfiguration.cs), copied here; change one and
+# change the other.
+
+MAP_PX = 640            # the map on screen
+MAP_METRES = 260        # of ground across it: the furthest spawn is 108 m out
+MAP_Y = 136             # below the HUD's line of faces
+DOT = 40
+FACE = 24               # a teammate on a dot, the site's .userProfile.small chip
+FACES = 5
+KEEP = 56               # the disc under the keep
+CHIP_H = 44             # the timer chip
+BOARD_W = PICKS * 200 + (PICKS - 1) * GAP
+
+SITES = (
+    # name, anchor (x, z), the spawns in dot order; all from PeekSeekSiegeConfiguration.cs
+    ("North", (74.97, 311.35), ((152.60, 383.00), (8.21, 286.77), (91.95, 232.95))),
+    ("South", (234.63, -240.41), ((155.81, -173.20), (310.10, -184.88), (305.46, -321.41))),
+)
+MAP_GUIDS = ("e2f1a3b4c5d6e7f8a9b0c1d2e3f4a5b6", "f3a2b4c5d6e7f8a9b0c1d2e3f4a5b6c7")
+
+
+def attack_screen():
+    screen = stretch("Attack", active=False)
+    image(screen, PAGE, 0.94)
+
+    # The map's frame clips the picture to the site's corners, the way a face is.
+    frame = screen.add(top_center("Attack_Map", 0, MAP_Y, MAP_PX, MAP_PX))
+    image(frame, "#ffffff", sprite=SPR["round8"])
+    mask(frame)
+
+    for site, (name, anchor, spawns) in enumerate(SITES):
+        ground = frame.add(stretch(f"Attack_Map{site}", active=False))
+        image(ground, "#ffffff", sprite=SPR[f"map{site}"], sliced=False)
+
+        for i, spawn in enumerate(spawns):
+            x, y = on_map(anchor, spawn)
+            dot(ground, site, i, x, y)
+
+    keep = frame.add(centered("Keep", 0, 0, KEEP, KEEP))
+    image(keep, PAGE, 0.9, sprite=SPR["disc"], sliced=False)
+    image(keep.add(centered("KeepFigure", 0, 0, 32, 32)), TEXT, sprite=SPR["keep"], sliced=False)
+
+    text(frame.add(top_left("North", 12, 8, 20, 20)), "N", size=12, colour=TEXT, bold=True)
+
+    chip = frame.add(top_right("Clock", 10, 10, 80, CHIP_H))
+    image(chip, PAGE, 0.9, sprite=SPR["round8"])
+    text(chip.add(stretch("Attack_Timer")), "20", size=28, colour=TEXT, halign=CENTER, bold=True)
+
+    board = screen.add(top_center("Attack_Board", 0, MAP_Y + MAP_PX + 20, BOARD_W, 220))
+    for i in range(PICKS):
+        tile(board, "Attack", i, i * (200 + GAP), 0, 200, 220, pick_tile)
+
+    text(screen.add(top_center("Attack_Hint", 0, MAP_Y + MAP_PX + 20 + 220 + 12, BOARD_W, HINT_H)),
+         "Click where you come in, and your powerup. Or /pick a spawn and a powerup by number.",
+         size=13, colour=SECONDARY, halign=CENTER)
+
+    return screen
+
+
+def on_map(anchor, point):
+    """Where a world point lands on the map picture, from its top-left corner. North is
+    up, so world z runs up the picture."""
+    scale = MAP_PX / MAP_METRES
+    return (MAP_PX / 2 + (point[0] - anchor[0]) * scale, MAP_PX / 2 - (point[1] - anchor[1]) * scale)
+
+
+def dot(ground, site, i, x, y):
+    """A spawn on the map: a dark disc with its number, the button `SiegeSpawn{site}{i}`.
+    `Spawn{site}{i}_On` is the same disc in white, shown on the one the viewer chose;
+    `Spawn{site}{i}_Face{k}` are the teammates coming in there, in a row beside it."""
+    node = ground.add(top_left(f"SiegeSpawn{site}{i}", x - DOT / 2, y - DOT / 2, DOT, DOT))
+    button(node, image(node, "#ffffff", sprite=SPR["disc"], sliced=False, raycast=True), PAGE, SUB_HOVER, SELECTED)
+    text(node.add(stretch(f"Spawn{site}{i}_Number")), str(i + 1), size=16, colour=TEXT, halign=CENTER, bold=True)
+
+    on = node.add(stretch(f"Spawn{site}{i}_On", active=False))
+    image(on, "#ffffff", sprite=SPR["disc"], sliced=False)
+    text(on.add(stretch("Number")), str(i + 1), size=16, colour=PAGE, halign=CENTER, bold=True)
+
+    for k in range(FACES):
+        face = node.add(top_left(f"Spawn{site}{i}_Face{k}_Frame", DOT + 6 + k * (FACE + 3), (DOT - FACE) / 2, FACE, FACE))
+        image(face, "#ffffff", sprite=SPR["round6"])
+        mask(face)
+        image(face.add(stretch(f"Spawn{site}{i}_Face{k}", active=False)), "#ffffff", enabled=False)
 
 
 # ---- the match HUD -------------------------------------------------------------------
 #
 # The concept (conceptArtOverlay.png): one bar along the top. In the middle, on the one
-# filled block, `team 0 [shield] 0:30 [swords] 1 team2`, the shield beside whoever holds
+# filled block, `team 0 [castle] 0:30 [swords] 1 team2`, the castle beside whoever holds
 # the flag this round and the swords beside whoever is after it. To either side, on
 # nothing, a face per player with their pick hanging off its corner; the viewer's own
 # team on the left. No names and no guns: a face and a pick say who somebody is.
 #
-# The block is 368 by 112 and opaque, and that is not a design choice. Unturned draws
-# its arena text (x centre +-180, y 0-50) and compass (same width, y 60-110) on every
-# Arena map, from the map type the client reads out of its own Level.dat, and nothing a
-# server sends can switch either off (PlayerLifeUI.updateCompass and
-# updateLifeBoxVisibility in the U3-SDK; EPluginWidgetFlags has no bit for them, and a
-# server-listed Localization item is not applied). The block sits over both, four
-# pixels proud on every side. The bar is the top row; the lower row is the round label
-# and the flag's health, so the depth says something. The clock is set in a monospaced
-# face because a proportional one shuffled the readout every second.
+# The block is 360 by 50, ten down from the top edge, and that is the game's rect, not
+# ours. Siege runs on vanilla Alpha Valley, an Arena map, and on every Arena map the
+# client draws two boxes of its own at the top of the screen (PlayerLifeUI: the arena
+# message, 300 wide from 180 left of centre, and the round number, 50 wide ending 180
+# right of it, both 50 tall in a container inset 10 from the screen edge) with the
+# compass under them, 360 wide from y 70 to 120. Nothing a server sends can switch the
+# boxes off, so the block is exactly their rect and stops there: the compass is left
+# showing. Both canvases scale by the same UI scale, so the px agree. The block's
+# corners are the site's 8px on all four sides, since it touches nothing; the game's
+# boxes are drawn a pixel in from their rect with a radius of nine, so they never show
+# past ours.
+#
+# Faces are the block's height and sit beside it, on the same line. The clock is set
+# in a monospaced face because a proportional one shuffled the readout every second;
+# the block says who, how many and how long, and nothing else.
 
-BLOCK_W, BLOCK_H = 368, 112
-ROW = 50                # the score line; the arena text's own height
+BLOCK_W, BLOCK_H = 360, 50
+BLOCK_Y = 10            # the arena boxes' container inset
+ROW = 50                # the score line, the whole block
 SEAT = 50               # a face, the site's .userProfile chip
 SEAT_GAP = 6
 WING_PAD = 8            # between the block and the first face
@@ -202,55 +345,43 @@ WING_W = WING_PAD + SEATS * (SEAT + SEAT_GAP) - SEAT_GAP
 HUD_W = BLOCK_W + 2 * WING_W
 PICK = 22               # the pick icon hanging off a face
 PICK_TILT = 14          # degrees; the one playful thing on the bar
-FLAG_STEPS = 10
-SEG_W, SEG_H, SEG_GAP = 10, 8, 3
+ROLE = 20               # the castle or the swords
 
 
 def match_hud():
     root = Node("Effect")
     canvas(root, sorting_order=16)
 
-    hud = root.add(top_center("Hud", 0, 0, HUD_W, BLOCK_H))
+    hud = root.add(top_center("Hud", 0, 0, HUD_W, BLOCK_Y + BLOCK_H + PICK // 2))
 
-    block = hud.add(top_center("Block", 0, 0, BLOCK_W, BLOCK_H))
-    image(block, FLAT, sprite=SPR["notch"])
+    block = hud.add(top_center("Block", 0, BLOCK_Y, BLOCK_W, BLOCK_H))
+    image(block, FLAT, sprite=SPR["round8"])
 
     # The score line, left to right, each field vertically centred in the row.
-    x = 12
-    text(block.add(top_left("Team0_Name", x, 0, 82, ROW)), "North", size=16, colour=INK, halign=RIGHT, bold=True)
-    x += 86
-    text(block.add(top_left("Score0", x, 0, 28, ROW)), "0", size=22, colour=INK, halign=CENTER, bold=True)
+    y = BLOCK_H - ROW
+    x = 8
+    text(block.add(top_left("Team0_Name", x, y, 80, ROW)), "North", size=16, colour=INK, halign=RIGHT, bold=True)
+    x += 84
+    text(block.add(top_left("Score0", x, y, 28, ROW)), "0", size=22, colour=INK, halign=CENTER, bold=True)
     x += 30
-    role(block, "Shield0", "Swords0", x)
+    role(block, "Castle0", "Swords0", x, y)
     x += 24
-    text(block.add(top_left("Timer", x, 0, 68, ROW)), "0:30", size=18, colour=INK, halign=CENTER, mono=True)
-    x += 70
-    role(block, "Shield1", "Swords1", x)
-    x += 24
-    text(block.add(top_left("Score1", x, 0, 28, ROW)), "1", size=22, colour=INK, halign=CENTER, bold=True)
+    text(block.add(top_left("Timer", x, y, 68, ROW)), "0:30", size=18, colour=INK, halign=CENTER, mono=True)
+    x += 72
+    role(block, "Castle1", "Swords1", x, y)
+    x += 22
+    text(block.add(top_left("Score1", x, y, 28, ROW)), "1", size=22, colour=INK, halign=CENTER, bold=True)
     x += 32
-    text(block.add(top_left("Team1_Name", x, 0, 82, ROW)), "South", size=16, colour=INK, halign=LEFT, bold=True)
+    text(block.add(top_left("Team1_Name", x, y, 80, ROW)), "South", size=16, colour=INK, halign=LEFT, bold=True)
 
-    # The lower row: what the clock is counting on the left, the flag on the right.
-    text(block.add(top_left("Mid", 14, ROW, 150, BLOCK_H - ROW)), "Round 1",
-         size=11, colour=MUTED, halign=LEFT, bold=True, uppercase=True, spacing=10)
-
-    bar_w = FLAG_STEPS * SEG_W + (FLAG_STEPS - 1) * SEG_GAP
-    flag = block.add(top_right("Flag", 14, ROW, 44 + bar_w, BLOCK_H - ROW, active=False))
-    text(flag.add(top_left("FlagLabel", 0, 0, 40, BLOCK_H - ROW)), "Flag",
-         size=11, colour=MUTED, halign=LEFT, bold=True, uppercase=True, spacing=10)
-    for i in range(FLAG_STEPS):
-        segment = flag.add(top_left(f"Flag{i}", 44 + i * (SEG_W + SEG_GAP), (BLOCK_H - ROW - SEG_H) // 2, SEG_W, SEG_H))
-        image(segment, INK, 0.9)
-
-    # Faces run outward from the block on each side. A face is two pictures of the
-    # same download, one at full strength and one at half, and the plugin shows the
-    # half one while that player is out of the round: nothing a server can send sets
-    # an alpha, but it can choose which of two images is on.
+    # Faces run outward from the block on each side, on its line. A face is two
+    # pictures of the same download, one at full strength and one at half, and the
+    # plugin shows the half one while that player is out of the round: nothing a
+    # server can send sets an alpha, but it can choose which of two images is on.
     for prefix, place, corner, tilt in (("L", top_left, 0, -PICK_TILT), ("R", top_right, 1, PICK_TILT)):
         for i in range(SEATS):
             x = WING_W - WING_PAD - (i + 1) * SEAT - i * SEAT_GAP
-            seat = hud.add(place(f"{prefix}{i}", x, 0, SEAT, SEAT + PICK // 2, active=False))
+            seat = hud.add(place(f"{prefix}{i}", x, BLOCK_Y + BLOCK_H - SEAT, SEAT, SEAT + PICK // 2, active=False))
 
             frame = seat.add(top_left(f"{prefix}{i}_Frame", 0, 0, SEAT, SEAT))
             image(frame, "#ffffff", sprite=SPR["round8"])
@@ -266,10 +397,13 @@ def match_hud():
     return root
 
 
-def role(block, shield, swords, x):
-    """The two role markers share a slot; the plugin shows one, or neither between rounds."""
-    image(block.add(top_left(shield, x, (ROW - 20) // 2, 20, 20, active=False)), INK, 0.85, sprite=SPR["shield"], sliced=False)
-    image(block.add(top_left(swords, x, (ROW - 20) // 2, 20, 20, active=False)), INK, 0.85, sprite=SPR["swords"], sliced=False)
+def role(block, castle, swords, x, y):
+    """The two role markers share a slot; the plugin shows one, or neither between
+    rounds. The castle is the side holding, in blue; the swords the side attacking, in
+    red."""
+    y += (ROW - ROLE) // 2
+    image(block.add(top_left(castle, x, y, ROLE, ROLE, active=False)), BLUE, sprite=SPR["castle"], sliced=False)
+    image(block.add(top_left(swords, x, y, ROLE, ROLE, active=False)), RED, sprite=SPR["swords"], sliced=False)
 
 
 # ---- the build panel -----------------------------------------------------------------

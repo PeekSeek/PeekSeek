@@ -60,15 +60,20 @@ That is what "a large inventory" was for, without the mess of a hundred items on
 hands page, and it is what makes swapping a placed piece for another material a matter
 of counting.
 
-**The site is not an Arena map, and the flag is not a claim flag.** Unturned draws its
-arena text and compass on every Arena map from the client's own copy of the map, and
-nothing a server sends can stop it, so Siege runs on Alpha Valley Siege, a Workshop
-copy of Alpha Valley with the type byte set to Survival. And the claim flag's 32m
-bubble stops anybody outside the owning group placing anything within it, on the
-client, which is exactly the demolition charge an attacker needs to stick on a wall.
-The marker is the Metal Flag instead, a sign with 1100 health and no bubble, placed by
-one defender before every round rather than by the gamemode; the starting floors are
-protected by where they stand, not by what they are.
+**The flag is not a claim flag.** The claim flag's 32m bubble stops anybody outside
+the owning group placing anything within it, on the client, which is exactly the
+demolition charge an attacker needs to stick on a wall. The marker is the PeekSeek
+Flag instead, the claim flag's model with 600 health and no bubble, placed by one
+defender before every round rather than by the gamemode; the starting floors are
+protected by where they stand, not by what they are. The map is vanilla Alpha Valley
+as asked; Unturned's own arena boxes at the top of the screen cannot be switched off
+from a server, so the HUD block is drawn exactly over them.
+
+**The sentry is our own item.** A vanilla sentry only runs within reach of a fuelled
+generator, and the server and every client each decide that for themselves, so a
+server that lies about it gets a turret that shoots but looks dead. The PeekSeek
+Sentry is the Hostile Sentry with `Requires_Power false`, shipped in the UI workshop
+item beside the flag.
 
 **Attackers may place charges.** The brief's raid tools were carried and thrown. With no
 claim bubble a demolition charge can go on a wall, so it does.

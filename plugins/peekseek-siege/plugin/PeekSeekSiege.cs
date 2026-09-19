@@ -77,17 +77,6 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
         { "swap_remove", "Remove" },
         { "swap_remove_blurb", "Take it down. It goes back on the pile." },
 
-        // The small label under the HUD clock. Short, because the slot is, and the
-        // last two are the ones drawn in red.
-        { "hud_shaping", "Footprint" },
-        { "hud_building", "Build" },
-        { "hud_placing", "Flag" },
-        { "hud_starting", "Ready" },
-        { "hud_round", "Round {0}" },
-        { "hud_overtime", "Overtime" },
-        { "hud_match_point", "Match point" },
-        { "hud_final", "Final" },
-
         // The one line a round is allowed: who took it and how. The score is on the HUD
         // and the reason is the thing it cannot show.
         { "round_won_wipe", "<color=white>{0}</color> take round {1}. Nobody left." },
@@ -97,17 +86,23 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
         { "match_won", "<color=white>{0}</color> win it <color=white>{1}-{2}</color>. Well played." },
         { "match_stopped", "Match <color=white>stopped</color>." },
 
-        // Said to the one defender holding the flag, because nothing on screen says it
-        // is them.
+        // Said to the one defender handed the flag, because nothing on screen says it
+        // is them, and again if they carry it off the base.
         { "flag_bearer", "<color=white>You have the flag.</color> Stand it anywhere on your base. {0} seconds, or it goes on a free tile." },
+        { "flag_leashed", "<color=white>Stay on your base</color> until the flag is down." },
 
-        // The board. The headline says which side you are and how long you have; the
+        // The boards. The headline says which side you are and how long you have; the
         // options are numbered so a one-character answer is one people actually give.
+        // An attacker's chat form also lists the spawns, by where they lie from the
+        // base, since chat has no map to point at.
         { "board_defend", "<color=white>Round {0}. You are defending {1}.</color> Pick what you hold it with." },
-        { "board_attack", "<color=white>Round {0}. You are taking {1}.</color> Pick what you crack it with." },
+        { "board_attack", "<color=white>Round {0}. You are taking {1}.</color> Pick where you come in, and what you crack it with." },
         { "pick_option", "<color=white>{0}</color>  {1}. {2}" },
+        { "pick_spawn_option", "<color=white>{0}</color>  Come in from the {1}." },
         { "pick_how", "Type <color=white>/pick</color> and a number." },
+        { "pick_how_attack", "Type <color=white>/pick spawn</color> and a number for where you come in, and <color=white>/pick</color> and a number for your powerup." },
         { "pick_locked", "Locked in: <color=white>{0}</color>." },
+        { "spawn_locked", "Coming in from the <color=white>{0}</color>." },
         { "pick_no_such", "That is not on the board." },
         { "pick_closed", "There is nothing to pick right now." },
 

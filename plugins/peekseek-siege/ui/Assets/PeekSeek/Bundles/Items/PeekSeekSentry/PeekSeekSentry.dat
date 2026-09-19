@@ -1,0 +1,41 @@
+GUID 5a6299f1b7d9490a9608badf4bf40bdf
+Type Sentry
+Rarity Epic
+Useable Barricade
+Build Sentry
+ID 43131
+
+// The Hostile Sentry as it is, minus the generator. A sentry only scans and shoots
+// while it thinks it is wired, and both the server and every client work that out
+// for themselves from the generators in range, so a server that lies about it gets a
+// turret that shoots on the server and sits dark on every screen. This one never
+// asks: Requires_Power is read off the item file on both sides.
+Master_Bundle_Override core.masterbundle
+Bundle_Override_Path /Items/Barricades/Sentry_Hostile
+
+Size_X 2
+Size_Y 2
+Size_Z 0.55
+
+Health 150
+Range 4
+Radius 0.5
+Offset 1
+
+Storage_X 5
+Storage_Y 2
+Display
+Locked
+
+Mode Hostile
+Requires_Power false
+React_To_Attacks true
+
+AmmoConsumptionProbability 0.25
+QualityConsumptionProbability 0.25
+
+Explosion 36
+
+Should_Close_When_Outside_Range true
+PlacementAudioClip Sounds/MetalPlacement.mp3
+Has_Clip_Prefab false

@@ -16,6 +16,22 @@ public class WordingTests {
         Assert.Equal(said, Wording.Duration(seconds));
     }
 
+    /// The chat form of the map says where a spawn lies from the base. Eight winds,
+    /// each covering 45 degrees centred on its own heading.
+    [Theory]
+    [InlineData(0f, "north")]
+    [InlineData(22f, "north")]
+    [InlineData(23f, "north-east")]
+    [InlineData(90f, "east")]
+    [InlineData(180f, "south")]
+    [InlineData(270f, "west")]
+    [InlineData(337f, "north-west")]
+    [InlineData(338f, "north")]
+    [InlineData(-45f, "north-west")]
+    public void ABearingIsSaidAsAWind(float bearing, string said) {
+        Assert.Equal(said, Wording.Compass(bearing));
+    }
+
     /// Every list the build phase hands out has to exist, because it is walked without
     /// asking. A fresh install once had two of them null, which a server only escaped
     /// because its config had been written out and read back as empty.

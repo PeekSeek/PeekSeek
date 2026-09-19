@@ -17,9 +17,8 @@ good to defend is a bad base.
 | --- | --- |
 | Footprint | 20 seconds, rooted. Each team picks square or hexagonal; first answer counts. |
 | Build | 5 minutes. Both teams build, each locked to their own plot. |
-| Pick | Up to 20 seconds, rooted and empty-handed. Five options on the board, defence or raid. Over the moment the last person picks. |
-| Flag | 15 seconds. One defender walks the base and stands the flag; everybody else waits where they spawned. |
-| Ready | 3 seconds, everybody rooted, flag up. |
+| Pick | Up to 20 seconds. Attackers get the map: where they come in, and their powerup. Defenders get five powerups, and one of them, once picked, the flag to stand. Everybody but the flag bearer waits rooted in the map's lobby. Over the moment the last person has picked and the flag is up. |
+| Ready | 3 seconds, everybody in position and rooted, flag up. |
 | Round | 3 minutes. Attackers bring the flag down, defenders keep it up. |
 
 Rounds 1-3 team North defends, rounds 4-6 team South does. The match ends the moment the
@@ -27,16 +26,20 @@ rest of the block cannot change who is ahead: 4-0 after four rounds is over, 4-1
 five is over. Level at 3-3 goes to overtime, two rounds each, over and over, decided the
 same way. Never earlier, because half a block is not a fair swap.
 
-Nobody moves until the round is live. A pick phase where people can run is a head start,
-which is what the rooting is for.
+Nobody moves until the round is live, except the one defender walking the flag, who
+cannot leave the base. Everybody else spends the pick in the map's own lobby, the
+building in the corner of Alpha Valley that the game itself uses as one: the regular
+player spawns of an Arena map are its lobby (the alt spawns are the arena drop), so the
+plugin reads them off the level rather than knowing where they are. A pick phase where
+people can run is a head start, which is what the rooting and the distance are for.
 
 ## The rules that make it a siege
 
-**Defenders take damage standing on dirt.** Two seconds off your own building and open
+**Defenders take damage standing on dirt.** Three seconds off your own building and open
 ground starts killing you. The grace period matters more than the damage: vaulting a
-windowsill, dropping through a hatch and landing a jump short all leave you briefly on
-the ground while doing exactly what a defender should be doing. Two seconds covers all of
-that and nothing longer.
+windowsill, dropping through a hatch, landing a jump short and stepping out to meet
+somebody at the door all leave you briefly on the ground while doing exactly what a
+defender should be doing. Three seconds covers all of that and nothing longer.
 
 **Almost nothing in a base can be taken down.** When a base is re-laid, every piece comes
 back owned by nobody, and in Unturned an unowned piece cannot be salvaged by anyone. Two
@@ -61,13 +64,20 @@ above one that is already standing, so the base grows out of the anchor. Nobody 
 with three shacks in a field and a choice about which one to defend.
 
 **The flag is the objective, and the defenders stand it.** Before every round one
-defender, taking turns, gets fifteen seconds with the flag in hand to stand it anywhere
-on the building; the rest of the team, and the attackers, wait rooted at their spawns.
-Nobody outside the team sees where. If it is not down in time it goes on a random
-starting tile that has nothing standing on it. The flag is the Metal Flag, a sign with
-1100 health and the team's name on it, chosen because it has no claim bubble: a claim
-flag stops anybody but its own group placing within 32m of it, on the client, which is
-exactly the charge an attacker needs to stick on a wall. Attackers win a round by
+defender, at random, picks their powerup and is then handed the flag, with the rest of
+the pick to stand it anywhere on the building; step off the base with it and you are
+put back on the anchor. The rest of the team, and the attackers, wait in the lobby.
+Nobody outside the team sees where. If it is not down when the pick ends it goes on a
+random starting tile that has nothing standing on it.
+
+**Attackers choose where they come in.** Each site has three spawn points walked out
+by hand, and the attack screen is a map of the base, the game's own GPS picture, with
+a dot on each. Click one and your face hangs off it on every teammate's map, so a
+team sees its own spread without a word. Somebody who never clicks comes in at the
+first. Several on one dot stand a step apart round it, all facing the base. The flag is the PeekSeek Flag, the claim
+flag's looks with 600 health and no claim bubble, shipped in the UI workshop item: a
+claim flag stops anybody but its own group placing within 32m of it, on the client,
+which is exactly the charge an attacker needs to stick on a wall. Attackers win a round by
 bringing it down, or by wiping the defence; defenders win by the clock.
 
 **A builder builds from a budget.** The team has one pile of pieces for the whole build
@@ -89,13 +99,17 @@ playing.
 ## The kits
 
 Every number is from the game's own item files: a maple wall is 400 health, metal 1100,
-brick 1650, the flag 1100.
+brick 1650, the flag 600.
 
 Defence: barbed wire (four coils), landmines (three), reinforce (spare metal), a
 watchtower kit (grenades and a scope), and a sentry, a hostile one that goes down with a
 Bluntforce in it, loaded, that nobody can take out. Salvage the sentry and put it back and
 it is armed again; the gun never hits the floor. Which gun is `SentryFirearm` in the
-config, one item with whatever state it needs.
+config, one item with whatever state it needs. The sentry is the PeekSeek Sentry, item
+43131 in the UI workshop item: the Hostile Sentry's model and numbers with
+`Requires_Power false`, because a vanilla sentry only runs within reach of a fuelled
+generator, and both the server and every client decide that for themselves. Lying about
+it server-side gave a turret that shot on the server and sat dark on every screen.
 
 Raid: a rocket launcher with two rockets (1000 each, from across the field), three
 demolition charges with the detonator (1000 each, but you have to reach the wall), six
@@ -103,16 +117,13 @@ sticky grenades (100 each), six impact grenades (100), six frags (50, mostly for
 
 ## The map
 
-Siege runs on **Alpha Valley Siege**, a Workshop copy of Alpha Valley with one byte
-changed: the map type, from Arena to Survival. Unturned draws its arena text and compass
-on every Arena map, from the client's own copy of the map, and no server setting or
-plugin can switch them off. A Survival copy under another name has neither, and the
-compass then follows `Gameplay.Compass` in the server's `Config.json`, which is off. The
-copy also lets a base go down near the map's player spawns, which only Arena maps allow
-by default. `map/make.py` makes it from a local Unturned install; it is never committed.
-
-With the type comes hunger, thirst and infection on the HUD, which the plugin hides, and
-loot, which `Items.Spawn_Chance` in the server config sets to nothing.
+Siege runs on vanilla **Alpha Valley**, an Arena map. Unturned draws its arena message
+and round number on every Arena map, from the client's own copy of the map, and no server
+setting or plugin can switch them off, so the HUD's middle block is drawn exactly over
+them: 360 wide at the centre of the screen, down to where they end. The compass under
+them stays, on purpose. The game's own arena round system is patched out
+(`Patches/ArenaPatches.cs`), and `Items.Spawn_Chance` in the server config sets the loot
+to nothing.
 
 ## Running it
 
@@ -121,6 +132,7 @@ loot, which `Items.Spawn_Chance` in the server config sets to nothing.
 /start solo     one player, for testing
 /stop           end it
 /pick 3         answer the option board
+/pick spawn 2   where you come in, as an attacker
 /siege          where the match is
 ```
 
@@ -147,7 +159,8 @@ already downloaded, so a UI cannot ship in a `.dll`, only in a workshop mod.
 The boards are written against both:
 
 - A server that has the `ui/` mod loaded draws the real Unity layouts: the boards, the
-  HUD along the top for everybody all match, and the build panel.
+  HUD along the top for everybody all match, and the build panel. The same mod carries
+  the flag and the sentry as items.
 - One that does not logs a line at the first pick phase and draws the same options to
   chat, answered with `/pick`.
 
@@ -174,8 +187,7 @@ plugin/Core/Hud/MatchHud.cs     the score, clock and faces along the top; any ga
 plugin/Core/Hud/BuildPanel.cs   what is left to lay, beside the screen
 plugin/Core/Models/             the housing grid, the budget arithmetic, material families
 plugin/Core/IGamemode.cs        the seam the main PeekSeek plugin will drive this through
-map/                            the script that makes the Survival copy of Alpha Valley
-ui/                             the Unity project the screens are built from
+ui/                             the Unity project the screens and the two items are built from
 ```
 
 ## The gamemode seam

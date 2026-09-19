@@ -1,3 +1,5 @@
+using System;
+
 namespace PeekSeekSiege.Core;
 
 /// How a number is said to a player. Kept away from anything Unity so a test can read
@@ -13,5 +15,13 @@ internal static class Wording {
 
         int minutes = seconds / 60;
         return minutes == 1 ? "1 minute" : $"{minutes} minutes";
+    }
+
+    /// "north-west", for a bearing in degrees clockwise from north. Eight winds, which
+    /// is as fine as anyone reads a direction in chat.
+    internal static string Compass(float bearing) {
+        string[] winds = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
+        int index = (int)Math.Floor(((bearing % 360f + 360f) % 360f + 22.5f) / 45f) % 8;
+        return winds[index];
     }
 }

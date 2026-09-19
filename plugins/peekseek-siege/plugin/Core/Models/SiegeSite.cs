@@ -6,7 +6,8 @@ using UnityEngine;
 namespace PeekSeekSiege.Core.Models;
 
 /// One team's plot of ground: where its base is anchored, how far from that anchor its
-/// players may build and stand, and where the other team comes in from.
+/// players may build and stand, and the places the other team can choose to come in
+/// from.
 ///
 /// Both sites are on the same map, so BuildRadius is what stops a team wandering far
 /// enough to look at the other team's build in progress. It is deliberately tight — a
@@ -33,19 +34,17 @@ public class SiegeSite {
     [XmlAttribute]
     public float BuildRadius;
 
-    /// How far out the attacking team starts. Far enough that the defenders cannot
-    /// shoot them off spawn, close enough that a round is not a walk.
-    [XmlAttribute]
-    public float AttackerSpawnDistance;
+    /// Where the attacking team can come in from: the three points an attacker chooses
+    /// between on the map before a round. The order is the order the dots are numbered,
+    /// and the dots are baked into the UI from the same numbers (ui/tools/generate.py),
+    /// so a change here is a change there too.
+    [XmlArray]
+    public List<SerializableVector3> AttackerSpawns = [];
 
-    /// Which way, in degrees, the attackers come in from. Kept separate from Yaw so an
-    /// approach can be pointed down a valley rather than at whatever the anchor happens
-    /// to face.
-    [XmlAttribute]
-    public float AttackerBearing;
-
-    /// How far apart, in degrees of bearing, a full team is spread across its spawn.
-    private const float SpawnSpreadDegrees = 20f;
+    /// How far from a chosen point the attackers who chose it stand, so a team that all
+    /// picked the same dot does not start on one square metre. Small: the point is
+    /// the choice, and a spread wide enough to matter would be a fourth spawn.
+    private const float SpawnSpreadMetres = 2.5f;
 
     public Vector3 AnchorPoint => new(Anchor.X, Anchor.Y, Anchor.Z);
 
@@ -61,25 +60,38 @@ public class SiegeSite {
 
     public bool Contains(Vector3 point) => Contains(point.x, point.z);
 
-    /// Where the attacking team drops in, spread around AttackerBearing so a team does
-    /// not spawn stacked on one square metre. A lone attacker gets the bearing itself
-    /// rather than one edge of the spread.
-    public void AttackerSpawnAt(int index, int total, out float x, out float y, out float z) {
-        float bearing = AttackerBearing;
-        if (total > 1) {
-            bearing += -SpawnSpreadDegrees / 2f + SpawnSpreadDegrees * index / (total - 1);
-        }
+    /// Where an attacker who chose spawn `spawn` stands, as the `index`th of `total`
+    /// who chose it. One stands on the point itself; more stand in a ring round it, so
+    /// the spot on the map is where the first one is and the rest are within arm's reach.
+    public void AttackerSpawnAt(int spawn, int index, int total, out float x, out float y, out float z) {
+        SerializableVector3 point = AttackerSpawns[Math.Max(0, Math.Min(spawn, AttackerSpawns.Count - 1))];
+        x = point.X;
+        y = point.Y;
+        z = point.Z;
+        if (total <= 1) return;
 
-        double radians = bearing * Math.PI / 180d;
-
-        x = Anchor.X + (float)Math.Sin(radians) * AttackerSpawnDistance;
-        y = Anchor.Y + 2f;
-        z = Anchor.Z + (float)Math.Cos(radians) * AttackerSpawnDistance;
+        double radians = 2d * Math.PI * index / total;
+        x += (float)Math.Sin(radians) * SpawnSpreadMetres;
+        z += (float)Math.Cos(radians) * SpawnSpreadMetres;
     }
 
-    public Vector3 AttackerSpawn(int index, int total) {
-        AttackerSpawnAt(index, total, out float x, out float y, out float z);
+    public Vector3 AttackerSpawn(int spawn, int index, int total) {
+        AttackerSpawnAt(spawn, index, total, out float x, out float y, out float z);
         return new Vector3(x, y, z);
+    }
+
+    /// The yaw that looks at the anchor from a point, in Unity's degrees: 0 faces +Z
+    /// and turns clockwise seen from above. An attacker spawns looking at the base.
+    public float YawTowardsAnchor(float x, float z) {
+        return (float)(Math.Atan2(Anchor.X - x, Anchor.Z - z) * 180d / Math.PI);
+    }
+
+    /// Which way a spawn lies from the base, as a bearing in degrees clockwise from
+    /// north, for saying "north-west" in chat where there is no map to point at.
+    public float BearingOfSpawn(int spawn) {
+        SerializableVector3 point = AttackerSpawns[spawn];
+        double degrees = Math.Atan2(point.X - Anchor.X, point.Z - Anchor.Z) * 180d / Math.PI;
+        return (float)((degrees + 360d) % 360d);
     }
 }
 

@@ -109,16 +109,4 @@ public class RoundOrderTests {
         Assert.Equal(0, RoundOrder.Winner(10, 6, 4));
         Assert.Equal(1, RoundOrder.Winner(14, 6, 8));
     }
-
-    [Theory]
-    [InlineData(4, 3, 0, true)]
-    [InlineData(4, 2, 1, false)]
-    [InlineData(6, 3, 2, true)]
-    [InlineData(7, 3, 3, false)]
-    [InlineData(8, 4, 3, false)]
-    [InlineData(9, 5, 3, true)]
-    [InlineData(10, 5, 4, true)]
-    public void MatchPointIsTheRoundThatCanEndIt(int round, int zero, int one, bool matchPoint) {
-        Assert.Equal(matchPoint, RoundOrder.IsMatchPoint(round, zero, one));
-    }
 }

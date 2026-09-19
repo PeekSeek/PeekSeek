@@ -68,11 +68,4 @@ internal static class RoundOrder {
 
         return teamZeroScore > teamOneScore ? 0 : 1;
     }
-
-    /// Whether round `round`, about to be played at this score, can end the match:
-    /// the leader winning it would put them beyond the block's reach.
-    internal static bool IsMatchPoint(int round, int teamZeroScore, int teamOneScore) {
-        int lead = Math.Abs(teamZeroScore - teamOneScore);
-        return lead + 1 > LeftInBlock(round);
-    }
 }

@@ -2,14 +2,20 @@
 
 The Unity UIs PeekSeek draws in game, built from one project into two Workshop items:
 
-- **The boards**, one prefab with three panels: the pick board for a round, five tiles
+- **The boards**, one prefab with four panels: the pick board for a round, five tiles
   with the item's picture, its name, one line under it, and a number so `/pick 3` reads
   as the same board; the footprint board before the build, two tiles with the whole
-  starting base drawn on each; and the swap board while building, the piece you are
-  looking at in every other material.
+  starting base drawn on each; the swap board while building, the piece you are
+  looking at in every other material; and the attack screen, the whole screen dimmed,
+  the map of the base being attacked in the middle with a keep on it and a dot on
+  every spawn, and the five raid tiles under it. The map is the game's own `Map.png`
+  cropped 260 m round the site's anchor and baked in, one per site; the dots are
+  baked from the same numbers as the plugin's config, because a position cannot be
+  sent to a client. The top-left third of the screen is left empty for the game's
+  chat.
 - **The match HUD**, along the top of the screen for the whole match: score and clock on
-  one block in the middle, a face per player to either side with their pick hanging off
-  its corner, the viewer's own team on the left.
+  one block in the middle, drawn over the game's own arena boxes, a face per player to
+  either side with their pick hanging off its corner, the viewer's own team on the left.
 - **The build panel**, beside the screen during the build phase: what the team has left
   to lay, a row per kind of piece.
 - **The kill feed**, its own item (`Assets/PeekSeekKillFeed/`) for its own plugin: a row
@@ -27,13 +33,15 @@ Assets/PeekSeek/Bundles/Effects/PickBoard/Effect.prefab    both boards
 Assets/PeekSeek/Bundles/Effects/MatchHud/MatchHud.dat      the HUD effect, with its GUID
 Assets/PeekSeek/Bundles/Effects/MatchHud/Effect.prefab     the HUD
 Assets/PeekSeek/Bundles/Effects/BuildPanel/                the build panel, likewise
+Assets/PeekSeek/Bundles/Items/                             the flag and the sentry, as item files
 Assets/PeekSeekKillFeed/Bundles/                           the kill feed's bundle and effect
 Assets/PeekSeek/Shaders/                                   the silhouette shader and its material
-Assets/PeekSeek/Sprites/                                   corners, role icons, the two footprints
+Assets/PeekSeek/Sprites/                                   corners, role icons, the two footprints, the two maps
 Assets/PeekSeek/Fonts/                                     Inter and JetBrains Mono, OFL
 Assets/Editor/BuildBundle.cs                               turns the above into a mod
 tools/unityyaml.py                                         the Unity objects a screen is made of
 tools/footprints.py                                        draws a starting base from above
+tools/sitemap.py                                           crops the map's own picture round a site
 tools/generate.py                                          writes both prefabs and the sprites
 tools/WorkshopUpload/                                      publishes the mod
 build.ps1                                                  runs the build headless
@@ -59,20 +67,24 @@ footprint tiles show the whole base the plugin will lay, floors, pillars and fla
 by `footprints.py` from the same numbers as `BaseLayout.cs`.
 
 **The HUD is the concept** (`conceptArtOverlay.png` at the repo root) in the overlay's
-language: `#f2f2f2` ink, `#8a8a8a` muted, red only for match point and final, one flat
-`#0f0f0f` block in the middle reading `team 0 [shield] 0:30 [swords] 1 team2`, the
-shield beside whoever holds the flag this round and the swords beside whoever is after
-it. Faces sit on nothing to either side, 50px like the site's `.userProfile` chip, the
-pick tilted off the outer bottom corner, and a face at half strength is a player out of
-the round. No names and no guns. Sizes are px at UI scale 1.
+language: `#f2f2f2` ink, one flat `#0f0f0f` block in the middle reading
+`team 0 [castle] 0:30 [swords] 1 team2`, a blue castle beside whoever holds the flag
+this round and red swords beside whoever is after it, both drawn by `unityyaml.py` so
+they are nobody else's. Faces sit on nothing to either side, 50px like the site's
+`.userProfile` chip, the pick tilted off the outer bottom corner, and a face at half
+strength is a player out of the round. No names and no guns. Sizes are px at UI scale 1.
 
-The block is exactly as tall as a face. Unturned draws its arena text and compass on
-every Arena map, from the map type the client reads out of its own `Level.dat`, and
-nothing a server sends can switch either off; the answer to that is the map (see the
-plugin's README), not the HUD, so there is nothing here to cover. The clock is
-monospaced because a proportional one shuffled the whole readout every second, and
-TextMeshPro cannot ask a font for tabular figures; the small label under it says what
-the clock is counting.
+The block is 360 by 60 because that is the game's number. Unturned draws two boxes of
+its own at the top of every Arena map, from the map type the client reads out of its own
+`Level.dat`: the arena message and the round number, together 360 wide at the centre of
+the screen, from 10 down to 60, with the compass under them from 70 to 120. Nothing a
+server sends can switch them off, so the block is their width, runs from the screen's
+top edge to their bottom edge, and stops there; the compass is left showing. Its corners
+are the site's 8px, and the game's boxes are drawn a pixel inside their rect with a
+radius of nine, so nothing of theirs shows past ours. Faces are ten short of the block
+and sit on its bottom edge. The clock is monospaced because a proportional one shuffled
+the whole readout every second, and TextMeshPro cannot ask a font for tabular figures;
+it is the only thing on the block besides the score.
 
 **The build panel and the kill feed are the overlay too.** The panel is the block's fill
 at 90% with the site's corner, a row per piece: picture, count in ink, name in muted.
@@ -114,7 +126,7 @@ rounded corners. An `Image` that starts disabled shows nothing until its picture
 
 **Rounded corners are sprites.** uGUI draws a flat rectangle unless an `Image` has a
 sprite, so `generate.py` writes small PNGs (a rounded square, the block's bottom
-corners, the shield and swords) and the `.meta` that imports each as a nine-sliced
+corners, the castle and swords) and the `.meta` that imports each as a nine-sliced
 sprite under a GUID the prefabs reference. The two footprints are sprites too, plain
 rather than sliced, drawn at twice the size they are shown at.
 
@@ -153,10 +165,15 @@ starts hidden:
 | `{P}{n}_Name` | TMP text | the option's name |
 | `{P}{n}_Blurb` | TMP text | one short line under the name |
 | `{P}{n}_Taken` | GameObject | the selected fill and label, on the picked tile |
-| `Pick{n}_Icon`, `Swap{n}_Icon` | `Image` | the option's picture; the footprint tiles carry their own |
+| `Pick{n}_Icon`, `Swap{n}_Icon`, `Attack{n}_Icon` | `Image` | the option's picture; the footprint tiles carry their own |
+| `Attack_Map{s}` | GameObject | the map of site `s`, with its own dots; shown for the site under attack |
+| `Spawn{s}{n}_On` | GameObject | the white dot, on the spawn this viewer chose |
+| `Spawn{s}{n}_Face{k}` | `Image` | a teammate coming in at that dot, up to five, shown while there is one |
 
-And back, via `onEffectButtonClicked`: `SiegePick0` to `SiegePick4`, `SiegeShape0` and
-`SiegeShape1`, or `SiegeSwap0` to `SiegeSwap5`.
+The attack screen has no headline. And back, via `onEffectButtonClicked`: `SiegePick0`
+to `SiegePick4`, `SiegeShape0` and `SiegeShape1`, `SiegeSwap0` to `SiegeSwap5`,
+`SiegeAttack0` to `SiegeAttack4`, and the dots, `SiegeSpawn{s}{n}`. The attack screen
+stays up until both its answers are in, lit where it has been answered.
 
 The HUD (`Hud/MatchHud.cs`, key `MatchHudKey`; `L` is the viewer's team, `R` the other):
 
@@ -164,9 +181,8 @@ The HUD (`Hud/MatchHud.cs`, key `MatchHudKey`; `L` is the viewer's team, `R` the
 | --- | --- | --- |
 | `Team0_Name`, `Team1_Name` | TMP text | team names, left and right of the score |
 | `Score0`, `Score1` | TMP text | rounds won |
-| `Shield0`, `Swords0`, `Shield1`, `Swords1` | GameObject | the role beside each score |
+| `Castle0`, `Swords0`, `Castle1`, `Swords1` | GameObject | the role beside each score |
 | `Timer` | TMP text | `m:ss`, once a second |
-| `Mid` | TMP text | `Round 3`, `Match point` (red), `Final` (red) |
 | `L{n}`, `R{n}` | GameObject | a face, shown only while somebody is in that seat |
 | `L{n}_Avatar` | `Image` | the player's Steam picture, on while they are in the round |
 | `L{n}_Faded` | `Image` | the same picture at half strength, on while they are out |
@@ -219,6 +235,8 @@ Build/PeekSeek/
   Effects/PickBoard/PickBoard.dat
   Effects/MatchHud/MatchHud.dat
   Effects/BuildPanel/BuildPanel.dat
+  Items/PeekSeekFlag/PeekSeekFlag.dat        with its English.dat
+  Items/PeekSeekSentry/PeekSeekSentry.dat
 Build/PeekSeekKillFeed/
   MasterBundle.dat
   peekseek_killfeed.masterbundle    and the same per platform
@@ -248,13 +266,12 @@ dotnet run -c Release -- ../../Build/PeekSeekKillFeed --update 3804490030 --chan
 
 That goes through the Steam client logged in on this machine; there is no password, key
 or token involved, because Steam takes Workshop uploads no other way. Leave off
-`--update` to create a new item, with `--title`. The same tool uploads the map,
-`--type Map` (see `../map/make.py`); that is item **3804490205**. The server sees an
-update within ten minutes and restarts itself for it (`Should_Monitor_Updates`).
+`--update` to create a new item, with `--title`. The server sees an update within ten
+minutes and restarts itself for it (`Should_Monitor_Updates`).
 
 To test a build before uploading it, copy the folder to
 `Servers/unturned/Bundles/PeekSeek/` on the server and to
-`Maps/Alpha Valley Siege/Bundles/PeekSeek/` in your own Unturned install, and restart both.
+`Maps/Alpha Valley/Bundles/PeekSeek/` in your own Unturned install, and restart both.
 The client path is the map's, not `Sandbox/`: while connected to a server a client only
 sees assets from the core game, the map, and the server's workshop files
 (`Assets.ApplyServerAssetMapping`), so a `Sandbox/` mod is there in singleplayer and gone

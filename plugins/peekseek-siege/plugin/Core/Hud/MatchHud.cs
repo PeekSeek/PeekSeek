@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using SDG.NetTransport;
@@ -29,27 +28,17 @@ internal class HudTeam {
 internal class HudState {
     internal HudTeam[] Teams = [new HudTeam(), new HudTeam()];
 
-    /// The small label under the clock: "Round 3", "Match point", "Overtime".
-    internal string Label;
-
-    /// True when the label is the kind that should be red: match point, final.
-    internal bool Jeopardy;
-
-    /// Which team is holding this round, 0 or 1, or -1 when nobody is: the shield goes
+    /// Which team is holding this round, 0 or 1, or -1 when nobody is: the castle goes
     /// beside their score and the swords beside the other.
     internal int DefendingTeam = -1;
 
     internal int SecondsLeft;
-
-    /// How much of the flag is standing, 0 to 1, or -1 for no flag: the bar under the
-    /// clock, in ten steps.
-    internal float FlagHealth = -1f;
 }
 
 /// The bar along the top of the screen during a match: score and clock in the middle,
 /// a face per player to either side, the viewer's own team always on the left. Up for
 /// everybody, for the whole match; there is no way to turn it off, because it also
-/// stands in front of the game's arena text and compass, which cannot be turned off.
+/// stands in front of the game's arena text, which cannot be turned off.
 ///
 /// Every change redraws the whole bar for every viewer. That is thirty small messages
 /// a handful of times a round, and it is what makes the HUD unable to drift: the
@@ -67,11 +56,8 @@ internal class MatchHud {
     private bool effectLookedUp;
 
     /// Who has been drawn to since the match started, so the once-a-second clock is
-    /// not sent to a client that has nothing to put it on, and how many steps of the
-    /// flag bar they were last shown, so a bar that has not moved is not resent.
-    private readonly Dictionary<ulong, int> drawn = [];
-
-    private const int FlagSteps = 10;
+    /// not sent to a client that has nothing to put it on.
+    private readonly HashSet<ulong> drawn = [];
 
     internal bool IsAvailable => Effect() != null;
 
@@ -81,25 +67,19 @@ internal class MatchHud {
 
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
             Draw(viewer, FromTheViewpointOf(state, viewer.playerID.steamID.m_SteamID));
-            drawn[viewer.playerID.steamID.m_SteamID] = Steps(state.FlagHealth);
+            drawn.Add(viewer.playerID.steamID.m_SteamID);
         }
     }
 
-    /// The clock and the flag bar, once a second. Kept apart from Show so the
-    /// per-second call is a text message per viewer and the bar only when it moved.
-    internal void Countdown(int secondsLeft, float flagHealth) {
+    /// The clock, once a second. Kept apart from Show so the per-second call is one
+    /// text message per viewer.
+    internal void Countdown(int secondsLeft) {
         if (Effect() == null) return;
 
-        int steps = Steps(flagHealth);
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
-            ulong steam64 = viewer.playerID.steamID.m_SteamID;
-            if (!drawn.TryGetValue(steam64, out int shown)) continue;
+            if (!drawn.Contains(viewer.playerID.steamID.m_SteamID)) continue;
 
             Send(viewer, "Timer", Clock(secondsLeft));
-            if (shown == steps) continue;
-
-            Flag(viewer, steps);
-            drawn[steam64] = steps;
         }
     }
 
@@ -128,12 +108,10 @@ internal class MatchHud {
         for (int team = 0; team < 2; team++) {
             Send(viewer, $"Team{team}_Name", state.Teams[team].Name);
             Send(viewer, $"Score{team}", state.Teams[team].Score.ToString());
-            Visible(viewer, $"Shield{team}", state.DefendingTeam == team);
+            Visible(viewer, $"Castle{team}", state.DefendingTeam == team);
             Visible(viewer, $"Swords{team}", state.DefendingTeam >= 0 && state.DefendingTeam != team);
         }
-        Send(viewer, "Mid", state.Jeopardy ? $"<color=#ff4f4f>{state.Label}</color>" : state.Label);
         Send(viewer, "Timer", Clock(state.SecondsLeft));
-        Flag(viewer, Steps(state.FlagHealth));
 
         for (int team = 0; team < 2; team++) {
             string side = team == 0 ? "L" : "R";
@@ -165,27 +143,9 @@ internal class MatchHud {
 
         return new HudState {
             Teams = onSecond ? [state.Teams[1], state.Teams[0]] : [state.Teams[0], state.Teams[1]],
-            Label = state.Label,
-            Jeopardy = state.Jeopardy,
             DefendingTeam = state.DefendingTeam < 0 ? -1 : onSecond ? 1 - state.DefendingTeam : state.DefendingTeam,
-            SecondsLeft = state.SecondsLeft,
-            FlagHealth = state.FlagHealth
+            SecondsLeft = state.SecondsLeft
         };
-    }
-
-    /// The flag bar: `steps` of its ten segments lit, and the whole thing away when
-    /// there is no flag.
-    private static void Flag(SteamPlayer viewer, int steps) {
-        Visible(viewer, "Flag", steps >= 0);
-        for (int i = 0; i < FlagSteps; i++) Visible(viewer, $"Flag{i}", i < steps);
-    }
-
-    /// Health as lit segments: anything standing lights at least one, and -1 for no
-    /// flag at all.
-    private static int Steps(float health) {
-        if (health < 0f) return -1;
-
-        return Math.Max(1, (int)Math.Ceiling(health * FlagSteps));
     }
 
     // ---- the wire ---------------------------------------------------------------

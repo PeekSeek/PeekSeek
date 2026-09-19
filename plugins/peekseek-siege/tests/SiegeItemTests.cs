@@ -149,7 +149,7 @@ public class ConfigurationTests {
 
         Assert.NotNull(config.SentryFirearm);
         Assert.Equal(112, config.SentryFirearm.ItemId);
-        Assert.Contains(config.DefenceOptions, option => option.Items.Any(item => item.ItemId == 1373));
+        Assert.Contains(config.DefenceOptions, option => option.Items.Any(item => item.ItemId == 43131));
     }
 
     /// The site marker is placed by the gamemode and never handed out. If a player could

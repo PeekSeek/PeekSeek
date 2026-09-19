@@ -30,7 +30,9 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// building, short enough that nobody is standing around at the end.
     public int BuildSeconds;
 
-    /// How long the option board stays up before it picks for you.
+    /// How long the boards stay up before they pick for you. Attackers choose where they
+    /// come in and what they bring; defenders choose what they hold with, and one of
+    /// them stands the flag in the same time.
     public int PickSeconds;
 
     /// The round clock. Running it out with the flag still standing is a defender win,
@@ -106,7 +108,10 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     public byte OffBaseDamagePerSecond;
     public float OffBaseGraceSeconds;
 
-    /// The two plots. Order is the team order, so team 0 builds at Sites[0].
+    /// The two plots. Order is the team order, so team 0 builds at Sites[0]. Each
+    /// carries the three points its attackers choose between; those are walked out on
+    /// the map by hand, somewhere with cover most of the way in, and the picture the
+    /// attackers choose on is baked from the same numbers.
     public List<SiegeSite> Sites;
 
     /// What a defender may take into a round, and what an attacker may. Five each,
@@ -150,9 +155,9 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     public string BuildPanelEffectGUID;
     public short BuildPanelKey;
 
-    /// How long the one defender chosen to stand the flag gets, and how long everybody
-    /// stays rooted after it is up before the round goes live.
-    public int FlagSeconds;
+    /// How long everybody stays rooted, in position and with the flag up, before the
+    /// round goes live. The flag itself is stood during the pick: the defender chosen
+    /// for it picks their powerup and then has the rest of the pick to walk the base.
     public int StartSeconds;
 
     /// The gun every sentry goes down with, put in the moment it is placed and never
@@ -234,7 +239,7 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         HandsHeight = 12;
 
         OffBaseDamagePerSecond = 12;
-        OffBaseGraceSeconds = 2f;
+        OffBaseGraceSeconds = 3f;
 
         Sites = [
             new SiegeSite {
@@ -242,23 +247,31 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
                 Anchor = new SerializableVector3(74.97f, 65.65f, 311.35f),
                 Yaw = 321.4624f,
                 BuildRadius = 32f,
-                AttackerSpawnDistance = 70f,
-                AttackerBearing = 141f
+                AttackerSpawns = [
+                    new SerializableVector3(152.60f, 67.76f, 383.00f),
+                    new SerializableVector3(8.21f, 68.47f, 286.77f),
+                    new SerializableVector3(91.95f, 62.73f, 232.95f)
+                ]
             },
             new SiegeSite {
                 Name = "South",
                 Anchor = new SerializableVector3(234.63f, 52.23f, -240.41f),
                 Yaw = 354.825f,
                 BuildRadius = 32f,
-                AttackerSpawnDistance = 70f,
-                AttackerBearing = 175f
+                AttackerSpawns = [
+                    new SerializableVector3(155.81f, 35.27f, -173.20f),
+                    new SerializableVector3(310.10f, 63.16f, -184.88f),
+                    new SerializableVector3(305.46f, 79.00f, -321.41f)
+                ]
             }
         ];
 
         // Every number below is off the game's own item files. Traps: 386 barbed wire
         // (40 to a player who walks it), 1101 landmine (91 to a player, 75 to a
-        // structure), 1373 hostile sentry, armed by SentryFirearm the moment it goes
-        // down and shooting anybody not in its group.
+        // structure), 43131 the PeekSeek Sentry, the hostile sentry from the UI
+        // workshop item with Requires_Power off, armed by SentryFirearm the moment it
+        // goes down and shooting anybody not in its group. Its picture is the vanilla
+        // sentry's, which is the one the site has.
         DefenceOptions = [
             new SiegeOption {
                 Name = "Barbed Wire",
@@ -284,7 +297,8 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             new SiegeOption {
                 Name = "Sentry",
                 Blurb = "A hostile sentry with a shotgun in it. Put it where they have to come through.",
-                Items = [new SiegeItem(1373, 1)]
+                Icon = 1373,
+                Items = [new SiegeItem(43131, 1)]
             }
         ];
 
@@ -330,7 +344,6 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         BuildPanelEffectGUID = "7a3d9c2e5f8b4b1c9d0e1f2a3b4c5d6e";
         BuildPanelKey = 27312;
 
-        FlagSeconds = 15;
         StartSeconds = 3;
 
         // 112 is the Bluntforce; the state is left to the game, which loads it.

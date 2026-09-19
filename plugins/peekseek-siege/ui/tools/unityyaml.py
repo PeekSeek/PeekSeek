@@ -444,25 +444,43 @@ def flare_alpha(size, outer_x):
     return lambda x, y: coverage(inside, x, y)
 
 
-def shield_alpha(size):
-    """A shield: flat top, straight sides down to the middle, then a point. The role
-    marker for the team holding the flag."""
+def disc_alpha(size):
+    """A filled circle: a dot on a map, and the ground under the keep."""
     def inside(px, py):
-        top, straight_to, bottom = size * 0.12, size * 0.5, size * 0.92
-        left, right = size * 0.18, size * 0.82
-        if py < top or py > bottom:
+        return 1 if (px - size / 2) ** 2 + (py - size / 2) ** 2 <= (size / 2) ** 2 else 0
+
+    return lambda x, y: coverage(inside, x, y)
+
+
+def castle_alpha(size):
+    """A keep: a wall with a merlon at each end, a taller tower in the middle with two
+    of its own, and an arched gate. The role marker for the team holding the flag.
+    Drawn here rather than taken from an icon set, so nothing about it is anybody
+    else's."""
+    def box(x, y, x0, y0, x1, y1):
+        return x0 <= x <= x1 and y0 <= y <= y1
+
+    def inside(px, py):
+        x, y = px / size, py / size
+        # The gate: an arch with a straight-sided opening under it, cut out of the wall.
+        if 0.41 <= x <= 0.59 and (y >= 0.77 or (x - 0.5) ** 2 + (y - 0.77) ** 2 <= 0.09 ** 2):
             return 0
-        if py <= straight_to:
-            return 1 if left <= px <= right else 0
-        half = (right - left) / 2 * (bottom - py) / (bottom - straight_to)
-        return 1 if abs(px - size / 2) <= half else 0
+        if box(x, y, 0.08, 0.46, 0.92, 0.92):
+            return 1
+        if box(x, y, 0.08, 0.32, 0.22, 0.46) or box(x, y, 0.78, 0.32, 0.92, 0.46):
+            return 1
+        if box(x, y, 0.35, 0.22, 0.65, 0.46):
+            return 1
+        if box(x, y, 0.35, 0.10, 0.46, 0.22) or box(x, y, 0.54, 0.10, 0.65, 0.22):
+            return 1
+        return 0
 
     return lambda x, y: coverage(inside, x, y)
 
 
 def swords_alpha(size):
     """Two crossed blades with a short guard each. The role marker for the team
-    attacking."""
+    attacking. Drawn here for the same reason the keep is."""
     def near(px, py, ax, ay, bx, by, radius):
         dx, dy = bx - ax, by - ay
         t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))

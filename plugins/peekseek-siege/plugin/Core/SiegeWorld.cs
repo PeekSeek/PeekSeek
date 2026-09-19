@@ -160,14 +160,6 @@ internal static class SiegeWorld {
     /// it is asked once a second while a round runs.
     internal static bool MarkerStands(SiegeSite site) => Marker(site) != null;
 
-    /// How much of the flag is left, 0 to 1, or -1 with no flag standing.
-    internal static float MarkerHealth(SiegeSite site) {
-        BarricadeDrop flag = Marker(site);
-        if (flag == null) return -1f;
-
-        return (float)flag.GetServersideData().barricade.health / flag.asset.health;
-    }
-
     /// A layout offset turned to face the site and put on its anchor.
     private static Vector3 OnSite(SiegeSite site, float x, float y, float z) {
         return site.AnchorPoint + Quaternion.Euler(0f, site.Yaw, 0f) * new Vector3(x, y, z);
@@ -190,14 +182,37 @@ internal static class SiegeWorld {
         return site.AnchorPoint + Vector3.up * 1.5f;
     }
 
+    /// Where a player waits while a round is set up: one of the map's own lobby spawns,
+    /// half a metre up as the game itself puts a player there. False on a map that has
+    /// no lobby.
+    ///
+    /// Nothing here is Siege's: on an Arena map the regular player spawns are the lobby.
+    /// They are where the game puts a player on join and on respawn
+    /// (Provider.onLoginSpawning and PlayerLife, both LevelPlayers.getSpawn(false) in
+    /// the U3-SDK), and LevelManager takes the alt spawns for the arena drop itself.
+    /// Alpha Valley's are the building in the south-west corner, hundreds of metres
+    /// from either site, which is the point: there is nothing to see from there.
+    internal static bool LobbySpot(int index, out Vector3 point, out float angle) {
+        List<PlayerSpawnpoint> lobby = LevelPlayers.getRegSpawns();
+        if (lobby.Count == 0) {
+            point = default;
+            angle = 0f;
+            return false;
+        }
+
+        PlayerSpawnpoint spawn = lobby[index % lobby.Count];
+        point = spawn.point + Vector3.up * 0.5f;
+        angle = spawn.angle;
+        return true;
+    }
+
     /// Drop a point onto whatever is under it.
     ///
-    /// Attacker spawns are worked out as a bearing and a distance from the site anchor,
-    /// which is flat arithmetic on a map that is not flat. Seventy metres out from a
-    /// site on Alpha Valley can be well above or well below the anchor, and teleporting
-    /// somebody into the middle of a hillside leaves them stuck in it. The ray starts
-    /// high and takes the first ground it finds; if it finds none, the point is used as
-    /// calculated, because falling is recoverable and being inside a hill is not.
+    /// A spawn that was walked out by hand still gets this, because the spread round it
+    /// is flat arithmetic on a map that is not flat, and teleporting somebody into the
+    /// side of a hill leaves them stuck in it. The ray starts high and takes the first
+    /// ground it finds; if it finds none, the point is used as given, because falling
+    /// is recoverable and being inside a hill is not.
     internal static Vector3 OnGround(Vector3 point) {
         Vector3 sky = new(point.x, point.y + 200f, point.z);
 
@@ -291,7 +306,7 @@ internal static class SiegeWorld {
         ref ulong owner, ref ulong group, ref bool shouldAllow) {
         if (asset.id == PeekSeekSiege.Config.AnchorMarkerItemId) {
             shouldAllow = siege != null
-                && siege.Phase == SiegePhase.Placing
+                && siege.Phase == SiegePhase.Picking
                 && owner == siege.FlagBearer
                 && SiteAt(point) == siege.DefendedSite
                 && IsOnSomethingBuilt(point);

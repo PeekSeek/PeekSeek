@@ -1,12 +1,13 @@
+using System;
 using System.Collections.Generic;
 using PeekSeekSiege.Core;
-using PeekSeekSiege.Core.Models;
 using Rocket.API;
 using Rocket.Unturned.Player;
 
 namespace PeekSeekSiege.Commands;
 
-/// `/pick 3`, the chat answer to the option board.
+/// `/pick 3`, the chat answer to the option board, and `/pick spawn 2`, an attacker's
+/// answer to the map.
 ///
 /// This exists whether or not the Unity board does. A player still downloading the UI
 /// bundle, or one whose client is not drawing effects for any reason, still has to be
@@ -14,8 +15,8 @@ namespace PeekSeekSiege.Commands;
 public class PickCommand : IRocketCommand {
     public AllowedCaller AllowedCaller => AllowedCaller.Player;
     public string Name => "pick";
-    public string Help => "Take one of the five options on the board.";
-    public string Syntax => "<1-5>";
+    public string Help => "Take one of the five options on the board, or a spawn on the map.";
+    public string Syntax => "<1-5> | spawn <1-3>";
     public List<string> Aliases => [];
     public List<string> Permissions => [];
 
@@ -28,13 +29,17 @@ public class PickCommand : IRocketCommand {
             return;
         }
 
-        if (command.Length == 0 || !int.TryParse(command[0], out int chosen)) {
+        bool spawn = command.Length > 1 && command[0].Equals("spawn", StringComparison.OrdinalIgnoreCase);
+        string number = command.Length == 0 ? "" : spawn ? command[1] : command[0];
+        if (!int.TryParse(number, out int chosen)) {
             Chat.Whisper(player.Player.channel.owner, PeekSeekSiege.Instance.Translate("pick_how"));
             return;
         }
 
-        SiegeOption taken = siege.Board.Answer(player.Player.channel.owner, chosen);
-        if (taken == null) {
+        bool taken = spawn
+            ? siege.Board.AnswerSpawn(player.Player.channel.owner, chosen)
+            : siege.Board.Answer(player.Player.channel.owner, chosen) != null;
+        if (!taken) {
             Chat.Whisper(player.Player.channel.owner, PeekSeekSiege.Instance.Translate("pick_no_such"));
         }
     }
