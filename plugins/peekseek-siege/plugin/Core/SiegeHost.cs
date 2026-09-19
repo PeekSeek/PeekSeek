@@ -35,8 +35,22 @@ internal static class SiegeHost {
         UnturnedPlayerEvents.OnPlayerDeath += OnDeath;
         UnturnedPlayerEvents.OnPlayerRevive += OnRevive;
         EffectManager.onEffectButtonClicked += OnButtonClicked;
+        PlayerInput.onPluginKeyTick += OnPluginKey;
+        Level.onPostLevelLoaded += OnLevelLoaded;
 
         RemoteAPI.Init();
+        if (Level.isLoaded) OnLevelLoaded(0);
+    }
+
+    /// Morning, and a day that outlasts the server's own nightly restart. The map is a
+    /// Survival-type copy of an Arena map, so the game would run its day and night
+    /// cycle, and a siege fought in the dark is a different game. Set here rather
+    /// than in Commands.dat, where `day` runs before there is a level to set it on.
+    private static void OnLevelLoaded(int level) {
+        if (Level.info == null || Level.info.type != ELevelType.SURVIVAL) return;
+
+        LightingManager.cycle = 24 * 60 * 60;
+        LightingManager.time = (uint)(LightingManager.cycle * (LevelLighting.transition + 0.1f));
     }
 
     internal static void Shutdown() {
@@ -48,6 +62,8 @@ internal static class SiegeHost {
         UnturnedPlayerEvents.OnPlayerDeath -= OnDeath;
         UnturnedPlayerEvents.OnPlayerRevive -= OnRevive;
         EffectManager.onEffectButtonClicked -= OnButtonClicked;
+        PlayerInput.onPluginKeyTick -= OnPluginKey;
+        Level.onPostLevelLoaded -= OnLevelLoaded;
 
         RemoteAPI.Shutdown();
         instrument?.UnpatchAll(instrument.Id);
@@ -120,6 +136,10 @@ internal static class SiegeHost {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
+        // The map is a Survival-type copy of an Arena map, so the game would draw
+        // hunger, thirst and infection for everybody, match or no match.
+        SiegeWorld.HideSurvivalMeters(player);
+
         if (running == null) {
             Chat.Whisper(player.channel.owner, PeekSeekSiege.Instance.Translate("idle_welcome"));
             return;
@@ -163,5 +183,11 @@ internal static class SiegeHost {
     /// and land on the same method, so the two forms cannot drift apart.
     private static void OnButtonClicked(Player player, string buttonName) {
         Current?.Board.AnswerButton(player.channel.owner, buttonName);
+    }
+
+    /// One of the game's five plugin hotkeys, as the client reports it with every
+    /// input packet. Only the press matters, and only the gamemode knows what for.
+    private static void OnPluginKey(Player player, uint simulation, byte key, bool state) {
+        Current?.OnPluginKey(player, key, state);
     }
 }

@@ -9,7 +9,9 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.TextCore.LowLevel;
 
-/// Builds PeekSeek's in-game screens into the folder that gets uploaded to the Workshop.
+/// Builds PeekSeek's in-game screens into the folders that get uploaded to the Workshop:
+/// one mod per folder under Assets with a Bundles/MasterBundle.dat in it, so the Siege
+/// screens and the kill feed are two items out of one project.
 ///
 /// This does what the U3-SDK's Master Bundle Tool does when you press Export, read off
 /// EditorAssetBundleHelper.Build so a bundle from here is byte-for-byte the kind the
@@ -28,43 +30,73 @@ using UnityEngine.TextCore.LowLevel;
 ///   Unity.exe -batchmode -nographics -quit -projectPath <this folder>
 ///             -executeMethod BuildBundle.Build -logFile build.log
 public static class BuildBundle {
-    private const string BundleName = "peekseek.masterbundle";
-    private const string BundleRoot = "Assets/PeekSeek/Bundles";
     private const string FontsRoot = "Assets/PeekSeek/Fonts";
 
-    /// The mod folder. Everything in it goes to the Workshop as one item.
-    private static readonly string Output = Path.GetFullPath("Build/PeekSeekUI");
+    /// One mod: where its assets live, what its bundle is called, and where it is built
+    /// to. Everything in the output folder goes to the Workshop as one item.
+    private sealed class Mod {
+        internal string BundleRoot;
+        internal string BundleName;
+        internal string Output;
+    }
 
-    [MenuItem("PeekSeek/Build UI bundle")]
+    [MenuItem("PeekSeek/Build UI bundles")]
     public static void Build() {
         ImportTextMeshProResources();
 
         // The GUIDs unityyaml.py writes into every text component.
         EnsureFont("Inter-Regular", "7d1a3c9e5b2f4a6c8e0d1f2a3b4c5d6e");
         EnsureFont("Inter-Bold", "8e2b4d0f6c3a5b7d9f1e2a3b4c5d6e7f");
+        EnsureFont("JetBrainsMono-Bold", "9f3c5e1a7d4b6c8e0a2f3b4c5d6e7f8a");
 
-        foreach (string prefab in Directory.GetFiles(BundleRoot, "Effect.prefab", SearchOption.AllDirectories)) {
-            AssetImporter.GetAtPath(prefab.Replace('\\', '/')).SetAssetBundleNameAndVariant(BundleName, "");
+        foreach (Mod mod in Mods()) BuildMod(mod);
+    }
+
+    /// Every folder under Assets with a Bundles/MasterBundle.dat in it. The bundle's
+    /// name is the one the .dat gives the game; the output folder is named after the
+    /// asset folder.
+    private static IEnumerable<Mod> Mods() {
+        foreach (string folder in Directory.GetDirectories("Assets")) {
+            string definition = Path.Combine(folder, "Bundles", "MasterBundle.dat");
+            if (!File.Exists(definition)) continue;
+
+            string name = null;
+            foreach (string line in File.ReadAllLines(definition)) {
+                if (line.StartsWith("Asset_Bundle_Name ")) name = line.Substring("Asset_Bundle_Name ".Length).Trim();
+            }
+            if (name == null) throw new InvalidDataException(definition + " has no Asset_Bundle_Name.");
+
+            yield return new Mod {
+                BundleRoot = Path.Combine(folder, "Bundles").Replace('\\', '/'),
+                BundleName = name,
+                Output = Path.GetFullPath(Path.Combine("Build", Path.GetFileName(folder)))
+            };
+        }
+    }
+
+    private static void BuildMod(Mod mod) {
+        foreach (string prefab in Directory.GetFiles(mod.BundleRoot, "Effect.prefab", SearchOption.AllDirectories)) {
+            AssetImporter.GetAtPath(prefab.Replace('\\', '/')).SetAssetBundleNameAndVariant(mod.BundleName, "");
         }
 
-        Directory.CreateDirectory(Output);
-        string[] assets = AssetDatabase.GetAssetPathsFromAssetBundle(BundleName);
-        if (assets.Length == 0) throw new FileNotFoundException("No Effect.prefab under " + BundleRoot);
+        Directory.CreateDirectory(mod.Output);
+        string[] assets = AssetDatabase.GetAssetPathsFromAssetBundle(mod.BundleName);
+        if (assets.Length == 0) throw new FileNotFoundException("No Effect.prefab under " + mod.BundleRoot);
 
         BuildAssetBundleOptions options =
             BuildAssetBundleOptions.DisableLoadAssetByFileName
             | BuildAssetBundleOptions.DisableLoadAssetByFileNameWithExtension;
 
         // Windows last, so the editor is left on the platform it started on.
-        BuildFor(BuildTarget.StandaloneLinux64, "_linux", assets, options);
-        BuildFor(BuildTarget.StandaloneOSX, "_mac", assets, options);
-        BuildFor(BuildTarget.StandaloneWindows64, "", assets, options);
+        BuildFor(mod, BuildTarget.StandaloneLinux64, "_linux", assets, options);
+        BuildFor(mod, BuildTarget.StandaloneOSX, "_mac", assets, options);
+        BuildFor(mod, BuildTarget.StandaloneWindows64, "", assets, options);
 
-        RemoveBuildNoise();
-        WriteHash();
-        CopyDefinitions();
+        RemoveBuildNoise(mod);
+        WriteHash(mod);
+        CopyDefinitions(mod);
 
-        Debug.Log("PeekSeek UI bundle written to " + Output);
+        Debug.Log(mod.BundleName + " written to " + mod.Output);
     }
 
     /// TextMeshPro's shaders, without which a font asset cannot be made: CreateFontAsset
@@ -189,7 +221,7 @@ public static class BuildBundle {
         Debug.Log($"Made {assetPath}.");
     }
 
-    private static void BuildFor(BuildTarget target, string suffix, string[] assets, BuildAssetBundleOptions options) {
+    private static void BuildFor(Mod mod, BuildTarget target, string suffix, string[] assets, BuildAssetBundleOptions options) {
         if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, target)) {
             Debug.LogWarning($"{target} build support is not installed; skipping. Add it in Unity Hub "
                 + "(Installs > Add modules) so the server and every player get a bundle for their platform.");
@@ -197,34 +229,34 @@ public static class BuildBundle {
         }
 
         AssetBundleBuild build = new() {
-            assetBundleName = NameFor(suffix),
+            assetBundleName = NameFor(mod, suffix),
             assetNames = assets
         };
-        BuildPipeline.BuildAssetBundles(Output, new[] { build }, options, target);
+        BuildPipeline.BuildAssetBundles(mod.Output, new[] { build }, options, target);
     }
 
     /// `peekseek_linux.masterbundle`: the suffix goes before the first dot, which is
     /// where the game looks for a platform's variant.
-    private static string NameFor(string suffix) {
-        int dot = BundleName.IndexOf('.');
-        return BundleName.Insert(dot, suffix);
+    private static string NameFor(Mod mod, string suffix) {
+        int dot = mod.BundleName.IndexOf('.');
+        return mod.BundleName.Insert(dot, suffix);
     }
 
     /// Unity writes a bundle named after the output folder plus a .manifest beside every
     /// bundle. Neither is part of a mod.
-    private static void RemoveBuildNoise() {
-        string folderBundle = Path.Combine(Output, Path.GetFileName(Output));
+    private static void RemoveBuildNoise(Mod mod) {
+        string folderBundle = Path.Combine(mod.Output, Path.GetFileName(mod.Output));
         if (File.Exists(folderBundle)) File.Delete(folderBundle);
 
-        foreach (string manifest in Directory.GetFiles(Output, "*.manifest")) File.Delete(manifest);
+        foreach (string manifest in Directory.GetFiles(mod.Output, "*.manifest")) File.Delete(manifest);
     }
 
     /// The server reads one file holding all three platform hashes, version byte first.
     /// Without all three bundles there is nothing correct to write, so none is written.
-    private static void WriteHash() {
-        string windows = Path.Combine(Output, NameFor(""));
-        string linux = Path.Combine(Output, NameFor("_linux"));
-        string mac = Path.Combine(Output, NameFor("_mac"));
+    private static void WriteHash(Mod mod) {
+        string windows = Path.Combine(mod.Output, NameFor(mod, ""));
+        string linux = Path.Combine(mod.Output, NameFor(mod, "_linux"));
+        string mac = Path.Combine(mod.Output, NameFor(mod, "_mac"));
         string hashFile = windows + ".hash";
 
         if (!File.Exists(linux) || !File.Exists(mac)) {
@@ -244,10 +276,10 @@ public static class BuildBundle {
 
     /// The .dat files sit beside the prefabs in the project so the folder shape the game
     /// walks is the same shape Unity built the paths from. The mod needs them too.
-    private static void CopyDefinitions() {
-        foreach (string source in Directory.GetFiles(BundleRoot, "*.dat", SearchOption.AllDirectories)) {
-            string relative = source.Substring(BundleRoot.Length + 1);
-            string target = Path.Combine(Output, relative);
+    private static void CopyDefinitions(Mod mod) {
+        foreach (string source in Directory.GetFiles(mod.BundleRoot, "*.dat", SearchOption.AllDirectories)) {
+            string relative = source.Replace('\\', '/').Substring(mod.BundleRoot.Length + 1);
+            string target = Path.Combine(mod.Output, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(target));
             File.Copy(source, target, overwrite: true);
         }

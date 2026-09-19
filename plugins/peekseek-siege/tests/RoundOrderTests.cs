@@ -68,16 +68,22 @@ public class RoundOrderTests {
         Assert.Equal(ends, RoundOrder.EndsABlock(round));
     }
 
-    [Fact]
-    public void ALeadMidBlockDoesNotEndTheMatch() {
-        Assert.Equal(-1, RoundOrder.Winner(4, 3, 1));
-        Assert.Equal(-1, RoundOrder.Winner(8, 5, 3));
+    /// Four of six cannot be caught, so 4-0 after round four and 4-1 after round five
+    /// are over, and so is 4-2 after six. Nobody plays a round that changes nothing.
+    [Theory]
+    [InlineData(4, 4, 0, 0)]
+    [InlineData(5, 4, 1, 0)]
+    [InlineData(5, 1, 4, 1)]
+    [InlineData(6, 4, 2, 0)]
+    [InlineData(6, 2, 4, 1)]
+    public void FirstToFourTakesRegulation(int round, int zero, int one, int winner) {
+        Assert.Equal(winner, RoundOrder.Winner(round, zero, one));
     }
 
     [Fact]
-    public void ALeadAtTheEndOfRegulationEndsTheMatch() {
-        Assert.Equal(0, RoundOrder.Winner(6, 4, 2));
-        Assert.Equal(1, RoundOrder.Winner(6, 2, 4));
+    public void ThreeIsNotEnough() {
+        Assert.Equal(-1, RoundOrder.Winner(4, 3, 1));
+        Assert.Equal(-1, RoundOrder.Winner(5, 3, 2));
     }
 
     [Fact]
@@ -86,9 +92,33 @@ public class RoundOrderTests {
         Assert.Equal(-1, RoundOrder.Winner(10, 4, 4));
     }
 
+    /// An overtime block is two rounds each way. A lead that the rest of the block
+    /// could still cancel is not a win, because the other side has not had its half.
     [Fact]
-    public void ALeadAtTheEndOfAnOvertimeBlockEndsTheMatch() {
-        Assert.Equal(0, RoundOrder.Winner(10, 5, 3));
-        Assert.Equal(1, RoundOrder.Winner(14, 5, 7));
+    public void ALeadTheBlockCanStillCancelDoesNotEndTheMatch() {
+        Assert.Equal(-1, RoundOrder.Winner(7, 4, 3));
+        Assert.Equal(-1, RoundOrder.Winner(8, 5, 3));
+        Assert.Equal(-1, RoundOrder.Winner(9, 5, 4));
+    }
+
+    /// A lead the block cannot cancel ends it there, even a round early: 6-3 after the
+    /// ninth round is over, because the tenth can only make it 6-4.
+    [Fact]
+    public void ALeadTheBlockCannotCancelEndsTheMatch() {
+        Assert.Equal(0, RoundOrder.Winner(9, 6, 3));
+        Assert.Equal(0, RoundOrder.Winner(10, 6, 4));
+        Assert.Equal(1, RoundOrder.Winner(14, 6, 8));
+    }
+
+    [Theory]
+    [InlineData(4, 3, 0, true)]
+    [InlineData(4, 2, 1, false)]
+    [InlineData(6, 3, 2, true)]
+    [InlineData(7, 3, 3, false)]
+    [InlineData(8, 4, 3, false)]
+    [InlineData(9, 5, 3, true)]
+    [InlineData(10, 5, 4, true)]
+    public void MatchPointIsTheRoundThatCanEndIt(int round, int zero, int one, bool matchPoint) {
+        Assert.Equal(matchPoint, RoundOrder.IsMatchPoint(round, zero, one));
     }
 }

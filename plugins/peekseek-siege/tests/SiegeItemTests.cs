@@ -96,65 +96,60 @@ public class ConfigurationTests {
         return dir?.FullName ?? Directory.GetCurrentDirectory();
     }
 
-    /// Nobody is ever handed the anchor's own pieces. The anchor floor and the flag are
-    /// protected from salvage and damage by item id wherever they stand, so a player
-    /// carrying one would be laying pieces nobody, including them, could ever remove,
-    /// and a snapshot would skip them: a base built out of anchor floors would vanish
-    /// at the first restore.
+    /// One of every piece has to fit in the hands page at once, because that is what a
+    /// builder carries: a piece with none of its kind in the inventory is a piece the
+    /// planner cannot offer. Structures are two or four cells each; the count here is
+    /// the worst case, every piece four cells.
     [Fact]
-    public void NobodyIsGivenAnAnchorPiece() {
+    public void OneOfEveryPieceFitsInTheHands() {
         PeekSeekSiegeConfiguration config = new();
         config.LoadDefaults();
 
-        foreach (ushort fixture in new[] { config.AnchorFloorItemId, config.AnchorMarkerItemId }) {
-            Assert.DoesNotContain(config.BuildSupplies, item => item.ItemId == fixture);
+        int kinds = config.BuildSupplies.Concat(config.TriangleSupplies).Select(item => item.ItemId).Distinct().Count();
+        Assert.True(kinds * 4 <= config.HandsWidth * config.HandsHeight,
+            $"{kinds} kinds of piece for {config.HandsWidth * config.HandsHeight} cells of hands.");
+    }
+
+    /// Every piece in the budget and every kit item shows on a panel or a tile with a
+    /// picture the site serves, from the same folder the site's loadout editor reads.
+    [Fact]
+    public void EveryBudgetPieceHasAnIconTheSiteServes() {
+        PeekSeekSiegeConfiguration config = new();
+        config.LoadDefaults();
+
+        string icons = Path.Combine(RepoRoot(), "website", "public", "unturned");
+        foreach (SiegeItem item in config.BuildSupplies.Concat(config.TriangleSupplies)) {
+            Assert.True(
+                File.Exists(Path.Combine(icons, item.ItemId + ".png")),
+                $"Budget piece {item.ItemId} has no icon on the site.");
         }
     }
 
-    /// The whole kit has to fit in the hands page at once, because it is issued once
-    /// and never topped up: what does not fit is silently not given. Structures are two
-    /// or four cells each; the count here is the worst case, every piece four cells.
+    /// Attackers may be given charges, which are placed, but never anything that
+    /// builds: a wall an attacker puts up inside the base is a base change mid-round,
+    /// and the flag is the defenders' to stand.
     [Fact]
-    public void TheBuildKitFitsInTheHands() {
+    public void RaidersCarryNothingThatBuilds() {
         PeekSeekSiegeConfiguration config = new();
         config.LoadDefaults();
 
-        int cells = config.BuildSupplies.Sum(item => item.Amount * (item.ItemId == 36 ? 2 : 4));
-        Assert.True(cells <= config.HandsWidth * config.HandsHeight,
-            $"{cells} cells of kit for {config.HandsWidth * config.HandsHeight} cells of hands.");
-    }
-
-    /// Attackers may not be given anything that has to be placed. They are in a different
-    /// group from the site they are attacking, so the defenders' claim bubble refuses them
-    /// every placement inside it — which is the whole base — and a placed charge would
-    /// simply never go down. 519 is the rocket launcher and 1100 is C4, both of which are
-    /// carried rather than placed.
-    [Fact]
-    public void RaidersCarryNothingThatMustBePlaced() {
-        PeekSeekSiegeConfiguration config = new();
-        config.LoadDefaults();
-
-        ushort[] placeable = [
-            1215,
-            1212,
-            1210,
-            1216,
-            1984,
-            57,
-            49,
-            59,
-            53,
-            55,
-            318,
-            378,
-            1332,
-            1158,
-            1234
-        ];
+        ushort[] builds = [1215, 1212, 1210, 1216, 1984, 57, 49, 59, 53, 55, 318, 378, 1332, 1158, 1234];
 
         foreach (SiegeItem item in config.RaidOptions.SelectMany(option => option.Items)) {
-            Assert.DoesNotContain(placeable, id => id == item.ItemId);
+            Assert.DoesNotContain(builds, id => id == item.ItemId);
         }
+    }
+
+    /// The sentry kit is only a kit because the sentry goes down armed: the gun is
+    /// configured, and it has to be a gun.
+    [Fact]
+    public void TheSentryIsArmedWithAGun() {
+        PeekSeekSiegeConfiguration config = new();
+        config.LoadDefaults();
+
+        Assert.NotNull(config.SentryFirearm);
+        Assert.Equal(112, config.SentryFirearm.ItemId);
+        Assert.Contains(config.DefenceOptions, option => option.Items.Any(item => item.ItemId == 1373));
     }
 
     /// The site marker is placed by the gamemode and never handed out. If a player could

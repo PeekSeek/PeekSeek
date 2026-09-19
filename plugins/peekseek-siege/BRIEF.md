@@ -41,7 +41,7 @@ Follow-up, mid-build:
 
 ## Deviations
 
-Three, each with a reason.
+Each with a reason.
 
 **The Unity UI needs a workshop bundle, which cannot be built from code.** Unturned has
 exactly one way to draw a custom UI: `EffectManager.SendUIEffect`, which takes an
@@ -50,20 +50,25 @@ has already downloaded, so a UI cannot ship inside a `.dll`. The board is theref
 written against both: give it an effect GUID in config and it draws the real Unity
 layout, leave the GUID empty and it draws the same five options to chat and takes
 `/pick`. `ui/README.md` is the spec for the prefab that GUID has to point at. The chat
-form is not a stopgap to be deleted — a player still downloading the bundle has to be
+form is not a stopgap to be deleted: a player still downloading the bundle has to be
 able to answer the board too.
 
-**Inventory size is not adjustable from a plugin, so supplies refill instead.** Backpack
-capacity is a property of the clothing asset, not something a server can set per player.
-Rather than hand out a mod backpack, the build phase tops every player's supplies back up
-every 30 seconds (`SupplyRefillSeconds`). The effect a big inventory was for — never
-running out of metal mid-build — is the effect this has, without a client-side dependency.
+**The building supplies are a team budget, not an inventory.** A builder carries one of
+each piece the team still has; the housing planner lists them, the panel beside the
+screen counts them, and placing one takes it off the pile and puts the next in hand.
+That is what "a large inventory" was for, without the mess of a hundred items on a
+hands page, and it is what makes swapping a placed piece for another material a matter
+of counting.
 
-**The claim flag needs a Harmony patch to stay unowned.** The brief is explicit that the
-anchor floor and its claim flag must not be assigned to the group, so they cannot be
-salvaged or moved. But Unturned's own claim check asks whether the builder matches the
-flag's owner or group, and against an unowned flag nobody matches — vanilla would refuse
-the team the site belongs to. Rather than compromise on the ownership, `ClaimPatch`
-answers that check from Siege's own rule, which is a better rule anyway: it knows a build
-phase is private per team and that a round opens exactly one building to both teams.
-Points outside both sites fall through to vanilla untouched.
+**The site is not an Arena map, and the flag is not a claim flag.** Unturned draws its
+arena text and compass on every Arena map from the client's own copy of the map, and
+nothing a server sends can stop it, so Siege runs on Alpha Valley Siege, a Workshop
+copy of Alpha Valley with the type byte set to Survival. And the claim flag's 32m
+bubble stops anybody outside the owning group placing anything within it, on the
+client, which is exactly the demolition charge an attacker needs to stick on a wall.
+The marker is the Metal Flag instead, a sign with 1100 health and no bubble, placed by
+one defender before every round rather than by the gamemode; the starting floors are
+protected by where they stand, not by what they are.
+
+**Attackers may place charges.** The brief's raid tools were carried and thrown. With no
+claim bubble a demolition charge can go on a wall, so it does.

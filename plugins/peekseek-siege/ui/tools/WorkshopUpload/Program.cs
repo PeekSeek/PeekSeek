@@ -1,21 +1,23 @@
 using Steamworks;
 using Steamworks.Ugc;
 
-// Publishes the built board mod to the Steam Workshop, or updates it there.
+// Publishes a built mod or map to the Steam Workshop, or updates it there.
 //
-//   dotnet run -- <mod folder>                     new item
-//   dotnet run -- <mod folder> --update <file id>  update that item
-//   dotnet run -- <mod folder> --changes "text"    a change note, on either
+//   dotnet run -- <folder> --title "PeekSeek UI"           new item
+//   dotnet run -- <folder> --update <file id>              update that item
+//   dotnet run -- <folder> --type Map                      a map rather than a bundle
+//   dotnet run -- <folder> --changes "text"                a change note, on any
 //
 // It talks to the Steam client that is already running and logged in on this machine,
 // so it needs no password and no API key; there is no other way to publish, because
 // Steam only takes Workshop uploads through a logged-in session.
 //
 // What it sets is what Unturned's own submit menu sets (TempSteamworksWorkshop.updateUGC
-// in the U3-SDK), because that is how the game decides what a downloaded item is:
-// a one-byte Object.meta in the folder, the tag "Object", and the key-value tag
-// compatibility_version = 6, the master bundle version for 2022 LTS. Unlisted, so the
-// server can hand the id to anybody who joins without the item turning up in search.
+// in the U3-SDK), because that is how the game decides what a downloaded item is: a
+// one-byte Object.meta or Map.meta in the folder, the matching tag, and for a bundle
+// the key-value tag compatibility_version = 6, the master bundle version for 2022 LTS.
+// Unlisted, so the server can hand the id to anybody who joins without the item turning
+// up in search.
 
 const uint Unturned = 304930;
 const string CompatibilityVersion = "6";
@@ -23,18 +25,29 @@ const string CompatibilityVersion = "6";
 string? folder = args.Length > 0 && !args[0].StartsWith("--") ? Path.GetFullPath(args[0]) : null;
 ulong existing = Flag("--update") is string id ? ulong.Parse(id) : 0;
 string changes = Flag("--changes") ?? (existing == 0 ? "First upload." : "Rebuilt.");
+string type = Flag("--type") ?? "Object";
+bool isMap = type.Equals("Map", StringComparison.OrdinalIgnoreCase);
 
-if (folder == null || !File.Exists(Path.Combine(folder, "MasterBundle.dat"))) {
-    Console.Error.WriteLine("Give the mod folder: the one holding MasterBundle.dat, usually ui/Build/PeekSeekSiegeUI.");
+if (folder == null || (!isMap && !File.Exists(Path.Combine(folder, "MasterBundle.dat")))) {
+    Console.Error.WriteLine("Give the mod folder: the one holding MasterBundle.dat, usually ui/Build/<mod>; or a map folder with --type Map.");
     return 2;
 }
 
-// The site's logo, found by walking up to the repo, so the item looks like PeekSeek's.
-string preview = Path.Combine(RepoRoot(), "website", "public", "img", "logo red.png");
+string title = Flag("--title") ?? (isMap ? Path.GetFileName(Directory.GetDirectories(folder).First()) : "PeekSeek UI");
+string description = Flag("--description") ?? (isMap
+    ? File.ReadAllLines(Path.Combine(Directory.GetDirectories(folder).First(), "English.dat"))
+        .FirstOrDefault(line => line.StartsWith("Description "))?.Substring("Description ".Length) ?? title
+    : "The screens PeekSeek servers draw in game. Servers list this item so it downloads on join; there is nothing to do with it on its own.");
+
+// The site's logo, found by walking up to the repo, so the item looks like PeekSeek's;
+// a map has its own preview.
+string preview = isMap
+    ? Path.Combine(Directory.GetDirectories(folder).First(), "Preview.png")
+    : Path.Combine(RepoRoot(), "website", "public", "img", "logo red.png");
 
 // The marker the game reads to learn what kind of content this is. Unturned's uploader
 // writes the same file into the folder it submits.
-File.WriteAllBytes(Path.Combine(folder, "Object.meta"), new byte[1]);
+File.WriteAllBytes(Path.Combine(folder, isMap ? "Map.meta" : "Object.meta"), new byte[1]);
 
 try {
     SteamClient.Init(Unturned, asyncCallbacks: true);
@@ -47,12 +60,12 @@ try {
     Console.WriteLine($"Logged in as {SteamClient.Name} ({SteamClient.SteamId}).");
 
     Editor editor = (existing == 0 ? Editor.NewCommunityFile : new Editor(existing))
-        .WithTitle("PeekSeek UI")
-        .WithDescription("The screens PeekSeek servers draw in game: the pick board and the match HUD. Servers list this item so it downloads on join; there is nothing to do with it on its own.")
+        .WithTitle(title)
+        .WithDescription(description)
         .WithContent(new DirectoryInfo(folder))
-        .WithTag("Object")
-        .AddKeyValueTag("compatibility_version", CompatibilityVersion)
+        .WithTag(isMap ? "Map" : "Object")
         .WithChangeLog(changes);
+    if (!isMap) editor = editor.AddKeyValueTag("compatibility_version", CompatibilityVersion);
     editor = Unlisted(editor);
 
     if (File.Exists(preview)) editor = editor.WithPreviewFile(preview);

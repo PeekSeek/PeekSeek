@@ -1,16 +1,20 @@
+using System;
+
 namespace PeekSeekSiege.Core;
 
 /// Who defends in round N, and whether the match is over yet.
 ///
 /// The shape is Rainbow Six's: a block of rounds on one side, then the same block on
 /// the other, so a team that built a base always gets to both defend it and attack
-/// the base it has just been defending against. Regulation is 3 and 3. If that is
-/// level, overtime is 2 and 2, over and over, until somebody is ahead at the end of
-/// a completed block — never mid-block, because half a block is not a fair swap.
+/// the base it has just been defending against. Regulation is 3 and 3, and level at
+/// 3-3 goes to overtime, 2 and 2, over and over. A match ends the moment the rest of
+/// the block cannot change who is ahead: 4-0 after four rounds is over, 4-1 after
+/// five is over, and two rounds that change nothing are two rounds nobody wants to
+/// play. Never before that, because half a block is not a fair swap.
 ///
-/// Everything here is arithmetic on the round number, so nothing has to be carried
-/// between rounds and a reconnecting player can be told where they are from a single
-/// integer.
+/// Everything here is arithmetic on the round number and the score, so nothing has to
+/// be carried between rounds and a reconnecting player can be told where they are from
+/// three integers.
 internal static class RoundOrder {
     internal const int RegulationHalf = 3;
     internal const int OvertimeHalf = 2;
@@ -37,8 +41,10 @@ internal static class RoundOrder {
         return (block + (secondHalf ? 1 : 0) + 1) % 2;
     }
 
-    /// Whether round `round` is the last of its block, which is the only moment a
-    /// score can end the match.
+    internal static bool IsOvertime(int round) => round > Regulation;
+
+    /// Whether round `round` is the last of its block, which in overtime is the only
+    /// moment a score can end the match.
     internal static bool EndsABlock(int round) {
         if (round < Regulation) return false;
         if (round == Regulation) return true;
@@ -46,14 +52,27 @@ internal static class RoundOrder {
         return (round - Regulation) % OvertimeBlock == 0;
     }
 
-    /// The winning team, or -1 while the match is still going.
-    ///
-    /// A match can only be decided at the end of a block, and only when the two
-    /// scores differ. Anything else means play on.
+    /// Rounds still to play in the block that round `round` belongs to, once it has
+    /// been played.
+    private static int LeftInBlock(int round) {
+        if (!IsOvertime(round)) return Regulation - round;
+
+        return (OvertimeBlock - (round - Regulation) % OvertimeBlock) % OvertimeBlock;
+    }
+
+    /// The winning team once round `round` has been scored, or -1 while the match is
+    /// still going: whoever is ahead by more than the block has rounds left.
     internal static int Winner(int round, int teamZeroScore, int teamOneScore) {
-        if (!EndsABlock(round)) return -1;
-        if (teamZeroScore == teamOneScore) return -1;
+        int lead = Math.Abs(teamZeroScore - teamOneScore);
+        if (lead <= LeftInBlock(round)) return -1;
 
         return teamZeroScore > teamOneScore ? 0 : 1;
+    }
+
+    /// Whether round `round`, about to be played at this score, can end the match:
+    /// the leader winning it would put them beyond the block's reach.
+    internal static bool IsMatchPoint(int round, int teamZeroScore, int teamOneScore) {
+        int lead = Math.Abs(teamZeroScore - teamOneScore);
+        return lead + 1 > LeftInBlock(round);
     }
 }

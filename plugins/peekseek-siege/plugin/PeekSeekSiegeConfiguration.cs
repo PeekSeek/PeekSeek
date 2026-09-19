@@ -38,21 +38,22 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// gamemode is being tested end to end; a real match wants 180.
     public int RoundSeconds;
 
-    /// The pieces this gamemode places itself. A site starts as a three-by-three grid of
-    /// metal floors with a pillar on each outer corner and the claim flag in the middle.
+    /// The pieces this gamemode places itself. A site starts as the metal floors of the
+    /// footprint the team chose, with a pillar on every corner.
     ///
-    /// The floors and the flag are fixtures: never part of a snapshot, never salvageable,
-    /// never damaged, by anybody, in any phase, refused by item id in SiegeWorld. A team
-    /// that could move its anchor could build a second base beside the first and pick
-    /// whichever suited the round. The pillars are not fixtures: they go down in the
-    /// team's group so the team can pull one out if the plan needs the corner, and from
-    /// then on they are just part of the base.
+    /// The starting floors are the site: never salvageable, never damaged, by anybody,
+    /// in any phase, whatever material a team has swapped them to, refused by position
+    /// in SiegeWorld. A team that could move its anchor could build a second base beside
+    /// the first and pick whichever suited the round. The pillars are not fixtures: they
+    /// go down in the team's group so the team can pull one out if the plan needs the
+    /// corner, and from then on they are just part of the base.
     ///
-    /// The flag is placed in the site team's group so that the team can build inside its
-    /// own 32m bubble. That is the only whitelist a claim flag has: ClaimManager.
-    /// checkCanBuild admits you if you match the bubble's owner or its group, and the
-    /// bubble is built on the client from the replicated barricade, so there is nothing
-    /// a server-side patch can do about it.
+    /// The marker is the flag one defender stands somewhere on the base before each
+    /// round, and the round's objective. It has to be a barricade with health and
+    /// without a claim bubble: a claim flag keeps everybody but its own group from
+    /// placing anything within 32m of it, on the client, which is exactly the charge an
+    /// attacker needs to put on the wall. 1234 is the Metal Flag, a sign with 1100
+    /// health, so it also carries the team's name.
     public ushort AnchorFloorItemId;
     public ushort AnchorTriangleItemId;
     public ushort AnchorPillarItemId;
@@ -62,14 +63,17 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// in it, because a triangular floor needs triangular pieces to build on.
     public List<SiegeItem> TriangleSupplies;
 
-    /// A team's materials for the whole build phase, issued once. Everything is a
-    /// budget: metal is what survives a charge, so how much of a building is metal and
-    /// which parts is the most interesting decision a team makes, and it stops being
-    /// one the moment anything is unlimited.
+    /// A team's pieces for the whole build phase: one budget, shared by the team. A
+    /// builder never carries the kit; they carry one of each piece the team still has,
+    /// so the housing planner lists what can still go down, and the panel beside the
+    /// screen says how many. Everything is a budget: metal is what survives a charge, so
+    /// how much of a building is metal and which parts is the most interesting decision
+    /// a team makes, and it stops being one the moment anything is unlimited.
     ///
     /// Floors are in the kit, and any floor placed has to touch a floor that is already
     /// standing (SiegeWorld refuses the rest), so the base grows out from the anchor
-    /// rather than being laid beside it.
+    /// rather than being laid beside it. A piece already standing can be swapped for
+    /// the same piece in another material, which refunds the old one here.
     public List<SiegeItem> BuildSupplies;
 
     /// What a builder is handed on top of their clothes: the housing planner, which is
@@ -140,6 +144,22 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// own placeholder, the same one the site falls back to.
     public string DefaultAvatarURL;
 
+    /// The panel beside the screen during the build phase, listing what the team has
+    /// left to lay: `Effects/BuildPanel/BuildPanel.dat` in `ui/`, on its own key.
+    public string BuildPanelEffectGUID;
+    public short BuildPanelKey;
+
+    /// How long the one defender chosen to stand the flag gets, and how long everybody
+    /// stays rooted after it is up before the round goes live.
+    public int FlagSeconds;
+    public int StartSeconds;
+
+    /// The gun every sentry goes down with, put in the moment it is placed and never
+    /// coming out. One item, with whatever state it needs: the id, and the same
+    /// comma-separated state bytes a kit item takes, or none for the game's default,
+    /// which for a gun is the standard sight, a full magazine and full quality.
+    public SiegeItem SentryFirearm;
+
     public void LoadDefaults() {
         szAPIURL = "https://peekseek.net";
         KitCategory = "meta";
@@ -161,25 +181,43 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         AnchorFloorItemId = 369;
         AnchorTriangleItemId = 1265;
         AnchorPillarItemId = 36;
-        AnchorMarkerItemId = 1158;
+        AnchorMarkerItemId = 1234;
 
-        // Ids are read off the server's own Bundles/Items rather than guessed. Maple:
-        // 31 floor, 32 doorway, 33 wall, 35 roof, 36 pillar, 322 ramp, 1262 triangle
-        // floor, 1266 triangle roof. Metal: 369 floor, 373 roof, 378 door, 1265
-        // triangle floor.
+        // Ids are read off the game's own Bundles/Items rather than guessed. Maple is
+        // the standard piece (400 health a wall): 31 floor, 32 doorway, 33 wall, 34
+        // window, 35 roof, 36 pillar, 316 stairs, 319 hole, 322 ramp, 442 rampart.
+        // Birch is the soft wall a team can pull down mid-round (350): 57 wall, 49
+        // doorway, 51 floor. Metal holds a rocket (1100): 369 floor, 370 doorway, 371
+        // wall, 373 roof, 374 pillar, 376 hole. Brick holds two (1650): 1215 wall, 1212
+        // pillar. Doors are metal only, 378, as the brief asked.
         BuildSupplies = [
-            new SiegeItem(36, 50),
-            new SiegeItem(33, 20),
-            new SiegeItem(35, 20),
-            new SiegeItem(32, 5),
-            new SiegeItem(31, 5),
-            new SiegeItem(378, 5),
-            new SiegeItem(322, 3),
-            new SiegeItem(373, 3)
+            new SiegeItem(36, 80),
+            new SiegeItem(33, 40),
+            new SiegeItem(35, 24),
+            new SiegeItem(31, 16),
+            new SiegeItem(32, 8),
+            new SiegeItem(34, 8),
+            new SiegeItem(319, 4),
+            new SiegeItem(316, 4),
+            new SiegeItem(322, 4),
+            new SiegeItem(442, 8),
+            new SiegeItem(57, 12),
+            new SiegeItem(49, 4),
+            new SiegeItem(51, 4),
+            new SiegeItem(371, 8),
+            new SiegeItem(370, 4),
+            new SiegeItem(369, 4),
+            new SiegeItem(374, 8),
+            new SiegeItem(373, 4),
+            new SiegeItem(376, 2),
+            new SiegeItem(1215, 4),
+            new SiegeItem(1212, 4),
+            new SiegeItem(378, 6)
         ];
 
+        // 1262 maple triangle floor, 1266 maple triangle roof.
         TriangleSupplies = [
-            new SiegeItem(1262, 6),
+            new SiegeItem(1262, 12),
             new SiegeItem(1266, 12)
         ];
 
@@ -190,9 +228,9 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         FallbackOutfit = ["Alicepack"];
 
         HandsWidth = 14;
-        // Grown to hold the whole kit at once: a hundred and ten pieces at two or four
-        // cells each is more than a backpack.
-        HandsHeight = 32;
+        // Grown to hold one of every piece at once: thirty kinds at two or four cells
+        // each is more than a backpack.
+        HandsHeight = 12;
 
         OffBaseDamagePerSecond = 12;
         OffBaseGraceSeconds = 2f;
@@ -216,16 +254,20 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             }
         ];
 
+        // Every number below is off the game's own item files. Traps: 386 barbed wire
+        // (40 to a player who walks it), 1101 landmine (91 to a player, 75 to a
+        // structure), 1373 hostile sentry, armed by SentryFirearm the moment it goes
+        // down and shooting anybody not in its group.
         DefenceOptions = [
             new SiegeOption {
                 Name = "Barbed Wire",
-                Blurb = "Slows and bleeds anyone who walks it.",
-                Items = [new SiegeItem(1101, 4)]
+                Blurb = "Four coils. Slows and bleeds anyone who walks it.",
+                Items = [new SiegeItem(386, 4)]
             },
             new SiegeOption {
                 Name = "Landmines",
-                Blurb = "Buried. One step and that doorway is yours again.",
-                Items = [new SiegeItem(1102, 3)]
+                Blurb = "Three, buried. One step and that doorway is yours again.",
+                Items = [new SiegeItem(1101, 3)]
             },
             new SiegeOption {
                 Name = "Reinforce",
@@ -239,45 +281,44 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
                 Items = [new SiegeItem(254, 2), new SiegeItem(1408, 1)]
             },
             new SiegeOption {
-                Name = "Medic",
-                Blurb = "Two medkits and a dressing. Outlast the clock.",
-                Items = [new SiegeItem(95, 2), new SiegeItem(1103, 1)]
+                Name = "Sentry",
+                Blurb = "A hostile sentry with a shotgun in it. Put it where they have to come through.",
+                Items = [new SiegeItem(1373, 1)]
             }
         ];
 
-        // Raiders are the explosive side. Nothing here is a placed barricade: attackers
-        // are in a different group from the site they are attacking, so the defenders'
-        // claim bubble refuses them any placement inside it, which is the whole base.
-        // C4 is a sticky throwable rather than a placed charge, so it works.
-        //
-        // 254 fragmentation grenade, 519 rocket launcher, 520 rocket, 1100 C4,
-        // 1520 impact grenade. The launcher does 1000 structure damage, so it comes
-        // with less of everything else.
+        // Raiders are the explosive side, and the numbers are structure damage: a
+        // rocket (519 launcher, 520 rocket) and a demolition charge (1241, set off with
+        // the 1240 detonator) are 1000 each, a sticky (1100) or an impact grenade
+        // (1520) 100, a frag (254) 50. A maple wall is 400, metal 1100, brick 1650, and
+        // the flag 1100. The launcher gets fewer shots than the charges because it
+        // fires them from across the field; a charge has to be walked to the wall.
         RaidOptions = [
             new SiegeOption {
                 Name = "Rocket Launcher",
-                Blurb = "Two rockets. Opens brick, and nothing else you carry will.",
+                Blurb = "Two rockets, from wherever you are standing. One takes any wood wall; two take metal.",
                 Items = [new SiegeItem(519, 1), new SiegeItem(520, 2)]
             },
             new SiegeOption {
-                Name = "C4",
-                Blurb = "Four sticky charges. Put them on the wall you want gone.",
-                Items = [new SiegeItem(1100, 4)]
+                Name = "Demolition",
+                Blurb = "Three charges and the detonator. Stick them on, walk away, press the button.",
+                Icon = 1241,
+                Items = [new SiegeItem(1240, 1), new SiegeItem(1241, 3)]
+            },
+            new SiegeOption {
+                Name = "Sticky Grenades",
+                Blurb = "Six. Each takes a quarter of a wood wall; they stick where they land.",
+                Items = [new SiegeItem(1100, 6)]
             },
             new SiegeOption {
                 Name = "Impact Grenades",
-                Blurb = "Six, and they go off where they land.",
+                Blurb = "Six, and they go off where they land. Good through a window.",
                 Items = [new SiegeItem(1520, 6)]
             },
             new SiegeOption {
                 Name = "Frags",
                 Blurb = "Six grenades. Clear a room without entering it.",
                 Items = [new SiegeItem(254, 6)]
-            },
-            new SiegeOption {
-                Name = "Field Medic",
-                Blurb = "Two medkits and a dressing. Survive the first room.",
-                Items = [new SiegeItem(95, 2), new SiegeItem(1103, 1)]
             }
         ];
 
@@ -285,6 +326,14 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         PickUIKey = 27310;
         MatchHudEffectGUID = "5398e1499dcf4fda9e4f8a6c4d73faea";
         MatchHudKey = 27311;
+        BuildPanelEffectGUID = "7a3d9c2e5f8b4b1c9d0e1f2a3b4c5d6e";
+        BuildPanelKey = 27312;
+
+        FlagSeconds = 15;
+        StartSeconds = 3;
+
+        // 112 is the Bluntforce; the state is left to the game, which loads it.
+        SentryFirearm = new SiegeItem(112, 1);
         ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
         DefaultAvatarURL = "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg";
     }

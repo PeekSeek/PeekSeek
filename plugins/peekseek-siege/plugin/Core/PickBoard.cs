@@ -8,25 +8,28 @@ using Logger = Rocket.Core.Logging.Logger;
 
 namespace PeekSeekSiege.Core;
 
-/// Which of the prefab's two panels a board is drawn on. `Pick` is the five-tile board
-/// a round's options go on, each tile's picture fetched from the site; `Shape` is the
+/// Which of the prefab's panels a board is drawn on. `Pick` is the five-tile board a
+/// round's options go on, each tile's picture fetched from the site; `Shape` is the
 /// two-tile board the footprint is chosen on, with the whole starting base drawn on
-/// each tile and baked into the bundle. The name is the prefix of every child the
-/// plugin addresses on that panel (`Pick_Timer`, `Shape0_Taken`) and of its buttons
-/// (`SiegePick2`, `SiegeShape0`), so one board class draws both.
+/// each tile and baked into the bundle; `Swap` is the six-tile board a builder changes
+/// a piece's material on. The name is the prefix of every child the plugin addresses
+/// on that panel (`Pick_Timer`, `Shape0_Taken`) and of its buttons (`SiegePick2`,
+/// `SiegeSwap0`), so one board class draws all of them.
 internal enum BoardFace {
     Pick,
-    Shape
+    Shape,
+    Swap
 }
 
-/// The board a player answers between rounds, and the one they answer before building.
+/// The boards a player answers: the round's options, the footprint before building,
+/// and the material of a piece while building.
 ///
-/// There are two ways to draw it and only one set of rules behind them. Unturned cannot
-/// draw a custom UI from plugin code: EffectManager.SendUIEffect takes an EffectAsset,
-/// and an EffectAsset only exists inside a workshop bundle the client has already
-/// downloaded. So the board is written against whichever is available. Give it an effect
-/// GUID and it draws a real Unity layout with clickable tiles; leave the GUID empty and
-/// it prints the same options to chat and takes /pick instead.
+/// There are two ways to draw a board and only one set of rules behind them. Unturned
+/// cannot draw a custom UI from plugin code: EffectManager.SendUIEffect takes an
+/// EffectAsset, and an EffectAsset only exists inside a workshop bundle the client has
+/// already downloaded. So the board is written against whichever is available. Give it
+/// an effect GUID and it draws a real Unity layout with clickable tiles; leave the GUID
+/// empty and it prints the same options to chat and takes /pick instead.
 ///
 /// The chat form is not a placeholder that gets deleted later. A player whose client is
 /// still downloading the bundle, or who has UI effects failing for any other reason, has
@@ -42,21 +45,34 @@ internal class PickBoard {
         internal string Headline;
         internal BoardFace Face;
 
+        /// Told the option the moment it is taken, for a board whose answer is an
+        /// action rather than a kit to hand out later.
+        internal System.Action<SiegeOption> OnAnswer;
+
         /// The option taken, or -1 while the board is up and unanswered.
         internal int Pick = -1;
+
+        /// Whether the board is on the player's screen. An answer is only taken from a
+        /// board that is up; the answer itself is kept until the next Reset, because the
+        /// round hands the kit out after the board has gone.
+        internal bool Up = true;
     }
 
     /// How many tiles each panel has. Tiles past the options offered are hidden, so a
     /// three-option list on the five-tile panel does not show two tiles of whatever the
     /// prefab was saved with.
-    private static int Tiles(BoardFace face) => face == BoardFace.Shape ? 2 : 5;
+    private static int Tiles(BoardFace face) => face switch {
+        BoardFace.Shape => 2,
+        BoardFace.Swap => 6,
+        _ => 5
+    };
 
     private readonly Dictionary<ulong, Seat> seats = [];
 
     private EffectAsset effect;
     private bool effectLookedUp;
 
-    internal bool IsOpen { get; private set; }
+    internal bool IsOpen => seats.Values.Any(seat => seat.Up);
 
     /// The option a player ended up with, defaulting to the first on their own board
     /// when they never answered. Defaulting rather than blocking is deliberate: a round
@@ -82,33 +98,52 @@ internal class PickBoard {
     /// last round should not still be holding one.
     internal void Reset() {
         seats.Clear();
-        IsOpen = true;
     }
 
-    /// Put the board up for one player. `headline` is the one line above the options
-    /// that says why they are choosing: which round it is and which side they are on.
-    internal void Open(SteamPlayer viewer, List<SiegeOption> choices, string headline, BoardFace face = BoardFace.Pick) {
-        Seat seat = new() { Options = choices, Headline = headline, Face = face };
+    /// Put a board up for one player. `headline` is the one line above the options
+    /// that says why they are choosing; `marked` is a tile shown as already taken,
+    /// which is how the swap board shows what a piece is made of now.
+    internal void Open(SteamPlayer viewer, List<SiegeOption> choices, string headline, BoardFace face = BoardFace.Pick,
+                       System.Action<SiegeOption> onAnswer = null, int marked = -1) {
+        Seat seat = new() { Options = choices, Headline = headline, Face = face, OnAnswer = onAnswer };
         seats[viewer.playerID.steamID.m_SteamID] = seat;
 
-        Draw(viewer, seat);
+        Draw(viewer, seat, marked);
+    }
+
+    /// Take one player's board down without an answer.
+    internal void CloseFor(SteamPlayer viewer) {
+        if (!seats.TryGetValue(viewer.playerID.steamID.m_SteamID, out Seat seat) || !seat.Up) return;
+
+        seat.Up = false;
+        EffectAsset asset = Effect();
+        if (asset == null) return;
+
+        EffectManager.askEffectClearByID(asset.id, viewer.transportConnection);
+        Modal(viewer, false);
+    }
+
+    internal bool IsShowing(SteamPlayer viewer, BoardFace face) {
+        return seats.TryGetValue(viewer.playerID.steamID.m_SteamID, out Seat seat) && seat.Up && seat.Face == face;
     }
 
     /// Record a pick, 1-based as the board shows it. Returns the option taken, or null
     /// when that number is not on this player's board.
     internal SiegeOption Answer(SteamPlayer player, int oneBased) {
-        if (!IsOpen) return null;
-        if (!seats.TryGetValue(player.playerID.steamID.m_SteamID, out Seat seat)) return null;
+        if (!seats.TryGetValue(player.playerID.steamID.m_SteamID, out Seat seat) || !seat.Up) return null;
         if (oneBased < 1 || oneBased > seat.Options.Count) return null;
 
         seat.Pick = oneBased - 1;
+        seat.Up = false;
+        SiegeOption taken = seat.Options[seat.Pick];
         Confirm(player, seat);
-        return seat.Options[seat.Pick];
+        seat.OnAnswer?.Invoke(taken);
+        return taken;
     }
 
-    /// Answer from a clicked Unity button. Buttons are named `SiegePick0` and
-    /// `SiegeShape0` upward so a stray click on some other plugin's UI cannot land
-    /// here, and a click on the panel this player was not shown is not an answer.
+    /// Answer from a clicked Unity button. Buttons are named `SiegePick0`, `SiegeShape0`
+    /// and `SiegeSwap0` upward so a stray click on some other plugin's UI cannot land
+    /// here, and a click on a panel this player was not shown is not an answer.
     internal SiegeOption AnswerButton(SteamPlayer player, string buttonName) {
         if (!seats.TryGetValue(player.playerID.steamID.m_SteamID, out Seat seat)) return null;
 
@@ -119,9 +154,9 @@ internal class PickBoard {
         return Answer(player, index + 1);
     }
 
+    /// Every board down, answers kept.
     internal void Close() {
-        if (!IsOpen) return;
-        IsOpen = false;
+        foreach (Seat seat in seats.Values) seat.Up = false;
 
         EffectAsset asset = Effect();
         if (asset == null) return;
@@ -132,26 +167,28 @@ internal class PickBoard {
         }
     }
 
-    /// Repaint the seconds left. Called about once a second while the board is up, so it
-    /// only touches the one field that changed rather than resending the layout.
+    /// Repaint the seconds left. Called about once a second while a timed board is up,
+    /// so it only touches the one field that changed rather than resending the layout.
     internal void Countdown(int secondsLeft) {
-        if (!IsOpen || Effect() == null) return;
+        if (Effect() == null) return;
 
-        foreach (ulong steam64 in seats.Keys) {
-            SteamPlayer viewer = PlayerTool.getSteamPlayer(new CSteamID(steam64));
+        foreach (KeyValuePair<ulong, Seat> entry in seats) {
+            if (!entry.Value.Up || entry.Value.Face == BoardFace.Swap) continue;
+
+            SteamPlayer viewer = PlayerTool.getSteamPlayer(new CSteamID(entry.Key));
             if (viewer == null) continue;
 
             // Red for the last five seconds: the one thing on the board that is jeopardy,
             // so the one place the overlay's red belongs.
             string clock = secondsLeft <= 5 ? $"<color=#ff4f4f>{secondsLeft}</color>" : secondsLeft.ToString();
             EffectManager.sendUIEffectText(
-                PeekSeekSiege.Config.PickUIKey, viewer.transportConnection, true, $"{seats[steam64].Face}_Timer", clock);
+                PeekSeekSiege.Config.PickUIKey, viewer.transportConnection, true, $"{entry.Value.Face}_Timer", clock);
         }
     }
 
     private const string ButtonPrefix = "Siege";
 
-    private void Draw(SteamPlayer viewer, Seat seat) {
+    private void Draw(SteamPlayer viewer, Seat seat, int marked) {
         EffectAsset asset = Effect();
         if (asset == null) {
             DrawToChat(viewer, seat);
@@ -171,9 +208,10 @@ internal class PickBoard {
 
             EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{face}{i}_Name", option.Name);
             EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{face}{i}_Blurb", option.Blurb);
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{face}{i}_Taken", i == marked);
 
-            // The footprint tiles carry their own picture; only the pick tiles fetch one.
-            if (seat.Face == BoardFace.Pick) {
+            // The footprint tiles carry their own picture; the others fetch one.
+            if (seat.Face != BoardFace.Shape) {
                 EffectManager.sendUIEffectImageURL(
                     key, viewer.transportConnection, true, $"{face}{i}_Icon", IconUrl(option));
             }
@@ -185,7 +223,7 @@ internal class PickBoard {
     }
 
     private static string IconUrl(SiegeOption option) {
-        return string.Format(PeekSeekSiege.Config.ItemIconURL, option.IconItemId);
+        return option.IconItemId == 0 ? "" : string.Format(PeekSeekSiege.Config.ItemIconURL, option.IconItemId);
     }
 
     private static void Modal(SteamPlayer viewer, bool on) {
@@ -214,7 +252,6 @@ internal class PickBoard {
     /// The board as lines of chat. Same information, same order, same numbers as the
     /// tiles, so a player who moves between the two is reading the same board.
     private static void DrawToChat(SteamPlayer viewer, Seat seat) {
-        Chat.Whisper(viewer, Chat.Rule);
         Chat.Whisper(viewer, seat.Headline);
 
         for (int i = 0; i < seat.Options.Count; i++) {

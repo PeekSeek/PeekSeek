@@ -60,43 +60,52 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
         // the shape of the whole match is explained, so it says the shape and nothing else.
         { "match_intro", "<color=white>Siege.</color> Build a base, then take turns cracking each other's. <color=white>{0}</color> rounds each side. You get <color=white>{1}</color> to build." },
 
-        { "build_start", "<color=white>Build.</color> {0} at <color=white>{1}</color>. The planner is in your hands and the whole kit is on you. You cannot leave your plot, and a floor only goes down against one that is already there." },
-        { "build_shape", "<color=white>{0}</color> build on a <color=white>{1}</color> footprint." },
-
-        // The footprint board. Three tiles; the first answer on a team is the team's.
-        { "board_shape", "<color=white>Your footprint.</color> What the base starts from. First pick on your team counts." },
+        // The footprint board. Two tiles; the first answer on a team is the team's.
+        { "board_shape", "<color=white>Your footprint.</color> What the base starts from." },
         { "shape_square", "Square" },
         { "shape_square_blurb", "Nine metal floors, three by three. Walls and roofs only." },
         { "shape_hexagonal", "Hexagonal" },
-        { "shape_hexagonal_blurb", "Six triangles round the flag, a square on every side. Triangle pieces in the kit." },
-        { "build_countdown", "<color=white>{0}s</color> of building left." },
-        { "build_done", "<color=white>Bases locked.</color> {0} and {1} pieces. Nothing about them changes from here." },
+        { "shape_hexagonal_blurb", "Six triangles round the middle, a square on every side. Triangle pieces in the kit." },
 
-        // The small label over the HUD clock. Short, because the slot is, and the last
-        // two are the ones drawn in red.
+        // The swap board, while building: the piece you are looking at in every other
+        // material, and a way to take it down. {0} is what is left of that material,
+        // {1} the piece's health.
+        { "board_swap", "<color=white>{0}.</color> Make it something else." },
+        { "swap_left", "{0} left. {1} health." },
+        { "swap_none", "None left. {1} health." },
+        { "swap_none_left", "No <color=white>{0}</color> left." },
+        { "swap_remove", "Remove" },
+        { "swap_remove_blurb", "Take it down. It goes back on the pile." },
+
+        // The small label under the HUD clock. Short, because the slot is, and the
+        // last two are the ones drawn in red.
         { "hud_shaping", "Footprint" },
         { "hud_building", "Build" },
+        { "hud_placing", "Flag" },
+        { "hud_starting", "Ready" },
         { "hud_round", "Round {0}" },
         { "hud_overtime", "Overtime" },
         { "hud_match_point", "Match point" },
         { "hud_final", "Final" },
 
-        { "round_start", "<color=white>Round {0}.</color> <color=white>{1}</color> defends. Score <color=white>{2}-{3}</color>." },
-        { "round_live", "<color=white>Go.</color> {0} seconds. Attackers take the flag down, defenders keep it up." },
-        { "round_countdown", "<color=white>{0}s</color> left." },
-        { "round_won_wipe", "<color=white>{0}</color> take round {1}. <color=white>{2}-{3}</color>." },
-        { "round_won_clock", "<color=white>{0}</color> hold round {1}. The flag is still standing. <color=white>{2}-{3}</color>." },
-        { "round_won_flag", "<color=white>{0}</color> took the flag down. Round {1} theirs. <color=white>{2}-{3}</color>." },
-        { "round_won_skipped", "Round {1} given to <color=white>{0}</color>. <color=white>{2}-{3}</color>." },
-        { "overtime", "Level after the swap. <color=white>Overtime</color>: {0} rounds each until somebody is ahead." },
+        // The one line a round is allowed: who took it and how. The score is on the HUD
+        // and the reason is the thing it cannot show.
+        { "round_won_wipe", "<color=white>{0}</color> take round {1}. Nobody left." },
+        { "round_won_clock", "<color=white>{0}</color> hold round {1}. The flag is still up." },
+        { "round_won_flag", "<color=white>{0}</color> take round {1}. The flag is down." },
+        { "round_won_skipped", "Round {1} given to <color=white>{0}</color>." },
         { "match_won", "<color=white>{0}</color> win it <color=white>{1}-{2}</color>. Well played." },
         { "match_stopped", "Match <color=white>stopped</color>." },
+
+        // Said to the one defender holding the flag, because nothing on screen says it
+        // is them.
+        { "flag_bearer", "<color=white>You have the flag.</color> Stand it anywhere on your base. {0} seconds, or it goes on a free tile." },
 
         // The board. The headline says which side you are and how long you have; the
         // options are numbered so a one-character answer is one people actually give.
         { "board_defend", "<color=white>Round {0}. You are defending {1}.</color> Pick what you hold it with." },
         { "board_attack", "<color=white>Round {0}. You are taking {1}.</color> Pick what you crack it with." },
-        { "pick_option", "<color=white>{0}</color>  {1} — {2}" },
+        { "pick_option", "<color=white>{0}</color>  {1}. {2}" },
         { "pick_how", "Type <color=white>/pick</color> and a number." },
         { "pick_locked", "Locked in: <color=white>{0}</color>." },
         { "pick_no_such", "That is not on the board." },

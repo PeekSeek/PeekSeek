@@ -34,6 +34,9 @@ TEXT_MESH_PRO_UGUI = "f4688fdb7df04437aeb418b961361dc5"
 # font's own, which saves this file having to know a sub-asset id Unity generates.
 FONT_REGULAR = "7d1a3c9e5b2f4a6c8e0d1f2a3b4c5d6e"
 FONT_BOLD = "8e2b4d0f6c3a5b7d9f1e2a3b4c5d6e7f"
+# JetBrains Mono Bold, for a clock: every digit the same width, so 0:59 to 1:00 does
+# not shift the text. TextMeshPro cannot ask a proportional font for tabular figures.
+FONT_MONO = "9f3c5e1a7d4b6c8e0a2f3b4c5d6e7f8a"
 
 LEFT, CENTER, RIGHT = 1, 2, 4
 TOP, MIDDLE, BOTTOM = 256, 512, 1024
@@ -222,12 +225,14 @@ def canvas(node, sorting_order=0):
     ])
 
 
-def image(node, colour, alpha=1.0, *, sprite=None, sliced=True, enabled=True, preserve_aspect=False, raycast=False):
+def image(node, colour, alpha=1.0, *, sprite=None, sliced=True, enabled=True, preserve_aspect=False, raycast=False,
+          material=None):
     """A rectangle in a colour. With `sprite` set it is that sprite, tinted: nine-sliced
-    for a corner or a border that must not stretch, plain for a picture."""
+    for a corner or a border that must not stretch, plain for a picture. `material` is
+    the GUID of a material asset to draw it with instead of uGUI's own."""
     node.component(222, ["m_CullTransparentMesh: 1"])
     return node.mono(IMAGE, [
-        "m_Material: {fileID: 0}",
+        f"m_Material: {{fileID: 2100000, guid: {material}, type: 2}}" if material else "m_Material: {fileID: 0}",
         f"m_Color: {rgba(colour, alpha)}",
         f"m_RaycastTarget: {int(raycast)}",
         "m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}",
@@ -283,9 +288,10 @@ def button(node, target_image_id, normal, hover, pressed):
 
 
 def text(node, content, *, size, colour, halign=LEFT, valign=MIDDLE, bold=False,
-         wrap=False, spacing=0, uppercase=False):
+         wrap=False, spacing=0, uppercase=False, mono=False):
     """TextMeshPro text. `spacing` is letter spacing in hundredths of an em, the unit
     TMP uses, so CSS's 0.1em is 10."""
+    font = FONT_MONO if mono else FONT_BOLD if bold else FONT_REGULAR
     node.component(222, ["m_CullTransparentMesh: 1"])
     node.mono(TEXT_MESH_PRO_UGUI, [
         "m_Material: {fileID: 0}",
@@ -298,7 +304,7 @@ def text(node, content, *, size, colour, halign=LEFT, valign=MIDDLE, bold=False,
         "    m_Calls: []",
         f"m_text: {quoted(content)}",
         "m_isRightToLeft: 0",
-        f"m_fontAsset: {{fileID: 11400000, guid: {FONT_BOLD if bold else FONT_REGULAR}, type: 2}}",
+        f"m_fontAsset: {{fileID: 11400000, guid: {font}, type: 2}}",
         "m_sharedMaterial: {fileID: 0}",
         "m_fontSharedMaterials: []",
         "m_fontMaterial: {fileID: 0}",
@@ -590,3 +596,123 @@ TextureImporter:
   assetBundleVariant:
 """, encoding="utf-8", newline="\n")
     return guid
+
+
+# ---- the silhouette material -----------------------------------------------------------
+
+SILHOUETTE_SHADER = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+SILHOUETTE_MATERIAL = "b2c3d4e5f60718293a4b5c6d7e8f90a1"
+
+
+def silhouette(folder):
+    """A material that draws an image as a flat shape: the sprite's alpha in the tint
+    colour, and nothing of its own colours. uGUI's default material multiplies the
+    tint into the picture, which leaves a gun the colour of a gun; a kill feed wants
+    it white. Writes the shader, its material and their metas, and returns the
+    material's GUID for `image(material=...)`."""
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    Path(folder, "Silhouette.shader").write_text("""Shader "PeekSeek/UI Silhouette"
+{
+    Properties
+    {
+        [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
+        _Color ("Tint", Color) = (1,1,1,1)
+    }
+
+    SubShader
+    {
+        Tags { "Queue"="Transparent" "IgnoreProjector"="True" "RenderType"="Transparent" "PreviewType"="Plane" "CanUseSpriteAtlas"="True" }
+        Cull Off
+        Lighting Off
+        ZWrite Off
+        ZTest [unity_GUIZTestMode]
+        Blend SrcAlpha OneMinusSrcAlpha
+
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+
+            struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; fixed4 color : COLOR; };
+            struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; fixed4 color : COLOR; };
+
+            sampler2D _MainTex;
+            fixed4 _Color;
+
+            v2f vert(appdata v)
+            {
+                v2f o;
+                o.pos = UnityObjectToClipPos(v.vertex);
+                o.uv = v.uv;
+                o.color = v.color * _Color;
+                return o;
+            }
+
+            fixed4 frag(v2f i) : SV_Target
+            {
+                fixed a = tex2D(_MainTex, i.uv).a;
+                return fixed4(i.color.rgb, a * i.color.a);
+            }
+            ENDCG
+        }
+    }
+}
+""", encoding="utf-8", newline="\n")
+    Path(folder, "Silhouette.shader.meta").write_text(f"""fileFormatVersion: 2
+guid: {SILHOUETTE_SHADER}
+ShaderImporter:
+  externalObjects: {{}}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+""", encoding="utf-8", newline="\n")
+
+    Path(folder, "Silhouette.mat").write_text(f"""%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {{fileID: 0}}
+  m_PrefabInstance: {{fileID: 0}}
+  m_PrefabAsset: {{fileID: 0}}
+  m_Name: Silhouette
+  m_Shader: {{fileID: 4800000, guid: {SILHOUETTE_SHADER}, type: 3}}
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {{}}
+  disabledShaderPasses: []
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _MainTex:
+        m_Texture: {{fileID: 0}}
+        m_Scale: {{x: 1, y: 1}}
+        m_Offset: {{x: 0, y: 0}}
+    m_Ints: []
+    m_Floats: []
+    m_Colors:
+    - _Color: {{r: 1, g: 1, b: 1, a: 1}}
+  m_BuildTextureStacks: []
+""", encoding="utf-8", newline="\n")
+    Path(folder, "Silhouette.mat.meta").write_text(f"""fileFormatVersion: 2
+guid: {SILHOUETTE_MATERIAL}
+NativeFormatImporter:
+  externalObjects: {{}}
+  mainObjectFileID: 2100000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+""", encoding="utf-8", newline="\n")
+
+    return SILHOUETTE_MATERIAL

@@ -15,6 +15,8 @@ internal enum SiegePhase {
     Shaping,
     Building,
     Picking,
+    Placing,
+    Starting,
     Playing,
     Over
 }
@@ -23,10 +25,17 @@ internal enum SiegePhase {
 ///
 /// The match is one build phase and then a run of rounds. The build phase is the only
 /// time the buildings change; after that a base is a fixed thing that gets re-laid
-/// before every round exactly as it was left, and the only per-round decision is what
-/// each player carries in. That split is the whole design — a team spends five minutes
-/// on a building and then has to both hold it and crack the mirror of it, so a base
-/// that is only good to defend is a bad base.
+/// before every round exactly as it was left, and the only per-round decisions are
+/// what each player carries in and where the defenders stand their flag. That split
+/// is the whole design: a team spends five minutes on a building and then has to both
+/// hold it and crack the mirror of it, so a base that is only good to defend is a bad
+/// base.
+///
+/// A round is four moments. Everybody picks, rooted to their spawn with nothing in
+/// their hands. One defender walks the base and stands the flag where this round's
+/// defence wants it. Three seconds of everybody frozen with the flag up. Then the
+/// round. Nobody moves until the last of those, which is what stops a pick phase
+/// being a head start.
 ///
 /// The rules that make it read as a siege rather than a deathmatch on a small map are
 /// all about ground. Defenders take damage standing on dirt, so holding means holding
@@ -52,16 +61,23 @@ internal class Siege : IGamemode {
     /// phase; Square if nobody on the team answered.
     private readonly BaseShape[] shapes = [BaseShape.Square, BaseShape.Square];
 
+    /// What each team has left to lay, for the build phase only.
+    private readonly BuildBudget[] budgets = new BuildBudget[2];
+
     private readonly PickBoard board = new();
     private readonly MatchHud hud = new();
+    private readonly BuildPanel panel = new();
+
+    /// The defender placing this round's flag, or 0 when nobody is.
+    internal ulong FlagBearer { get; private set; }
+
+    /// The piece each builder had a swap board open for, by where it stands, so an
+    /// answer can find it again even if it has changed hands in the meantime.
+    private readonly Dictionary<ulong, Vector3> swapping = [];
 
     /// When each player was last standing on something built, so the grace period
     /// before off-base damage can be measured. Absent means they are on a base now.
     private readonly Dictionary<ulong, float> offBaseSince = [];
-
-    /// Who has been kitted out this build phase. Cleared when a build phase opens, so a
-    /// player who dies or rejoins mid-build is dressed again but not resupplied.
-    private readonly HashSet<ulong> supplied = [];
 
     /// Who has died this round. A death is what takes a player out of a round, and it
     /// has to be remembered rather than read off `isDead`, because solo lets the tester
@@ -75,16 +91,6 @@ internal class Siege : IGamemode {
     /// walks the tester through both halves; /siege side overrides it for a look at the
     /// other half of the same round.
     private int soloSide;
-
-    /// The items this gamemode places itself. They are never captured into a snapshot
-    /// and never cleared between rounds, because they are the site rather than the
-    /// base — a team that could move its own anchor could build a second base beside
-    /// the first and pick whichever one suited the round.
-    private HashSet<ushort> Fixtures => [
-        PeekSeekSiege.Config.AnchorFloorItemId,
-        PeekSeekSiege.Config.AnchorTriangleItemId,
-        PeekSeekSiege.Config.AnchorMarkerItemId
-    ];
 
     /// The site being attacked this round, which is the site its owners are defending.
     ///
@@ -114,7 +120,6 @@ internal class Siege : IGamemode {
 
         SiegeWorld.Hook(this);
 
-        Chat.Announce(Chat.Rule);
         Chat.Announce(PeekSeekSiege.Instance.Translate("match_intro",
             RoundOrder.RegulationHalf, Wording.Duration(PeekSeekSiege.Config.BuildSeconds)));
 
@@ -124,9 +129,13 @@ internal class Siege : IGamemode {
     public void End() {
         board.Close();
         hud.Hide();
+        StopBuilding();
         SiegeWorld.Unhook();
 
-        foreach (Player player in Players()) AllowRespawn(player);
+        foreach (Player player in Players()) {
+            AllowRespawn(player);
+            SiegeWorld.Freeze(player, false);
+        }
 
         phase = SiegePhase.Idle;
         match = null;
@@ -136,7 +145,7 @@ internal class Siege : IGamemode {
         if (phase == SiegePhase.Idle || phase == SiegePhase.Over) return;
 
         // Everything below is per-second bookkeeping, not per-frame work: clocks,
-        // supply top-ups and the off-base check all read the same once a second as
+        // the off-base check and the flag check all read the same once a second as
         // they would sixty times, and the raycast in particular is not free.
         if (Time.realtimeSinceStartup < nextTick) return;
         nextTick = Time.realtimeSinceStartup + 1f;
@@ -152,6 +161,12 @@ internal class Siege : IGamemode {
                 break;
             case SiegePhase.Picking:
                 TickPicking();
+                break;
+            case SiegePhase.Placing:
+                TickPlacing();
+                break;
+            case SiegePhase.Starting:
+                if (SecondsLeft <= 0) StartPlaying();
                 break;
             case SiegePhase.Playing:
                 TickPlaying();
@@ -173,6 +188,11 @@ internal class Siege : IGamemode {
     /// them too; forgetting them afterwards is what stops the clock following them out.
     public void OnPlayerLeft(CSteamID steamID) {
         offBaseSince.Remove(steamID.m_SteamID);
+        swapping.Remove(steamID.m_SteamID);
+
+        Player leaving = PlayerTool.getPlayer(steamID);
+        if (leaving != null) BudgetFor(steamID.m_SteamID)?.Unwatch(leaving);
+
         RefreshHud();
         hud.Forget(steamID.m_SteamID);
     }
@@ -204,8 +224,8 @@ internal class Siege : IGamemode {
     public void OnPlayerRevived(Player player) {
         if (match == null) return;
 
+        SiegeWorld.HideSurvivalMeters(player);
         Place(player);
-        if (phase != SiegePhase.Building) SiegeWorld.Outfit(player);
         RefreshHud();
     }
 
@@ -233,7 +253,6 @@ internal class Siege : IGamemode {
     }
 
     private void TickShaping() {
-        Leash();
         board.Countdown(SecondsLeft);
 
         bool everyoneAnswered = Players().All(p => board.HasAnswered(p.channel.owner.playerID.steamID.m_SteamID));
@@ -279,31 +298,34 @@ internal class Siege : IGamemode {
     private void StartBuilding() {
         phase = SiegePhase.Building;
         phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.BuildSeconds;
-        supplied.Clear();
+
+        for (int team = 0; team < 2; team++) {
+            int captured = team;
+            budgets[team] = new BuildBudget(SuppliesFor(ShapeAt(team)));
+            budgets[team].Changed += () => ShowPanel(captured);
+        }
 
         foreach (int team in BuiltSites()) {
             SiegeSite site = sites[team];
             BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, []);
-            SiegeWorld.PlaceAnchor(site, GroupOf(team), shapes[team]);
+            SiegeWorld.PlaceAnchor(team, site, shapes[team]);
             SiegeWorld.PlacePillars(site, GroupOf(team), shapes[team]);
         }
 
         foreach (Player player in Players()) Place(player);
 
-        Chat.Announce(PeekSeekSiege.Instance.Translate("build_start",
-            Wording.Duration(PeekSeekSiege.Config.BuildSeconds),
-            match.Solo ? sites[0].Name : "your site"));
-        for (int team = 0; team < (match.Solo ? 1 : 2); team++) {
-            Chat.Announce(PeekSeekSiege.Instance.Translate("build_shape", TeamName(team),
-                PeekSeekSiege.Instance.Translate("shape_" + shapes[team].ToString().ToLowerInvariant())));
-        }
-
         RefreshHud();
+    }
+
+    /// The team's whole kit: the pieces every base gets, and the triangles a
+    /// hexagonal one needs on top.
+    private static IEnumerable<SiegeItem> SuppliesFor(BaseShape shape) {
+        IEnumerable<SiegeItem> supplies = PeekSeekSiege.Config.BuildSupplies;
+        return shape == BaseShape.Square ? supplies : supplies.Concat(PeekSeekSiege.Config.TriangleSupplies);
     }
 
     private void TickBuilding() {
         Leash();
-        Countdown("build_countdown");
 
         if (SecondsLeft > 0) return;
         FinishBuilding();
@@ -313,10 +335,108 @@ internal class Siege : IGamemode {
     internal void FinishBuilding() {
         foreach (int team in BuiltSites()) bases[team] = Snapshot(team);
 
-        Chat.Announce(PeekSeekSiege.Instance.Translate("build_done",
-            bases[0]?.Count ?? 0, bases[1]?.Count ?? 0));
-
+        StopBuilding();
         StartRound(1);
+    }
+
+    private void StopBuilding() {
+        board.Close();
+        swapping.Clear();
+
+        foreach (BuildBudget budget in budgets) budget?.UnwatchAll();
+        foreach (SteamPlayer viewer in Provider.clients.ToList()) panel.Hide(viewer);
+    }
+
+    /// The budget a player builds from: their team's. Solo builds as team 0.
+    internal BuildBudget BudgetFor(ulong steam64) => budgets[SideOf(steam64)];
+
+    private void ShowPanel(int team) {
+        BuildBudget budget = budgets[team];
+        if (budget == null || phase != SiegePhase.Building) return;
+
+        foreach (SteamPlayer viewer in Provider.clients.ToList()) {
+            if (SideOf(viewer.playerID.steamID.m_SteamID) != team) continue;
+            panel.Show(viewer, budget.Counts.Rows);
+        }
+    }
+
+    /// The swap key, while building: aim at one of your own team's pieces and press it
+    /// for a board of the same piece in every other material, and a way to take it
+    /// down. Pressed again with the board up, the board goes.
+    internal void OnPluginKey(Player player, byte key, bool pressed) {
+        if (key != 0 || !pressed || phase != SiegePhase.Building) return;
+
+        SteamPlayer viewer = player.channel.owner;
+        ulong steam64 = viewer.playerID.steamID.m_SteamID;
+
+        if (board.IsShowing(viewer, BoardFace.Swap)) {
+            board.CloseFor(viewer);
+            swapping.Remove(steam64);
+            return;
+        }
+
+        StructureDrop drop = SiegeWorld.Aimed(player);
+        if (drop == null) return;
+
+        int site = SiegeWorld.SiteAt(drop.GetServersideData().point);
+        if (site != SideOf(steam64)) return;
+
+        OpenSwapBoard(viewer, drop, site);
+    }
+
+    private void OpenSwapBoard(SteamPlayer viewer, StructureDrop drop, int site) {
+        ulong steam64 = viewer.playerID.steamID.m_SteamID;
+        BuildBudget budget = budgets[site];
+        ItemStructureAsset current = drop.asset;
+
+        List<SiegeOption> options = SiegeWorld.Variants(current).Select(variant => new SiegeOption {
+            Name = variant.itemName,
+            Blurb = PeekSeekSiege.Instance.Translate(
+                budget.Counts.Has(variant.id) ? "swap_left" : "swap_none", budget.Counts.Left(variant.id), variant.health),
+            Icon = variant.id
+        }).ToList();
+
+        // A starting floor can change material but never go: the site is the floors.
+        if (!SiegeWorld.IsAnchorTile(site, drop)) {
+            options.Add(new SiegeOption {
+                Name = PeekSeekSiege.Instance.Translate("swap_remove"),
+                Blurb = PeekSeekSiege.Instance.Translate("swap_remove_blurb")
+            });
+        }
+
+        swapping[steam64] = drop.GetServersideData().point;
+        board.Open(viewer, options, PeekSeekSiege.Instance.Translate("board_swap", current.itemName), BoardFace.Swap,
+            taken => Swap(viewer, taken));
+    }
+
+    /// Carry a swap out. The piece is found again by where it stands, because the
+    /// board may have been up for a while and a teammate may have salvaged it
+    /// meanwhile; a piece that is no longer there is nothing to swap.
+    private void Swap(SteamPlayer viewer, SiegeOption taken) {
+        ulong steam64 = viewer.playerID.steamID.m_SteamID;
+        if (phase != SiegePhase.Building || !swapping.TryGetValue(steam64, out Vector3 at)) return;
+        swapping.Remove(steam64);
+
+        StructureDrop drop = SiegeWorld.StructureAt(at);
+        if (drop == null) return;
+
+        BuildBudget budget = BudgetFor(steam64);
+        ushort was = drop.asset.id;
+
+        if (taken.Icon == 0) {
+            SiegeWorld.Remove(drop);
+            budget.Refund(was);
+            return;
+        }
+
+        if (Assets.find(EAssetType.ITEM, taken.Icon) is not ItemStructureAsset to) return;
+        if (!budget.Spend(to.id)) {
+            Chat.Whisper(viewer, PeekSeekSiege.Instance.Translate("swap_none_left", to.itemName));
+            return;
+        }
+
+        SiegeWorld.Swap(drop, to);
+        budget.Refund(was);
     }
 
     /// Which sites get a base built on them. Every team builds its own, except in solo,
@@ -347,9 +467,11 @@ internal class Siege : IGamemode {
         return match != null && match.Teams.Count > team ? match.Teams[team].GroupId : 0;
     }
 
+    /// Everything standing on the plot, starting floors included: they may have
+    /// changed material during the build, and a round has to put back what was there.
     private BaseSnapshot Snapshot(int team) {
         SiegeSite site = sites[team];
-        BaseSnapshot taken = BaseSnapshot.Capture(site.AnchorPoint, site.BuildRadius, Fixtures);
+        BaseSnapshot taken = BaseSnapshot.Capture(site.AnchorPoint, site.BuildRadius, []);
         Logger.Log($"Captured {taken.Count} piece(s) for {site.Name}.");
         return taken;
     }
@@ -359,14 +481,13 @@ internal class Siege : IGamemode {
     private void StartRound(int number) {
         round = number;
         deadThisRound.Clear();
+        FlagBearer = 0;
 
         RestoreBases();
 
         // Everything a round left on the ground: the loot a death dropped, the wall
         // somebody never placed. Siege has no world loot, so there is nothing to keep.
         ItemManager.askClearAllItems();
-
-        int defender = DefendedSite;
 
         phase = SiegePhase.Picking;
         phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.PickSeconds;
@@ -383,26 +504,20 @@ internal class Siege : IGamemode {
             Place(player);
         }
 
-        Chat.Announce(Chat.Rule);
-        Chat.Announce(PeekSeekSiege.Instance.Translate("round_start",
-            round, sites[defender].Name, score[0], score[1]));
-
-        OpenBoard(defender);
+        OpenBoard(DefendedSite);
         RefreshHud();
     }
 
     /// Put both buildings back exactly as they were built, then hand the pieces out
     /// according to the rules that make a round playable. This runs before every round
     /// including the first, so round one and round six start from identical ground.
+    /// Last round's flag goes with everything else; this round's is placed fresh.
     private void RestoreBases() {
         for (int team = 0; team < sites.Count; team++) {
             SiegeSite site = sites[team];
             ulong group = GroupOf(team);
 
-            // Nothing is skipped here, marker included. A round can end with the flag
-            // shot down, so putting a base back means putting its anchor back too.
             BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, []);
-            SiegeWorld.PlaceAnchor(site, group, ShapeAt(team));
             BaseFor(team)?.Restore(site.AnchorPoint, asset => OwnerGroupFor(asset, group));
         }
     }
@@ -417,7 +532,7 @@ internal class Siege : IGamemode {
     /// nobody can open. Birch walls are the soft walls: a team that deliberately built
     /// in birch gets to pull one down mid-round and open an angle that was not there
     /// before, which is the closest thing this has to Rainbow Six's soft breaching.
-    /// Everything else — metal walls, every floor, every pillar — stays unowned, so a
+    /// Everything else, metal walls, every floor, every pillar, stays unowned, so a
     /// base cannot be dismantled into a better base while a round is running.
     internal static ulong OwnerGroupFor(ItemAsset asset, ulong teamGroup) {
         if (asset is ItemBarricadeAsset barricade) {
@@ -462,12 +577,92 @@ internal class Siege : IGamemode {
         }
     }
 
+    /// The pick phase ends when the last person has picked, not when the clock says.
     private void TickPicking() {
         board.Countdown(SecondsLeft);
+
+        bool everyoneAnswered = Players().All(p => board.HasAnswered(p.channel.owner.playerID.steamID.m_SteamID));
+        if (SecondsLeft > 0 && !everyoneAnswered) return;
+
+        StartPlacing();
+    }
+
+    /// One defender stands the flag. The others wait where they are; so do the
+    /// attackers, empty-handed at their spawn. With nobody to place it, or once the
+    /// time is up, the flag is stood on a free starting tile instead.
+    private void StartPlacing() {
+        board.Close();
+        phase = SiegePhase.Placing;
+        phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.FlagSeconds;
+
+        FlagBearer = ChooseFlagBearer();
+        Player bearer = FlagBearer == 0 ? null : PlayerTool.getPlayer(new CSteamID(FlagBearer));
+
+        if (bearer == null) {
+            StandFlag();
+            StartCountdown();
+            return;
+        }
+
+        SiegeWorld.HandFlag(bearer);
+        SiegeWorld.Freeze(bearer, false);
+        Chat.Whisper(bearer.channel.owner, PeekSeekSiege.Instance.Translate("flag_bearer", PeekSeekSiege.Config.FlagSeconds));
+        RefreshHud();
+    }
+
+    /// The defenders take turns: the round number picks who, so consecutive defence
+    /// rounds go to consecutive teammates and every one of them sets the flag once
+    /// before anybody does it twice.
+    private ulong ChooseFlagBearer() {
+        int defender = DefendedSite;
+
+        if (match.Solo) {
+            Player tester = Players().FirstOrDefault();
+            return tester != null && IsDefending(tester.channel.owner.playerID.steamID.m_SteamID)
+                ? tester.channel.owner.playerID.steamID.m_SteamID
+                : 0;
+        }
+
+        if (match.Teams.Count <= defender) return 0;
+
+        List<ulong> present = match.Teams[defender].Players
+            .Where(steam64 => PlayerTool.getPlayer(new CSteamID(steam64)) is { } player && !player.life.isDead)
+            .ToList();
+        if (present.Count == 0) return 0;
+
+        return present[(round - 1) % present.Count];
+    }
+
+    private void TickPlacing() {
+        if (SiegeWorld.MarkerStands(sites[DefendedSite])) {
+            StartCountdown();
+            return;
+        }
+
         if (SecondsLeft > 0) return;
 
-        board.Close();
-        StartPlaying();
+        StandFlag();
+        StartCountdown();
+    }
+
+    private void StandFlag() {
+        int defender = DefendedSite;
+        SiegeWorld.PlaceFlag(defender, sites[defender], ShapeAt(defender), GroupOf(defender), TeamName(defender));
+    }
+
+    /// Three seconds with the flag up and everybody rooted, so the round starts on a
+    /// count rather than on whoever noticed first.
+    private void StartCountdown() {
+        phase = SiegePhase.Starting;
+        phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.StartSeconds;
+
+        foreach (Player player in Players()) {
+            SiegeWorld.Freeze(player, true);
+            if (player.channel.owner.playerID.steamID.m_SteamID == FlagBearer) SiegeWorld.DressPlain(player);
+        }
+        FlagBearer = 0;
+
+        RefreshHud();
     }
 
     private void StartPlaying() {
@@ -476,23 +671,21 @@ internal class Siege : IGamemode {
         offBaseSince.Clear();
 
         foreach (Player player in Players()) {
-            Place(player);
             SiegeWorld.Kit(player, board.Chosen(player.channel.owner.playerID.steamID.m_SteamID));
+            SiegeWorld.Freeze(player, false);
         }
 
-        Chat.Announce(PeekSeekSiege.Instance.Translate("round_live", PeekSeekSiege.Config.RoundSeconds));
         RefreshHud();
     }
 
     private void TickPlaying() {
         PunishOffBase();
-        Countdown("round_countdown");
 
         int defender = DefendedSite;
 
         // The flag is the objective. Attackers win by bringing it down; defenders win by
         // still having it up when the clock runs out.
-        if (!SiegeWorld.MarkerStands(sites[defender].AnchorPoint)) {
+        if (!SiegeWorld.MarkerStands(sites[defender])) {
             EndRound(1 - defender, "round_won_flag");
             return;
         }
@@ -516,7 +709,7 @@ internal class Siege : IGamemode {
 
     /// Award the round and either start the next one or call the match.
     internal void EndRound(int winner, string reasonKey) {
-        if (phase != SiegePhase.Playing && phase != SiegePhase.Picking) return;
+        if (phase < SiegePhase.Picking || phase > SiegePhase.Playing) return;
 
         score[winner]++;
         Chat.Announce(PeekSeekSiege.Instance.Translate(reasonKey,
@@ -526,15 +719,11 @@ internal class Siege : IGamemode {
         if (matchWinner >= 0) {
             phase = SiegePhase.Over;
             board.Close();
-            Chat.Announce(Chat.Rule);
+            foreach (Player player in Players()) SiegeWorld.Freeze(player, false);
             Chat.Announce(PeekSeekSiege.Instance.Translate("match_won",
                 TeamName(matchWinner), score[0], score[1]));
             RefreshHud();
             return;
-        }
-
-        if (RoundOrder.EndsABlock(round)) {
-            Chat.Announce(PeekSeekSiege.Instance.Translate("overtime", RoundOrder.OvertimeHalf));
         }
 
         StartRound(round + 1);
@@ -598,23 +787,56 @@ internal class Siege : IGamemode {
         }
     }
 
-    /// Put one player where the current phase says they belong, and kit them for it.
+    /// Put one player where the current phase says they belong, kit them for it, and
+    /// root them if the phase is one nobody moves in.
     private void Place(Player player) {
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
         int side = SideOf(steam64);
         SiegeSite own = sites[side];
 
-        if (phase == SiegePhase.Shaping) {
-            player.teleportToLocationUnsafe(SiegeWorld.OnGround(own.AnchorPoint), own.Yaw);
-            return;
-        }
+        switch (phase) {
+            case SiegePhase.Shaping:
+                player.teleportToLocationUnsafe(SiegeWorld.OnGround(own.AnchorPoint), own.Yaw);
+                SiegeWorld.DressPlain(player);
+                SiegeWorld.Freeze(player, true);
+                return;
 
-        if (phase == SiegePhase.Building) {
-            player.teleportToLocationUnsafe(SiegeWorld.StandingSpot(own), own.Yaw);
-            Supply(player);
-            return;
-        }
+            case SiegePhase.Building:
+                player.teleportToLocationUnsafe(SiegeWorld.StandingSpot(own), own.Yaw);
+                SiegeWorld.DressForBuilding(player);
+                SiegeWorld.Freeze(player, false);
+                BudgetFor(steam64).Watch(player);
+                panel.Show(player.channel.owner, BudgetFor(steam64).Counts.Rows);
+                return;
 
+            case SiegePhase.Picking:
+            case SiegePhase.Placing:
+            case SiegePhase.Starting:
+                Spawn(player, steam64, side);
+                if (steam64 == FlagBearer) {
+                    SiegeWorld.HandFlag(player);
+                    SiegeWorld.Freeze(player, false);
+                } else {
+                    SiegeWorld.DressPlain(player);
+                    SiegeWorld.Freeze(player, true);
+                }
+                return;
+
+            case SiegePhase.Playing:
+                Spawn(player, steam64, side);
+                SiegeWorld.Kit(player, board.Chosen(steam64));
+                SiegeWorld.Freeze(player, false);
+                return;
+
+            default:
+                SiegeWorld.Freeze(player, false);
+                return;
+        }
+    }
+
+    /// A round's spawn: defenders on their building, attackers spread out at the
+    /// distance the site says, facing it.
+    private void Spawn(Player player, ulong steam64, int side) {
         SiegeSite defended = sites[DefendedSite];
 
         if (IsDefending(steam64)) {
@@ -626,25 +848,6 @@ internal class Siege : IGamemode {
         player.teleportToLocationUnsafe(
             SiegeWorld.OnGround(defended.AttackerSpawn(index, Math.Max(1, TeamSize(side)))),
             defended.AttackerBearing + 180f);
-    }
-
-    /// Kit a builder out, once per build phase: their clothes, the planner in hand, and
-    /// the whole budget of materials. Nothing is topped up; the amounts in BuildSupplies
-    /// are the base.
-    ///
-    /// A player placed again mid-build (a respawn, a rejoin) is dressed again but not
-    /// resupplied, or dying would be a way to double the kit.
-    private void Supply(Player player) {
-        ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
-        bool first = supplied.Add(steam64);
-
-        SiegeWorld.DressForBuilding(player);
-        if (!first) return;
-
-        SiegeWorld.Issue(player, PeekSeekSiege.Config.BuildSupplies);
-        if (ShapeAt(SideOf(steam64)) != BaseShape.Square) {
-            SiegeWorld.Issue(player, PeekSeekSiege.Config.TriangleSupplies);
-        }
     }
 
     private static void AllowRespawn(Player player) {
@@ -666,12 +869,7 @@ internal class Siege : IGamemode {
     /// Solo only: swap the tester to the other side of the round they are in.
     internal void SwapSoloSide() {
         soloSide = 1 - soloSide;
-        foreach (Player player in Players()) {
-            Place(player);
-            if (phase == SiegePhase.Playing) {
-                SiegeWorld.Kit(player, board.Chosen(player.channel.owner.playerID.steamID.m_SteamID));
-            }
-        }
+        foreach (Player player in Players()) Place(player);
         RefreshHud();
     }
 
@@ -703,21 +901,9 @@ internal class Siege : IGamemode {
             .Select(client => client.player);
     }
 
-    /// Say the time left, but only at the moments worth saying it at. A clock that
-    /// announces every second is noise a player learns to stop reading.
-    private static readonly int[] CalledOut = [1, 2, 3, 5, 10, 30, 60, 120, 240];
-
-    private void Countdown(string key) {
-        int left = SecondsLeft;
-        if (!CalledOut.Contains(left)) return;
-
-        Chat.Announce(PeekSeekSiege.Instance.Translate(key, left));
-    }
-
     // ---- the HUD ----------------------------------------------------------------
 
-    /// Everything the HUD shows, rebuilt from the match on every change. The HUD only
-    /// sends what differs from what each viewer last saw, so this can be called freely.
+    /// Everything the HUD shows, rebuilt from the match on every change.
     private void RefreshHud() {
         if (match == null) return;
         hud.Show(HudState());
@@ -726,7 +912,7 @@ internal class Siege : IGamemode {
     private HudState HudState() {
         HudState state = new() {
             SecondsLeft = SecondsLeft,
-            DefendingTeam = phase == SiegePhase.Picking || phase == SiegePhase.Playing ? DefendedSite : -1,
+            DefendingTeam = phase >= SiegePhase.Picking && phase <= SiegePhase.Playing ? DefendedSite : -1,
             Label = PeekSeekSiege.Instance.Translate("hud_round", Math.Max(1, round)),
         };
 
@@ -734,15 +920,18 @@ internal class Siege : IGamemode {
             state.Label = PeekSeekSiege.Instance.Translate("hud_shaping");
         } else if (phase == SiegePhase.Building) {
             state.Label = PeekSeekSiege.Instance.Translate("hud_building");
+        } else if (phase == SiegePhase.Placing) {
+            state.Label = PeekSeekSiege.Instance.Translate("hud_placing");
+        } else if (phase == SiegePhase.Starting) {
+            state.Label = PeekSeekSiege.Instance.Translate("hud_starting");
         } else if (phase == SiegePhase.Over) {
             state.Label = PeekSeekSiege.Instance.Translate("hud_final");
             state.Jeopardy = true;
-        } else if (round > RoundOrder.RegulationHalf * 2) {
-            state.Label = PeekSeekSiege.Instance.Translate("hud_overtime");
-        } else if (RoundOrder.EndsABlock(round) && score[0] != score[1]) {
-            // The last round of a block with one side ahead: this round can end it.
+        } else if (RoundOrder.IsMatchPoint(round, score[0], score[1])) {
             state.Label = PeekSeekSiege.Instance.Translate("hud_match_point");
             state.Jeopardy = true;
+        } else if (RoundOrder.IsOvertime(round)) {
+            state.Label = PeekSeekSiege.Instance.Translate("hud_overtime");
         }
 
         for (int team = 0; team < 2; team++) {
@@ -764,7 +953,8 @@ internal class Siege : IGamemode {
         // The pick hangs off the face once it is made and stays there for the round it
         // was made for: that is the "what did they bring" a teammate glances up for.
         // Nothing hangs there before the first round; the footprint is not a pick.
-        bool picked = phase == SiegePhase.Playing || (phase == SiegePhase.Picking && board.HasAnswered(steam64));
+        bool picked = phase == SiegePhase.Playing
+            || (phase >= SiegePhase.Picking && phase <= SiegePhase.Starting && board.HasAnswered(steam64));
 
         return new HudSeat {
             Steam64 = steam64,

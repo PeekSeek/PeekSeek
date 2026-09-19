@@ -22,5 +22,6 @@
 # generate.py pins and the prefabs reference.
 *.meta
 !/Assets/PeekSeek/Sprites/*.meta
+!/Assets/PeekSeek/Shaders/*.meta
 /Packages/packages-lock.json
 /build.log
