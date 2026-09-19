@@ -18,7 +18,9 @@ internal class BuildPanel {
     private EffectAsset effect;
     private bool effectLookedUp;
 
-    internal void Show(SteamPlayer viewer, IEnumerable<(ushort Id, int Count)> rows) {
+    /// Draw the list, with the row for `laying` picked out in ink: the kind the
+    /// builder is putting down right now.
+    internal void Show(SteamPlayer viewer, IEnumerable<(ushort Id, int Count)> rows, ushort laying) {
         EffectAsset asset = Effect();
         if (asset == null) return;
 
@@ -31,8 +33,9 @@ internal class BuildPanel {
             if (i >= shown.Count) continue;
 
             (ushort id, int count) = shown[i];
+            string name = id == laying ? $"<color=#f2f2f2>{Name(id)}</color>" : Name(id);
             EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Count", count.ToString());
-            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Name", Name(id));
+            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Name", name);
             EffectManager.sendUIEffectImageURL(
                 key, viewer.transportConnection, true, $"Row{i}_Icon", string.Format(PeekSeekSiege.Config.ItemIconURL, id));
         }

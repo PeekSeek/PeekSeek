@@ -182,13 +182,18 @@ def boards():
 # nothing, a face per player with their pick hanging off its corner; the viewer's own
 # team on the left. No names and no guns: a face and a pick say who somebody is.
 #
-# The block is exactly as tall as a face. The arena text and compass the game used to
-# draw here are gone with the map type (see the README on the map), so there is
-# nothing left to cover. The clock is set in a monospaced face because a proportional
-# one made the whole readout shuffle every second; the small label under it says what
-# the clock is counting.
+# The block is 368 by 112 and opaque, and that is not a design choice. Unturned draws
+# its arena text (x centre +-180, y 0-50) and compass (same width, y 60-110) on every
+# Arena map, from the map type the client reads out of its own Level.dat, and nothing a
+# server sends can switch either off (PlayerLifeUI.updateCompass and
+# updateLifeBoxVisibility in the U3-SDK; EPluginWidgetFlags has no bit for them, and a
+# server-listed Localization item is not applied). The block sits over both, four
+# pixels proud on every side. The bar is the top row; the lower row is the round label
+# and the flag's health, so the depth says something. The clock is set in a monospaced
+# face because a proportional one shuffled the readout every second.
 
-BLOCK_W, BLOCK_H = 350, 50
+BLOCK_W, BLOCK_H = 368, 112
+ROW = 50                # the score line; the arena text's own height
 SEAT = 50               # a face, the site's .userProfile chip
 SEAT_GAP = 6
 WING_PAD = 8            # between the block and the first face
@@ -197,6 +202,8 @@ WING_W = WING_PAD + SEATS * (SEAT + SEAT_GAP) - SEAT_GAP
 HUD_W = BLOCK_W + 2 * WING_W
 PICK = 22               # the pick icon hanging off a face
 PICK_TILT = 14          # degrees; the one playful thing on the bar
+FLAG_STEPS = 10
+SEG_W, SEG_H, SEG_GAP = 10, 8, 3
 
 
 def match_hud():
@@ -208,23 +215,33 @@ def match_hud():
     block = hud.add(top_center("Block", 0, 0, BLOCK_W, BLOCK_H))
     image(block, FLAT, sprite=SPR["notch"])
 
-    # The score line, left to right, each field vertically centred in the bar.
-    x = 10
-    text(block.add(top_left("Team0_Name", x, 0, 78, BLOCK_H)), "North", size=16, colour=INK, halign=RIGHT, bold=True)
-    x += 82
-    text(block.add(top_left("Score0", x, 0, 26, BLOCK_H)), "0", size=22, colour=INK, halign=CENTER, bold=True)
-    x += 28
-    role(block, "Shield0", "Swords0", x)
-    x += 22
-    text(block.add(top_left("Timer", x, 4, 66, 26)), "0:30", size=18, colour=INK, halign=CENTER, mono=True)
-    text(block.add(top_left("Mid", x, 30, 66, 16)), "Round 1",
-         size=9, colour=MUTED, halign=CENTER, valign=TOP, bold=True, uppercase=True, spacing=8)
-    x += 68
-    role(block, "Shield1", "Swords1", x)
-    x += 22
-    text(block.add(top_left("Score1", x, 0, 26, BLOCK_H)), "1", size=22, colour=INK, halign=CENTER, bold=True)
+    # The score line, left to right, each field vertically centred in the row.
+    x = 12
+    text(block.add(top_left("Team0_Name", x, 0, 82, ROW)), "North", size=16, colour=INK, halign=RIGHT, bold=True)
+    x += 86
+    text(block.add(top_left("Score0", x, 0, 28, ROW)), "0", size=22, colour=INK, halign=CENTER, bold=True)
     x += 30
-    text(block.add(top_left("Team1_Name", x, 0, 78, BLOCK_H)), "South", size=16, colour=INK, halign=LEFT, bold=True)
+    role(block, "Shield0", "Swords0", x)
+    x += 24
+    text(block.add(top_left("Timer", x, 0, 68, ROW)), "0:30", size=18, colour=INK, halign=CENTER, mono=True)
+    x += 70
+    role(block, "Shield1", "Swords1", x)
+    x += 24
+    text(block.add(top_left("Score1", x, 0, 28, ROW)), "1", size=22, colour=INK, halign=CENTER, bold=True)
+    x += 32
+    text(block.add(top_left("Team1_Name", x, 0, 82, ROW)), "South", size=16, colour=INK, halign=LEFT, bold=True)
+
+    # The lower row: what the clock is counting on the left, the flag on the right.
+    text(block.add(top_left("Mid", 14, ROW, 150, BLOCK_H - ROW)), "Round 1",
+         size=11, colour=MUTED, halign=LEFT, bold=True, uppercase=True, spacing=10)
+
+    bar_w = FLAG_STEPS * SEG_W + (FLAG_STEPS - 1) * SEG_GAP
+    flag = block.add(top_right("Flag", 14, ROW, 44 + bar_w, BLOCK_H - ROW, active=False))
+    text(flag.add(top_left("FlagLabel", 0, 0, 40, BLOCK_H - ROW)), "Flag",
+         size=11, colour=MUTED, halign=LEFT, bold=True, uppercase=True, spacing=10)
+    for i in range(FLAG_STEPS):
+        segment = flag.add(top_left(f"Flag{i}", 44 + i * (SEG_W + SEG_GAP), (BLOCK_H - ROW - SEG_H) // 2, SEG_W, SEG_H))
+        image(segment, INK, 0.9)
 
     # Faces run outward from the block on each side. A face is two pictures of the
     # same download, one at full strength and one at half, and the plugin shows the
@@ -251,8 +268,8 @@ def match_hud():
 
 def role(block, shield, swords, x):
     """The two role markers share a slot; the plugin shows one, or neither between rounds."""
-    image(block.add(top_left(shield, x, (BLOCK_H - 20) // 2, 20, 20, active=False)), INK, 0.85, sprite=SPR["shield"], sliced=False)
-    image(block.add(top_left(swords, x, (BLOCK_H - 20) // 2, 20, 20, active=False)), INK, 0.85, sprite=SPR["swords"], sliced=False)
+    image(block.add(top_left(shield, x, (ROW - 20) // 2, 20, 20, active=False)), INK, 0.85, sprite=SPR["shield"], sliced=False)
+    image(block.add(top_left(swords, x, (ROW - 20) // 2, 20, 20, active=False)), INK, 0.85, sprite=SPR["swords"], sliced=False)
 
 
 # ---- the build panel -----------------------------------------------------------------

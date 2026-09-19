@@ -75,6 +75,11 @@ internal class Siege : IGamemode {
     /// answer can find it again even if it has changed hands in the meantime.
     private readonly Dictionary<ulong, Vector3> swapping = [];
 
+    /// The kind of piece each builder last put down, which the panel picks out: the
+    /// planner never tells the server what is selected, and what you just laid is what
+    /// you are laying.
+    private readonly Dictionary<ulong, ushort> lastPlaced = [];
+
     /// When each player was last standing on something built, so the grace period
     /// before off-base damage can be measured. Absent means they are on a base now.
     private readonly Dictionary<ulong, float> offBaseSince = [];
@@ -150,7 +155,7 @@ internal class Siege : IGamemode {
         if (Time.realtimeSinceStartup < nextTick) return;
         nextTick = Time.realtimeSinceStartup + 1f;
 
-        hud.Countdown(SecondsLeft);
+        hud.Countdown(SecondsLeft, FlagHealth());
 
         switch (phase) {
             case SiegePhase.Shaping:
@@ -224,7 +229,6 @@ internal class Siege : IGamemode {
     public void OnPlayerRevived(Player player) {
         if (match == null) return;
 
-        SiegeWorld.HideSurvivalMeters(player);
         Place(player);
         RefreshHud();
     }
@@ -342,6 +346,7 @@ internal class Siege : IGamemode {
     private void StopBuilding() {
         board.Close();
         swapping.Clear();
+        lastPlaced.Clear();
 
         foreach (BuildBudget budget in budgets) budget?.UnwatchAll();
         foreach (SteamPlayer viewer in Provider.clients.ToList()) panel.Hide(viewer);
@@ -350,13 +355,22 @@ internal class Siege : IGamemode {
     /// The budget a player builds from: their team's. Solo builds as team 0.
     internal BuildBudget BudgetFor(ulong steam64) => budgets[SideOf(steam64)];
 
+    /// A builder put a piece down: one off the team's pile, and the panel picks out
+    /// that kind for them from now on.
+    internal void Placed(ulong steam64, ushort id) {
+        lastPlaced[steam64] = id;
+        if (!BudgetFor(steam64).Spend(id)) ShowPanel(SideOf(steam64));
+    }
+
     private void ShowPanel(int team) {
         BuildBudget budget = budgets[team];
         if (budget == null || phase != SiegePhase.Building) return;
 
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
-            if (SideOf(viewer.playerID.steamID.m_SteamID) != team) continue;
-            panel.Show(viewer, budget.Counts.Rows);
+            ulong steam64 = viewer.playerID.steamID.m_SteamID;
+            if (SideOf(steam64) != team) continue;
+
+            panel.Show(viewer, budget.Counts.Rows, lastPlaced.TryGetValue(steam64, out ushort laying) ? laying : (ushort)0);
         }
     }
 
@@ -806,7 +820,7 @@ internal class Siege : IGamemode {
                 SiegeWorld.DressForBuilding(player);
                 SiegeWorld.Freeze(player, false);
                 BudgetFor(steam64).Watch(player);
-                panel.Show(player.channel.owner, BudgetFor(steam64).Counts.Rows);
+                panel.Show(player.channel.owner, BudgetFor(steam64).Counts.Rows, 0);
                 return;
 
             case SiegePhase.Picking:
@@ -909,9 +923,17 @@ internal class Siege : IGamemode {
         hud.Show(HudState());
     }
 
+    /// How much of this round's flag is standing, or -1 when there is no flag yet.
+    private float FlagHealth() {
+        if (phase < SiegePhase.Placing || phase > SiegePhase.Playing) return -1f;
+
+        return SiegeWorld.MarkerHealth(sites[DefendedSite]);
+    }
+
     private HudState HudState() {
         HudState state = new() {
             SecondsLeft = SecondsLeft,
+            FlagHealth = FlagHealth(),
             DefendingTeam = phase >= SiegePhase.Picking && phase <= SiegePhase.Playing ? DefendedSite : -1,
             Label = PeekSeekSiege.Instance.Translate("hud_round", Math.Max(1, round)),
         };

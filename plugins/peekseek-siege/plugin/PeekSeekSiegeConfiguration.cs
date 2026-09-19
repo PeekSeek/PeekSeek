@@ -50,10 +50,11 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     ///
     /// The marker is the flag one defender stands somewhere on the base before each
     /// round, and the round's objective. It has to be a barricade with health and
-    /// without a claim bubble: a claim flag keeps everybody but its own group from
-    /// placing anything within 32m of it, on the client, which is exactly the charge an
-    /// attacker needs to put on the wall. 1234 is the Metal Flag, a sign with 1100
-    /// health, so it also carries the team's name.
+    /// without a claim bubble: a vanilla claim flag keeps everybody but its own group
+    /// from placing anything within 32m of it, on the client, which is exactly the
+    /// charge an attacker needs to put on the wall. 43130 is the PeekSeek Flag from the
+    /// UI workshop item: the claim flag's own model, a plain barricade with 600 health
+    /// and no bubble.
     public ushort AnchorFloorItemId;
     public ushort AnchorTriangleItemId;
     public ushort AnchorPillarItemId;
@@ -181,7 +182,7 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         AnchorFloorItemId = 369;
         AnchorTriangleItemId = 1265;
         AnchorPillarItemId = 36;
-        AnchorMarkerItemId = 1234;
+        AnchorMarkerItemId = 43130;
 
         // Ids are read off the game's own Bundles/Items rather than guessed. Maple is
         // the standard piece (400 health a wall): 31 floor, 32 doorway, 33 wall, 34

@@ -30,6 +30,7 @@ internal static class SiegeWorld {
 
         StructureManager.onDeployStructureRequested += OnDeployStructure;
         BarricadeManager.onDeployBarricadeRequested += OnDeployBarricade;
+        StructureManager.onStructureSpawned += OnStructureSpawned;
         BarricadeManager.onBarricadeSpawned += OnBarricadeSpawned;
         BarricadeManager.onOpenStorageRequested += OnOpenStorage;
         StructureDrop.OnSalvageRequested_Global += OnSalvageStructure;
@@ -41,6 +42,7 @@ internal static class SiegeWorld {
     internal static void Unhook() {
         StructureManager.onDeployStructureRequested -= OnDeployStructure;
         BarricadeManager.onDeployBarricadeRequested -= OnDeployBarricade;
+        StructureManager.onStructureSpawned -= OnStructureSpawned;
         BarricadeManager.onBarricadeSpawned -= OnBarricadeSpawned;
         BarricadeManager.onOpenStorageRequested -= OnOpenStorage;
         StructureDrop.OnSalvageRequested_Global -= OnSalvageStructure;
@@ -129,43 +131,41 @@ internal static class SiegeWorld {
         if (chosen == default) chosen = site.AnchorPoint;
 
         // `offset` on a barricade asset is how far its pivot sits above the ground it
-        // stands on, 5 on a metal flag, so it is the correction that stops the pole
-        // being buried. The extra clears the anchor floor's own thickness.
-        Transform placed = BarricadeManager.dropNonPlantedBarricade(
+        // stands on, so it is the correction that stops the flag being buried up to
+        // the waist. The extra clears the anchor floor's own thickness.
+        BarricadeManager.dropNonPlantedBarricade(
             new Barricade(marker, marker.health, marker.getState()),
             chosen + Vector3.up * (marker.offset + AnchorFloorClearance),
             Facing(site, 0f),
             0,
             teamGroup);
-
-        Label(placed, name);
     }
 
-    /// The team's name on its flag. A sign takes text from the server; a flag that is
-    /// not a sign is left as it is.
-    private static void Label(Transform barricade, string name) {
-        if (barricade == null || string.IsNullOrEmpty(name)) return;
-
-        InteractableSign sign = barricade.GetComponent<InteractableSign>();
-        if (sign != null) BarricadeManager.ServerSetSignText(sign, name);
-    }
-
-    /// Whether a site's flag is still standing anywhere on its plot. This is the round's
-    /// win condition, so it is asked once a second while a round runs.
-    internal static bool MarkerStands(SiegeSite site) {
+    /// A site's flag, wherever on the plot it stands, or null.
+    internal static BarricadeDrop Marker(SiegeSite site) {
         List<RegionCoordinate> around = [];
         Regions.getRegionsInRadius(site.AnchorPoint, site.BuildRadius, around);
 
         foreach (RegionCoordinate coordinate in around) {
             foreach (BarricadeDrop drop in BarricadeManager.regions[coordinate.x, coordinate.y].drops) {
                 if (drop.asset == null || drop.asset.id != PeekSeekSiege.Config.AnchorMarkerItemId) continue;
-                if (!site.Contains(drop.GetServersideData().point)) continue;
-
-                return true;
+                if (site.Contains(drop.GetServersideData().point)) return drop;
             }
         }
 
-        return false;
+        return null;
+    }
+
+    /// Whether a site's flag is still standing. This is the round's win condition, so
+    /// it is asked once a second while a round runs.
+    internal static bool MarkerStands(SiegeSite site) => Marker(site) != null;
+
+    /// How much of the flag is left, 0 to 1, or -1 with no flag standing.
+    internal static float MarkerHealth(SiegeSite site) {
+        BarricadeDrop flag = Marker(site);
+        if (flag == null) return -1f;
+
+        return (float)flag.GetServersideData().barricade.health / flag.asset.health;
     }
 
     /// A layout offset turned to face the site and put on its anchor.
@@ -239,7 +239,22 @@ internal static class SiegeWorld {
         ref ulong owner, ref ulong group, ref bool shouldAllow) {
         if (!MayBuildAt(point, owner)) shouldAllow = false;
         else if (IsFloor(asset) && !TouchesAFloor(point)) shouldAllow = false;
-        else if (siege.Phase == SiegePhase.Building && !siege.BudgetFor(owner).Spend(asset.id)) shouldAllow = false;
+        else if (siege.Phase == SiegePhase.Building && !siege.BudgetFor(owner).Counts.Has(asset.id)) shouldAllow = false;
+    }
+
+    /// Set while the plugin itself is putting a piece down, so the spend that follows a
+    /// player's placement does not follow a swap or a restore.
+    private static bool placingOurselves;
+
+    /// A piece a builder put down is one off the pile: spent here, once it exists,
+    /// rather than at the request, so a placement the game then refuses costs nothing.
+    private static void OnStructureSpawned(StructureRegion region, StructureDrop drop) {
+        if (placingOurselves || siege == null || siege.Phase != SiegePhase.Building) return;
+
+        StructureData data = drop.GetServersideData();
+        if (data.owner == 0 || SiteAt(data.point) != siege.SideOf(data.owner)) return;
+
+        siege.Placed(data.owner, drop.asset.id);
     }
 
     internal static bool IsFloor(ItemStructureAsset asset) {
@@ -269,7 +284,7 @@ internal static class SiegeWorld {
 
     /// The flag goes down by the one defender chosen to place it, during the moment set
     /// aside for that, on their own building. Everything else follows the phase rule,
-    /// and during the build phase a door or hatch is spent from the budget like a wall.
+    /// and during the build phase a door or hatch has to be on the pile like a wall.
     private static void OnDeployBarricade(
         Barricade barricade, ItemBarricadeAsset asset, Transform hit, ref Vector3 point,
         ref float angleX, ref float angleY, ref float angleZ,
@@ -279,33 +294,33 @@ internal static class SiegeWorld {
                 && siege.Phase == SiegePhase.Placing
                 && owner == siege.FlagBearer
                 && SiteAt(point) == siege.DefendedSite
-                && IsBuilt(hit);
+                && IsOnSomethingBuilt(point);
             return;
         }
 
         if (!MayBuildAt(point, owner)) shouldAllow = false;
         else if (siege.Phase == SiegePhase.Building && siege.BudgetFor(owner).Counts.Ids.Contains(asset.id)
-                 && !siege.BudgetFor(owner).Spend(asset.id)) shouldAllow = false;
+                 && !siege.BudgetFor(owner).Counts.Has(asset.id)) shouldAllow = false;
     }
 
-    /// Whether a surface hit by a placement is part of something built.
-    private static bool IsBuilt(Transform hit) {
-        if (hit == null) return false;
-
-        return StructureManager.FindStructureByRootTransform(hit.root) != null
-            || BarricadeManager.FindBarricadeByRootTransform(hit.root) != null;
+    /// Whether a point sits on something built rather than on the ground. The deploy
+    /// hook's own `hit` is only ever a vehicle, so the floor has to be found by looking
+    /// down from the point.
+    private static bool IsOnSomethingBuilt(Vector3 point) {
+        return Physics.Raycast(point + Vector3.up * 0.5f, Vector3.down, 2f, RayMasks.STRUCTURE | RayMasks.BARRICADE);
     }
 
     /// A sentry goes down armed. The gun is put in the moment the sentry spawns and the
     /// storage is set to delete its contents when the sentry goes, so salvaging one and
     /// putting it back never leaves a Bluntforce on the floor; placing it again arms it
-    /// again. A player-placed flag gets its team's name, like the automatic one.
+    /// again. A door a builder put down during the build phase is one off the pile.
     private static void OnBarricadeSpawned(BarricadeRegion region, BarricadeDrop drop) {
         if (siege == null || drop.asset == null) return;
 
-        if (drop.asset.id == PeekSeekSiege.Config.AnchorMarkerItemId) {
-            Label(drop.model, siege.TeamName(siege.DefendedSite));
-            return;
+        BarricadeData data = drop.GetServersideData();
+        if (!placingOurselves && siege.Phase == SiegePhase.Building && data.owner != 0
+            && SiteAt(data.point) == siege.SideOf(data.owner)) {
+            siege.Placed(data.owner, drop.asset.id);
         }
 
         if (drop.asset is not ItemSentryAsset || drop.interactable is not InteractableSentry sentry) return;
@@ -337,11 +352,33 @@ internal static class SiegeWorld {
     /// mid-match, and the cost of the check is one comparison.
     private static void OnSalvageStructure(StructureDrop drop, SteamPlayer instigator, ref bool shouldAllow) {
         int site = SiteAt(drop.GetServersideData().point);
-        if (site >= 0 && IsAnchorTile(site, drop)) shouldAllow = false;
+        if (site >= 0 && IsAnchorTile(site, drop)) {
+            shouldAllow = false;
+            return;
+        }
+
+        Salvaged(instigator, drop.asset, site);
     }
 
     private static void OnSalvageBarricade(BarricadeDrop drop, SteamPlayer instigator, ref bool shouldAllow) {
-        if (drop.asset?.id == PeekSeekSiege.Config.AnchorMarkerItemId) shouldAllow = false;
+        if (drop.asset?.id == PeekSeekSiege.Config.AnchorMarkerItemId) {
+            shouldAllow = false;
+            return;
+        }
+
+        Salvaged(instigator, drop.asset, SiteAt(drop.GetServersideData().point));
+    }
+
+    /// A piece a builder took down during the build phase goes back on the pile. The
+    /// copy the game hands them is folded away by the budget's next sync.
+    private static void Salvaged(SteamPlayer by, ItemAsset asset, int site) {
+        if (siege == null || siege.Phase != SiegePhase.Building || asset == null || by == null) return;
+
+        ulong steam64 = by.playerID.steamID.m_SteamID;
+        if (site < 0 || site != siege.SideOf(steam64)) return;
+
+        BuildBudget budget = siege.BudgetFor(steam64);
+        if (budget.Counts.Ids.Contains(asset.id)) budget.Refund(asset.id);
     }
 
     /// A starting floor is never shootable, and the flag is shootable only while a
@@ -390,7 +427,12 @@ internal static class SiegeWorld {
         ulong owner = data.owner, group = data.group;
 
         Remove(drop);
-        StructureManager.dropReplicatedStructure(new Structure(to, to.health), point, rotation, owner, group);
+        placingOurselves = true;
+        try {
+            StructureManager.dropReplicatedStructure(new Structure(to, to.health), point, rotation, owner, group);
+        } finally {
+            placingOurselves = false;
+        }
     }
 
     internal static void Remove(StructureDrop drop) {
@@ -445,12 +487,6 @@ internal static class SiegeWorld {
     internal static void Freeze(Player player, bool frozen) {
         player.movement.sendPluginSpeedMultiplier(frozen ? 0f : 1f);
         player.movement.sendPluginJumpMultiplier(frozen ? 0f : 1f);
-    }
-
-    /// The map is a Survival-type copy of an Arena map, so the game would draw hunger,
-    /// thirst and infection. None of them mean anything in a twenty-minute match.
-    internal static void HideSurvivalMeters(Player player) {
-        player.disablePluginWidgetFlag(EPluginWidgetFlags.ShowFood | EPluginWidgetFlags.ShowWater | EPluginWidgetFlags.ShowVirus);
     }
 
     /// Give a player hands big enough to carry one of everything.

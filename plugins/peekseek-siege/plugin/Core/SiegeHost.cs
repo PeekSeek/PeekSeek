@@ -36,24 +36,8 @@ internal static class SiegeHost {
         UnturnedPlayerEvents.OnPlayerRevive += OnRevive;
         EffectManager.onEffectButtonClicked += OnButtonClicked;
         PlayerInput.onPluginKeyTick += OnPluginKey;
-        Level.onPostLevelLoaded += OnLevelLoaded;
 
         RemoteAPI.Init();
-        if (Level.isLoaded) OnLevelLoaded(0);
-    }
-
-    /// Morning, a day that outlasts the server's own nightly restart, and no cars. The
-    /// map is a Survival-type copy of an Arena map, so the game would run its day and
-    /// night cycle and stand the map's vehicles up at load, and a siege fought in the
-    /// dark or driven into is a different game. The server config keeps vehicles from
-    /// respawning; this clears the ones the load put down. Set here rather than in
-    /// Commands.dat, where `day` runs before there is a level to set it on.
-    private static void OnLevelLoaded(int level) {
-        if (Level.info == null || Level.info.type != ELevelType.SURVIVAL) return;
-
-        LightingManager.cycle = 24 * 60 * 60;
-        LightingManager.time = (uint)(LightingManager.cycle * (LevelLighting.transition + 0.1f));
-        VehicleManager.askVehicleDestroyAll();
     }
 
     internal static void Shutdown() {
@@ -66,7 +50,6 @@ internal static class SiegeHost {
         UnturnedPlayerEvents.OnPlayerRevive -= OnRevive;
         EffectManager.onEffectButtonClicked -= OnButtonClicked;
         PlayerInput.onPluginKeyTick -= OnPluginKey;
-        Level.onPostLevelLoaded -= OnLevelLoaded;
 
         RemoteAPI.Shutdown();
         instrument?.UnpatchAll(instrument.Id);
@@ -138,10 +121,6 @@ internal static class SiegeHost {
 
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
-
-        // The map is a Survival-type copy of an Arena map, so the game would draw
-        // hunger, thirst and infection for everybody, match or no match.
-        SiegeWorld.HideSurvivalMeters(player);
 
         if (running == null) {
             Chat.Whisper(player.channel.owner, PeekSeekSiege.Instance.Translate("idle_welcome"));
