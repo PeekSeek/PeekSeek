@@ -21,8 +21,8 @@ one that reads the same; the game leaves a font that is not TextMeshPro's own al
 from pathlib import Path
 
 from unityyaml import (BOTTOM, CENTER, LEFT, MIDDLE, RIGHT, TOP, Node, bottom_left, button, canvas,
-                       centered, flare_alpha, image, mask, prefab, rounded_alpha, sprite, stretch,
-                       text, top_center, top_left, top_right, top_stretch)
+                       centered, flare_alpha, image, mask, prefab, rounded_alpha, shield_alpha, sprite,
+                       stretch, swords_alpha, text, top_center, top_left, top_right, top_stretch)
 
 ROOT = Path(__file__).resolve().parent.parent / "Assets/PeekSeek"
 SPRITES = ROOT / "Sprites"
@@ -64,7 +64,14 @@ def write_sprites():
                      flare_alpha(NOTCH_R, NOTCH_R), 0)
     flare_r = sprite(SPRITES, "FlareR", "f5d4a6b7c8e9f0a1b2c3d4e5f6a7b8c9", NOTCH_R, NOTCH_R,
                      flare_alpha(NOTCH_R, 0), 0)
-    return round8, round6, notch, flare_l, flare_r
+    wing_l = sprite(SPRITES, "WingL", "a6e5b7c8d9f0a1b2c3d4e5f6a7b8c9d0", 32, 32, rounded_alpha(32, 32, 8, corners=("bl",)), 8)
+    wing_r = sprite(SPRITES, "WingR", "b7f6c8d9e0a1b2c3d4e5f6a7b8c9d0e1", 32, 32, rounded_alpha(32, 32, 8, corners=("br",)), 8)
+    shield = sprite(SPRITES, "Shield", "c8a7d9e0f1b2c3d4e5f6a7b8c9d0e1f2", 24, 24, shield_alpha(24), 0)
+    swords = sprite(SPRITES, "Swords", "d9b8e0f1a2c3d4e5f6a7b8c9d0e1f2a3", 24, 24, swords_alpha(24), 0)
+    return {
+        "round8": round8, "round6": round6, "notch": notch, "flare_l": flare_l, "flare_r": flare_r,
+        "wing_l": wing_l, "wing_r": wing_r, "shield": shield, "swords": swords,
+    }
 
 
 # ---- the pick board ------------------------------------------------------------------
@@ -121,80 +128,90 @@ def pick_board(round8):
 
 # ---- the match HUD -------------------------------------------------------------------
 #
-# One block, not a notch with cards around it. It sits exactly where Unturned's own
-# arena text (y 0-50, x +-180) and compass (y 60-110) are drawn on an Arena map, at a
-# canvas sort order above the game's (15), so it covers both: there is no flag or config
-# that turns either off on an Arena level. The shape is still the overlay's notch, only
-# wide enough for two rosters, with the inverse fillets at its ends.
+# The concept (conceptArtOverlay.png): one bar across the top. Faces on the wings, the
+# pick hanging under each; `team 0 [shield] 0:30 [swords] 1 team2` in the middle, the
+# shield beside whoever holds the flag this round and the swords beside whoever is
+# after it. No names: a face and a gun say who somebody is faster than a name does.
+#
+# The middle section reaches down to 112px because Unturned draws its arena text (y
+# 0-50, x +-180) and compass (y 60-110) there on every Arena map and nothing a server
+# sends can switch them off; at a canvas sort order above the game's (15) this covers
+# both. The round label lives in that apron so the depth is not for nothing.
 
-HUD_H = 112
-HUD_PAD = 16
-SEAT_W = 36             # a 32px face and a 4px gap
-AVATAR = 32
-ROSTER_W = SEATS * SEAT_W - 4
-CENTER_W = 140
-HUD_W = HUD_PAD * 2 + ROSTER_W * 2 + 12 * 2 + CENTER_W
-ROW2_Y = 58
+BAR_H = 44
+APRON_W, APRON_H = 420, 112
+SEAT = 44
+SEAT_GAP = 4
+SEAT_H = 64             # a face and the loadout run under it
+WING_PAD = 8
+WING_W = WING_PAD + SEATS * (SEAT + SEAT_GAP) - SEAT_GAP + WING_PAD
+HUD_W = APRON_W + 2 * WING_W
 
 
-def match_hud(round6, notch_sprite, flare_l, flare_r):
+def match_hud(sprites):
     root = Node("Effect")
     canvas(root, sorting_order=16)
 
-    block = root.add(top_center("Block", 0, 0, HUD_W, HUD_H))
-    image(block, FLAT, 0.9, sprite=notch_sprite)
+    block = root.add(top_center("Block", 0, 0, HUD_W, APRON_H))
+
+    apron = block.add(top_center("Apron", 0, 0, APRON_W, APRON_H))
+    image(apron, FLAT, 0.9, sprite=sprites["notch"])
+
+    left = block.add(top_left("WingL", 0, 0, WING_W, BAR_H))
+    image(left, FLAT, 0.9, sprite=sprites["wing_l"])
+    right = block.add(top_right("WingR", 0, 0, WING_W, BAR_H))
+    image(right, FLAT, 0.9, sprite=sprites["wing_r"])
 
     flare_left = block.add(Node("FlareL", anchor_min=(0, 1), anchor_max=(0, 1), pivot=(1, 1), size=(NOTCH_R, NOTCH_R)))
-    image(flare_left, FLAT, 0.9, sprite=flare_l)
+    image(flare_left, FLAT, 0.9, sprite=sprites["flare_l"])
     flare_right = block.add(Node("FlareR", anchor_min=(1, 1), anchor_max=(1, 1), pivot=(0, 1), size=(NOTCH_R, NOTCH_R)))
-    image(flare_right, FLAT, 0.9, sprite=flare_r)
+    image(flare_right, FLAT, 0.9, sprite=sprites["flare_r"])
 
-    # Row one: names over each roster, scores and the clock in the middle.
-    center_x = HUD_PAD + ROSTER_W + 12
-    text(block.add(top_left("Team0_Name", HUD_PAD, 8, ROSTER_W, 40)), "North",
-         size=18, colour=TEAM_NAME, halign=RIGHT, bold=True)
-    text(block.add(top_left("Score0", center_x, 8, 40, 40)), "0",
-         size=28, colour=INK, halign=CENTER, bold=True)
-    text(block.add(top_left("Timer", center_x + 40, 8, 60, 40)), "0:30",
-         size=24, colour=INK, halign=CENTER, bold=True)
-    text(block.add(top_left("Score1", center_x + 100, 8, 40, 40)), "0",
-         size=28, colour=INK, halign=CENTER, bold=True)
-    text(block.add(top_left("Team1_Name", center_x + CENTER_W + 12, 8, ROSTER_W, 40)), "South",
-         size=18, colour=TEAM_NAME, halign=LEFT, bold=True)
+    # The middle, left to right, all in the bar's height.
+    x = 11
+    text(apron.add(top_left("Team0_Name", x, 0, 100, BAR_H)), "team", size=16, colour=INK, halign=RIGHT, bold=True)
+    x += 106
+    text(apron.add(top_left("Score0", x, 0, 30, BAR_H)), "0", size=22, colour=INK, halign=CENTER, bold=True)
+    x += 34
+    image(apron.add(top_left("Shield0", x, 12, 20, 20, active=False)), INK, 0.85, sprite=sprites["shield"])
+    image(apron.add(top_left("Swords0", x, 12, 20, 20, active=False)), INK, 0.85, sprite=sprites["swords"])
+    x += 24
+    text(apron.add(top_left("Timer", x, 0, 70, BAR_H)), "0:30", size=20, colour=INK, halign=CENTER, bold=True)
+    x += 74
+    image(apron.add(top_left("Shield1", x, 12, 20, 20, active=False)), INK, 0.85, sprite=sprites["shield"])
+    image(apron.add(top_left("Swords1", x, 12, 20, 20, active=False)), INK, 0.85, sprite=sprites["swords"])
+    x += 24
+    text(apron.add(top_left("Score1", x, 0, 30, BAR_H)), "0", size=22, colour=INK, halign=CENTER, bold=True)
+    x += 34
+    text(apron.add(top_left("Team1_Name", x, 0, 100, BAR_H)), "team2", size=16, colour=INK, halign=LEFT, bold=True)
 
-    # Row two: the round label under the clock, a seat per player under each name.
-    text(block.add(top_left("Mid", center_x, ROW2_Y + 4, CENTER_W, 16)), "Round 1",
-         size=12, colour=MUTED, halign=CENTER, bold=True, uppercase=True, spacing=10)
+    text(apron.add(top_stretch("Mid", 66, 16, 20)), "Round 1",
+         size=11, colour=MUTED, halign=CENTER, bold=True, uppercase=True, spacing=10)
 
+    # Seats run outward from the middle on each wing: a face in the bar, the gun and
+    # the pick hanging under it. Out of the round fades the whole seat.
     for prefix, place in (("L", top_left), ("R", top_right)):
         for i in range(SEATS):
-            x = HUD_PAD + i * SEAT_W
-            seat = block.add(place(f"{prefix}{i}", x, ROW2_Y, AVATAR, HUD_H - ROW2_Y - 6, active=False))
+            x = WING_PAD + i * (SEAT + SEAT_GAP)
+            seat = block.add(place(f"{prefix}{i}", (WING_W - x - SEAT), 0, SEAT, SEAT_H, active=False))
 
-            frame = seat.add(top_left(f"{prefix}{i}_Frame", 0, 0, AVATAR, AVATAR))
-            image(frame, "#ffffff", sprite=round6)
+            frame = seat.add(top_left(f"{prefix}{i}_Frame", 0, 0, SEAT, SEAT))
+            image(frame, "#ffffff", sprite=sprites["round6"])
             mask(frame)
             image(frame.add(stretch(f"{prefix}{i}_Avatar")), "#ffffff", enabled=False)
 
-            # The loadout run, gun then pick, under the face.
-            image(seat.add(top_left(f"{prefix}{i}_Gun", 0, AVATAR + 2, 16, 14)), "#ffffff", enabled=False, preserve_aspect=True)
-            image(seat.add(top_left(f"{prefix}{i}_Pick", 18, AVATAR + 2, 14, 14)), "#ffffff", enabled=False, preserve_aspect=True)
+            image(seat.add(place(f"{prefix}{i}_Gun", 0, SEAT + 2, 24, 16)), "#ffffff", enabled=False, preserve_aspect=True)
+            image(seat.add(place(f"{prefix}{i}_Pick", 26, SEAT + 1, 18, 18)), "#ffffff", enabled=False, preserve_aspect=True)
 
-            # Out of the round: the overlay fades the card rather than removing it.
             image(seat.add(stretch(f"{prefix}{i}_Out", active=False)), FLAT, 0.7)
-
-        # A hairline under each roster. The viewer's own side is ink, the other side is
-        # the overlay's red: for a player, the other team is the jeopardy.
-        rule = block.add(place(f"{prefix}_Rule", HUD_PAD, HUD_H - 4, ROSTER_W, 2))
-        image(rule, INK if prefix == "L" else RED, 0.5 if prefix == "L" else 0.85)
 
     return root
 
 
 if __name__ == "__main__":
-    round8, round6, notch, flare_l, flare_r = write_sprites()
+    sprites = write_sprites()
 
-    for name, root in (("PickBoard", pick_board(round8)), ("MatchHud", match_hud(round6, notch, flare_l, flare_r))):
+    for name, root in (("PickBoard", pick_board(sprites["round8"])), ("MatchHud", match_hud(sprites))):
         target = EFFECTS / name / "Effect.prefab"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(prefab(root), encoding="utf-8", newline="\n")

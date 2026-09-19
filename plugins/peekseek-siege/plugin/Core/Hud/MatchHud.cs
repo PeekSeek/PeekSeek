@@ -36,6 +36,10 @@ internal class HudState {
     /// True when the label is the kind that should be red: match point, final.
     internal bool Jeopardy;
 
+    /// Which team is holding this round, 0 or 1, or -1 when nobody is: the shield goes
+    /// beside their score and the swords beside the other.
+    internal int DefendingTeam = -1;
+
     internal int SecondsLeft;
 }
 
@@ -145,6 +149,7 @@ internal class MatchHud {
         }
         Send(viewer, "Mid", Label(state));
         Send(viewer, "Timer", Clock(state.SecondsLeft));
+        Roles(viewer, state.DefendingTeam);
 
         for (int team = 0; team < 2; team++) {
             string side = team == 0 ? "L" : "R";
@@ -159,7 +164,6 @@ internal class MatchHud {
     }
 
     private static void DrawSeat(SteamPlayer viewer, string slot, HudSeat seat) {
-        Send(viewer, $"{slot}_Name", seat.Name);
         Picture(viewer, $"{slot}_Avatar", seat.AvatarUrl);
         Picture(viewer, $"{slot}_Gun", ItemIcon(seat.GunItemId));
         Picture(viewer, $"{slot}_Pick", ItemIcon(seat.PickItemId));
@@ -178,7 +182,6 @@ internal class MatchHud {
                 HudSeat now = next.Teams[team].Seats[i];
                 string slot = $"{side}{i}";
 
-                if (was.Name != now.Name) Send(viewer, $"{slot}_Name", now.Name);
                 if (was.AvatarUrl != now.AvatarUrl) Picture(viewer, $"{slot}_Avatar", now.AvatarUrl);
                 if (was.GunItemId != now.GunItemId) Picture(viewer, $"{slot}_Gun", ItemIcon(now.GunItemId));
                 if (was.PickItemId != now.PickItemId) Picture(viewer, $"{slot}_Pick", ItemIcon(now.PickItemId));
@@ -188,6 +191,16 @@ internal class MatchHud {
 
         if (Label(last) != Label(next)) Send(viewer, "Mid", Label(next));
         if (last.SecondsLeft != next.SecondsLeft) Send(viewer, "Timer", Clock(next.SecondsLeft));
+        if (last.DefendingTeam != next.DefendingTeam) Roles(viewer, next.DefendingTeam);
+    }
+
+    /// The shield beside whoever holds, the swords beside whoever attacks, neither
+    /// between rounds.
+    private static void Roles(SteamPlayer viewer, int defending) {
+        for (int team = 0; team < 2; team++) {
+            Visible(viewer, $"Shield{team}", defending == team);
+            Visible(viewer, $"Swords{team}", defending >= 0 && defending != team);
+        }
     }
 
     /// Same teams in the same order with the same people: the difference can be patched
@@ -213,6 +226,7 @@ internal class MatchHud {
             Teams = onSecond ? [state.Teams[1], state.Teams[0]] : [state.Teams[0], state.Teams[1]],
             Label = state.Label,
             Jeopardy = state.Jeopardy,
+            DefendingTeam = state.DefendingTeam < 0 ? -1 : onSecond ? 1 - state.DefendingTeam : state.DefendingTeam,
             SecondsLeft = state.SecondsLeft
         };
     }

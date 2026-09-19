@@ -15,6 +15,7 @@ good to defend is a bad base.
 
 | Phase | What happens |
 | --- | --- |
+| Footprint | 20 seconds. Each team picks square, hexagonal or round; first answer counts. |
 | Build | 5 minutes. Both teams build, each locked to their own plot. |
 | Pick | 20 seconds. Five options on the board. Defence or raid, depending which side you are. |
 | Round | 3 minutes. Attackers breach, defenders hold. |
@@ -42,11 +43,14 @@ exceptions:
   Metal walls, every floor and every pillar stay unowned, so a base cannot be dismantled
   into a better base while a round is running.
 
-**One base per site.** Each plot starts as a three-by-three grid of metal floors with a
-claim flag in the middle and a metal pillar on each outer corner, dropped by the
-gamemode. The floors and the flag are owned by nobody and impossible to salvage, damage
-or move; the pillars belong to the team, so a plan that wants a corner clear can pull
-one. Teams do get floors, but a floor only goes down beside or above one that is already
+**One base per site.** Before the build phase each team picks a footprint: square (nine
+metal floors, three by three), hexagonal (six triangles round the flag with a square on
+every side), or round (hexagonal with the six gaps filled, twelve sides). The gamemode
+drops it with the claim flag in the middle and a maple pillar on every corner of every
+floor, on Unturned's own housing grid to the centimetre, so everything a team attaches
+links. The floors and the flag are owned by nobody and impossible to salvage, damage or
+move; the pillars belong to the team, so a plan that wants a corner clear can pull one.
+Teams do get floors, but a floor only goes down beside or above one that is already
 standing, so the base grows out of the anchor. Nobody ends up with three shacks in a
 field and a choice about which one to defend.
 

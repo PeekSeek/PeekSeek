@@ -54,6 +54,12 @@ internal class PickBoard {
         return seats.TryGetValue(steam64, out Seat seat) && seat.Pick >= 0;
     }
 
+    /// The tile a player took, zero-based, or -1. For a board whose options mean
+    /// something other than items, like the shape of a base.
+    internal int PickIndex(ulong steam64) {
+        return seats.TryGetValue(steam64, out Seat seat) ? seat.Pick : -1;
+    }
+
     /// Clear every seat, before a round's boards go up. A player who has left since the
     /// last round should not still be holding one.
     internal void Reset() {

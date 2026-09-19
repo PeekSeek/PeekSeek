@@ -433,6 +433,48 @@ def flare_alpha(size, outer_x):
     return lambda x, y: coverage(inside, x, y)
 
 
+def shield_alpha(size):
+    """A shield: flat top, straight sides down to the middle, then a point. The role
+    marker for the team holding the flag."""
+    def inside(px, py):
+        top, straight_to, bottom = size * 0.12, size * 0.5, size * 0.92
+        left, right = size * 0.18, size * 0.82
+        if py < top or py > bottom:
+            return 0
+        if py <= straight_to:
+            return 1 if left <= px <= right else 0
+        half = (right - left) / 2 * (bottom - py) / (bottom - straight_to)
+        return 1 if abs(px - size / 2) <= half else 0
+
+    return lambda x, y: coverage(inside, x, y)
+
+
+def swords_alpha(size):
+    """Two crossed blades with a short guard each. The role marker for the team
+    attacking."""
+    def near(px, py, ax, ay, bx, by, radius):
+        dx, dy = bx - ax, by - ay
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+        cx, cy = ax + t * dx, ay + t * dy
+        return (px - cx) ** 2 + (py - cy) ** 2 <= radius * radius
+
+    lo, hi, thick = size * 0.12, size * 0.88, size * 0.06
+    guard = size * 0.11
+
+    def inside(px, py):
+        # Blades from each top corner down to the opposite bottom corner.
+        if near(px, py, lo, lo, hi, hi, thick) or near(px, py, hi, lo, lo, hi, thick):
+            return 1
+        # A guard across each blade near its grip, which is the bottom end.
+        for (gx, gy, ux, uy) in ((lo + (hi - lo) * 0.8, lo + (hi - lo) * 0.8, 1, -1),
+                                 (lo + (hi - lo) * 0.2, lo + (hi - lo) * 0.8, 1, 1)):
+            if near(px, py, gx - ux * guard, gy - uy * guard, gx + ux * guard, gy + uy * guard, thick):
+                return 1
+        return 0
+
+    return lambda x, y: coverage(inside, x, y)
+
+
 def sprite(folder, name, guid, width, height, alpha_at, border):
     """Write `name`.png and the .meta that imports it as a nine-sliced sprite under
     `guid`. `border` is the slice inset on every side."""

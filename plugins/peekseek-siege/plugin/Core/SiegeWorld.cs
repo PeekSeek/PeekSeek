@@ -44,32 +44,27 @@ internal static class SiegeWorld {
 
     // ---- the anchor -----------------------------------------------------------
 
-    /// Drop what a site is before anybody builds: a three-by-three grid of metal floors
-    /// with the claim flag standing in the middle.
+    /// Drop what a site is before anybody builds: the metal floors of the shape the team
+    /// chose, with the claim flag standing in the middle.
     ///
     /// The floors go down owned by nobody and in no group, which in Unturned means
     /// nobody can salvage them and nobody can move them. That is the point. A team that
     /// could pick its anchor up could carry it to a corner and build a base the round
     /// system never intended; a team that cannot has to build off this floor, which is
     /// what makes "one base per site" a fact about the world rather than a rule anybody
-    /// has to enforce. Six metres is the housing grid (HousingConnections.EDGE_LENGTH),
-    /// so the nine tiles link like nine a player laid.
-    internal static void PlaceAnchor(SiegeSite site, ulong teamGroup) {
+    /// has to enforce. Where each piece goes is BaseLayout's, which is the housing grid
+    /// the game links on; here it is only turned to face the site and dropped.
+    internal static void PlaceAnchor(SiegeSite site, ulong teamGroup, BaseShape shape) {
         Vector3 anchor = site.AnchorPoint;
+        ItemStructureAsset square = Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorFloorItemId) as ItemStructureAsset;
+        ItemStructureAsset triangle = Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorTriangleItemId) as ItemStructureAsset;
 
-        // Unturned's structure and barricade prefabs are authored facing forward and
-        // laid down by a quarter turn on X, so an upright or flat piece is
-        // Euler(-90, yaw, 0). Euler(0, yaw, 0) is what stands a floor on its edge.
-        Quaternion placed = Quaternion.Euler(-90f, site.Yaw, 0f);
-        Quaternion heading = Quaternion.Euler(0f, site.Yaw, 0f);
+        foreach (FloorPiece piece in BaseLayout.Floors(shape)) {
+            ItemStructureAsset floor = piece.Triangle ? triangle : square;
+            if (floor == null) continue;
 
-        if (Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorFloorItemId) is ItemStructureAsset floor) {
-            for (int across = -1; across <= 1; across++) {
-                for (int along = -1; along <= 1; along++) {
-                    Vector3 tile = anchor + heading * new Vector3(across * FloorEdge, 0f, along * FloorEdge);
-                    StructureManager.dropReplicatedStructure(new Structure(floor, floor.health), tile, placed, 0, 0);
-                }
-            }
+            StructureManager.dropReplicatedStructure(
+                new Structure(floor, floor.health), OnSite(site, piece.X, 0f, piece.Z), Facing(site, piece.Yaw), 0, 0);
         }
 
         // The marker goes down in the team's group, and that is not the same thing as
@@ -95,37 +90,45 @@ internal static class SiegeWorld {
                 // waist, whatever marker somebody configures. The extra clears the
                 // anchor floor's own thickness.
                 anchor + Vector3.up * (marker.offset + AnchorFloorClearance),
-                placed,
+                Facing(site, 0f),
                 0,
                 teamGroup);
         }
     }
 
-    /// A metal pillar on each outer corner of the grid, once, when the build phase
-    /// opens. Unlike the floors these belong to the team: they are placed in its group,
-    /// so a team whose plan wants that corner clear can salvage one, and they are
-    /// captured with the base like anything else the team left standing.
-    internal static void PlacePillars(SiegeSite site, ulong teamGroup) {
+    /// A maple pillar on every corner of every anchor floor, once, when the build phase
+    /// opens. The game puts a pillar at a floor vertex half a wall above the floor's
+    /// plane (HousingConnections.FindEmptyPillarSlot), and links within two centimetres,
+    /// so that is exactly where these go: anything else is a pillar nothing can attach
+    /// to. Unlike the floors these belong to the team: they are placed in its group, so
+    /// a team whose plan wants that corner clear can salvage one, and they are captured
+    /// with the base like anything else the team left standing. The one corner every
+    /// triangle of a hexagon shares is the middle, and the flag stands there.
+    internal static void PlacePillars(SiegeSite site, ulong teamGroup, BaseShape shape) {
         if (Assets.find(EAssetType.ITEM, PeekSeekSiege.Config.AnchorPillarItemId) is not ItemStructureAsset pillar) return;
 
-        Quaternion placed = Quaternion.Euler(-90f, site.Yaw, 0f);
-        Quaternion heading = Quaternion.Euler(0f, site.Yaw, 0f);
-        float corner = FloorEdge * 1.5f;
-        float pivot = AnchorFloorClearance + HalfWallHeight;
+        foreach ((float x, float z, float yaw) in BaseLayout.Vertices(shape)) {
+            if (Mathf.Abs(x) < BaseLayout.LinkTolerance && Mathf.Abs(z) < BaseLayout.LinkTolerance) continue;
 
-        foreach (float across in new[] { -corner, corner }) {
-            foreach (float along in new[] { -corner, corner }) {
-                Vector3 at = site.AnchorPoint + heading * new Vector3(across, pivot, along);
-                StructureManager.dropReplicatedStructure(new Structure(pillar, pillar.health), at, placed, 0, teamGroup);
-            }
+            StructureManager.dropReplicatedStructure(
+                new Structure(pillar, pillar.health),
+                OnSite(site, x, BaseLayout.HalfWallHeight, z),
+                Facing(site, yaw),
+                0,
+                teamGroup);
         }
     }
 
-    /// Unturned's housing grid: HousingConnections.EDGE_LENGTH and HALF_WALL_HEIGHT. A
-    /// floor is six metres square and a pillar's pivot sits half a wall above the floor
-    /// it stands on.
-    private const float FloorEdge = 6f;
-    private const float HalfWallHeight = 2.125f;
+    /// A layout offset turned to face the site and put on its anchor.
+    private static Vector3 OnSite(SiegeSite site, float x, float y, float z) {
+        return site.AnchorPoint + Quaternion.Euler(0f, site.Yaw, 0f) * new Vector3(x, y, z);
+    }
+
+    /// Unturned's structure prefabs are authored facing forward and laid down by a
+    /// quarter turn on X, so an upright or flat piece is Euler(-90, yaw, 0).
+    private static Quaternion Facing(SiegeSite site, float yaw) {
+        return Quaternion.Euler(-90f, site.Yaw + yaw, 0f);
+    }
 
     /// Half the anchor floor's thickness, so things resting on it start at its surface
     /// rather than at its middle.
@@ -205,7 +208,7 @@ internal static class SiegeWorld {
     /// being exactly one.
     private static bool TouchesAFloor(Vector3 point) {
         List<RegionCoordinate> around = [];
-        Regions.getRegionsInRadius(point, FloorEdge * 2f, around);
+        Regions.getRegionsInRadius(point, BaseLayout.Edge * 2f, around);
 
         foreach (RegionCoordinate coordinate in around) {
             foreach (StructureDrop drop in StructureManager.regions[coordinate.x, coordinate.y].drops) {
@@ -213,7 +216,7 @@ internal static class SiegeWorld {
 
                 Vector3 gap = drop.GetServersideData().point - point;
                 float flat = Mathf.Sqrt(gap.x * gap.x + gap.z * gap.z);
-                if (flat <= FloorEdge + 0.5f && Mathf.Abs(gap.y) <= HalfWallHeight * 2f + 0.5f) return true;
+                if (flat <= BaseLayout.Edge + 0.5f && Mathf.Abs(gap.y) <= BaseLayout.HalfWallHeight * 2f + 0.5f) return true;
             }
         }
 

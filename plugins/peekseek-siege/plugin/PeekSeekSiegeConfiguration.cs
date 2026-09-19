@@ -54,8 +54,13 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
     /// bubble is built on the client from the replicated barricade, so there is nothing
     /// a server-side patch can do about it.
     public ushort AnchorFloorItemId;
+    public ushort AnchorTriangleItemId;
     public ushort AnchorPillarItemId;
     public ushort AnchorMarkerItemId;
+
+    /// Handed out on top of BuildSupplies to a team that chose a shape with triangles
+    /// in it, because a triangular floor needs triangular pieces to build on.
+    public List<SiegeItem> TriangleSupplies;
 
     /// A team's materials for the whole build phase, issued once. Everything is a
     /// budget: metal is what survives a charge, so how much of a building is metal and
@@ -154,12 +159,14 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         RoundSeconds = 30;
 
         AnchorFloorItemId = 369;
+        AnchorTriangleItemId = 1265;
+        AnchorPillarItemId = 36;
         AnchorMarkerItemId = 1158;
-        AnchorPillarItemId = 374;
 
         // Ids are read off the server's own Bundles/Items rather than guessed. Maple:
-        // 31 floor, 32 doorway, 33 wall, 35 roof, 36 pillar, 322 ramp. Metal: 369 floor,
-        // 373 roof, 374 pillar, 378 door.
+        // 31 floor, 32 doorway, 33 wall, 35 roof, 36 pillar, 322 ramp, 1262 triangle
+        // floor, 1266 triangle roof. Metal: 369 floor, 373 roof, 378 door, 1265
+        // triangle floor.
         BuildSupplies = [
             new SiegeItem(36, 50),
             new SiegeItem(33, 20),
@@ -171,6 +178,11 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
             new SiegeItem(373, 3)
         ];
 
+        TriangleSupplies = [
+            new SiegeItem(1262, 6),
+            new SiegeItem(1266, 12)
+        ];
+
         // 1764 is the housing planner: the one tool that says "builder" and makes the
         // placing itself less of a fight. A kitless player gets a bag or their supplies
         // land on the floor; the name is looked up, so it survives an id change.
@@ -180,7 +192,7 @@ public class PeekSeekSiegeConfiguration : IRocketPluginConfiguration {
         HandsWidth = 14;
         // Grown to hold the whole kit at once: a hundred and ten pieces at two or four
         // cells each is more than a backpack.
-        HandsHeight = 26;
+        HandsHeight = 32;
 
         OffBaseDamagePerSecond = 12;
         OffBaseGraceSeconds = 2f;

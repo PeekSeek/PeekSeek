@@ -12,6 +12,7 @@ namespace PeekSeekSiege.Core;
 
 internal enum SiegePhase {
     Idle,
+    Shaping,
     Building,
     Picking,
     Playing,
@@ -47,6 +48,10 @@ internal class Siege : IGamemode {
     /// Each team's finished building, taken once at the end of the build phase.
     private readonly BaseSnapshot[] bases = new BaseSnapshot[2];
 
+    /// The footprint each team chose to start from. Chosen on a board before the build
+    /// phase; Square if nobody on the team answered.
+    private readonly BaseShape[] shapes = [BaseShape.Square, BaseShape.Square];
+
     private readonly PickBoard board = new();
     private readonly MatchHud hud = new();
 
@@ -77,6 +82,7 @@ internal class Siege : IGamemode {
     /// the first and pick whichever one suited the round.
     private HashSet<ushort> Fixtures => [
         PeekSeekSiege.Config.AnchorFloorItemId,
+        PeekSeekSiege.Config.AnchorTriangleItemId,
         PeekSeekSiege.Config.AnchorMarkerItemId
     ];
 
@@ -112,7 +118,7 @@ internal class Siege : IGamemode {
         Chat.Announce(PeekSeekSiege.Instance.Translate("match_intro",
             RoundOrder.RegulationHalf, Wording.Duration(PeekSeekSiege.Config.BuildSeconds)));
 
-        StartBuilding();
+        StartShaping();
     }
 
     public void End() {
@@ -138,6 +144,9 @@ internal class Siege : IGamemode {
         hud.Countdown(SecondsLeft);
 
         switch (phase) {
+            case SiegePhase.Shaping:
+                TickShaping();
+                break;
             case SiegePhase.Building:
                 TickBuilding();
                 break;
@@ -206,6 +215,77 @@ internal class Siege : IGamemode {
         return shown;
     }
 
+    // ---- the footprint ----------------------------------------------------------
+
+    /// Before anybody builds, each team says what it is building on: a board with the
+    /// three footprints, up for as long as a pick. The first answer on a team is the
+    /// team's; a team that never answers gets the square.
+    private void StartShaping() {
+        phase = SiegePhase.Shaping;
+        phaseEndsAt = Time.realtimeSinceStartup + PeekSeekSiege.Config.PickSeconds;
+
+        foreach (int team in BuiltSites()) {
+            BaseSnapshot.Clear(sites[team].AnchorPoint, sites[team].BuildRadius, []);
+        }
+        foreach (Player player in Players()) Place(player);
+
+        board.Reset();
+        List<SiegeOption> footprints = ShapeOptions();
+        foreach (SteamPlayer viewer in Provider.clients.ToList()) {
+            board.Open(viewer, footprints, PeekSeekSiege.Instance.Translate("board_shape"));
+        }
+
+        RefreshHud();
+    }
+
+    private void TickShaping() {
+        Leash();
+        board.Countdown(SecondsLeft);
+
+        bool everyoneAnswered = Players().All(p => board.HasAnswered(p.channel.owner.playerID.steamID.m_SteamID));
+        if (SecondsLeft > 0 && !everyoneAnswered) return;
+
+        FinishShaping();
+    }
+
+    internal void FinishShaping() {
+        for (int team = 0; team < 2; team++) shapes[team] = ShapeChosenBy(team);
+        board.Close();
+        StartBuilding();
+    }
+
+    /// The three footprints as tiles: the first answer on a team decides for the team.
+    private static List<SiegeOption> ShapeOptions() {
+        return [
+            new SiegeOption {
+                Name = PeekSeekSiege.Instance.Translate("shape_square"),
+                Blurb = PeekSeekSiege.Instance.Translate("shape_square_blurb"),
+                Icon = PeekSeekSiege.Config.AnchorFloorItemId
+            },
+            new SiegeOption {
+                Name = PeekSeekSiege.Instance.Translate("shape_hexagonal"),
+                Blurb = PeekSeekSiege.Instance.Translate("shape_hexagonal_blurb"),
+                Icon = PeekSeekSiege.Config.AnchorTriangleItemId
+            },
+            new SiegeOption {
+                Name = PeekSeekSiege.Instance.Translate("shape_round"),
+                Blurb = PeekSeekSiege.Instance.Translate("shape_round_blurb"),
+                Icon = PeekSeekSiege.Config.TriangleSupplies.Count > 0 ? PeekSeekSiege.Config.TriangleSupplies[0].ItemId : (ushort)0
+            }
+        ];
+    }
+
+    private BaseShape ShapeChosenBy(int team) {
+        if (match.Teams.Count <= team) return BaseShape.Square;
+
+        foreach (ulong steam64 in match.Teams[team].Players) {
+            int pick = board.PickIndex(steam64);
+            if (pick >= 0) return (BaseShape)pick;
+        }
+
+        return BaseShape.Square;
+    }
+
     // ---- build phase ----------------------------------------------------------
 
     private void StartBuilding() {
@@ -215,9 +295,9 @@ internal class Siege : IGamemode {
 
         foreach (int team in BuiltSites()) {
             SiegeSite site = sites[team];
-            BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, Fixtures);
-            SiegeWorld.PlaceAnchor(site, GroupOf(team));
-            SiegeWorld.PlacePillars(site, GroupOf(team));
+            BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, []);
+            SiegeWorld.PlaceAnchor(site, GroupOf(team), shapes[team]);
+            SiegeWorld.PlacePillars(site, GroupOf(team), shapes[team]);
         }
 
         foreach (Player player in Players()) Place(player);
@@ -225,6 +305,10 @@ internal class Siege : IGamemode {
         Chat.Announce(PeekSeekSiege.Instance.Translate("build_start",
             Wording.Duration(PeekSeekSiege.Config.BuildSeconds),
             match.Solo ? sites[0].Name : "your site"));
+        for (int team = 0; team < (match.Solo ? 1 : 2); team++) {
+            Chat.Announce(PeekSeekSiege.Instance.Translate("build_shape", TeamName(team),
+                PeekSeekSiege.Instance.Translate("shape_" + shapes[team].ToString().ToLowerInvariant())));
+        }
 
         RefreshHud();
     }
@@ -262,6 +346,12 @@ internal class Siege : IGamemode {
         if (match.Solo) return bases[0];
 
         return bases.Length > team ? bases[team] : null;
+    }
+
+    /// The footprint standing at a site. Solo stands its one base at both anchors, so
+    /// both get the tester's shape.
+    private BaseShape ShapeAt(int team) {
+        return match.Solo ? shapes[0] : shapes[team];
     }
 
     /// The Unturned group a site's team is in, or 0 before the roster has one.
@@ -324,7 +414,7 @@ internal class Siege : IGamemode {
             // Nothing is skipped here, marker included. A round can end with the flag
             // shot down, so putting a base back means putting its anchor back too.
             BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, []);
-            SiegeWorld.PlaceAnchor(site, group);
+            SiegeWorld.PlaceAnchor(site, group, ShapeAt(team));
             BaseFor(team)?.Restore(site.AnchorPoint, asset => OwnerGroupFor(asset, group));
         }
     }
@@ -526,6 +616,11 @@ internal class Siege : IGamemode {
         int side = SideOf(steam64);
         SiegeSite own = sites[side];
 
+        if (phase == SiegePhase.Shaping) {
+            player.teleportToLocationUnsafe(SiegeWorld.OnGround(own.AnchorPoint), own.Yaw);
+            return;
+        }
+
         if (phase == SiegePhase.Building) {
             player.teleportToLocationUnsafe(SiegeWorld.StandingSpot(own), own.Yaw);
             Supply(player);
@@ -556,7 +651,12 @@ internal class Siege : IGamemode {
         bool first = supplied.Add(steam64);
 
         SiegeWorld.DressForBuilding(player);
-        if (first) SiegeWorld.Issue(player, PeekSeekSiege.Config.BuildSupplies);
+        if (!first) return;
+
+        SiegeWorld.Issue(player, PeekSeekSiege.Config.BuildSupplies);
+        if (ShapeAt(SideOf(steam64)) != BaseShape.Square) {
+            SiegeWorld.Issue(player, PeekSeekSiege.Config.TriangleSupplies);
+        }
     }
 
     private static void AllowRespawn(Player player) {
@@ -638,10 +738,13 @@ internal class Siege : IGamemode {
     private HudState HudState() {
         HudState state = new() {
             SecondsLeft = SecondsLeft,
+            DefendingTeam = phase == SiegePhase.Picking || phase == SiegePhase.Playing ? DefendedSite : -1,
             Label = PeekSeekSiege.Instance.Translate("hud_round", Math.Max(1, round)),
         };
 
-        if (phase == SiegePhase.Building) {
+        if (phase == SiegePhase.Shaping) {
+            state.Label = PeekSeekSiege.Instance.Translate("hud_shaping");
+        } else if (phase == SiegePhase.Building) {
             state.Label = PeekSeekSiege.Instance.Translate("hud_building");
         } else if (phase == SiegePhase.Over) {
             state.Label = PeekSeekSiege.Instance.Translate("hud_final");

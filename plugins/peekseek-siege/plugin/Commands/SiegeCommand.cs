@@ -63,6 +63,10 @@ public class SiegeCommand : IRocketCommand {
     /// skipped round is awarded, defaulting to the defenders because that is what the
     /// clock running out does.
     private static void Skip(Siege siege, string winner) {
+        if (siege.Phase == SiegePhase.Shaping) {
+            siege.FinishShaping();
+            return;
+        }
         if (siege.Phase == SiegePhase.Building) {
             siege.FinishBuilding();
             return;

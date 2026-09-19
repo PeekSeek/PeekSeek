@@ -60,12 +60,23 @@ public class PeekSeekSiege : RocketPlugin<PeekSeekSiegeConfiguration> {
         // the shape of the whole match is explained, so it says the shape and nothing else.
         { "match_intro", "<color=white>Siege.</color> Build a base, then take turns cracking each other's. <color=white>{0}</color> rounds each side. You get <color=white>{1}</color> to build." },
 
-        { "build_start", "<color=white>Build.</color> {0} at <color=white>{1}</color>. Supplies top up as you go. You cannot leave your plot, and there are no floors — build off the metal floor you are standing on." },
+        { "build_start", "<color=white>Build.</color> {0} at <color=white>{1}</color>. The planner is in your hands and the whole kit is on you. You cannot leave your plot, and a floor only goes down against one that is already there." },
+        { "build_shape", "<color=white>{0}</color> build on a <color=white>{1}</color> footprint." },
+
+        // The footprint board. Three tiles; the first answer on a team is the team's.
+        { "board_shape", "<color=white>Your footprint.</color> What the base starts from. First pick on your team counts." },
+        { "shape_square", "Square" },
+        { "shape_square_blurb", "Nine metal floors, three by three. Walls and roofs only." },
+        { "shape_hexagonal", "Hexagonal" },
+        { "shape_hexagonal_blurb", "Six triangles round the flag, a square on every side. Triangle pieces in the kit." },
+        { "shape_round", "Round" },
+        { "shape_round_blurb", "Hexagonal with the gaps filled, twelve sides. Triangle pieces in the kit." },
         { "build_countdown", "<color=white>{0}s</color> of building left." },
         { "build_done", "<color=white>Bases locked.</color> {0} and {1} pieces. Nothing about them changes from here." },
 
         // The small label over the HUD clock. Short, because the slot is, and the last
         // two are the ones drawn in red.
+        { "hud_shaping", "Footprint" },
         { "hud_building", "Build" },
         { "hud_round", "Round {0}" },
         { "hud_overtime", "Overtime" },
