@@ -42,15 +42,18 @@ internal static class SiegeHost {
         if (Level.isLoaded) OnLevelLoaded(0);
     }
 
-    /// Morning, and a day that outlasts the server's own nightly restart. The map is a
-    /// Survival-type copy of an Arena map, so the game would run its day and night
-    /// cycle, and a siege fought in the dark is a different game. Set here rather
-    /// than in Commands.dat, where `day` runs before there is a level to set it on.
+    /// Morning, a day that outlasts the server's own nightly restart, and no cars. The
+    /// map is a Survival-type copy of an Arena map, so the game would run its day and
+    /// night cycle and stand the map's vehicles up at load, and a siege fought in the
+    /// dark or driven into is a different game. The server config keeps vehicles from
+    /// respawning; this clears the ones the load put down. Set here rather than in
+    /// Commands.dat, where `day` runs before there is a level to set it on.
     private static void OnLevelLoaded(int level) {
         if (Level.info == null || Level.info.type != ELevelType.SURVIVAL) return;
 
         LightingManager.cycle = 24 * 60 * 60;
         LightingManager.time = (uint)(LightingManager.cycle * (LevelLighting.transition + 0.1f));
+        VehicleManager.askVehicleDestroyAll();
     }
 
     internal static void Shutdown() {
