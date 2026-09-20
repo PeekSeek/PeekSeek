@@ -22,6 +22,10 @@ The Unity UIs PeekSeek draws in game, built from one project into two Workshop i
   to lay, a row per kind of piece.
 - **The kill feed**, its own item (`Assets/PeekSeekKillFeed/`) so the lobby can carry it
   without the rest: a row per kill at the top right, the weapon a white silhouette.
+- **The lobby's bar** (`Assets/PeekSeekKillFeed/Bundles/Effects/LobbyBar/`, in the same item):
+  the match bar's block with the PeekSeek mark on it and a face per player round it, the
+  first on the left, the second on the right, six a side; a face at half strength is
+  somebody dead, at the spawn or away.
 
 All of them are PeekSeek Match's (`plugin/Core/Hud/`), driven by whatever gamemode is
 running: the bar asks the gamemode for its role markers, its picks and its clock, and

@@ -24,6 +24,8 @@ one that reads the same; the game leaves a font that is not TextMeshPro's own al
 import sys
 from pathlib import Path
 
+from PIL import Image
+
 import footprints
 import sitemap
 from unityyaml import (CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, button, canvas,
@@ -98,6 +100,9 @@ def write_sprites():
         "round6": sprite(SPRITES, "Round6", "c2a1d3e4f5b6c7d8e9f0a1b2c3d4e5f6", 24, 24, rounded_alpha(24, 24, 6), 6),
         "round3": sprite(SPRITES, "Round3", "d4b2e6f7a8c9d0e1f2a3b4c5d6e7f8a9", 12, 12, rounded_alpha(12, 12, 3), 3),
         "ring6": sprite(SPRITES, "Ring6", "e5c3f7a8b9d0e1f2a3b4c5d6e7f8a9b0", 24, 24, ring_alpha(24, 24, 6), 6),
+        # The PeekSeek mark, the site's own white-on-nothing cmw.png, at twice the size it
+        # is shown at.
+        "logo": sprite_file(SPRITES, "Logo", "f6d4a8b9c0e1f2a3b4c5d6e7f8a9b0c1", logo_png(2 * LOGO_H)),
         "castle": sprite(SPRITES, "Castle", "c8a7d9e0f1b2c3d4e5f6a7b8c9d0e1f2", 24, 24, castle_alpha(24), 0),
         "swords": sprite(SPRITES, "Swords", "d9b8e0f1a2c3d4e5f6a7b8c9d0e1f2a3", 24, 24, swords_alpha(24), 0),
         "skull": sprite(SPRITES, "Skull", "c6e5a7b8d9f0a1b2c3d4e5f6a7b8c9d0", 40, 40, skull_alpha(40), 0),
@@ -107,6 +112,22 @@ def write_sprites():
         "hexagonal": sprite_file(SPRITES, "FootprintHexagonal", "f1d0a2b3c4e5f6a7b8c9d0e1f2a3b4c5",
                                  footprints.picture("Hexagonal", 2 * FIGURE_W, 2 * FIGURE_H, FIGURE_METRES)),
     })
+
+
+LOGO_H = 28             # the mark on the lobby's block
+LOGO = ROOT.parents[4] / "website/public/img/cmw.png"
+
+
+def logo_png(height):
+    """The site's logo, cropped to its ink and scaled to `height`, as PNG bytes."""
+    from io import BytesIO
+    from PIL import Image
+    mark = Image.open(LOGO).convert("RGBA")
+    mark = mark.crop(mark.getbbox())
+    mark = mark.resize((round(mark.width * height / mark.height), height), Image.LANCZOS)
+    out = BytesIO()
+    mark.save(out, "PNG", optimize=True)
+    return out.getvalue()
 
 
 # ---- the boards ----------------------------------------------------------------------
@@ -495,6 +516,43 @@ def health_bar(seat, name):
             image(fill.add(top_left(f"{name}_{colour_name}{k}", k * step, 0, step, HEALTH_H, active=False)), colour)
 
 
+# ---- the lobby's bar -----------------------------------------------------------------
+#
+# The match bar, for a server with no match on it: the same block, ten down and the
+# arena boxes' width, with the PeekSeek mark on it and nothing else, and a face per
+# player to either side. There are no teams, so faces go round the block in the order
+# people arrived, the first on the left, the second on the right, and so on, six a
+# side. No picks and no health: a face at full strength is somebody out in the arena,
+# and at half strength somebody who is not, dead, waiting at the spawn, or away.
+
+LOBBY_SEATS = 6
+LOBBY_WING_W = WING_PAD + LOBBY_SEATS * (SEAT + SEAT_GAP) - SEAT_GAP
+
+
+def lobby_bar():
+    root = Node("Effect")
+    canvas(root, sorting_order=16)
+
+    hud = root.add(top_center("Hud", 0, 0, BLOCK_W + 2 * LOBBY_WING_W, BLOCK_Y + BLOCK_H))
+
+    block = hud.add(top_center("Block", 0, BLOCK_Y, BLOCK_W, BLOCK_H))
+    image(block, FLAT, sprite=SPR["round8"])
+    logo = block.add(centered("Logo", 0, 0, 0, LOGO_H))
+    image(logo, INK, sprite=SPR["logo"], sliced=False, preserve_aspect=True)
+    logo.size = (LOGO_W, LOGO_H)
+
+    for prefix, place in (("L", top_left), ("R", top_right)):
+        for i in range(LOBBY_SEATS):
+            x = LOBBY_WING_W - WING_PAD - (i + 1) * SEAT - i * SEAT_GAP
+            seat = hud.add(place(f"{prefix}{i}", x, BLOCK_Y, SEAT, SEAT, active=False))
+            image(seat, "#ffffff", sprite=SPR["round8"])
+            mask(seat)
+            image(seat.add(stretch(f"{prefix}{i}_Avatar")), "#ffffff", enabled=False)
+            image(seat.add(stretch(f"{prefix}{i}_Faded", active=False)), "#ffffff", 0.5, enabled=False)
+
+    return root
+
+
 # ---- the build panel -----------------------------------------------------------------
 #
 # Beside the screen during the build phase: what the team has left to lay, a row per
@@ -593,6 +651,8 @@ def kill_feed():
 
 if __name__ == "__main__":
     write_sprites()
+    with Image.open(SPRITES / "Logo.png") as mark:
+        LOGO_W = round(LOGO_H * mark.width / mark.height)
     SILHOUETTE = silhouette(ROOT / "Shaders")
 
     screens = (
@@ -600,6 +660,7 @@ if __name__ == "__main__":
         (EFFECTS / "MatchHud", match_hud()),
         (EFFECTS / "BuildPanel", build_panel()),
         (KILLFEED_EFFECTS / "KillFeed", kill_feed()),
+        (KILLFEED_EFFECTS / "LobbyBar", lobby_bar()),
     )
     for folder, root in screens:
         target = folder / "Effect.prefab"

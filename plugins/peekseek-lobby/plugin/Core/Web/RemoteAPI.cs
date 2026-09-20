@@ -86,6 +86,29 @@ internal static class RemoteAPI {
         Send(HttpMethod.Get, $"{Base}/players/{steam64}", steam64);
     }
 
+    /// A player's Steam picture, for the bar: the site's copy if it has one, else
+    /// Steam's own public profile as XML, which needs no key. Asked once, on join.
+    internal static void FetchAvatar(ulong steam64, System.Action<string> found) {
+        Task.Run(async () => {
+            try {
+                string url = null;
+                HttpResponseMessage response = await Client.GetAsync($"{Base}/players/{steam64}");
+                if (response.IsSuccessStatusCode) url = Text((await ReadJson(response))?["avatar"]);
+
+                if (string.IsNullOrEmpty(url)) {
+                    string xml = await Client.GetStringAsync($"https://steamcommunity.com/profiles/{steam64}?xml=1");
+                    System.Text.RegularExpressions.Match full = System.Text.RegularExpressions.Regex.Match(
+                        xml, @"<avatarFull><!\[CDATA\[(.*?)\]\]></avatarFull>");
+                    url = full.Success ? full.Groups[1].Value : null;
+                }
+
+                if (!string.IsNullOrEmpty(url)) TaskDispatcher.QueueOnMainThread(() => found(url));
+            } catch (Exception ex) {
+                ReportFailure(ex.Message);
+            }
+        });
+    }
+
     /// Who already has a refresh out. The lobby asks again for every player every few
     /// seconds regardless of what happened to the last ask, so a site that has gone
     /// slow — or a request sitting out its ten second timeout — would otherwise leave
