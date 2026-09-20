@@ -989,7 +989,7 @@ internal abstract class PSManager {
     internal static void AbandonMatch() {
         if (Status != EPSStatus.IN_PROGRESS) return;
 
-        SendResults(string.Empty, isPlayed: false);
+        if (!Match.IsLocal) SendResults(string.Empty, isPlayed: false);
         ClearMatch();
     }
 

@@ -133,7 +133,11 @@ internal class ArenaSpawnPatch {
     private static bool Prefix(LevelManager __instance) {
         if (PeekSeekArena.Arena is not { InPlay: true }) return false;
 
-        List<SerializableVector3> spawns = [.. PeekSeekArena.Config.Spawns];
+        List<SerializableVector3> spawns = [.. PeekSeekArena.Config.Spawns ?? []];
+        if (spawns.Count == 0) {
+            Logger.LogError("PeekSeekArena has no Spawns configured, so nobody can be put anywhere. Write them into PeekSeekArena.configuration.xml.");
+            return false;
+        }
         Dictionary<CSteamID, SerializableVector3> assignedGroupSpawns = [];
 
         Host.BeginRound();
