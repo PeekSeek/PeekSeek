@@ -620,6 +620,20 @@ internal static class RaidWorld {
             origin, Vector3.down, 1.2f, RayMasks.BARRICADE | RayMasks.STRUCTURE);
     }
 
+    /// Put a point on a player's map and compass, or take it off. The game's own quest
+    /// marker, so it is drawn the way every player already reads one, and it shows to
+    /// their group too. An attacker carries the base they are taking for the whole
+    /// round: with both bases on one map and the spawns a hundred metres out, "which
+    /// way" is the first question, and this is the answer that is always on screen.
+    internal static void Mark(Player player, Vector3? at, string label) {
+        if (at == null) {
+            if (player.quests.isMarkerPlaced) player.quests.replicateSetMarker(false, Vector3.zero);
+            return;
+        }
+
+        player.quests.replicateSetMarker(true, at.Value, label ?? "");
+    }
+
     /// Root a player to the spot, or let them go. Speed and jump both, because a
     /// standing jump is a way to move.
     internal static void Freeze(Player player, bool frozen) {

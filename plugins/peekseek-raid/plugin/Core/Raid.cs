@@ -132,6 +132,7 @@ internal class Raid : IGamemode {
         foreach (Player player in Players()) {
             AllowRespawn(player);
             RaidWorld.Freeze(player, false);
+            RaidWorld.Mark(player, null, null);
         }
 
         phase = RaidPhase.Idle;
@@ -705,6 +706,8 @@ internal class Raid : IGamemode {
     internal void EndRound(int winner, string reasonKey) {
         if (phase < RaidPhase.Picking || phase > RaidPhase.Playing) return;
 
+        foreach (Player player in Players()) RaidWorld.Mark(player, null, null);
+
         Host.RoundWon(winner, PeekSeekRaid.Instance.Translate(reasonKey, TeamName(winner), round));
 
         int matchWinner = RoundOrder.Winner(round, Host.Score(0), Host.Score(1));
@@ -790,6 +793,11 @@ internal class Raid : IGamemode {
         RaidWorld.SalvageTime(player, phase == RaidPhase.Building
             ? PeekSeekRaid.Config.BuildSalvageSeconds
             : PeekSeekRaid.Config.RoundSalvageSeconds);
+
+        // The base being taken, on every attacker's map and compass from the moment
+        // they are put down for the round until it is over; nobody else has a marker.
+        bool attacking = phase is RaidPhase.Starting or RaidPhase.Playing && !IsDefending(steam64);
+        RaidWorld.Mark(player, attacking ? sites[DefendedSite].AnchorPoint : null, sites[DefendedSite].Name);
 
         switch (phase) {
             case RaidPhase.Shaping:

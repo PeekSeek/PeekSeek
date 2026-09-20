@@ -74,6 +74,12 @@ anywhere else is told so and keeps the flag. Everybody spawns on those tiles too
 whichever of them nothing has been built on, spread out from the middle; the anchor
 alone put people inside the walls a hexagonal base grows from its centre.
 
+**Attackers always know where they are going.** From the moment they are put down for
+a round until it ends, the base they are taking is on every attacker's map and compass,
+as the game's own marker with the site's name on it, and they spawn facing it. The
+spawns are a hundred metres out on a map with two bases, and "which way" is not a
+question a round should be spent on.
+
 **The flag is the objective, and the defenders stand it.** Before every round one
 defender, at random, picks their powerup and is then handed the flag, with the rest of
 the pick to stand it anywhere on the building; step off the base with it and you are
