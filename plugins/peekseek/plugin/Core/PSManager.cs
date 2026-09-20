@@ -8,6 +8,8 @@ using Newtonsoft.Json;
 using PeekSeek.Core.Models;
 using PeekSeek.Core.Models.Enums;
 using PeekSeek.Core.Web;
+using PeekSeek.Gamemodes;
+using PeekSeek.Hud;
 using Rocket.Core;
 using Rocket.Core.Utils;
 using Rocket.Unturned.Chat;
@@ -20,6 +22,13 @@ using Logger = Rocket.Core.Logging.Logger;
 
 namespace PeekSeek.Core;
 
+/// The match server.
+///
+/// Everything a match is apart from its rules lives here: the session with the site,
+/// who is on the roster and in which Unturned group, who is spectating, the wait for
+/// everybody to arrive, the score, the stats, the result the site is owed, and the
+/// screens. The rules are a gamemode's (PeekSeek.Gamemodes.IGamemode), handed the
+/// match once the wait is over and told about players from then on.
 internal abstract class PSManager {
     internal static EPSStatus Status;
 
@@ -36,6 +45,19 @@ internal abstract class PSManager {
     internal static float MatchReady;
     private static List<GroupInfoEx> GroupInfos;
 
+    /// The match as the gamemode sees it, and the gamemode running it. Running is null
+    /// from the hand-over until everybody who is coming has arrived; Chosen is the mode
+    /// that will get it then.
+    internal static GamemodeMatch Match { get; private set; }
+    internal static IGamemode Running { get; private set; }
+    private static IGamemode Chosen;
+    private static bool Waiting;
+
+    private static readonly MatchHud Hud = new();
+    internal static readonly PickBoard Board = new();
+    internal static readonly BuildPanel Panel = new();
+    private static KillFeed Feed;
+
     /// When this server came up, and whether it has decided it wants to go down again.
     /// Restarting is how a server picks up a new game build and new plugins, and the
     /// only safe time to do it is while it is holding nothing.
@@ -50,6 +72,12 @@ internal abstract class PSManager {
 
     private const float VisibilityIntervalSeconds = 0.15f;
     private static float LastVisibilityCheck;
+
+    /// The bar's clock and health move between redraws on this cadence. Short, because
+    /// a bar that shows a teammate at half health two seconds after the hit is a bar
+    /// nobody trusts.
+    private const float HudIntervalSeconds = 0.25f;
+    private static float LastHudTick;
 
     /// Separate from UpdateIntervalSeconds: this is a console log for debugging alive/dead
     /// state solo, not the payload sent to the overlay, so it can run on its own slower
@@ -81,7 +109,7 @@ internal abstract class PSManager {
         UnturnedPlayerEvents.OnPlayerDeath += OnPlayerDead;
         UnturnedPlayerEvents.OnPlayerRevive += OnPlayerRevive;
         PlayerLife.onPlayerLifeUpdated += OnLifeUpdated;
-
+        EffectManager.onEffectButtonClicked += OnButtonClicked;
 
         Instrument = new Harmony("blaze.ps.main");
         Instrument.PatchAll(Assembly.GetExecutingAssembly());
@@ -92,7 +120,41 @@ internal abstract class PSManager {
         UseableGun.onBulletSpawned += OnBulletSpawned;
         RemoteAPI.Init();
 
+        Feed = new KillFeed(new KillFeedSettings {
+            EffectGUID = PeekSeek.Config.KillFeedEffectGUID,
+            EffectKey = PeekSeek.Config.KillFeedKey,
+            ItemIconURL = PeekSeek.Config.ItemIconURL,
+            Rows = PeekSeek.Config.KillFeedRows,
+            RowSeconds = PeekSeek.Config.KillFeedRowSeconds,
+            NameLength = PeekSeek.Config.KillFeedNameLength
+        });
+        Feed.Hook();
+
         ConfigurationManager.DisablePassiveHealthRegen();
+    }
+
+    internal static void Shutdown() {
+        if (Data != null) StopMatch();
+
+        Provider.onCheckValidWithExplanation -= OnCheckValidWithExplanation;
+        Provider.onServerConnected -= OnClientConnected;
+        Provider.onServerDisconnected -= OnClientDisconnected;
+
+        UnturnedPlayerEvents.OnPlayerDeath -= OnPlayerDead;
+        UnturnedPlayerEvents.OnPlayerRevive -= OnPlayerRevive;
+        PlayerLife.onPlayerLifeUpdated -= OnLifeUpdated;
+        EffectManager.onEffectButtonClicked -= OnButtonClicked;
+
+        Instrument.UnpatchAll("blaze.ps.main");
+
+        Level.onPostLevelLoaded -= OnPostLevelLoaded;
+
+        DamageTool.damagePlayerRequested -= OnDamageRequested;
+        UseableGun.onBulletSpawned -= OnBulletSpawned;
+
+        Feed.Unhook();
+        Feed.Clear();
+        RemoteAPI.Shutdown();
     }
 
     private static void OnDamageRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
@@ -176,35 +238,30 @@ internal abstract class PSManager {
         );
     }
 
-
     private static void OnPostLevelLoaded(int level) {
         RemoteAPI.StartSession();
         Status = EPSStatus.READY;
     }
 
-    internal static void Shutdown() {
-        Provider.onCheckValidWithExplanation -= OnCheckValidWithExplanation;
-        Provider.onServerConnected -= OnClientConnected;
-        Provider.onServerDisconnected -= OnClientDisconnected;
-
-        UnturnedPlayerEvents.OnPlayerDeath -= OnPlayerDead;
-        UnturnedPlayerEvents.OnPlayerRevive -= OnPlayerRevive;
-        PlayerLife.onPlayerLifeUpdated -= OnLifeUpdated;
-
-        Instrument.UnpatchAll("blaze.ps.main");
-
-        Level.onPostLevelLoaded -= OnPostLevelLoaded;
-
-        DamageTool.damagePlayerRequested -= OnDamageRequested;
-        UseableGun.onBulletSpawned -= OnBulletSpawned;
-
-        RemoteAPI.Shutdown();
+    /// A click on a tile of a board. The board works out whose it was and what for.
+    private static void OnButtonClicked(Player player, string buttonName) {
+        Board.AnswerButton(player.channel.owner, buttonName);
     }
+
+    // ---- the session --------------------------------------------------------------
 
     /// Acts on one answer from the session poll. Every state this server can be in is
     /// reached from here, and nowhere else.
     internal static void Apply(PSSessionAnswer answer) {
         if (answer == null) return;
+
+        // A match started here with /start is not the site's to interrupt. The site
+        // does not know it exists, so it may well hand one over; it is refused and
+        // logged, and the site's own housekeeping releases it.
+        if (Data != null && Match.IsLocal && answer.Action != PSSessionAnswer.Idle) {
+            Logger.LogWarning($"Ignoring the site's \"{answer.Action}\" while a local match is running.");
+            return;
+        }
 
         switch (answer.Action) {
             case PSSessionAnswer.Wait:
@@ -239,6 +296,13 @@ internal abstract class PSManager {
         // a duplicate answer — restarting the round would kick everyone already playing.
         if (Status == EPSStatus.IN_PROGRESS && Data?.Id == match.Id) return;
 
+        IGamemode mode = Gamemodes.Gamemodes.For(match.Gamemode?.Name);
+        if (mode == null) {
+            Logger.LogError($"No gamemode plugin is installed to run \"{match.Gamemode?.Name}\". "
+                + "Install PeekSeek ARENA or another gamemode. The match is not started.");
+            return;
+        }
+
         HeldMatchId = match.Id;
         UpdateStatus(EPSStatus.IN_PROGRESS);
 
@@ -248,12 +312,95 @@ internal abstract class PSManager {
         MatchReady = Time.realtimeSinceStartup;
         KickAllClients("This server is starting a new match.");
 
+        Take(match, mode);
+
+        Logger.Log($"Hosting match {match.Id} ({match.Gamemode?.Name}, run by {mode.Name}) on {match.Settings.Map} — "
+            + $"first to {match.RoundsToWin} rounds. Waiting for {Data.Teams.Sum(team => team.Players.Count)} player(s).");
+        SendUpdateState();
+    }
+
+    /// Hold a match and make it the gamemode's: the groups, and the match as the mode
+    /// will see it. The mode itself is not begun until everybody is here.
+    private static void Take(PSMatch match, IGamemode mode) {
         GroupInfos = CreateGroups(match.Teams);
         Data = match;
+        Chosen = mode;
+        Waiting = true;
 
-        Logger.Log($"Hosting match {match.Id} ({match.Gamemode?.Name}) on {match.Settings.Map} — "
-            + $"first to {match.RoundsToWin} rounds.");
-        SendUpdateState();
+        Match = new GamemodeMatch {
+            Id = match.Id,
+            Spectators = [.. match.Spectators ?? []],
+            Solo = match.Solo,
+            Teams = match.Teams.Select(team => new GamemodeTeam {
+                Name = team.Name,
+                GroupId = GetTeamGroupID(team).m_SteamID,
+                Players = [.. team.Players]
+            }).ToList()
+        };
+        foreach (PSPlayer player in match.Players ?? []) {
+            Match.Kits[player.Steam64] = player.Kit.Select(Item).ToList();
+        }
+    }
+
+    private static GamemodeItem Item(PSItem item) {
+        return new GamemodeItem { ItemId = item.ItemID, Amount = item.Amount, State = item.State ?? [] };
+    }
+
+    /// The wait for the roster, measured from the hand-over. It ends early the moment
+    /// everybody is here, and when it runs out: nobody here releases the match, one
+    /// team here takes it, and anything else starts short-handed.
+    private static void TickWait(float now) {
+        if (!Waiting) return;
+
+        if (HaveAllPlayersJoined()) {
+            if (!Match.IsLocal) Announce(PeekSeek.Instance.Translate("lobby_everyone_here"));
+            Begin();
+            return;
+        }
+
+        float secondsLeft = PeekSeek.Config.LobbyTimeoutSeconds - (now - MatchReady);
+        if (secondsLeft > 0) {
+            BroadcastCountdown(secondsLeft);
+            return;
+        }
+
+        if (!HasAnyPlayerJoined()) {
+            AbandonMatch();
+            return;
+        }
+
+        PSTeam onlyTeam = OnlyTeamOnline();
+        if (onlyTeam != null) {
+            NotifyTeamForcedWin(onlyTeam);
+            return;
+        }
+
+        Begin();
+    }
+
+    private static float LastCountdownBroadcast;
+
+    private static void BroadcastCountdown(float secondsLeft) {
+        if (Time.realtimeSinceStartup - LastCountdownBroadcast < 1f) return;
+        LastCountdownBroadcast = Time.realtimeSinceStartup;
+
+        // Null when the config file predates this field: XmlSerializer leaves it unset rather than defaulted.
+        List<ushort> broadcastAt = PeekSeek.Config.LobbyTimeoutBroadcastSecondsRemaining;
+
+        ushort rounded = (ushort)Mathf.Round(secondsLeft);
+        if (broadcastAt == null || !broadcastAt.Contains(rounded)) return;
+
+        Announce(PeekSeek.Instance.Translate("lobby_countdown", rounded));
+    }
+
+    /// Seconds of the wait left, for the bar's clock.
+    private static int WaitSecondsLeft => Mathf.Max(0, Mathf.CeilToInt(PeekSeek.Config.LobbyTimeoutSeconds - (Time.realtimeSinceStartup - MatchReady)));
+
+    private static void Begin() {
+        Waiting = false;
+        Running = Chosen;
+        Running.Begin(Match);
+        RefreshHud();
     }
 
     /// The site says this match is no longer a match. Nobody is coming, so everything
@@ -278,11 +425,94 @@ internal abstract class PSManager {
         if (HeldMatchId == matchId) HeldMatchId = 0;
     }
 
+    // ---- local matches --------------------------------------------------------
+
+    /// Start a match from whoever is on the server right now, for testing a gamemode
+    /// without the site. Two teams from the people present, kits from each player's
+    /// saved loadout. `solo` puts everybody on one team, for a mode that can be walked
+    /// through alone. Returns the reason it could not start, or null when it did.
+    internal static string StartLocal(string gamemodeName, bool solo) {
+        if (Data != null) return "already_running";
+
+        IGamemode mode = Gamemodes.Gamemodes.For(gamemodeName);
+        if (mode == null || !string.Equals(mode.Name, gamemodeName, StringComparison.OrdinalIgnoreCase)) return "no_such_gamemode";
+
+        List<SteamPlayer> present = Provider.clients.Where(client => client.player != null).ToList();
+        if (present.Count == 0) return "nobody_here";
+        if (!solo && present.Count < 2) return "need_two";
+
+        PSMatch match = new() {
+            Id = 0,
+            Solo = solo,
+            Gamemode = new PSGamemode { Name = mode.Name },
+            RoundsToWin = 3,
+            Settings = new PSSettings {
+                Map = Level.info?.name ?? "",
+                Ballistics = Provider.modeConfigData.Gameplay.Ballistics,
+                Movement = Provider.modeConfigData.Gameplay.AirStrafing_Acceleration_Multiplier > 1f
+            },
+            Teams = [new PSTeam { Name = "North" }, new PSTeam { Name = "South" }],
+            Players = [],
+            Spectators = []
+        };
+
+        for (int i = 0; i < present.Count; i++) {
+            ulong steam64 = present[i].playerID.steamID.m_SteamID;
+            match.Teams[solo ? 0 : i % 2].Players.Add(steam64);
+            match.Players.Add(new PSPlayer { Steam64 = steam64, Kit = RemoteAPI.KitFor(steam64) });
+        }
+
+        HeldMatchId = 0;
+        UpdateStatus(EPSStatus.IN_PROGRESS);
+        MatchReady = Time.realtimeSinceStartup;
+        Take(match, mode);
+
+        foreach (SteamPlayer player in present) AssignPlayerGroup(player.player);
+
+        Logger.Log($"Local {mode.Name} match started{(solo ? " in solo" : "")} with {present.Count} player(s).");
+        Begin();
+        return null;
+    }
+
+    /// End whatever is running without a result: a test that has told you what you
+    /// needed, or the plugin unloading.
+    internal static void StopMatch() {
+        if (Data == null) return;
+
+        bool local = Match.IsLocal;
+        Announce(PeekSeek.Instance.Translate("match_stopped"));
+        ResetMatchState();
+        if (!local) RelayAllClients();
+        UpdateStatus(EPSStatus.READY);
+    }
+
+    /// Somebody arriving in a local match joins the side with fewer people, with
+    /// whatever kit the site has for them. Without a seat they would be on nobody's
+    /// roster: counted by nobody, and nowhere on the bar.
+    private static void Seat(Player player) {
+        ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+        int team = Match.Solo ? 0 : Data.Teams.Select((t, i) => (t.Players.Count, i)).Min().i;
+
+        Data.Teams[team].Players.Add(steam64);
+        Data.Players.Add(new PSPlayer { Steam64 = steam64, Kit = RemoteAPI.KitFor(steam64) });
+        Match.Teams[team].Players.Add(steam64);
+        Match.Kits[steam64] = Data.KitFor(steam64).Select(Item).ToList();
+        Logger.Log($"{player.channel.owner.playerID.characterName} joined {Data.Teams[team].Name} mid-match.");
+    }
+
+    // ---- players --------------------------------------------------------------
+
     private static void OnClientConnected(CSteamID steamID) {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
+        RemoteAPI.FetchPlayer(steamID.m_SteamID);
+
         if (!BelongsHere(steamID)) {
+            // Admins are never funnelled out of a server with nothing on it: they are
+            // the ones who start a local match, and there is nobody here to bother.
+            if (player.channel.owner.isAdmin && Data == null) return;
+
             RelayToLobby(player);
             return;
         }
@@ -304,13 +534,16 @@ internal abstract class PSManager {
 
             Whisper(player.channel.owner, PeekSeek.Instance.Translate("welcome_spectator"));
             SendWelcome(player.channel.owner);
+            RefreshHud();
             return;
         }
 
+        if (!Data.HasPlayer(steamID.m_SteamID)) Seat(player);
         if (player.quests.groupID != GetPlayerTeamGroupID(player)) AssignPlayerGroup(player);
-        AssignPlayerKit(player, Data.KitFor(steamID.m_SteamID));
 
         SendWelcome(player.channel.owner);
+        Running?.OnPlayerJoined(player);
+        RefreshHud();
     }
 
     /// Two lines: what this match is, then what is happening right now. Someone who
@@ -323,27 +556,34 @@ internal abstract class PSManager {
             Data.Settings.Ballistics ? "on" : "off",
             Data.Settings.Movement ? "old" : "new"));
 
-        if (HaveAllPlayersJoined()) return;
+        if (!Waiting || HaveAllPlayersJoined()) return;
         Whisper(to, PeekSeek.Instance.Translate("welcome_waiting"));
     }
 
     private static void OnClientDisconnected(CSteamID steamid) {
+        RemoteAPI.Forget(steamid.m_SteamID);
+
         Player player = PlayerTool.getPlayer(steamid);
-        if (player == null) return;
+        if (player == null || Data == null) return;
 
-        if (!IsSpectator(steamid)) return;
+        if (IsSpectator(steamid)) {
+            UnturnedPlayer unturnedPlayer = UnturnedPlayer.FromPlayer(player);
+            R.Permissions.RemovePlayerFromGroup(PeekSeek.Config.szSpectatorGroup, unturnedPlayer);
+        }
 
-        UnturnedPlayer unturnedPlayer = UnturnedPlayer.FromPlayer(player);
-        R.Permissions.RemovePlayerFromGroup(PeekSeek.Config.szSpectatorGroup, unturnedPlayer);
+        Running?.OnPlayerLeft(steamid);
+        RefreshHud();
+        Hud.Forget(steamid.m_SteamID);
     }
 
     /// Whether this connection is one of the people this server's current match is for.
     /// Everyone else is a stranger who typed the connect code, or a player whose match
-    /// has since ended, and the funnel sends them to the lobby instead.
+    /// has since ended, and the funnel sends them to the lobby instead. A local match
+    /// is for whoever turns up.
     private static bool BelongsHere(CSteamID steamID) {
         return Data != null
             && Status == EPSStatus.IN_PROGRESS
-            && (Data.HasPlayer(steamID.m_SteamID) || IsSpectator(steamID.m_SteamID));
+            && (Match.IsLocal || Data.HasPlayer(steamID.m_SteamID) || IsSpectator(steamID.m_SteamID));
     }
 
     /// Bounce one player straight back out to the warm-up lobby.
@@ -409,7 +649,17 @@ internal abstract class PSManager {
         return infos;
     }
 
-    private static void AssignPlayerKit(Player player, List<PSItem> kit) {
+    /// Strip a player and dress them in the kit the match holds for them, at full
+    /// health.
+    ///
+    /// Full health with the kit, because passive regen is off here on purpose and
+    /// nothing else would ever give it back. Players arrive relayed from the warm-up
+    /// lobby on whatever health they left it with, and would otherwise start a ranked
+    /// round already down and with no way up. Kitting someone is the one moment that
+    /// means "you are about to fight", so it is the moment worth topping them up.
+    internal static void AssignPlayerKit(Player player) {
+        List<PSItem> kit = Data?.KitFor(player.channel.owner.playerID.steamID.m_SteamID) ?? [];
+
         for (byte i = 0; i < PlayerInventory.PAGES - 1; i++) {
             byte count = player.inventory.getItemCount(i);
 
@@ -428,20 +678,12 @@ internal abstract class PSManager {
             0, 0, []
         );
 
-
         foreach (PSItem item in kit) {
             for (byte i = 0; i < item.Amount; i++) {
                 player.inventory.forceAddItem(new Item(item.ItemID, true) { state = item.State }, true);
             }
         }
 
-        // Full health with the kit, because passive regen is off here on purpose and
-        // nothing else would ever give it back. Players arrive relayed from the
-        // warm-up lobby on whatever health they left it with — 90 after a fight they
-        // won — and would otherwise start a ranked round already down and with no way
-        // up. Kitting someone is the one moment that means "you are about to fight",
-        // so it is the moment worth topping them up, and it covers both joining and
-        // respawning between rounds.
         player.life.serverModifyHealth(100);
     }
 
@@ -489,8 +731,6 @@ internal abstract class PSManager {
         );
     }
 
-    /// Same as Announce but to one player only — StatsCommand also uses this rather than
-    /// building its own ChatManager call.
     /// Ask the reported player's client for a screenshot, then send it to staff with
     /// their numbers for this match attached.
     ///
@@ -521,6 +761,7 @@ internal abstract class PSManager {
         });
     }
 
+    /// Same as Announce but to one player only.
     internal static void Whisper(SteamPlayer to, string message) {
         ChatManager.serverSendMessage(
             message,
@@ -540,23 +781,11 @@ internal abstract class PSManager {
     }
 
     private static CSteamID GetPlayerTeamGroupID(Player player) {
-        string teamID = GetPlayerTeam(player.channel.owner.playerID.steamID.m_SteamID).Name;
-
-        GroupInfoEx info = GroupInfos.FirstOrDefault(
-            x => x.TeamName == teamID
-        );
-
-        return info != null ? info.GroupInfo.groupID : CSteamID.Nil;
+        return GetPlayerTeamGroupID(player.channel.owner.playerID.steamID);
     }
 
     internal static CSteamID GetPlayerTeamGroupID(CSteamID steamID) {
-        string teamID = GetPlayerTeam(steamID.m_SteamID).Name;
-
-        GroupInfoEx info = GroupInfos.FirstOrDefault(
-            x => x.TeamName == teamID
-        );
-
-        return info != null ? info.GroupInfo.groupID : CSteamID.Nil;
+        return GetTeamGroupID(GetPlayerTeam(steamID.m_SteamID));
     }
 
     internal static CSteamID GetTeamGroupID(PSTeam team) {
@@ -592,38 +821,70 @@ internal abstract class PSManager {
         return online.Count == 1 ? online[0] : null;
     }
 
-    private static void UpdateStatus(EPSStatus status) {
-        Status = status;
-        //RemoteAPI.NotifyServerStatus(status);
+    /// Everyone on the server who is playing this match: no spectators, no strangers.
+    internal static IEnumerable<Player> Players() {
+        return Provider.clients.ToList()
+            .Where(client => client.player != null && Match != null && Match.HasPlayer(client.playerID.steamID.m_SteamID))
+            .Select(client => client.player);
     }
 
-    internal static void NotifyTeamWon(ulong playerID) {
-        PSTeam team = GetPlayerTeam(playerID);
+    private static void UpdateStatus(EPSStatus status) {
+        Status = status;
+    }
 
-        foreach (ulong user in team.Players) {
+    // ---- the score ------------------------------------------------------------
+
+    /// Rounds a team has won. Wins are kept per player, and every player on a team is
+    /// credited with the team's rounds, so any of them says it; a team with nobody on
+    /// it has none.
+    internal static int Score(PSTeam team) {
+        return team.Players.Count == 0 ? 0 : StatService.GetStatWins(new CSteamID(team.Players[0]));
+    }
+
+    internal static int Score(int team) {
+        return Data != null && Data.Teams.Count > team ? Score(Data.Teams[team]) : 0;
+    }
+
+    /// Rounds played so far, which is every team's wins added up. Not a sum over
+    /// players: a team of two winning one round is one round, not two.
+    internal static int RoundsPlayed => Data?.Teams.Sum(Score) ?? 0;
+
+    /// The round goes to a team. Scored for every player on it, announced, and sent
+    /// to the overlay. `announcement` replaces the plain line for a gamemode with
+    /// something more to say about how it was won.
+    internal static void RoundWon(int team, string announcement = null) {
+        if (Status != EPSStatus.IN_PROGRESS || Data == null || Data.Teams.Count <= team) return;
+        PSTeam winner = Data.Teams[team];
+
+        foreach (ulong user in winner.Players) {
             StatService.UpdateStatWins(new(user));
         }
 
-        AnnounceAceIfAny(team);
+        AnnounceAceIfAny(winner);
         WhisperCloseCalls();
         WhisperRoundDamage();
 
-        if (StatService.GetStatWins(new(playerID)) < Data.RoundsToWin) {
-            Announce(PeekSeek.Instance.Translate(
-                "round_won", team.Name, StatService.GetTotalPlayedRounds(), ScoreLine()));
-            RecordEvent("roundWon", team.Name);
-            SendUpdateState();
-            RoundLog.Clear();
-            return;
-        }
-
-        UpdateStatus(EPSStatus.DELAY);
-        Announce(PeekSeek.Instance.Translate("match_won", team.Name, ScoreLine()));
-        AnnounceMvp();
-        RecordEvent("matchWon", team.Name);
+        Announce(announcement ?? PeekSeek.Instance.Translate("round_won", winner.Name, RoundsPlayed, ScoreLine()));
+        RecordEvent("roundWon", winner.Name);
         SendUpdateState();
         RoundLog.Clear();
-        Task.Run(() => DelayEnd(PeekSeek.Config.DelayKickAfterWin, team.Name));
+        RefreshHud();
+    }
+
+    /// The gamemode calls the match. Everybody gets a moment to see the result, then
+    /// the site gets it and everybody goes home.
+    internal static void MatchWon(int team) {
+        if (Status != EPSStatus.IN_PROGRESS || Data == null || Data.Teams.Count <= team) return;
+        PSTeam winner = Data.Teams[team];
+
+        UpdateStatus(EPSStatus.DELAY);
+        Announce(PeekSeek.Instance.Translate("match_won", winner.Name, ScoreLine()));
+        AnnounceMvp();
+        RecordEvent("matchWon", winner.Name);
+        SendUpdateState();
+        RoundLog.Clear();
+        RefreshHud();
+        Task.Run(() => DelayEnd(PeekSeek.Config.DelayKickAfterWin, winner.Name));
     }
 
     /// The score, in team order, as "2-1" — or with names when there are more than two
@@ -631,20 +892,11 @@ internal abstract class PSManager {
     internal static string ScoreLine() {
         if (Data?.Teams == null || Data.Teams.Count == 0) return string.Empty;
 
-        IEnumerable<string> parts = Data.Teams.Select(team =>
-            StatService.GetStatWins(new CSteamID(team.Players.First())).ToString());
+        IEnumerable<string> parts = Data.Teams.Select(team => Score(team).ToString());
         if (Data.Teams.Count > 2) {
-            parts = Data.Teams.Select(team =>
-                $"{team.Name} {StatService.GetStatWins(new CSteamID(team.Players.First()))}");
+            parts = Data.Teams.Select(team => $"{team.Name} {Score(team)}");
         }
         return string.Join(Data.Teams.Count > 2 ? " · " : "-", parts);
-    }
-
-    /// Called as the round spawns everyone in, so the first thing a player sees on
-    /// landing is which round this is and where the match stands.
-    internal static void AnnounceRoundStart() {
-        Announce(PeekSeek.Instance.Translate(
-            "round_start", StatService.GetTotalPlayedRounds() + 1, ScoreLine()));
     }
 
     /// A solo ace only means something in a team format — a 1v1 win is just a win — and
@@ -719,8 +971,10 @@ internal abstract class PSManager {
         Announce(PeekSeek.Instance.Translate("mvp", name, mvp.Kills, hsPercent));
     }
 
-    /// Awards the whole match to the only team that showed up before the lobby timed out.
+    /// Awards the whole match to the only team that showed up, or the only one left.
     internal static void NotifyTeamForcedWin(PSTeam team) {
+        if (Status != EPSStatus.IN_PROGRESS) return;
+
         for (byte round = 0; round < Data.RoundsToWin; round++) {
             foreach (ulong user in team.Players) {
                 StatService.UpdateStatWins(new(user));
@@ -733,6 +987,8 @@ internal abstract class PSManager {
 
     /// Reports a match nobody turned up for, so the backend can release it.
     internal static void AbandonMatch() {
+        if (Status != EPSStatus.IN_PROGRESS) return;
+
         SendResults(string.Empty, isPlayed: false);
         ClearMatch();
     }
@@ -800,15 +1056,20 @@ internal abstract class PSManager {
     }
 
     private static void EndMatch(string winningTeam) {
-        SendResults(winningTeam);
+        if (!Match.IsLocal) SendResults(winningTeam);
         ClearMatch();
     }
 
     private static void ClearMatch() {
+        bool local = Match.IsLocal;
         Announce(PeekSeek.Instance.Translate("match_over"));
         ResetMatchState();
-        RelayAllClients();
         UpdateStatus(EPSStatus.READY);
+
+        // A local match ends where it began, with everybody still here to run another.
+        if (local) return;
+
+        RelayAllClients();
 
         // The gap after a match is the only moment this server is both empty and
         // certain to be empty, which makes it the one safe moment to go down and
@@ -820,6 +1081,14 @@ internal abstract class PSManager {
     /// this server still owes the site a result, and the site keeps the match open for
     /// exactly as long as this server keeps naming it.
     private static void ResetMatchState() {
+        Running?.End();
+        Running = null;
+        Chosen = null;
+        Waiting = false;
+        Board.Close();
+        Board.Reset();
+        Hud.Hide();
+
         StatService.InstanceStats.Clear();
         LatestEvent = null;
         EventsRecorded = 0;
@@ -832,6 +1101,7 @@ internal abstract class PSManager {
         VisibilityTracker.Clear();
         GroupManager.knownGroups.Clear();
         Data = null;
+        Match = null;
     }
 
     /// Reports every player on the roster, not only the ones who turned up: a player the
@@ -867,21 +1137,33 @@ internal abstract class PSManager {
             .ToArray();
     }
 
+    // ---- deaths ---------------------------------------------------------------
+
     /// Who last killed each player this match, for the revenge whisper. Steam64 to steam64,
     /// cleared with the rest of the match's state.
     private static readonly Dictionary<ulong, ulong> LastKilledBy = [];
 
-    /// Ordinary kills say nothing publicly — the stream overlay already carries the kill
-    /// feed for spectators, and the round/match win announcements below still mark the
-    /// moments that actually matter. Two things replace the old public line: a revenge
-    /// whisper to the killer, and a flavoured private line to anyone who died without a
-    /// killer at all, so silence isn't the only thing an ordinary run of the mill death
-    /// produces for the person on the wrong end of it.
+    /// Ordinary kills say nothing publicly — the kill feed carries them — and the
+    /// round/match win announcements still mark the moments that actually matter. Two
+    /// things replace the old public line: a revenge whisper to the killer, and a
+    /// flavoured private line to anyone who died without a killer at all.
+    ///
+    /// A death to the arena, which is also what a gamemode's own ground damage is, is
+    /// not a death for the stats or the site's kill log, as it never was; it still takes
+    /// the player out of the round and is still the gamemode's to answer.
     private static void OnPlayerDead(UnturnedPlayer player, EDeathCause cause, ELimb limb, CSteamID murderer) {
-        if (cause == EDeathCause.ARENA) return;
+        if (Data == null) return;
 
-        StatService.UpdateStatDeaths(player.CSteamID);
         StatService.MarkDeadThisRound(player.CSteamID);
+        if (cause != EDeathCause.ARENA) RecordDeath(player, cause, limb, murderer);
+
+        Running?.OnPlayerDied(player.Player, murderer);
+        RefreshHud();
+        SendUpdateState();
+    }
+
+    private static void RecordDeath(UnturnedPlayer player, EDeathCause cause, ELimb limb, CSteamID murderer) {
+        StatService.UpdateStatDeaths(player.CSteamID);
         Logger.Log($"[alive-check] {player.CharacterName} ({player.CSteamID}) died (cause={cause}, limb={limb}) — marked dead this round.");
 
         UnturnedPlayer unturnedInstigator = null;
@@ -904,10 +1186,7 @@ internal abstract class PSManager {
         }
 
         RecordKill(player, unturnedInstigator, limb);
-        SendKillEvent(player, unturnedInstigator, cause, limb, murderer);
-
-        player.Player.life.ServerRespawn(false);
-        SendUpdateState();
+        if (!Match.IsLocal) SendKillEvent(player, unturnedInstigator, cause, limb, murderer);
     }
 
     /// Only the causes realistic in an arena match get a line — the rest (zombies,
@@ -927,7 +1206,7 @@ internal abstract class PSManager {
     }
 
     /// Builds the durable kill record for the site from whatever FightTracker buffered,
-    /// separate from RecordKill's ephemeral overlay feed entry above.
+    /// separate from RecordKill's ephemeral overlay feed entry.
     private static void SendKillEvent(UnturnedPlayer victim, UnturnedPlayer killer, EDeathCause cause, ELimb limb, CSteamID murderer) {
         bool ballistics = Data.Settings.Ballistics;
 
@@ -935,7 +1214,7 @@ internal abstract class PSManager {
             Id = ++KillEventsRecorded,
             Time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             Map = Data.Settings.Map,
-            Round = StatService.GetTotalPlayedRounds() + 1,
+            Round = RoundsPlayed + 1,
             Killer = killer?.CSteamID.ToString(),
             KillerName = killer?.CharacterName,
             Victim = victim.CSteamID.ToString(),
@@ -954,33 +1233,27 @@ internal abstract class PSManager {
     }
 
     private static void OnPlayerRevive(UnturnedPlayer player, Vector3 position, byte angle) {
-        if (IsSpectator(Player.LocalPlayer)) return;
+        if (Data == null) return;
 
-        // Respawning does not clear StatService's dead-this-round flag — see LiveState's
-        // RoundState comment — so the overlay keeps reporting them dead until the next round.
-        Logger.Log($"[alive-check] {player.CharacterName} ({player.CSteamID}) respawned into the lobby — still reported dead until the next round starts.");
-
-        AssignPlayerKit(player.Player, Data.KitFor(player.CSteamID.m_SteamID));
-
-        player.Heal(255);
+        Running?.OnPlayerRevived(player.Player);
+        RefreshHud();
     }
 
     /// Safety net: if a death is ever resolved without UnturnedPlayerEvents.OnPlayerDeath
-    /// firing, this force-respawns so nobody sits on a death screen — but OnPlayerDead is
-    /// also the only place that told StatService someone died. A death only this path
-    /// catches would otherwise never be marked, and the overlay would keep reporting that
-    /// player as alive for the rest of the round even though they just respawned.
+    /// firing, this still marks the player out of the round, so the overlay and the bar
+    /// do not keep showing them alive after they respawn.
     private static void OnLifeUpdated(Player player) {
-        if (!player.life.isDead) return;
+        if (Data == null || !player.life.isDead) return;
 
         CSteamID steamID = player.channel.owner.playerID.steamID;
-        if (StatService.IsAliveThisRound(steamID)) {
-            Logger.LogWarning($"[alive-check] {player.channel.owner.playerID.characterName} ({steamID}) was dead without OnPlayerDead firing — marking dead now so the overlay does not show them as alive.");
-            StatService.MarkDeadThisRound(steamID);
-        }
+        if (!StatService.IsAliveThisRound(steamID)) return;
 
-        player.life.ServerRespawn(false);
+        Logger.LogWarning($"[alive-check] {player.channel.owner.playerID.characterName} ({steamID}) was dead without OnPlayerDead firing — marking dead now so the overlay does not show them as alive.");
+        StatService.MarkDeadThisRound(steamID);
+        RefreshHud();
     }
+
+    // ---- the heartbeat --------------------------------------------------------------
 
     /// Pushes a snapshot on a timer as well as on events, so health, held weapon and
     /// remaining powerup items move on the overlay between kills rather than freezing
@@ -988,23 +1261,36 @@ internal abstract class PSManager {
     /// its own shorter interval — waiting a full second to notice someone came into view
     /// would make the numbers meaningless.
     internal static void Tick() {
+        float now = Time.realtimeSinceStartup;
+
         // Ahead of the Data guard: a server with no match is exactly the one that
         // should be thinking about going down for updates.
-        TickRestart(Time.realtimeSinceStartup);
+        TickRestart(now);
+        Feed.Tick();
 
         if (Data == null) return;
 
-        if (Time.realtimeSinceStartup - LastVisibilityCheck >= VisibilityIntervalSeconds) {
-            LastVisibilityCheck = Time.realtimeSinceStartup;
+        TickWait(now);
+        if (Data == null) return;
+
+        Running?.Tick();
+
+        if (now - LastHudTick >= HudIntervalSeconds) {
+            LastHudTick = now;
+            Hud.Tick(HudState());
+        }
+
+        if (now - LastVisibilityCheck >= VisibilityIntervalSeconds) {
+            LastVisibilityCheck = now;
             VisibilityTracker.Tick(Data.Teams);
         }
 
-        if (Time.realtimeSinceStartup - LastDebugStateLogged >= DebugStateLogIntervalSeconds) {
-            LastDebugStateLogged = Time.realtimeSinceStartup;
+        if (now - LastDebugStateLogged >= DebugStateLogIntervalSeconds) {
+            LastDebugStateLogged = now;
             LogPlayerStates();
         }
 
-        if (Time.realtimeSinceStartup - LastUpdateSent < UpdateIntervalSeconds) return;
+        if (now - LastUpdateSent < UpdateIntervalSeconds) return;
 
         SendUpdateState();
     }
@@ -1052,7 +1338,7 @@ internal abstract class PSManager {
             Id = ++EventsRecorded,
             Kind = kind,
             Team = teamName,
-            Round = StatService.GetTotalPlayedRounds()
+            Round = RoundsPlayed
         };
     }
 
@@ -1063,54 +1349,62 @@ internal abstract class PSManager {
         }
 
         LastUpdateSent = Time.realtimeSinceStartup;
-        RemoteAPI.SendState(Data.Id, LiveState.Build(Data, LatestEvent, RecentKills));
+        if (Match.IsLocal) return;
+
+        RemoteAPI.SendState(Data.Id, LiveState.Build(Data, RoundsPlayed, LatestEvent, RecentKills));
     }
 
+    // ---- the bar ------------------------------------------------------------------
+
+    /// Redraw the bar for everybody, from what the match and the gamemode say now.
+    internal static void RefreshHud() {
+        if (Data == null) return;
+        Hud.Show(HudState());
+    }
+
+    private static HudState HudState() {
+        HudState state = new() {
+            SecondsLeft = Running?.SecondsLeft ?? (Waiting ? WaitSecondsLeft : -1),
+            Spectators = [.. Data.Spectators ?? []]
+        };
+
+        for (int team = 0; team < 2 && team < Data.Teams.Count; team++) {
+            state.Teams[team].Name = Data.Teams[team].Name;
+            state.Teams[team].Score = Score(team);
+            state.Teams[team].Role = Running?.RoleOf(team) ?? HudRole.None;
+            state.Teams[team].Seats = Data.Teams[team].Players.Select(Seat).ToList();
+        }
+
+        return state;
+    }
+
+    private static HudSeat Seat(ulong steam64) {
+        Player player = PlayerTool.getPlayer(new CSteamID(steam64));
+
+        return new HudSeat {
+            Steam64 = steam64,
+            AvatarUrl = RemoteAPI.AvatarFor(steam64),
+            PickItemId = Running?.PickOf(steam64) ?? 0,
+            Alive = player != null && !player.life.isDead && StatService.IsAliveThisRound(new CSteamID(steam64)),
+            Health = player?.life.health ?? 0
+        };
+    }
+
+    // ---- spectators --------------------------------------------------------------
+
     public static bool IsSpectator(ulong steamID) {
-        if (Data == null) {
-            Logger.LogError("IsSpectator() Data is null!");
-            return false;
-        }
-        if (Data.Spectators == null) {
-            Logger.LogError("IsSpectator() Data.Spectators is null!");
-            return false;
-        }
-        return Data.Spectators.Contains(steamID);
+        return Data?.Spectators != null && Data.Spectators.Contains(steamID);
     }
 
     public static bool IsSpectator(CSteamID steamID) {
-        if (Data == null) {
-            Logger.LogError("IsSpectator() Data is null!");
-            return false;
-        }
-        if (Data.Spectators == null) {
-            Logger.LogError("IsSpectator() Data.Spectators is null!");
-            return false;
-        }
-        return Data.Spectators.Contains(steamID.m_SteamID);
+        return IsSpectator(steamID.m_SteamID);
     }
 
     public static bool IsSpectator(Player player) {
-        if (Data == null) {
-            Logger.LogError("IsSpectator() Data is null!");
-            return false;
-        }
-        if (Data.Spectators == null) {
-            Logger.LogError("IsSpectator() Data.Spectators is null!");
-            return false;
-        }
-        return player != null && Data.Spectators.Contains(player.channel.owner.playerID.steamID.m_SteamID);
+        return player != null && IsSpectator(player.channel.owner.playerID.steamID.m_SteamID);
     }
 
     public static bool IsSpectator(SteamPlayer player) {
-        if (Data == null) {
-            Logger.LogError("IsSpectator() Data is null!");
-            return false;
-        }
-        if (Data.Spectators == null) {
-            Logger.LogError("IsSpectator() Data.Spectators is null!");
-            return false;
-        }
-        return player != null && Data.Spectators.Contains(player.playerID.steamID.m_SteamID);
+        return player != null && IsSpectator(player.playerID.steamID.m_SteamID);
     }
 }

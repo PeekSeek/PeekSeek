@@ -149,6 +149,17 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public float RangeDistance;
     public float RangeSpreadDegrees;
 
+    /// The kill feed at the top right, from the PeekSeek Kill Feed workshop item
+    /// (`plugins/peekseek/ui`), which the server has to list in
+    /// WorkshopDownloadConfig.json. Left empty, there is no feed; the chat lines stay
+    /// either way. The key is any small number no other plugin here uses.
+    public string KillFeedEffectGUID;
+    public short KillFeedKey;
+    public string ItemIconURL;
+    public int KillFeedRows;
+    public float KillFeedRowSeconds;
+    public int KillFeedNameLength;
+
     public void LoadDefaults() {
         szAPIURL = "https://api.peekseek.com";
         szHexDefaultChatColor = "#FFFFFF";
@@ -225,6 +236,13 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         ShowEloAsReputation = true;
         szDiscordURL = "https://discord.gg/NKgTe6RnvH";
         szMatchURL = "https://dev.peekseek.net/match";
+
+        KillFeedEffectGUID = "c4d5e6f708192a3b4c5d6e7f8091a2b3";
+        KillFeedKey = 27320;
+        ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
+        KillFeedRows = 6;
+        KillFeedRowSeconds = 7f;
+        KillFeedNameLength = 14;
 
         // The same first-option gun, attachments and outfit the website would
         // resolve for a player who has never saved a kit — see kits.json and

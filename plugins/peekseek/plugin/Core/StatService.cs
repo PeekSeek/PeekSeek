@@ -120,8 +120,4 @@ internal static class StatService {
             stat.IsDeadThisRound = false;
         }
     }
-
-    internal static int GetTotalPlayedRounds() {
-        return InstanceStats.Sum(x => x.Wins);
-    }
 }

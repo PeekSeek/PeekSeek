@@ -6,10 +6,10 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using Steamworks;
 using PeekSeekLobby.Core.Models;
 using Rocket.Core.Logging;
 using Rocket.Core.Utils;
+using Steamworks;
 
 namespace PeekSeekLobby.Core.Web;
 

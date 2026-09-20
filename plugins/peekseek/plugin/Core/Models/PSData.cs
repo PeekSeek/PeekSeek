@@ -87,6 +87,10 @@ internal class PSMatch {
     [JsonProperty("spectators")]
     internal List<ulong> Spectators = [];
 
+    /// One person testing a gamemode on their own, from /start. Never sent by the site.
+    [JsonIgnore]
+    internal bool Solo;
+
     /// The kit the site resolved for this player, or an empty list for someone not on
     /// the roster — a spectator, or a player the site did not send one for.
     internal List<PSItem> KitFor(ulong steam64) {

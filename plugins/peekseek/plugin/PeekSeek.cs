@@ -65,6 +65,16 @@ public class PeekSeek : RocketPlugin<PeekSeekConfiguration> {
         { "match_won", "<color=white>{0}</color> wins the match {1}. Well played." },
         { "match_forfeit", "<color=white>{0}</color> takes the match. Nobody from the other side turned up." },
         { "match_over", "Match over. Sending you back to the lobby." },
+        { "match_stopped", "Match <color=white>stopped</color>." },
+
+        // /start and /stop, the test controls. The refusals name the gamemodes this
+        // server has, because the one typo they catch is the gamemode's name.
+        { "start_usage", "<color=white>/start <gamemode> [solo]</color>. Installed: <color=white>{0}</color>." },
+        { "start_already_running", "A match is already running. <color=white>/stop</color> first." },
+        { "start_no_such_gamemode", "No such gamemode. Installed: <color=white>{0}</color>." },
+        { "start_nobody_here", "Nobody is on the server." },
+        { "start_need_two", "That needs two players, or <color=white>solo</color> to run it on your own." },
+        { "start_nothing_running", "No match is running." },
 
         { "ace", "<color=white>{0}</color> aced the round." },
         { "mvp", "MVP <color=white>{0}</color>. <color=white>{1}</color> kills, <color=white>{2}%</color> headshots." },

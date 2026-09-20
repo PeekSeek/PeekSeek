@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using PeekSeek.Hud;
 using PeekSeekLobby.Core.Models;
 using PeekSeekLobby.Core.Web;
 using Rocket.Core.Utils;
@@ -216,6 +217,9 @@ internal abstract class LobbyManager {
     private const string HarmonyId = "peekseek.lobby";
     private static Harmony Instrument;
 
+    /// The kill feed on everybody's screen, the match servers' own, drawn here too.
+    private static KillFeed Feed;
+
     internal static void Init() {
         Provider.onServerConnected += OnPlayerConnected;
         Provider.onServerDisconnected += OnPlayerDisconnected;
@@ -237,6 +241,16 @@ internal abstract class LobbyManager {
         LastArenaReset = Time.realtimeSinceStartup;
         TargetRange.Init();
         RemoteAPI.Init();
+
+        Feed = new KillFeed(new KillFeedSettings {
+            EffectGUID = PeekSeekLobby.Config.KillFeedEffectGUID,
+            EffectKey = PeekSeekLobby.Config.KillFeedKey,
+            ItemIconURL = PeekSeekLobby.Config.ItemIconURL,
+            Rows = PeekSeekLobby.Config.KillFeedRows,
+            RowSeconds = PeekSeekLobby.Config.KillFeedRowSeconds,
+            NameLength = PeekSeekLobby.Config.KillFeedNameLength
+        });
+        Feed.Hook();
     }
 
     /// Refusing the drop outright is cheaper and cleaner than spawning it and
@@ -339,6 +353,8 @@ internal abstract class LobbyManager {
 
         TargetRange.Shutdown();
         RemoteAPI.Shutdown();
+        Feed.Unhook();
+        Feed.Clear();
     }
 
     private static void OnPlayerConnected(CSteamID steamID) {
@@ -1335,6 +1351,7 @@ internal abstract class LobbyManager {
     /// happens the moment the life updates.
     internal static void Tick() {
         float now = Time.realtimeSinceStartup;
+        Feed.Tick();
 
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
             CSteamID steamID = new(entry.Key);

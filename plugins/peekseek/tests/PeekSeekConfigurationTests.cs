@@ -16,8 +16,6 @@ public class PeekSeekConfigurationTests {
 
         config.LoadDefaults();
 
-        Assert.NotNull(config.Spawns);
-        Assert.NotEmpty(config.Spawns);
         Assert.NotNull(config.PingConfig);
         Assert.NotEmpty(config.PingConfig);
         Assert.NotNull(config.LobbyTimeoutBroadcastSecondsRemaining);
@@ -51,11 +49,15 @@ public class PeekSeekConfigurationTests {
     /// The config deployed with 1.0 must keep working verbatim. XmlSerializer drops elements it
     /// does not recognise without complaining, so a field this project renames or never declares
     /// silently reverts to its default on a server that has been running for years.
+    ///
+    /// `Spawns` is the one element that has knowingly left: the round spawns belong to
+    /// PeekSeek ARENA now and live in its own config, which has to be written by hand on
+    /// every server that gets it.
     [Fact]
     public void Live10Config_HasAFieldForEveryElementItSets() {
         var declared = new HashSet<string>(
             typeof(PeekSeekConfiguration).GetFields().Select(field => field.Name)
-        );
+        ) { "Spawns" };
 
         var elements = XDocument.Load(FixturePath("live-1.0.configuration.xml"))
             .Root.Elements()

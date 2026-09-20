@@ -1,11 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using PeekSeek.Core.Models;
 using Rocket.Core.Utils;
 using SDG.Unturned;
@@ -50,7 +54,107 @@ internal static class RemoteAPI {
         Cancellation?.Cancel();
         Client?.Dispose();
         Client = null;
+        Kits.Clear();
+        Avatars.Clear();
     }
+
+    // ---- players --------------------------------------------------------------
+
+    /// What is known about each player on the server: their Steam picture, for the
+    /// bar, and their saved kit, for a match started here rather than by the site.
+    /// Both are fetched when a player joins and held until they leave, because a match
+    /// starts by drawing the bar and handing out gear right now, and neither is going
+    /// to wait on an HTTP round trip.
+    private static readonly Dictionary<ulong, List<PSItem>> Kits = [];
+    private static readonly Dictionary<ulong, string> Avatars = [];
+
+    internal static string AvatarFor(ulong steam64) {
+        return Avatars.TryGetValue(steam64, out string avatar) ? avatar : PeekSeek.Config.DefaultAvatarURL;
+    }
+
+    /// The player's saved kit as last fetched, or an empty list if there is not one.
+    internal static List<PSItem> KitFor(ulong steam64) {
+        return Kits.TryGetValue(steam64, out List<PSItem> kit) ? kit : [];
+    }
+
+    internal static void Forget(ulong steam64) {
+        Kits.Remove(steam64);
+        Avatars.Remove(steam64);
+    }
+
+    internal static void FetchPlayer(ulong steam64) {
+        if (Client == null) return;
+
+        Task.Run(async () => {
+            List<PSItem> kit = await ReadKit(steam64);
+            if (kit != null) TaskDispatcher.QueueOnMainThread(() => Kits[steam64] = kit);
+
+            string avatar = await ReadAvatar(steam64) ?? await ReadAvatarFromSteam(steam64);
+            if (avatar != null) TaskDispatcher.QueueOnMainThread(() => Avatars[steam64] = avatar);
+        });
+    }
+
+    /// `GET /players/{steam64}` carries `avatar` alongside the rank and whereabouts a
+    /// lobby reads off it, from the same cache every page of the site uses.
+    private static async Task<string> ReadAvatar(ulong steam64) {
+        try {
+            HttpResponseMessage response = await Client.GetAsync($"{Base}/players/{steam64}");
+            if (!response.IsSuccessStatusCode) return null;
+
+            JObject body = JObject.Parse(await response.Content.ReadAsStringAsync());
+            string avatar = (string)body["avatar"];
+            return string.IsNullOrEmpty(avatar) ? null : avatar;
+        } catch (Exception ex) {
+            TaskDispatcher.QueueOnMainThread(() => Logger.LogWarning($"Failed to fetch the profile of {steam64}: {ex.Message}"));
+            return null;
+        }
+    }
+
+    /// Steam's own answer, for a site that does not carry the picture yet: the public
+    /// profile as XML, which needs no key and answers for a private profile too.
+    private static async Task<string> ReadAvatarFromSteam(ulong steam64) {
+        try {
+            string xml = await Client.GetStringAsync($"https://steamcommunity.com/profiles/{steam64}?xml=1");
+            Match full = Regex.Match(xml, @"<avatarFull><!\[CDATA\[(.*?)\]\]></avatarFull>");
+            return full.Success ? full.Groups[1].Value : null;
+        } catch (Exception ex) {
+            TaskDispatcher.QueueOnMainThread(() => Logger.LogWarning($"Failed to fetch the Steam picture of {steam64}: {ex.Message}"));
+            return null;
+        }
+    }
+
+    /// The kit category named in the config, from `GET /players/{steam64}/kits`, which
+    /// resolves every saved kit into ready-to-equip items.
+    private static async Task<List<PSItem>> ReadKit(ulong steam64) {
+        try {
+            HttpResponseMessage response = await Client.GetAsync($"{Base}/players/{steam64}/kits");
+            if (!response.IsSuccessStatusCode) return null;
+
+            JObject body = JObject.Parse(await response.Content.ReadAsStringAsync());
+            if (body[PeekSeek.Config.LocalKitCategory] is not JObject kit || kit["items"] is not JArray items) return null;
+
+            List<PSItem> parsed = items.Select(ParseItem).ToList();
+
+            // The site breaks the magazine out of the item list so a caller can keep a
+            // spare topped up separately; here it just goes in the bag with the rest.
+            if (kit["magazine"] is JObject magazine) parsed.Add(ParseItem(magazine));
+
+            return parsed;
+        } catch (Exception ex) {
+            TaskDispatcher.QueueOnMainThread(() => Logger.LogWarning($"Failed to fetch the kit of {steam64}: {ex.Message}"));
+            return null;
+        }
+    }
+
+    private static PSItem ParseItem(JToken entry) {
+        return new PSItem {
+            ItemID = (ushort)entry["itemId"],
+            Amount = (byte)entry["amount"],
+            State = entry["state"] is JArray bytes ? bytes.Select(b => (byte)b).ToArray() : []
+        };
+    }
+
+    // ---- the session --------------------------------------------------------------
 
     /// The code players paste into Unturned's connect box — the game server's Steam ID,
     /// the same value the in-game "Copy Server Code" button copies. Provider.server is

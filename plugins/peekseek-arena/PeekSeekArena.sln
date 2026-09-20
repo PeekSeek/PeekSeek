@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35507.96
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeekSeekArena", "plugin\PeekSeekArena.csproj", "{A7E1C2D3-4B5F-4E6A-9C8D-1F2E3A4B5C6D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeekSeekArena.Tests", "tests\PeekSeekArena.Tests.csproj", "{B8F2D3E4-5C6A-4F7B-8D9E-2A3B4C5D6E7F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C9A3E4F5-6D7B-4A8C-9E0F-3B4C5D6E7F8A}
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A7E1C2D3-4B5F-4E6A-9C8D-1F2E3A4B5C6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7E1C2D3-4B5F-4E6A-9C8D-1F2E3A4B5C6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7E1C2D3-4B5F-4E6A-9C8D-1F2E3A4B5C6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7E1C2D3-4B5F-4E6A-9C8D-1F2E3A4B5C6D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8F2D3E4-5C6A-4F7B-8D9E-2A3B4C5D6E7F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8F2D3E4-5C6A-4F7B-8D9E-2A3B4C5D6E7F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8F2D3E4-5C6A-4F7B-8D9E-2A3B4C5D6E7F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8F2D3E4-5C6A-4F7B-8D9E-2A3B4C5D6E7F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
