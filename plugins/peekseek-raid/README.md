@@ -133,25 +133,14 @@ every gamemode, and `Items.Spawn_Chance` in the server config sets the loot to n
 
 ## Running it
 
-A real match comes from the site, through Match, once the site has a gamemode called
-`Raid`. Until then, and for testing, Match starts one from whoever is on the server:
+A match comes from the site: the `Raid` gamemode in `website/src/mmconfig.json`, queued
+for like any other, handed to a match server by `/server/v1/session`, and run by this
+plugin because the match names it. There is no other way to start one.
 
 ```
-/start raid         two or more players, split into two teams
-/start raid solo    one player, for testing
-/stop               end it
-/raid               where the match is
-```
-
-Solo is how the whole loop gets tested without finding a second person for a five-minute
-build phase. It builds one base and stands it at both sites, then runs the rounds
-normally with you on whichever side you ask for. With nobody to defend, the flag goes on
-a free tile by itself.
-
-```
+/raid                where the match is
 /raid skip           end the current phase (a round goes to the defenders, as the clock would)
 /raid skip atk       end the round, give it to the attackers
-/raid side           swap which side you are playing, solo only
 /raid find <text>    look an item up by name
 ```
 

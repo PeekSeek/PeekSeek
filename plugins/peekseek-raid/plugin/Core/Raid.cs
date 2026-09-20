@@ -94,17 +94,9 @@ internal class Raid : IGamemode {
 
     private float nextTick;
 
-    /// Solo only: which side of the one base the lone tester is playing, 0 holding it
-    /// and 1 attacking it. The round order flips who defends, so leaving this at 0
-    /// walks the tester through both halves; /raid side overrides it for a look at the
-    /// other half of the same round.
-    private int soloSide;
-
-    /// The site being attacked this round, which is the site its owners are defending.
-    ///
-    /// In a real match this alternates: a team defends its own base for three rounds and
-    /// then goes and attacks the other team's for three. Solo has only one base, so every
-    /// round is fought over that one and the tester swaps which end of it they are on.
+    /// The site being attacked this round, which is the site its owners are defending:
+    /// a team defends its own base for three rounds and then goes and attacks the
+    /// other team's for three.
     internal int DefendedSite => RoundOrder.Defender(round);
 
     /// Whether a player is on the defending side of the round being played.
@@ -123,7 +115,6 @@ internal class Raid : IGamemode {
         match = started;
         sites = new RaidSites(PeekSeekRaid.Config.Sites);
         round = 0;
-        soloSide = 0;
 
         RaidWorld.Hook(this);
 
@@ -200,8 +191,8 @@ internal class Raid : IGamemode {
 
         // Dead is dead until the round is over. Unturned would otherwise offer the
         // respawn button after its own timer and put them back on a map spawn, alive
-        // and counted. Solo has nobody to be unfair to, so the tester respawns.
-        if (!match.Solo) player.setPluginWidgetFlag(EPluginWidgetFlags.ShowDeathMenu, false);
+        // and counted.
+        player.setPluginWidgetFlag(EPluginWidgetFlags.ShowDeathMenu, false);
 
         // A death can end the round, so the check runs on the next tick rather than
         // here: the player is dead but Unturned has not finished moving them yet, and
@@ -355,7 +346,7 @@ internal class Raid : IGamemode {
         foreach (Player player in Players()) Host.Panel.Hide(player.channel.owner);
     }
 
-    /// The budget a player builds from: their team's. Solo builds as team 0.
+    /// The budget a player builds from: their team's.
     internal BuildBudget BudgetFor(ulong steam64) => budgets[SideOf(steam64)];
 
     /// A builder put a piece down: one off the team's pile, and the panel picks out
@@ -436,27 +427,17 @@ internal class Raid : IGamemode {
         budget.Refund(was);
     }
 
-    /// Which sites get a base built on them. Every team builds its own, except in solo,
-    /// where there is one tester, one base, and one place the whole match is fought.
+    /// Every team builds its own base, on its own site.
     private IEnumerable<int> BuiltSites() {
-        return match.Solo ? [0] : Enumerable.Range(0, sites.Count);
+        return Enumerable.Range(0, sites.Count);
     }
 
-    /// The base to stand at each site.
-    ///
-    /// Solo builds one base and then has to attack something, so that one base is put up
-    /// at both anchors: the tester spends three rounds holding the building they made and
-    /// three attacking a copy of it. In a real match each team has its own.
     private BaseSnapshot BaseFor(int team) {
-        if (match.Solo) return bases[0];
-
         return bases.Length > team ? bases[team] : null;
     }
 
-    /// The footprint standing at a site. Solo stands its one base at both anchors, so
-    /// both get the tester's shape.
     private BaseShape ShapeAt(int team) {
-        return match.Solo ? shapes[0] : shapes[team];
+        return shapes[team];
     }
 
     /// The Unturned group a site's team is in, or 0 before the roster has one.
@@ -478,7 +459,7 @@ internal class Raid : IGamemode {
     private void StartRound(int number) {
         // A side that has gone home between rounds has forfeited; a wipe a second
         // into every round until the score says so would be the same result, slower.
-        int alone = match.Solo ? -1 : Host.TeamLeftAlone();
+        int alone = Host.TeamLeftAlone();
         if (alone >= 0) {
             Host.Forfeit(alone);
             return;
@@ -576,8 +557,7 @@ internal class Raid : IGamemode {
         Board.Reset();
 
         // One board each, because the two sides are choosing from different lists at the
-        // same moment. Solo asks SideOf rather than the roster, so the lone tester gets
-        // the board for whichever side they are currently playing.
+        // same moment.
         foreach (Player player in Players()) {
             SteamPlayer viewer = player.channel.owner;
             if (IsDefending(viewer.playerID.steamID.m_SteamID)) {
@@ -638,14 +618,6 @@ internal class Raid : IGamemode {
     /// its own twenty seconds.
     private ulong ChooseFlagBearer() {
         int defender = DefendedSite;
-
-        if (match.Solo) {
-            Player tester = Players().FirstOrDefault();
-            return tester != null && IsDefending(tester.channel.owner.playerID.steamID.m_SteamID)
-                ? tester.channel.owner.playerID.steamID.m_SteamID
-                : 0;
-        }
-
         if (match.Teams.Count <= defender) return 0;
 
         // Whoever is on the server counts, dead or not: the dead are respawned before
@@ -717,9 +689,6 @@ internal class Raid : IGamemode {
             EndRound(defender, "round_won_clock");
             return;
         }
-
-        // Solo has nobody to wipe, so it only ever ends on the clock or on /skip.
-        if (match.Solo) return;
 
         if (Living(defender) == 0) {
             EndRound(1 - defender, "round_won_wipe");
@@ -909,33 +878,20 @@ internal class Raid : IGamemode {
 
     // ---- who is who -----------------------------------------------------------
 
-    /// Which side a player is on. Solo answers with whichever side the tester is
-    /// playing, so one person can walk both halves of the same round.
+    /// Which side a player is on.
     internal int SideOf(ulong steam64) {
         if (match == null) return 0;
-        if (match.Solo) return soloSide;
 
         int index = match.TeamIndexOf(steam64);
         return index < 0 ? 0 : index;
-    }
-
-    /// Solo only: swap the tester to the other side of the round they are in.
-    internal void SwapSoloSide() {
-        soloSide = 1 - soloSide;
-        foreach (Player player in Players()) Place(player);
-        Host.RefreshHud();
     }
 
     internal string TeamName(int team) {
         return match.Teams.Count > team ? match.Teams[team].Name : sites[team].Name;
     }
 
-    /// A team's players in roster order, or just the tester in solo, who is a team of
-    /// one on whichever side they are playing.
     private List<ulong> Roster(int team) {
-        if (match.Teams.Count > team && match.Teams[team].Players.Count > 0) return match.Teams[team].Players;
-
-        return Players().Select(p => p.channel.owner.playerID.steamID.m_SteamID).Take(1).ToList();
+        return match.Teams.Count > team ? match.Teams[team].Players : [];
     }
 
     private int Living(int team) {

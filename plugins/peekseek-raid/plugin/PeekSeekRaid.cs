@@ -95,10 +95,9 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
         { "off_base", "<color=white>Get back on your base.</color> Open ground is killing you." },
         { "leashed", "That is far enough. The other team is building where you were about to look." },
 
-        { "raid_nothing_running", "No Raid match is running. <color=white>/start raid</color> or <color=white>/start raid solo</color> starts one." },
+        { "raid_nothing_running", "No Raid match is running." },
 
         { "raid_state", "Phase <color=white>{0}</color>, round <color=white>{1}</color>, <color=white>{2}s</color> left. <color=white>{3}</color> defends." },
-        { "side_solo_only", "<color=white>/raid side</color> is for solo tests only." },
 
         { "find_usage", "<color=white>/raid find <text></color> looks an item up by name." },
         { "find_none", "Nothing is called anything like \"{0}\"." },

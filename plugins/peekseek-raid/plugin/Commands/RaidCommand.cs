@@ -20,7 +20,7 @@ public class RaidCommand : IRocketCommand {
     public AllowedCaller AllowedCaller => AllowedCaller.Both;
     public string Name => "raid";
     public string Help => "Where the match is, and the test controls.";
-    public string Syntax => "[skip def|skip atk|side|find <text>]";
+    public string Syntax => "[skip def|skip atk|find <text>]";
     public List<string> Aliases => [];
     public List<string> Permissions => ["peekseek.raid.start"];
 
@@ -46,14 +46,6 @@ public class RaidCommand : IRocketCommand {
         switch (command[0].ToLowerInvariant()) {
             case "skip":
                 Skip(raid, command.Length > 1 ? command[1] : "def");
-                break;
-
-            case "side":
-                if (!raid.Match.Solo) {
-                    Reply(caller, PeekSeekRaid.Instance.Translate("side_solo_only"));
-                    return;
-                }
-                raid.SwapSoloSide();
                 break;
 
             default:

@@ -61,12 +61,6 @@ against the DLL without ever shipping a copy of it: two `PeekSeek.dll`s under
    snapshot, and after `DelayKickAfterWin` reports the result and sends everybody
    back to the lobby.
 
-`/start <gamemode> [solo]` runs the same thing without the site: two teams from whoever
-is on the server, kits from each player's saved loadout (`LocalKitCategory`), nothing
-reported anywhere. `/stop` ends whatever is running. Both need the `peekseek.start`
-permission, and an Unturned admin is never funnelled off an empty server, so there is
-somebody to type them.
-
 ## The screens
 
 Unturned cannot draw a custom UI from plugin code: `EffectManager.SendUIEffect` takes an
@@ -114,7 +108,6 @@ server that gets a new version needs the new elements written in by hand.
 | `KillFeedEffectGUID`, `KillFeedKey`, `KillFeedRows`, `KillFeedRowSeconds`, `KillFeedNameLength` | The kill feed: the effect in the Kill Feed workshop item, its channel, how many rows the prefab has, how long a row stays, how many characters of a name fit. |
 | `ItemIconURL` | Where an item's picture comes from, `{0}` the item id. |
 | `DefaultAvatarURL` | The face for a player the site has no picture for yet. |
-| `LocalKitCategory` | Which saved kit a `/start` match uses. |
 
 `Spawns` left this file: the arena's round spawns are ARENA's, in its own config.
 
@@ -148,7 +141,7 @@ plugins/peekseek/
 ├── plugin/
 │   ├── PeekSeek.cs                  # Rocket hook, and every line of copy
 │   ├── PeekSeekConfiguration.cs
-│   ├── Commands/                    # /start, /stop, /stats, /report, /ping
+│   ├── Commands/                    # /stats, /report, /ping
 │   └── Core/
 │       ├── PSManager.cs             # the match server
 │       ├── Gamemodes/               # the seam: IGamemode, Host, Gamemodes, GamemodeMatch

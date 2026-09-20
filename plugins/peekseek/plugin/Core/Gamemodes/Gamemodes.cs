@@ -34,6 +34,4 @@ public static class Gamemodes {
         return registered.FirstOrDefault(mode => string.Equals(mode.Name, name, StringComparison.OrdinalIgnoreCase))
             ?? fallback;
     }
-
-    internal static IEnumerable<string> Names => registered.Select(mode => mode.Name);
 }

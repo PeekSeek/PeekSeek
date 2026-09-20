@@ -134,7 +134,7 @@ internal abstract class PSManager {
     }
 
     internal static void Shutdown() {
-        if (Data != null) StopMatch();
+        if (Data != null) ResetMatchState();
 
         Provider.onCheckValidWithExplanation -= OnCheckValidWithExplanation;
         Provider.onServerConnected -= OnClientConnected;
@@ -255,14 +255,6 @@ internal abstract class PSManager {
     internal static void Apply(PSSessionAnswer answer) {
         if (answer == null) return;
 
-        // A match started here with /start is not the site's to interrupt. The site
-        // does not know it exists, so it may well hand one over; it is refused and
-        // logged, and the site's own housekeeping releases it.
-        if (Data != null && Match.IsLocal && answer.Action != PSSessionAnswer.Idle) {
-            Logger.LogWarning($"Ignoring the site's \"{answer.Action}\" while a local match is running.");
-            return;
-        }
-
         switch (answer.Action) {
             case PSSessionAnswer.Wait:
                 HoldForMatch(answer);
@@ -330,7 +322,6 @@ internal abstract class PSManager {
         Match = new GamemodeMatch {
             Id = match.Id,
             Spectators = [.. match.Spectators ?? []],
-            Solo = match.Solo,
             Teams = match.Teams.Select(team => new GamemodeTeam {
                 Name = team.Name,
                 GroupId = GetTeamGroupID(team).m_SteamID,
@@ -353,7 +344,7 @@ internal abstract class PSManager {
         if (!Waiting) return;
 
         if (HaveAllPlayersJoined()) {
-            if (!Match.IsLocal) Announce(PeekSeek.Instance.Translate("lobby_everyone_here"));
+            Announce(PeekSeek.Instance.Translate("lobby_everyone_here"));
             Begin();
             return;
         }
@@ -425,81 +416,6 @@ internal abstract class PSManager {
         if (HeldMatchId == matchId) HeldMatchId = 0;
     }
 
-    // ---- local matches --------------------------------------------------------
-
-    /// Start a match from whoever is on the server right now, for testing a gamemode
-    /// without the site. Two teams from the people present, kits from each player's
-    /// saved loadout. `solo` puts everybody on one team, for a mode that can be walked
-    /// through alone. Returns the reason it could not start, or null when it did.
-    internal static string StartLocal(string gamemodeName, bool solo) {
-        if (Data != null) return "already_running";
-
-        IGamemode mode = Gamemodes.Gamemodes.For(gamemodeName);
-        if (mode == null || !string.Equals(mode.Name, gamemodeName, StringComparison.OrdinalIgnoreCase)) return "no_such_gamemode";
-
-        List<SteamPlayer> present = Provider.clients.Where(client => client.player != null).ToList();
-        if (present.Count == 0) return "nobody_here";
-        if (!solo && present.Count < 2) return "need_two";
-
-        PSMatch match = new() {
-            Id = 0,
-            Solo = solo,
-            Gamemode = new PSGamemode { Name = mode.Name },
-            RoundsToWin = 3,
-            Settings = new PSSettings {
-                Map = Level.info?.name ?? "",
-                Ballistics = Provider.modeConfigData.Gameplay.Ballistics,
-                Movement = Provider.modeConfigData.Gameplay.AirStrafing_Acceleration_Multiplier > 1f
-            },
-            Teams = [new PSTeam { Name = "North" }, new PSTeam { Name = "South" }],
-            Players = [],
-            Spectators = []
-        };
-
-        for (int i = 0; i < present.Count; i++) {
-            ulong steam64 = present[i].playerID.steamID.m_SteamID;
-            match.Teams[solo ? 0 : i % 2].Players.Add(steam64);
-            match.Players.Add(new PSPlayer { Steam64 = steam64, Kit = RemoteAPI.KitFor(steam64) });
-        }
-
-        HeldMatchId = 0;
-        UpdateStatus(EPSStatus.IN_PROGRESS);
-        MatchReady = Time.realtimeSinceStartup;
-        Take(match, mode);
-
-        foreach (SteamPlayer player in present) AssignPlayerGroup(player.player);
-
-        Logger.Log($"Local {mode.Name} match started{(solo ? " in solo" : "")} with {present.Count} player(s).");
-        Begin();
-        return null;
-    }
-
-    /// End whatever is running without a result: a test that has told you what you
-    /// needed, or the plugin unloading.
-    internal static void StopMatch() {
-        if (Data == null) return;
-
-        bool local = Match.IsLocal;
-        Announce(PeekSeek.Instance.Translate("match_stopped"));
-        ResetMatchState();
-        if (!local) RelayAllClients();
-        UpdateStatus(EPSStatus.READY);
-    }
-
-    /// Somebody arriving in a local match joins the side with fewer people, with
-    /// whatever kit the site has for them. Without a seat they would be on nobody's
-    /// roster: counted by nobody, and nowhere on the bar.
-    private static void Seat(Player player) {
-        ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
-        int team = Match.Solo ? 0 : Data.Teams.Select((t, i) => (t.Players.Count, i)).Min().i;
-
-        Data.Teams[team].Players.Add(steam64);
-        Data.Players.Add(new PSPlayer { Steam64 = steam64, Kit = RemoteAPI.KitFor(steam64) });
-        Match.Teams[team].Players.Add(steam64);
-        Match.Kits[steam64] = Data.KitFor(steam64).Select(Item).ToList();
-        Logger.Log($"{player.channel.owner.playerID.characterName} joined {Data.Teams[team].Name} mid-match.");
-    }
-
     // ---- players --------------------------------------------------------------
 
     private static void OnClientConnected(CSteamID steamID) {
@@ -509,10 +425,6 @@ internal abstract class PSManager {
         RemoteAPI.FetchPlayer(steamID.m_SteamID);
 
         if (!BelongsHere(steamID)) {
-            // Admins are never funnelled out of a server with nothing on it: they are
-            // the ones who start a local match, and there is nobody here to bother.
-            if (player.channel.owner.isAdmin && Data == null) return;
-
             RelayToLobby(player);
             return;
         }
@@ -538,7 +450,6 @@ internal abstract class PSManager {
             return;
         }
 
-        if (!Data.HasPlayer(steamID.m_SteamID)) Seat(player);
         if (player.quests.groupID != GetPlayerTeamGroupID(player)) AssignPlayerGroup(player);
 
         SendWelcome(player.channel.owner);
@@ -578,12 +489,11 @@ internal abstract class PSManager {
 
     /// Whether this connection is one of the people this server's current match is for.
     /// Everyone else is a stranger who typed the connect code, or a player whose match
-    /// has since ended, and the funnel sends them to the lobby instead. A local match
-    /// is for whoever turns up.
+    /// has since ended, and the funnel sends them to the lobby instead.
     private static bool BelongsHere(CSteamID steamID) {
         return Data != null
             && Status == EPSStatus.IN_PROGRESS
-            && (Match.IsLocal || Data.HasPlayer(steamID.m_SteamID) || IsSpectator(steamID.m_SteamID));
+            && (Data.HasPlayer(steamID.m_SteamID) || IsSpectator(steamID.m_SteamID));
     }
 
     /// Bounce one player straight back out to the warm-up lobby.
@@ -989,7 +899,7 @@ internal abstract class PSManager {
     internal static void AbandonMatch() {
         if (Status != EPSStatus.IN_PROGRESS) return;
 
-        if (!Match.IsLocal) SendResults(string.Empty, isPlayed: false);
+        SendResults(string.Empty, isPlayed: false);
         ClearMatch();
     }
 
@@ -1056,19 +966,14 @@ internal abstract class PSManager {
     }
 
     private static void EndMatch(string winningTeam) {
-        if (!Match.IsLocal) SendResults(winningTeam);
+        SendResults(winningTeam);
         ClearMatch();
     }
 
     private static void ClearMatch() {
-        bool local = Match.IsLocal;
         Announce(PeekSeek.Instance.Translate("match_over"));
         ResetMatchState();
         UpdateStatus(EPSStatus.READY);
-
-        // A local match ends where it began, with everybody still here to run another.
-        if (local) return;
-
         RelayAllClients();
 
         // The gap after a match is the only moment this server is both empty and
@@ -1186,7 +1091,7 @@ internal abstract class PSManager {
         }
 
         RecordKill(player, unturnedInstigator, limb);
-        if (!Match.IsLocal) SendKillEvent(player, unturnedInstigator, cause, limb, murderer);
+        SendKillEvent(player, unturnedInstigator, cause, limb, murderer);
     }
 
     /// Only the causes realistic in an arena match get a line — the rest (zombies,
@@ -1349,8 +1254,6 @@ internal abstract class PSManager {
         }
 
         LastUpdateSent = Time.realtimeSinceStartup;
-        if (Match.IsLocal) return;
-
         RemoteAPI.SendState(Data.Id, LiveState.Build(Data, RoundsPlayed, LatestEvent, RecentKills));
     }
 

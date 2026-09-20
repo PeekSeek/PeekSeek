@@ -25,24 +25,16 @@ public class GamemodeTeam {
 
 /// Everything a gamemode is told about the match it is running.
 public class GamemodeMatch {
-    /// The site's id, or 0 for a match started on this server with /start, which is
-    /// never reported anywhere.
+    /// The site's id.
     public int Id;
 
     public List<GamemodeTeam> Teams = [];
 
     public List<ulong> Spectators = [];
 
-    /// Whether this is one person testing the whole loop on their own. Solo skips
-    /// every rule that only makes sense with an opponent, and is the only reason a
-    /// match with one player is allowed to start at all.
-    public bool Solo;
-
     /// The kit the site resolved for each player. Empty for a spectator, or for a
     /// player the site sent none for.
     public Dictionary<ulong, List<GamemodeItem>> Kits = [];
-
-    public bool IsLocal => Id == 0;
 
     public GamemodeTeam TeamOf(ulong steam64) => Teams.Find(team => team.Has(steam64));
 

@@ -68,10 +68,6 @@ public class PeekSeekConfiguration : IRocketPluginConfiguration {
     /// own placeholder, the same one the site falls back to.
     public string DefaultAvatarURL;
 
-    /// Which of a player's saved kits a match started with /start uses, since there is
-    /// no site match to resolve one. A match the site hands over carries its kits.
-    public string LocalKitCategory;
-
     public void LoadDefaults() {
         LobbyTimeoutSeconds = 120;
         LobbyTimeoutBroadcastSecondsRemaining = [5, 10, 30, 60, 90];
@@ -109,6 +105,5 @@ public class PeekSeekConfiguration : IRocketPluginConfiguration {
 
         ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
         DefaultAvatarURL = "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg";
-        LocalKitCategory = "meta";
     }
 }
