@@ -177,42 +177,59 @@ internal static class RaidWorld {
     }
 
     /// Whether the flag may go here: on one of the site's starting tiles, on that tile's
-    /// own level, and not within reach of a door.
+    /// storey, and not in a doorway.
     ///
     /// The tiles are the whole of it. A flag on the roof, in a corner of a wall, or on a
     /// crate is a flag the attackers cannot get a charge onto; a flag on a starting tile
-    /// is somewhere in the building's own footprint. And the door rule is not about
-    /// doors: stand the flag in a doorway, then shut the door on it, and the flag is
-    /// inside the door, where nothing reaches it. Two and a half metres is a door and a
-    /// half from its hinge.
-    internal static bool MayStandFlag(int siteIndex, Vector3 point) {
+    /// is somewhere in the building's own footprint. The tile test is done in the site's
+    /// own frame, since the grid is turned to the site's yaw, and the storey test allows
+    /// the flag's own offset: its pivot sits 1.12 above whatever it stands on, and the
+    /// slab's half thickness under that.
+    ///
+    /// The door rule is not about doors: stand the flag in a doorway, then shut the door
+    /// on it, and the flag is inside the door, where nothing reaches it. A tenth of a
+    /// floor clear of the door's own point, measured flat, is out of the doorway.
+    internal static bool MayStandFlag(int siteIndex, RaidSite site, Vector3 point) {
         if (!anchorTiles.TryGetValue(siteIndex, out List<Vector3> tiles)) return false;
 
-        bool onATile = tiles.Any(tile =>
-            Mathf.Abs(point.x - tile.x) <= BaseLayout.HalfEdge
-            && Mathf.Abs(point.z - tile.z) <= BaseLayout.HalfEdge
-            && point.y - tile.y >= 0f
-            && point.y - tile.y <= FlagAboveTile);
+        Quaternion unturn = Quaternion.Euler(0f, -site.Yaw, 0f);
+        bool onATile = tiles.Any(tile => {
+            Vector3 local = unturn * (point - tile);
+            return Mathf.Abs(local.x) <= BaseLayout.HalfEdge + TileSlack
+                && Mathf.Abs(local.z) <= BaseLayout.HalfEdge + TileSlack
+                && local.y >= 0f
+                && local.y <= FlagAboveTile;
+        });
 
         return onATile && !NearDoor(point);
     }
 
-    /// How far above a starting tile's pivot the flag's own pivot may be and still be on
-    /// that tile: the floor's thickness plus the flag's offset and a little.
-    private const float FlagAboveTile = 1f;
+    /// How far past a tile's edge still counts as the tile, for the flag's own footing
+    /// and a triangle's corners.
+    private const float TileSlack = 0.5f;
 
-    private const float DoorClearance = 2.5f;
+    /// How far above a starting tile's pivot the flag's pivot may be and still be on
+    /// that storey: the slab's half thickness, the flag's 1.12 offset, and a crate under
+    /// it, but never the floor above, which is a wall higher.
+    private const float FlagAboveTile = 3f;
 
-    /// Whether a door, hatch or gate stands within DoorClearance of a point.
+    /// A tenth of a floor.
+    private const float DoorClearance = 0.6f;
+
+    /// Whether a door, hatch or gate stands within DoorClearance of a point, measured
+    /// flat: a door's point is at its middle, a metre off the floor, and that height is
+    /// not distance from the doorway.
     internal static bool NearDoor(Vector3 point) {
         List<RegionCoordinate> around = [];
-        Regions.getRegionsInRadius(point, DoorClearance, around);
+        Regions.getRegionsInRadius(point, DoorClearance + 1f, around);
 
         foreach (RegionCoordinate coordinate in around) {
             foreach (BarricadeDrop drop in BarricadeManager.regions[coordinate.x, coordinate.y].drops) {
                 if (drop.asset is not ItemBarricadeAsset barricade) continue;
                 if (barricade.build != EBuild.DOOR && barricade.build != EBuild.HATCH && barricade.build != EBuild.GATE) continue;
-                if ((drop.GetServersideData().point - point).sqrMagnitude <= DoorClearance * DoorClearance) return true;
+
+                Vector3 gap = drop.GetServersideData().point - point;
+                if (gap.x * gap.x + gap.z * gap.z <= DoorClearance * DoorClearance && Mathf.Abs(gap.y) <= BaseLayout.WallHeight) return true;
             }
         }
 
@@ -414,7 +431,7 @@ internal static class RaidWorld {
                 && raid.Phase == RaidPhase.Picking
                 && owner == raid.FlagBearer
                 && SiteAt(point) == raid.DefendedSite
-                && MayStandFlag(raid.DefendedSite, point);
+                && MayStandFlag(raid.DefendedSite, PeekSeekRaid.Config.Sites[raid.DefendedSite], point);
 
             // The bearer is the one person this rule bites, so they are told why.
             if (!shouldAllow && raid != null && owner == raid.FlagBearer && PlayerTool.getSteamPlayer(new CSteamID(owner)) is { } bearer) {

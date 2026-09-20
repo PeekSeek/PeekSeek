@@ -69,7 +69,7 @@ with three shacks in a field and a choice about which one to defend.
 
 **The flag goes on a starting floor, away from any door.** Not on the roof, not on a crate,
 not in a doorway to be shut inside the door: on one of the tiles the base began as, on
-that tile's own level, with no door within two and a half metres. The bearer who tries
+that tile's own storey, and not in a doorway: a tenth of a floor clear of the door is enough. The bearer who tries
 anywhere else is told so and keeps the flag. Everybody spawns on those tiles too, on
 whichever of them nothing has been built on, spread out from the middle; the anchor
 alone put people inside the walls a hexagonal base grows from its centre.
