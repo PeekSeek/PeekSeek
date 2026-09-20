@@ -153,22 +153,24 @@ internal class MatchHud {
 
                 (int Steps, bool Low) health = HealthOf(seat, seen, me);
                 record.Health[$"{side}{i}"] = health;
-                DrawSeat(viewer, $"{side}{i}", seat, health);
+                DrawSeat(viewer, $"{side}{i}", seat, health, MaySee(seat, seen, me));
             }
         }
     }
 
     /// A face is two pictures of the same download, one at full strength and one at
     /// half, because nothing a server sends can set an alpha but it can choose which
-    /// of two images is on. Out of the round is the half one.
-    private static void DrawSeat(SteamPlayer viewer, string slot, HudSeat seat, (int Steps, bool Low) health) {
+    /// of two images is on. Out of the round is the half one. The pick and the health
+    /// are only drawn for a viewer who may see them: what the other side brought is
+    /// the one thing a raid must not know.
+    private static void DrawSeat(SteamPlayer viewer, string slot, HudSeat seat, (int Steps, bool Low) health, bool inside) {
         Picture(viewer, $"{slot}_Avatar", seat.AvatarUrl);
         Picture(viewer, $"{slot}_Faded", seat.AvatarUrl);
         Visible(viewer, $"{slot}_Avatar", seat.Alive);
         Visible(viewer, $"{slot}_Faded", !seat.Alive);
 
-        Visible(viewer, $"{slot}_Pick", seat.PickItemId != 0);
-        Picture(viewer, $"{slot}_Pick_Icon", ItemIcon(seat.PickItemId));
+        Visible(viewer, $"{slot}_Pick", inside && seat.PickItemId != 0);
+        Picture(viewer, $"{slot}_Pick_Icon", inside ? ItemIcon(seat.PickItemId) : "");
 
         DrawHealth(viewer, slot, health);
     }
@@ -189,18 +191,23 @@ internal class MatchHud {
     }
 
     /// What one viewer sees of a seat's health, as lit steps: nothing for a face that
-    /// is whole or out of the round, and nothing for the other team unless the viewer
-    /// is spectating. `seen` is already turned to the viewer, so their own team, if
-    /// they have one, is the first.
+    /// is whole or out of the round, and nothing for a seat the viewer may not see
+    /// inside.
     private static (int Steps, bool Low) HealthOf(HudSeat seat, HudState seen, ulong viewer) {
         if (!seat.Alive || seat.Health >= 100 || seat.Health <= 0) return (0, false);
-
-        bool spectating = seen.Spectators.Contains(viewer);
-        bool teammate = seen.Teams[0].Seats.Contains(seat) && seen.Teams[0].Seats.Any(mate => mate.Steam64 == viewer);
-        if (!spectating && !teammate) return (0, false);
+        if (!MaySee(seat, seen, viewer)) return (0, false);
 
         int steps = (seat.Health * HealthSteps + 99) / 100;
         return (steps, seat.Health <= LowHealth);
+    }
+
+    /// Whether a viewer sees inside a seat, its pick and its health: their own
+    /// teammates', and every seat for a spectator. `seen` is already turned to the
+    /// viewer, so their own team, if they have one, is the first.
+    private static bool MaySee(HudSeat seat, HudState seen, ulong viewer) {
+        if (seen.Spectators.Contains(viewer)) return true;
+
+        return seen.Teams[0].Seats.Contains(seat) && seen.Teams[0].Seats.Any(mate => mate.Steam64 == viewer);
     }
 
     private static void ForEachSeat(HudState seen, System.Action<string, HudSeat> visit) {

@@ -27,9 +27,9 @@ from pathlib import Path
 import footprints
 import sitemap
 from unityyaml import (CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, button, canvas,
-                       castle_alpha, centered, disc_alpha, image, mask, prefab, rounded_alpha, row, silhouette,
-                       skull_alpha, sprite, sprite_file, stretch, swords_alpha, text, top_center, top_left, top_right,
-                       top_stretch)
+                       castle_alpha, centered, disc_alpha, fit_width, ignore_layout, image, layout_size, mask, prefab,
+                       ring_alpha, rounded_alpha, row, silhouette, skull_alpha, sprite, sprite_file, stretch, swords_alpha,
+                       text, top_center, top_left, top_right, top_stretch)
 
 ASSETS = Path(__file__).resolve().parent.parent / "Assets"
 UNTURNED = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r"C:\Program Files (x86)\Steam\steamapps\common\Unturned")
@@ -97,6 +97,7 @@ def write_sprites():
         "round8": sprite(SPRITES, "Round8", "b1f0c2d3e4a5b6c7d8e9f0a1b2c3d4e5", 32, 32, rounded_alpha(32, 32, 8), 8),
         "round6": sprite(SPRITES, "Round6", "c2a1d3e4f5b6c7d8e9f0a1b2c3d4e5f6", 24, 24, rounded_alpha(24, 24, 6), 6),
         "round3": sprite(SPRITES, "Round3", "d4b2e6f7a8c9d0e1f2a3b4c5d6e7f8a9", 12, 12, rounded_alpha(12, 12, 3), 3),
+        "ring6": sprite(SPRITES, "Ring6", "e5c3f7a8b9d0e1f2a3b4c5d6e7f8a9b0", 24, 24, ring_alpha(24, 24, 6), 6),
         "castle": sprite(SPRITES, "Castle", "c8a7d9e0f1b2c3d4e5f6a7b8c9d0e1f2", 24, 24, castle_alpha(24), 0),
         "swords": sprite(SPRITES, "Swords", "d9b8e0f1a2c3d4e5f6a7b8c9d0e1f2a3", 24, 24, swords_alpha(24), 0),
         "skull": sprite(SPRITES, "Skull", "c6e5a7b8d9f0a1b2c3d4e5f6a7b8c9d0", 40, 40, skull_alpha(40), 0),
@@ -287,7 +288,7 @@ BOARD_W = PICKS * POWERUP_W + (PICKS - 1) * GAP
 SITES = (
     # name, anchor (x, z), the spawns in dot order; all from PeekSeekRaidConfiguration.cs
     ("North", (74.97, 311.35), ((152.60, 383.00), (8.21, 286.77), (91.95, 232.95))),
-    ("South", (234.63, -240.41), ((155.81, -173.20), (310.10, -184.88), (305.46, -321.41))),
+    ("South", (224.10, -379.60), ((150.36, -364.48), (207.59, -306.13), (311.91, -369.68))),
 )
 MAP_GUIDS = ("e2f1a3b4c5d6e7f8a9b0c1d2e3f4a5b6", "f3a2b4c5d6e7f8a9b0c1d2e3f4a5b6c7")
 
@@ -537,66 +538,55 @@ def build_panel():
 
 # ---- the kill feed --------------------------------------------------------------------
 #
-# Its own mod, so the lobby can carry the feed without the rest of the screens. Top right, a row per kill: who, with what, whom; the weapon a white silhouette,
-# a roman numeral beside the killer's name from their second kill of a life. The fill is
-# the HUD's block. A row a viewer is in, either end, gets the one red the overlay has,
-# as a hairline round it.
+# Its own mod, so the lobby can carry the feed without the rest of the screens. Top
+# right, a row per kill: who, with what, whom; the weapon a white silhouette, a skull
+# after it for a headshot, a roman numeral beside the killer's name from their second
+# kill of a life. The fill is the HUD's block. A row a viewer is in, either end, gets
+# the one red the overlay has, as a hairline round it.
+#
+# A row is a run of parts a fixed gap apart, and exactly as wide as the run: a layout
+# row with a size fitter, each text as wide as its text, each picture a fixed size.
+# So a long name makes the row wider, never pokes out of it, and a part the plugin
+# turns off, the killer of a death nobody dealt, a streak of one, a weapon the game
+# cannot name, takes no space and leaves no gap. Rows hang off the right edge and grow
+# leftward. The hairline is a ring one pixel proud of the fill, stretched with it and
+# ignored by the layout, because a border cannot be set on an Image but a ring behind
+# nothing draws the same.
 
 FEED_ROWS = 6
-FEED_W, FEED_H = 312, 26
+FEED_H = 26
 FEED_GAP = 4
-NAME_W = 110
-BADGE_W = 24
+FEED_PAD = 8            # inside the row's ends
+FEED_SPACING = 6        # between the parts
 WEAPON_W = 40
-LONE_W = 8 + WEAPON_W + 4 + NAME_W + 8
-
-
-def weapon_slot(parent, name, x):
-    """The weapon's silhouette, or the skull when there is no item to show: the plugin
-    turns one on and the other off."""
-    image(parent.add(top_left(f"{name}_Weapon", x, 3, WEAPON_W, FEED_H - 6)), "#ffffff", enabled=False,
-          preserve_aspect=True, material=SILHOUETTE)
-    image(parent.add(top_left(f"{name}_Skull", x + (WEAPON_W - 18) // 2, 4, 18, 18, active=False)), INK,
-          sprite=SPR["skull"], sliced=False)
+HEADSHOT = 16
 
 
 def kill_feed():
     root = Node("Effect")
     canvas(root, sorting_order=16)
 
-    feed = root.add(top_right("Feed", 20, 20, FEED_W + 4, FEED_ROWS * (FEED_H + FEED_GAP)))
+    feed = root.add(top_right("Feed", 20, 20, 600, FEED_ROWS * (FEED_H + FEED_GAP)))
 
     for i in range(FEED_ROWS):
-        y = i * (FEED_H + FEED_GAP)
-        row = feed.add(top_right(f"Row{i}", 0, y, FEED_W + 4, FEED_H + 4, active=False))
-
-        # The hairline is a red rounded rectangle one pixel proud of the black one on
-        # every side; there is no border property to set, only a shape behind a shape.
-        image(row.add(stretch(f"Row{i}_Mine", active=False)), RED, sprite=SPR["round6"])
-        fill = row.add(centered(f"Row{i}_Fill", 0, 0, FEED_W, FEED_H))
+        fill = feed.add(top_right(f"Row{i}", 0, i * (FEED_H + FEED_GAP), 0, FEED_H, active=False))
         image(fill, FLAT, sprite=SPR["round6"])
+        row(fill, spacing=FEED_SPACING, padding=FEED_PAD, control_width=True)
+        fit_width(fill)
 
-        # Two shapes of row. A duel is who, with what, whom. A death with nobody on
-        # the other end of it, a fall, a mine of your own, the open ground, is the
-        # skull and the name, on a shorter fill so it does not read as a kill with the
-        # killer missing. The skull also stands in for a weapon the server cannot name.
-        duel = fill.add(stretch(f"Row{i}_Duel"))
-        x = 8
-        text(duel.add(top_left(f"Row{i}_Killer", x, 0, NAME_W, FEED_H)), "Ferret", size=13, colour=INK, halign=RIGHT, bold=True)
-        x += NAME_W + 4
-        text(duel.add(top_left(f"Row{i}_Streak", x, 0, BADGE_W, FEED_H)), "II", size=11, colour=RED, halign=CENTER, bold=True)
-        x += BADGE_W + 4
-        weapon_slot(duel, f"Row{i}", x)
-        x += WEAPON_W + 4
-        text(duel.add(top_left(f"Row{i}_Victim", x, 0, NAME_W, FEED_H)), "Homeless", size=13, colour=INK, halign=LEFT, bold=True)
+        mine = fill.add(Node(f"Row{i}_Mine", anchor_min=(0, 0), anchor_max=(1, 1), size=(2, 2), active=False))
+        image(mine, RED, sprite=SPR["ring6"])
+        ignore_layout(mine)
 
-        lone = row.add(top_right(f"Row{i}_Lone", 0, 0, LONE_W + 4, FEED_H + 4, active=False))
-        image(lone.add(stretch(f"Row{i}_Lone_Mine", active=False)), RED, sprite=SPR["round6"])
-        lone_fill = lone.add(centered(f"Row{i}_LoneFill", 0, 0, LONE_W, FEED_H))
-        image(lone_fill, FLAT, sprite=SPR["round6"])
-        weapon_slot(lone_fill, f"Row{i}_Lone", 8)
-        text(lone_fill.add(top_left(f"Row{i}_Lone_Victim", 8 + WEAPON_W + 4, 0, NAME_W, FEED_H)), "Homeless",
-             size=13, colour=INK, halign=LEFT, bold=True)
+        text(fill.add(top_left(f"Row{i}_Killer", 0, 0, 0, FEED_H)), "Ferret", size=13, colour=INK, bold=True)
+        text(fill.add(top_left(f"Row{i}_Streak", 0, 0, 0, FEED_H, active=False)), "II", size=11, colour=RED, bold=True)
+        weapon = fill.add(top_left(f"Row{i}_Weapon", 0, 0, WEAPON_W, FEED_H - 6, active=False))
+        image(weapon, "#ffffff", enabled=False, preserve_aspect=True, material=SILHOUETTE)
+        layout_size(weapon, WEAPON_W, FEED_H - 6)
+        skull = fill.add(top_left(f"Row{i}_Headshot", 0, 0, HEADSHOT, HEADSHOT, active=False))
+        image(skull, INK, sprite=SPR["skull"], sliced=False)
+        layout_size(skull, HEADSHOT, HEADSHOT)
+        text(fill.add(top_left(f"Row{i}_Victim", 0, 0, 0, FEED_H)), "Homeless", size=13, colour=INK, bold=True)
 
     return root
 

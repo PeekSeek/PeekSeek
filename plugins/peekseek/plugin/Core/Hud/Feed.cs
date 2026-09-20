@@ -19,6 +19,9 @@ public class Kill {
     /// How many the killer has this life, this one included. Shown from the second.
     public int Streak;
 
+    /// Whether it was a headshot, which gets the skull beside the weapon.
+    public bool Headshot;
+
     public float At;
 }
 
@@ -40,7 +43,7 @@ public class Feed {
 
     /// Record a kill at `now`. A kill of yourself, or by nothing, counts for nobody's
     /// streak but is still a row: the team wants to know they are one down.
-    public Kill Add(ulong killer, string killerName, ulong victim, string victimName, ushort weapon, float now) {
+    public Kill Add(ulong killer, string killerName, ulong victim, string victimName, ushort weapon, bool headshot, float now) {
         int streak = 0;
         if (killer != 0 && killer != victim) {
             streaks.TryGetValue(killer, out streak);
@@ -54,6 +57,7 @@ public class Feed {
             VictimName = victimName,
             Weapon = weapon,
             Streak = streak,
+            Headshot = headshot,
             At = now
         };
 

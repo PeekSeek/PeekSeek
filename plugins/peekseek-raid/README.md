@@ -67,6 +67,13 @@ corner clear can pull one. Teams do get floors, but a floor only goes down besid
 above one that is already standing, so the base grows out of the anchor. Nobody ends up
 with three shacks in a field and a choice about which one to defend.
 
+**The flag goes on a starting floor, away from any door.** Not on the roof, not on a crate,
+not in a doorway to be shut inside the door: on one of the tiles the base began as, on
+that tile's own level, with no door within two and a half metres. The bearer who tries
+anywhere else is told so and keeps the flag. Everybody spawns on those tiles too, on
+whichever of them nothing has been built on, spread out from the middle; the anchor
+alone put people inside the walls a hexagonal base grows from its centre.
+
 **The flag is the objective, and the defenders stand it.** Before every round one
 defender, at random, picks their powerup and is then handed the flag, with the rest of
 the pick to stand it anywhere on the building; step off the base with it and you are
@@ -105,22 +112,35 @@ playing.
 
 ## The kits
 
-Every number is from the game's own item files: a maple wall is 400 health, metal 1100,
-brick 1650, the flag 600.
+The arithmetic a raider does at the wall, and the plugin writes onto the game's own
+items when a match starts (`ChargeStructureDamage`, `RocketStructureDamage`,
+`RocketRangeMultiplier`): a maple wall is 400 health, birch 350, metal 1100, the flag
+600. A charge does 1000, so one takes a wood wall and two take metal. A rocket does
+380, so two take wood and three take metal, and its blast is four fifths of the game's,
+a hole in a wall rather than a room. There is no brick: a brick wall is four charges,
+and that is not this game. Pillars are maple only, so the frame is the frame and a
+wall is what a team chooses to make metal.
 
-Defence: barbed wire (four coils), landmines (three), reinforce (spare metal), a
-watchtower kit (grenades and a scope), and a sentry, a hostile one that goes down with a
-Bluntforce in it, loaded, that nobody can take out. Salvage the sentry and put it back and
-it is armed again; the gun never hits the floor. Which gun is `SentryFirearm` in the
-config, one item with whatever state it needs. The sentry is the PeekSeek Sentry, item
-43131 in the UI workshop item: the Hostile Sentry's model and numbers with
+**Attack.** Every kit has a way through a wall; what changes is how many walls, from
+how far, and what is left for the people inside. The more of it comes from range, the
+less of it there is. A base that is metal all the way round is four walls deep at most.
+
+| Kit | What you carry | In metal walls |
+| --- | --- | --- |
+| Demolition | twelve charges, the detonator | six, at the wall |
+| Rockets | the launcher, nine rockets | three, from anywhere |
+| Breacher | three rockets, five charges | one from range, then two and a half up close |
+| Grenadier | twelve stickies, four impacts, two frags | one, or three wood, and the room behind it |
+| Sapper | four charges, six frags | two, then clear what is behind them without going in |
+
+**Defence.** A sentry, a hostile one that goes down with a Bluntforce in it, loaded, that
+nobody can take out (salvage it and put it back and it is armed again; which gun is
+`SentryFirearm`). A welder: a blowtorch to mend what they crack and two metal walls to
+close a hole. A trapper: three landmines and four coils of wire. Reinforce: six metal
+walls, a door and two pillars. A watchtower: a scope and three grenades. The sentry is
+the PeekSeek Sentry, item 43131 in the UI workshop item: the Hostile Sentry with
 `Requires_Power false`, because a vanilla sentry only runs within reach of a fuelled
-generator, and both the server and every client decide that for themselves. Lying about
-it server-side gave a turret that shot on the server and sat dark on every screen.
-
-Raid: a rocket launcher with two rockets (1000 each, from across the field), three
-demolition charges with the detonator (1000 each, but you have to reach the wall), six
-sticky grenades (100 each), six impact grenades (100), six frags (50, mostly for people).
+generator, and both the server and every client decide that for themselves.
 
 ## The map
 

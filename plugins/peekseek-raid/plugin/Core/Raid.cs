@@ -608,7 +608,7 @@ internal class Raid : IGamemode {
         RaidSite site = sites[DefendedSite];
         if (site.Contains(bearer.transform.position)) return;
 
-        bearer.teleportToLocationUnsafe(RaidWorld.StandingSpot(site), site.Yaw);
+        bearer.teleportToLocationUnsafe(RaidWorld.FreeSpot(DefendedSite, site, 0), site.Yaw);
         Host.Whisper(bearer.channel.owner, PeekSeekRaid.Instance.Translate("flag_leashed"));
     }
 
@@ -773,7 +773,7 @@ internal class Raid : IGamemode {
             RaidSite site = sites[SideOf(player.channel.owner.playerID.steamID.m_SteamID)];
             if (site.Contains(player.transform.position)) continue;
 
-            player.teleportToLocationUnsafe(RaidWorld.StandingSpot(site), site.Yaw);
+            player.teleportToLocationUnsafe(RaidWorld.FreeSpot(SideOf(player.channel.owner.playerID.steamID.m_SteamID), site, 0), site.Yaw);
             Host.Whisper(player.channel.owner, PeekSeekRaid.Instance.Translate("leashed"));
         }
     }
@@ -799,7 +799,7 @@ internal class Raid : IGamemode {
                 return;
 
             case RaidPhase.Building:
-                player.teleportToLocationUnsafe(RaidWorld.StandingSpot(own), own.Yaw);
+                player.teleportToLocationUnsafe(RaidWorld.FreeSpot(side, own, IndexInTeam(steam64)), own.Yaw);
                 RaidWorld.DressForBuilding(player);
                 RaidWorld.Freeze(player, false);
                 BudgetFor(steam64).Watch(player);
@@ -811,7 +811,7 @@ internal class Raid : IGamemode {
             case RaidPhase.Picking:
                 if (steam64 == FlagBearer) {
                     RaidSite defended = sites[DefendedSite];
-                    player.teleportToLocationUnsafe(RaidWorld.StandingSpot(defended), defended.Yaw);
+                    player.teleportToLocationUnsafe(RaidWorld.FreeSpot(DefendedSite, defended, 0), defended.Yaw);
                     if (flagHanded) RaidWorld.HandFlag(player);
                     else RaidWorld.DressPlain(player);
                     RaidWorld.Freeze(player, !flagHanded);
@@ -847,7 +847,7 @@ internal class Raid : IGamemode {
         RaidSite defended = sites[DefendedSite];
 
         if (IsDefending(steam64)) {
-            player.teleportToLocationUnsafe(RaidWorld.StandingSpot(defended), defended.Yaw);
+            player.teleportToLocationUnsafe(RaidWorld.FreeSpot(DefendedSite, defended, IndexInTeam(steam64)), defended.Yaw);
             return;
         }
 
@@ -869,7 +869,7 @@ internal class Raid : IGamemode {
         }
 
         RaidSite own = sites[side];
-        player.teleportToLocationUnsafe(RaidWorld.StandingSpot(own), own.Yaw);
+        player.teleportToLocationUnsafe(RaidWorld.FreeSpot(side, own, 0), own.Yaw);
     }
 
     private static void AllowRespawn(Player player) {
@@ -892,6 +892,10 @@ internal class Raid : IGamemode {
 
     private List<ulong> Roster(int team) {
         return match.Teams.Count > team ? match.Teams[team].Players : [];
+    }
+
+    private int IndexInTeam(ulong steam64) {
+        return Math.Max(0, Roster(SideOf(steam64)).IndexOf(steam64));
     }
 
     private int Living(int team) {

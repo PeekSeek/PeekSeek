@@ -8,14 +8,18 @@ namespace PeekSeekRaid.Core.Models;
 ///
 /// Unturned names every housing piece the same way, "Birch Wall", "Triangular Metal
 /// Floor", "Brick Ramp Wall", with the material as one word somewhere in it, and the
-/// pieces of one kind in the five materials are the same shape on the housing grid.
-/// That is what makes a piece swappable in place for the same kind in another
-/// material, and the name is the only place the game states the family.
+/// pieces of one kind in every material are the same shape on the housing grid. That
+/// is what makes a piece swappable in place for the same kind in another material,
+/// and the name is the only place the game states the family.
+///
+/// Brick is not on the list on purpose. A brick wall takes four charges and Raid is
+/// not that game, so brick is not a material here at all: not in the kit, and not on
+/// the swap board.
 public static class Materials {
-    public static readonly string[] Names = ["Birch", "Pine", "Maple", "Metal", "Brick"];
+    public static readonly string[] Names = ["Birch", "Pine", "Maple", "Metal"];
 
     /// ("Metal", "Triangular Floor") for "Triangular Metal Floor"; null for anything
-    /// that is not a housing piece in one of the five materials.
+    /// that is not a housing piece in one of these materials.
     public static (string Material, string Kind)? Split(string itemName) {
         if (string.IsNullOrWhiteSpace(itemName)) return null;
 

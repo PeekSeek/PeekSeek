@@ -8,9 +8,9 @@ public class FeedTests {
     [Fact]
     public void NewestIsFirstAndOnlyAScreenIsKept() {
         Feed feed = new(rows: 2, lifetime: 10f);
-        feed.Add(1, "a", 2, "b", 0, 0f);
-        feed.Add(1, "a", 3, "c", 0, 1f);
-        feed.Add(1, "a", 4, "d", 0, 2f);
+        feed.Add(1, "a", 2, "b", 0, false, 0f);
+        feed.Add(1, "a", 3, "c", 0, false, 1f);
+        feed.Add(1, "a", 4, "d", 0, false, 2f);
 
         Assert.Equal(["d", "c"], feed.Rows.Select(kill => kill.VictimName).ToArray());
     }
@@ -21,26 +21,26 @@ public class FeedTests {
     public void TheStreakIsPerLife() {
         Feed feed = new(rows: 6, lifetime: 10f);
 
-        Assert.Equal(1, feed.Add(1, "a", 2, "b", 0, 0f).Streak);
-        Assert.Equal(2, feed.Add(1, "a", 3, "c", 0, 60f).Streak);
+        Assert.Equal(1, feed.Add(1, "a", 2, "b", 0, false, 0f).Streak);
+        Assert.Equal(2, feed.Add(1, "a", 3, "c", 0, false, 60f).Streak);
 
         feed.EndLife(1);
-        Assert.Equal(1, feed.Add(1, "a", 4, "d", 0, 61f).Streak);
+        Assert.Equal(1, feed.Add(1, "a", 4, "d", 0, false, 61f).Streak);
     }
 
     [Fact]
     public void NobodyAndYourselfCountForNothing() {
         Feed feed = new(rows: 6, lifetime: 10f);
 
-        Assert.Equal(0, feed.Add(0, "", 2, "b", 0, 0f).Streak);
-        Assert.Equal(0, feed.Add(2, "b", 2, "b", 0, 0f).Streak);
+        Assert.Equal(0, feed.Add(0, "", 2, "b", 0, false, 0f).Streak);
+        Assert.Equal(0, feed.Add(2, "b", 2, "b", 0, false, 0f).Streak);
     }
 
     [Fact]
     public void RowsExpire() {
         Feed feed = new(rows: 6, lifetime: 5f);
-        feed.Add(1, "a", 2, "b", 0, 0f);
-        feed.Add(1, "a", 3, "c", 0, 4f);
+        feed.Add(1, "a", 2, "b", 0, false, 0f);
+        feed.Add(1, "a", 3, "c", 0, false, 4f);
 
         Assert.True(feed.Expire(6f));
         Assert.Single(feed.Rows);

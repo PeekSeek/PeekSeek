@@ -224,10 +224,11 @@ The kill feed (`Hud/KillFeed.cs`, key `KillFeedKey`), six rows, newest at the to
 
 | Child | Component | What goes in it |
 | --- | --- | --- |
-| `Row{n}` | GameObject | a row, shown while there is a kill for it |
-| `Row{n}_Killer`, `Row{n}_Victim` | TMP text | names, cut with an ellipsis |
-| `Row{n}_Streak` | TMP text | `II` to `X`, from the second kill of a life |
-| `Row{n}_Weapon` | `Image` | the weapon, drawn as a silhouette |
+| `Row{n}` | GameObject | a row, shown while there is a kill for it; as wide as its parts |
+| `Row{n}_Killer`, `Row{n}_Victim` | TMP text | names, as wide as they are; the killer off for a death nobody dealt |
+| `Row{n}_Streak` | TMP text | `II` to `X`, from the second kill of a life, off otherwise |
+| `Row{n}_Weapon` | `Image` | the weapon, drawn as a silhouette, off when the game names no item |
+| `Row{n}_Headshot` | GameObject | the skull after the weapon, on for a headshot |
 | `Row{n}_Mine` | GameObject | the red hairline, on when the viewer is either name |
 
 `MatchHud.Show` redraws the whole bar for every viewer on every change; the tick, four

@@ -35,6 +35,10 @@ public static class BaseLayout {
     public const float Edge = 6f;
     public const float HalfEdge = 3f;
     public const float HalfWallHeight = 2.125f;
+
+    /// A storey: a pillar is a wall tall, and the next one stacks exactly this much
+    /// higher, on the same vertex.
+    public const float WallHeight = 4.25f;
     public const float TriangleApexPivotOffset = 2.1961524f;
     public const float LinkTolerance = 0.02f;
 

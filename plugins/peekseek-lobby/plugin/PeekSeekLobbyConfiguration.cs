@@ -242,7 +242,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
         KillFeedRows = 6;
         KillFeedRowSeconds = 7f;
-        KillFeedNameLength = 14;
+        KillFeedNameLength = 24;
 
         // The same first-option gun, attachments and outfit the website would
         // resolve for a player who has never saved a kit — see kits.json and

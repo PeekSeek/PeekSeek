@@ -28,6 +28,7 @@ internal static class RaidWorld {
 
     internal static void Hook(Raid running) {
         raid = running;
+        TuneExplosives();
 
         StructureManager.onDeployStructureRequested += OnDeployStructure;
         BarricadeManager.onDeployBarricadeRequested += OnDeployBarricade;
@@ -54,6 +55,32 @@ internal static class RaidWorld {
         anchorTiles.Clear();
         raid = null;
     }
+
+    /// What a charge and a rocket do to a building, set on the game's own assets so
+    /// every explosion the server works out uses these numbers. Explosions are the
+    /// server's to compute, so a client's copy of the asset never matters.
+    ///
+    /// The point is the arithmetic a raider does at the wall: a charge is two to a
+    /// metal wall and one to wood; a rocket is three to metal and two to wood, and
+    /// its blast is tightened so a rocket is a hole in one wall rather than a room.
+    /// Set every match rather than once, because the numbers are config. The range is
+    /// read-only on the asset, so its backing field is written; the publicizer opens
+    /// it up.
+    private static void TuneExplosives() {
+        if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.ChargeItemId) is ItemChargeAsset charge) {
+            charge.structureDamage = PeekSeekRaid.Config.ChargeStructureDamage;
+        }
+
+        if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.RocketItemId) is ItemMagazineAsset rocket) {
+            rocket.structureDamage = PeekSeekRaid.Config.RocketStructureDamage;
+            rocketRange ??= rocket.range;
+            rocket._range = rocketRange.Value * PeekSeekRaid.Config.RocketRangeMultiplier;
+        }
+    }
+
+    /// The rocket's blast radius as the game shipped it, kept so the multiplier is
+    /// applied to the original every time and not to the last result.
+    private static float? rocketRange;
 
     // ---- the anchor -----------------------------------------------------------
 
@@ -85,28 +112,34 @@ internal static class RaidWorld {
         anchorTiles[siteIndex] = tiles;
     }
 
-    /// A maple pillar on every corner of every anchor floor, once, when the build phase
-    /// opens. The game puts a pillar at a floor vertex half a wall above the floor's
-    /// plane (HousingConnections.FindEmptyPillarSlot), and links within two centimetres,
-    /// so that is exactly where these go: anything else is a pillar nothing can attach
-    /// to. Unlike the floors these belong to the team: they are placed in its group, so
-    /// a team whose plan wants that corner clear can salvage one, and they are captured
-    /// with the base like anything else the team left standing. The one corner every
-    /// triangle of a hexagon shares is the middle, and nothing stands there.
+    /// Two maple pillars, one on the other, on every corner of every anchor floor, once,
+    /// when the build phase opens: the frame of a two-storey base. The game puts a
+    /// pillar at a floor vertex half a wall above the floor's plane
+    /// (HousingConnections.FindEmptyPillarSlot), and the next one a wall higher on the
+    /// same vertex, and links within two centimetres, so that is exactly where these
+    /// go: anything else is a pillar nothing can attach to. Unlike the floors these
+    /// belong to the team: they are placed in its group, so a team whose plan wants
+    /// that corner clear can salvage one, and they are captured with the base like
+    /// anything else the team left standing. The one corner every triangle of a
+    /// hexagon shares is the middle, and nothing stands there.
     internal static void PlacePillars(RaidSite site, ulong teamGroup, BaseShape shape) {
         if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.AnchorPillarItemId) is not ItemStructureAsset pillar) return;
 
         foreach ((float x, float z, float yaw) in BaseLayout.Vertices(shape)) {
             if (Mathf.Abs(x) < BaseLayout.LinkTolerance && Mathf.Abs(z) < BaseLayout.LinkTolerance) continue;
 
-            StructureManager.dropReplicatedStructure(
-                new Structure(pillar, pillar.health),
-                OnSite(site, x, BaseLayout.HalfWallHeight, z),
-                Facing(site, yaw),
-                0,
-                teamGroup);
+            for (int storey = 0; storey < PillarStoreys; storey++) {
+                StructureManager.dropReplicatedStructure(
+                    new Structure(pillar, pillar.health),
+                    OnSite(site, x, BaseLayout.HalfWallHeight + storey * BaseLayout.WallHeight, z),
+                    Facing(site, yaw),
+                    0,
+                    teamGroup);
+            }
         }
     }
+
+    private const int PillarStoreys = 2;
 
     /// Whether a floor stands on one of a site's starting spots.
     internal static bool IsAnchorTile(int siteIndex, StructureDrop drop) {
@@ -121,14 +154,15 @@ internal static class RaidWorld {
     /// Stand the flag on a starting tile nobody has built on, when the defender who
     /// was meant to place it did not. Tiles are tried in a random order, and a tile
     /// counts as free when a sphere the size of a player just above it touches no wall,
-    /// pillar or barricade; the middle tile is used regardless if every one is busy.
+    /// pillar or barricade and no door is near; the middle tile is used regardless if
+    /// every one is busy.
     internal static void PlaceFlag(int siteIndex, RaidSite site, BaseShape shape, ulong teamGroup, string name) {
         if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.AnchorMarkerItemId) is not ItemBarricadeAsset marker) return;
         if (!anchorTiles.TryGetValue(siteIndex, out List<Vector3> tiles)) return;
 
         System.Random random = new();
         Vector3 chosen = tiles.OrderBy(_ => random.Next())
-            .FirstOrDefault(tile => !Physics.CheckSphere(tile + Vector3.up * 1.2f, 0.6f, RayMasks.BARRICADE | RayMasks.STRUCTURE | RayMasks.PLAYER));
+            .FirstOrDefault(tile => IsClear(tile) && !NearDoor(tile));
         if (chosen == default) chosen = site.AnchorPoint;
 
         // `offset` on a barricade asset is how far its pivot sits above the ground it
@@ -140,6 +174,76 @@ internal static class RaidWorld {
             Facing(site, 0f),
             0,
             teamGroup);
+    }
+
+    /// Whether the flag may go here: on one of the site's starting tiles, on that tile's
+    /// own level, and not within reach of a door.
+    ///
+    /// The tiles are the whole of it. A flag on the roof, in a corner of a wall, or on a
+    /// crate is a flag the attackers cannot get a charge onto; a flag on a starting tile
+    /// is somewhere in the building's own footprint. And the door rule is not about
+    /// doors: stand the flag in a doorway, then shut the door on it, and the flag is
+    /// inside the door, where nothing reaches it. Two and a half metres is a door and a
+    /// half from its hinge.
+    internal static bool MayStandFlag(int siteIndex, Vector3 point) {
+        if (!anchorTiles.TryGetValue(siteIndex, out List<Vector3> tiles)) return false;
+
+        bool onATile = tiles.Any(tile =>
+            Mathf.Abs(point.x - tile.x) <= BaseLayout.HalfEdge
+            && Mathf.Abs(point.z - tile.z) <= BaseLayout.HalfEdge
+            && point.y - tile.y >= 0f
+            && point.y - tile.y <= FlagAboveTile);
+
+        return onATile && !NearDoor(point);
+    }
+
+    /// How far above a starting tile's pivot the flag's own pivot may be and still be on
+    /// that tile: the floor's thickness plus the flag's offset and a little.
+    private const float FlagAboveTile = 1f;
+
+    private const float DoorClearance = 2.5f;
+
+    /// Whether a door, hatch or gate stands within DoorClearance of a point.
+    internal static bool NearDoor(Vector3 point) {
+        List<RegionCoordinate> around = [];
+        Regions.getRegionsInRadius(point, DoorClearance, around);
+
+        foreach (RegionCoordinate coordinate in around) {
+            foreach (BarricadeDrop drop in BarricadeManager.regions[coordinate.x, coordinate.y].drops) {
+                if (drop.asset is not ItemBarricadeAsset barricade) continue;
+                if (barricade.build != EBuild.DOOR && barricade.build != EBuild.HATCH && barricade.build != EBuild.GATE) continue;
+                if ((drop.GetServersideData().point - point).sqrMagnitude <= DoorClearance * DoorClearance) return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// Whether a player could stand on a tile: a capsule their size just above it
+    /// touches no wall, pillar, barricade or other player. The tile's own floor sits
+    /// below the capsule, so it does not count.
+    private static bool IsClear(Vector3 tile) {
+        return !Physics.CheckCapsule(tile + Vector3.up * 0.7f, tile + Vector3.up * 1.9f, 0.45f,
+            RayMasks.BARRICADE | RayMasks.STRUCTURE | RayMasks.PLAYER);
+    }
+
+    /// Somewhere on a site's starting floors a player fits: the `index`th clear tile,
+    /// counted from the middle outward, so a team is spread over the base rather than
+    /// stacked on one spot. Falls back to the anchor when every tile is built over.
+    ///
+    /// The anchor alone was wrong for a hexagonal base: its six triangles meet in the
+    /// middle, so a wall on any of their inner edges runs straight through the anchor
+    /// point, and a player put there was put inside it.
+    internal static Vector3 FreeSpot(int siteIndex, RaidSite site, int index) {
+        if (!anchorTiles.TryGetValue(siteIndex, out List<Vector3> tiles) || tiles.Count == 0) return StandingSpot(site);
+
+        List<Vector3> clear = tiles
+            .OrderBy(tile => (tile - site.AnchorPoint).sqrMagnitude)
+            .Where(IsClear)
+            .ToList();
+        if (clear.Count == 0) return StandingSpot(site);
+
+        return clear[Math.Max(0, index) % clear.Count] + Vector3.up * 1.5f;
     }
 
     /// A site's flag, wherever on the plot it stands, or null.
@@ -310,20 +414,18 @@ internal static class RaidWorld {
                 && raid.Phase == RaidPhase.Picking
                 && owner == raid.FlagBearer
                 && SiteAt(point) == raid.DefendedSite
-                && IsOnSomethingBuilt(point);
+                && MayStandFlag(raid.DefendedSite, point);
+
+            // The bearer is the one person this rule bites, so they are told why.
+            if (!shouldAllow && raid != null && owner == raid.FlagBearer && PlayerTool.getSteamPlayer(new CSteamID(owner)) is { } bearer) {
+                Host.Whisper(bearer, PeekSeekRaid.Instance.Translate("flag_where"));
+            }
             return;
         }
 
         if (!MayBuildAt(point, owner)) shouldAllow = false;
         else if (raid.Phase == RaidPhase.Building && raid.BudgetFor(owner).Counts.Ids.Contains(asset.id)
                  && !raid.BudgetFor(owner).Counts.Has(asset.id)) shouldAllow = false;
-    }
-
-    /// Whether a point sits on something built rather than on the ground. The deploy
-    /// hook's own `hit` is only ever a vehicle, so the floor has to be found by looking
-    /// down from the point.
-    private static bool IsOnSomethingBuilt(Vector3 point) {
-        return Physics.Raycast(point + Vector3.up * 0.5f, Vector3.down, 2f, RayMasks.STRUCTURE | RayMasks.BARRICADE);
     }
 
     /// A sentry goes down armed. The gun is put in the moment the sentry spawns and the
@@ -489,7 +591,10 @@ internal static class RaidWorld {
     }
 
     /// Every piece of the same kind as this one in another material: the swap board.
+    /// A pillar has none: the frame is maple and stays maple.
     internal static List<ItemStructureAsset> Variants(ItemStructureAsset of) {
+        if (of.construct == EConstruct.PILLAR || of.construct == EConstruct.POST) return [];
+
         List<ItemAsset> all = [];
         Assets.find(all);
 

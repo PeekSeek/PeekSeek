@@ -117,6 +117,18 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
     /// for it picks their powerup and then has the rest of the pick to walk the base.
     public int StartSeconds;
 
+    /// What the explosives do to a building, written onto the game's own assets when a
+    /// match starts. Structure damage is health taken off a wall: a maple wall is 400,
+    /// birch 350, metal 1100, so 1000 on a charge is one wood wall and two metal, and
+    /// 380 on a rocket is two wood and three metal. The rocket's blast radius is the
+    /// game's own times the multiplier, so a rocket is a hole in a wall rather than a
+    /// room.
+    public ushort ChargeItemId;
+    public float ChargeStructureDamage;
+    public ushort RocketItemId;
+    public float RocketStructureDamage;
+    public float RocketRangeMultiplier;
+
     /// The gun every sentry goes down with, put in the moment it is placed and never
     /// coming out. One item, with whatever state it needs: the id, and the same
     /// comma-separated state bytes a kit item takes, or none for the game's default,
@@ -146,9 +158,10 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
         // the standard piece (400 health a wall): 31 floor, 32 doorway, 33 wall, 34
         // window, 35 roof, 36 pillar, 316 stairs, 319 hole, 322 ramp, 442 rampart.
         // Birch is the soft wall a team can pull down mid-round (350): 57 wall, 49
-        // doorway, 51 floor. Metal holds a rocket (1100): 369 floor, 370 doorway, 371
-        // wall, 373 roof, 374 pillar, 376 hole. Brick holds two (1650): 1215 wall, 1212
-        // pillar. Doors are metal only, 378, as the brief asked.
+        // doorway, 51 floor. Metal holds two charges (1100): 369 floor, 370 doorway, 371
+        // wall, 373 roof, 376 hole. There is no brick, and the only pillar is maple:
+        // the frame is the frame, and a wall is what a team chooses to make metal.
+        // Doors are metal only, 378, as the brief asked.
         BuildSupplies = [
             new RaidItem(36, 80),
             new RaidItem(33, 40),
@@ -166,11 +179,8 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
             new RaidItem(371, 8),
             new RaidItem(370, 4),
             new RaidItem(369, 4),
-            new RaidItem(374, 8),
             new RaidItem(373, 4),
             new RaidItem(376, 2),
-            new RaidItem(1215, 4),
-            new RaidItem(1212, 4),
             new RaidItem(378, 6)
         ];
 
@@ -211,89 +221,108 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
             },
             new RaidSite {
                 Name = "South",
-                Anchor = new SerializableVector3(234.63f, 52.23f, -240.41f),
+                Anchor = new SerializableVector3(224.10f, 81.41f, -379.60f),
                 Yaw = 354.825f,
                 BuildRadius = 32f,
                 AttackerSpawns = [
-                    new SerializableVector3(155.81f, 35.27f, -173.20f),
-                    new SerializableVector3(310.10f, 63.16f, -184.88f),
-                    new SerializableVector3(305.46f, 79.00f, -321.41f)
+                    new SerializableVector3(150.36f, 85.01f, -364.48f),
+                    new SerializableVector3(207.59f, 72.66f, -306.13f),
+                    new SerializableVector3(311.91f, 103.34f, -369.68f)
                 ]
             }
         ];
 
-        // Every number below is off the game's own item files. Traps: 386 barbed wire
-        // (40 to a player who walks it), 1101 landmine (91 to a player, 75 to a
-        // structure), 43131 the PeekSeek Sentry, the hostile sentry from the UI
-        // workshop item with Requires_Power off, armed by SentryFirearm the moment it
-        // goes down and shooting anybody not in its group. Its picture is the vanilla
-        // sentry's, which is the one the site has.
+        // Every number below is off the game's own item files, or set on them by
+        // RaidWorld.TuneExplosives from the fields above: a charge is two to a metal
+        // wall and one to wood, a rocket three and two.
+        //
+        // Defence. 43131 is the PeekSeek Sentry, the hostile sentry from the UI workshop
+        // item with Requires_Power off, armed by SentryFirearm the moment it goes down
+        // and shooting anybody not in its group; its picture is the vanilla sentry's,
+        // which is the one the site has. 76 is the blowtorch, which repairs anything
+        // built. 386 barbed wire (40 to a player who walks it), 1101 landmine (91 to a
+        // player, 75 to a structure).
         DefenceOptions = [
-            new RaidOption {
-                Name = "Barbed Wire",
-                Blurb = "Four coils. Slows and bleeds anyone who walks it.",
-                Items = [new RaidItem(386, 4)]
-            },
-            new RaidOption {
-                Name = "Landmines",
-                Blurb = "Three, buried. One step and that doorway is yours again.",
-                Items = [new RaidItem(1101, 3)]
-            },
-            new RaidOption {
-                Name = "Reinforce",
-                Blurb = "Spare metal to close a hole mid-round.",
-                Items = [new RaidItem(371, 6), new RaidItem(374, 4)]
-            },
-            new RaidOption {
-                Name = "Watchtower",
-                Blurb = "Grenades and a scope. See them coming, and greet them.",
-                Icon = 1408,
-                Items = [new RaidItem(254, 2), new RaidItem(1408, 1)]
-            },
             new RaidOption {
                 Name = "Sentry",
                 Blurb = "A hostile sentry with a shotgun in it. Put it where they have to come through.",
                 Icon = 1373,
                 Items = [new RaidItem(43131, 1)]
+            },
+            new RaidOption {
+                Name = "Welder",
+                Blurb = "A blowtorch to mend what they crack, and two metal walls to close a hole.",
+                Icon = 76,
+                Items = [new RaidItem(76, 1), new RaidItem(371, 2)]
+            },
+            new RaidOption {
+                Name = "Trapper",
+                Blurb = "Three landmines and four coils of wire. The doorways are yours.",
+                Icon = 1101,
+                Items = [new RaidItem(1101, 3), new RaidItem(386, 4)]
+            },
+            new RaidOption {
+                Name = "Reinforce",
+                Blurb = "Six metal walls, a door and two pillars. Rebuild the base they are about to meet.",
+                Icon = 371,
+                Items = [new RaidItem(371, 6), new RaidItem(378, 1), new RaidItem(36, 2)]
+            },
+            new RaidOption {
+                Name = "Watchtower",
+                Blurb = "A scope and three grenades. See them coming, and greet them.",
+                Icon = 1408,
+                Items = [new RaidItem(1408, 1), new RaidItem(254, 3)]
             }
         ];
 
-        // Raiders are the explosive side, and the numbers are structure damage: a
-        // rocket (519 launcher, 520 rocket) and a demolition charge (1241, set off with
-        // the 1240 detonator) are 1000 each, a sticky (1100) or an impact grenade
-        // (1520) 100, a frag (254) 50. A maple wall is 400, metal 1100, brick 1650, and
-        // the flag 1100. The launcher gets fewer shots than the charges because it
-        // fires them from across the field; a charge has to be walked to the wall.
+        // Attack. Every kit has a way through a wall; what changes is how many walls,
+        // from how far, and what is left over for the people inside. In metal walls: a
+        // charge (1241, set off with the 1240 detonator) is half of one, a rocket (520,
+        // from the 519 launcher) a third, a sticky (1100) a twelfth. The more of it
+        // comes from range, the less of it there is: twelve charges are six walls at
+        // the wall, nine rockets are three from across the field. A base that is metal
+        // all the way round is four walls deep at most, and the flag is somewhere
+        // inside it.
         RaidOptions = [
             new RaidOption {
-                Name = "Rocket Launcher",
-                Blurb = "Two rockets, from wherever you are standing. One takes any wood wall; two take metal.",
-                Items = [new RaidItem(519, 1), new RaidItem(520, 2)]
-            },
-            new RaidOption {
                 Name = "Demolition",
-                Blurb = "Three charges and the detonator. Stick them on, walk away, press the button.",
+                Blurb = "Twelve charges and the detonator. Six metal walls, if you can reach them.",
                 Icon = 1241,
-                Items = [new RaidItem(1240, 1), new RaidItem(1241, 3)]
+                Items = [new RaidItem(1240, 1), new RaidItem(1241, 12)]
             },
             new RaidOption {
-                Name = "Sticky Grenades",
-                Blurb = "Six. Each takes a quarter of a wood wall; they stick where they land.",
-                Items = [new RaidItem(1100, 6)]
+                Name = "Rockets",
+                Blurb = "Nine rockets. Three metal walls, from wherever you are standing.",
+                Icon = 519,
+                Items = [new RaidItem(519, 1), new RaidItem(520, 9)]
             },
             new RaidOption {
-                Name = "Impact Grenades",
-                Blurb = "Six, and they go off where they land. Good through a window.",
-                Items = [new RaidItem(1520, 6)]
+                Name = "Breacher",
+                Blurb = "Three rockets to open it from range, five charges to finish the job up close.",
+                Icon = 1241,
+                Items = [new RaidItem(519, 1), new RaidItem(520, 3), new RaidItem(1240, 1), new RaidItem(1241, 5)]
             },
             new RaidOption {
-                Name = "Frags",
-                Blurb = "Six grenades. Clear a room without entering it.",
-                Items = [new RaidItem(254, 6)]
+                Name = "Grenadier",
+                Blurb = "Twelve stickies, four impacts, two frags. A metal wall, or three wood, and the room behind it.",
+                Icon = 1100,
+                Items = [new RaidItem(1100, 12), new RaidItem(1520, 4), new RaidItem(254, 2)]
+            },
+            new RaidOption {
+                Name = "Sapper",
+                Blurb = "Four charges, six frags. Two metal walls, then clear what is behind them without going in.",
+                Icon = 254,
+                Items = [new RaidItem(1240, 1), new RaidItem(1241, 4), new RaidItem(254, 6)]
             }
         ];
 
         StartSeconds = 3;
+
+        ChargeItemId = 1241;
+        ChargeStructureDamage = 1000f;
+        RocketItemId = 520;
+        RocketStructureDamage = 380f;
+        RocketRangeMultiplier = 0.8f;
 
         // 112 is the Bluntforce; the state is left to the game, which loads it.
         SentryFirearm = new RaidItem(112, 1);

@@ -31,9 +31,16 @@ public class KillFeedSettings {
 }
 
 /// A kill feed at the top right of everybody's screen: who killed whom with what, the
-/// weapon a white silhouette, a roman numeral from a player's second kill of a life,
-/// and a red hairline round any row you are in. A death nobody dealt is the skull and
-/// the name on a shorter row.
+/// weapon a white silhouette, a skull after it for a headshot, a roman numeral from a
+/// player's second kill of a life, and a red hairline round any row you are in. A
+/// death nobody dealt is the name on its own, with the thing that did it if the game
+/// can name one.
+///
+/// A row is exactly as wide as what is in it. The prefab lays each row out as a run
+/// of parts a fixed gap apart and sizes it to them, so a long name pushes the row
+/// wider rather than off it, and a part that is switched off, the streak, the weapon,
+/// the skull, the killer, takes no space. The plugin only ever says which parts are on
+/// and what they say.
 ///
 /// It knows nothing about matches or rounds. A streak is kills in one life, which in a
 /// round-based mode is the same thing as a round, and in the lobby is what a streak
@@ -83,6 +90,7 @@ public class KillFeed {
             victimId,
             victim.CharacterName,
             Weapon(cause, killer?.player),
+            limb == ELimb.SKULL && killer != null,
             Time.realtimeSinceStartup);
 
         Redraw();
@@ -143,24 +151,21 @@ public class KillFeed {
             EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}", kill != null);
             if (kill == null) continue;
 
-            // A death with nobody on the other end is its own shape of row: the skull
-            // and the name, not a kill with the killer's column blank. The skull also
-            // stands in for a weapon the game gave no item for, a fist or a fall.
+            // A death with nobody on the other end has no killer and no streak, and the
+            // row closes up to the name and whatever did it.
             bool duel = kill.Killer != 0;
-            string slot = duel ? $"Row{i}" : $"Row{i}_Lone";
-            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Duel", duel);
-            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Lone", !duel);
-            if (duel) {
-                EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Killer", Feed.Fit(kill.KillerName, settings.NameLength));
-                EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Streak", Feed.Badge(kill.Streak));
-            }
-            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"{slot}_Victim", Feed.Fit(kill.VictimName, settings.NameLength));
-            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{slot}_Skull", kill.Weapon == 0);
-            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{slot}_Weapon", kill.Weapon != 0);
+            string badge = Feed.Badge(kill.Streak);
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Killer", duel);
+            if (duel) EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Killer", Feed.Fit(kill.KillerName, settings.NameLength));
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Streak", badge.Length > 0);
+            if (badge.Length > 0) EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Streak", badge);
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Weapon", kill.Weapon != 0);
             if (kill.Weapon != 0) {
-                EffectManager.sendUIEffectImageURL(key, viewer.transportConnection, true, $"{slot}_Weapon", string.Format(settings.ItemIconURL, kill.Weapon));
+                EffectManager.sendUIEffectImageURL(key, viewer.transportConnection, true, $"Row{i}_Weapon", string.Format(settings.ItemIconURL, kill.Weapon));
             }
-            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{slot}_Mine", Feed.Involves(kill, me));
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Headshot", kill.Headshot);
+            EffectManager.sendUIEffectText(key, viewer.transportConnection, true, $"Row{i}_Victim", Feed.Fit(kill.VictimName, settings.NameLength));
+            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"Row{i}_Mine", Feed.Involves(kill, me));
         }
     }
 

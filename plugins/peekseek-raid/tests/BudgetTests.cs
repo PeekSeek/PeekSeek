@@ -49,7 +49,7 @@ public class MaterialsTests {
     [Theory]
     [InlineData("Birch Wall", "Birch", "Wall")]
     [InlineData("Triangular Metal Floor", "Metal", "Triangular Floor")]
-    [InlineData("Brick Ramp Wall", "Brick", "Ramp Wall")]
+    [InlineData("Pine Ramp Wall", "Pine", "Ramp Wall")]
     [InlineData("Maple Hole", "Maple", "Hole")]
     public void TheMaterialIsOneWordAnywhereInTheName(string name, string material, string kind) {
         (string Material, string Kind)? split = Materials.Split(name);
@@ -59,8 +59,11 @@ public class MaterialsTests {
         Assert.Equal(kind, split.Value.Kind);
     }
 
+    /// Brick is a housing material to the game and not to Raid: a brick wall is four
+    /// charges, so it is not in the kit and never on the swap board.
     [Theory]
     [InlineData("Housing Planner")]
+    [InlineData("Brick Wall")]
     [InlineData("")]
     public void ANameWithoutAMaterialIsNotAPiece(string name) {
         Assert.Null(Materials.Split(name));
@@ -71,7 +74,7 @@ public class MaterialsTests {
     /// and the swap board only ever looks at structures anyway.
     [Fact]
     public void SameKindIgnoresTheMaterial() {
-        Assert.True(Materials.SameKind("Birch Wall", "Brick Wall"));
+        Assert.True(Materials.SameKind("Birch Wall", "Metal Wall"));
         Assert.True(Materials.SameKind("Triangular Metal Floor", "Triangular Pine Floor"));
         Assert.False(Materials.SameKind("Metal Wall", "Metal Door"));
         Assert.False(Materials.SameKind("Metal Floor", "Metal Roof"));

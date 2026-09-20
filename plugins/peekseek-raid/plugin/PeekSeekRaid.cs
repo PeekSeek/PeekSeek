@@ -85,6 +85,7 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
         // is them, and again if they carry it off the base.
         { "flag_bearer", "<color=white>You have the flag.</color> Stand it anywhere on your base. {0} seconds, or it goes on a free tile." },
         { "flag_leashed", "<color=white>Stay on your base</color> until the flag is down." },
+        { "flag_where", "The flag goes on one of the <color=white>starting floors</color>, and not next to a door." },
 
         // The defenders' board says the one word it is; the tiles say the rest, and
         // the HUD already says which round and which side.

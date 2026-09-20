@@ -101,7 +101,7 @@ public class PeekSeekConfiguration : IRocketPluginConfiguration {
         KillFeedKey = 27320;
         KillFeedRows = 6;
         KillFeedRowSeconds = 7f;
-        KillFeedNameLength = 14;
+        KillFeedNameLength = 24;
 
         ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
         DefaultAvatarURL = "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg";

@@ -26,6 +26,8 @@ BUTTON = "4e29b1a8efbd4b44bb3f3716e73f07ff"
 MASK = "31a19414c41e5ae4aae2af33fee712f6"
 ASPECT_RATIO_FITTER = "86710e43de46f6f4bac7c8e50813a599"
 HORIZONTAL_LAYOUT_GROUP = "30649d3a9faa99c48a7b1166b86bf2a0"
+CONTENT_SIZE_FITTER = "3245ec927659c4140ac4f8d17403cc18"
+LAYOUT_ELEMENT = "306cc8c2b49d7114eaa3623786fc2126"
 CANVAS_SCALER = "0cd44c1031e13a943bb63640046fad76"
 GRAPHIC_RAYCASTER = "dc42784cf147c0c48a680349fa168899"
 TEXT_MESH_PRO_UGUI = "f4688fdb7df04437aeb418b961361dc5"
@@ -280,26 +282,68 @@ def mask(node, show=False):
 MIDDLE_CENTER = 4
 
 
-def row(node, spacing=0, align=MIDDLE_CENTER):
-    """uGUI's HorizontalLayoutGroup: the node's active children laid out left to right
-    at their own sizes, `spacing` apart, the whole run aligned in the node. A child
-    that is switched off is left out of the run, so the rest close up round it: that
-    is what makes a marker or a clock a screen does not have cost no space."""
+def row(node, spacing=0, align=MIDDLE_CENTER, padding=0, control_width=False):
+    """uGUI's HorizontalLayoutGroup: the node's active children laid out left to right,
+    `spacing` apart, the whole run aligned in the node. A child that is switched off
+    is left out of the run, so the rest close up round it: that is what makes a marker
+    or a clock a screen does not have cost no space. With `control_width` each child is
+    as wide as it asks to be, a text as wide as its text and an image whatever its
+    `layout_size` says, which with `fit_width` on the node makes a row as wide as what
+    is in it."""
     node.mono(HORIZONTAL_LAYOUT_GROUP, [
         "m_Padding:",
-        "  m_Left: 0",
-        "  m_Right: 0",
+        f"  m_Left: {padding}",
+        f"  m_Right: {padding}",
         "  m_Top: 0",
         "  m_Bottom: 0",
         f"m_ChildAlignment: {align}",
         f"m_Spacing: {spacing:g}",
         "m_ChildForceExpandWidth: 0",
         "m_ChildForceExpandHeight: 0",
-        "m_ChildControlWidth: 0",
+        f"m_ChildControlWidth: {int(control_width)}",
         "m_ChildControlHeight: 0",
         "m_ChildScaleWidth: 0",
         "m_ChildScaleHeight: 0",
         "m_ReverseArrangement: 0",
+    ])
+
+
+def fit_width(node):
+    """uGUI's ContentSizeFitter, horizontal only: the node becomes as wide as its layout
+    says it wants to be. Its pivot decides which way it grows."""
+    node.mono(CONTENT_SIZE_FITTER, [
+        "m_HorizontalFit: 2",
+        "m_VerticalFit: 0",
+    ])
+
+
+def layout_size(node, width, height):
+    """What a node asks a layout for, when it has no text to measure: a picture is this
+    big in the run whatever picture arrives."""
+    node.mono(LAYOUT_ELEMENT, [
+        "m_IgnoreLayout: 0",
+        "m_MinWidth: -1",
+        "m_MinHeight: -1",
+        f"m_PreferredWidth: {width:g}",
+        f"m_PreferredHeight: {height:g}",
+        "m_FlexibleWidth: -1",
+        "m_FlexibleHeight: -1",
+        "m_LayoutPriority: 1",
+    ])
+
+
+def ignore_layout(node):
+    """A child a layout leaves alone: a hairline drawn round the row is not a part of
+    the row."""
+    node.mono(LAYOUT_ELEMENT, [
+        "m_IgnoreLayout: 1",
+        "m_MinWidth: -1",
+        "m_MinHeight: -1",
+        "m_PreferredWidth: -1",
+        "m_PreferredHeight: -1",
+        "m_FlexibleWidth: -1",
+        "m_FlexibleHeight: -1",
+        "m_LayoutPriority: 1",
     ])
 
 
@@ -473,6 +517,26 @@ def rounded_alpha(width, height, radius, corners=("tl", "tr", "bl", "br")):
         return 1
 
     return lambda x, y: coverage(inside, x, y)
+
+
+def ring_alpha(width, height, radius, thickness=1):
+    """A rounded rectangle's outline, `thickness` wide: the rectangle less the same one
+    inset. A hairline round a thing that sizes itself, since a border cannot be set on
+    an Image but a ring behind it with nothing in the middle draws the same."""
+    outer = rounded_alpha(width, height, radius)
+
+    def inside_inner(px, py):
+        t = thickness
+        if px < t or py < t or px > width - t or py > height - t:
+            return 0
+        r = radius - t
+        for cx, cy in ((t + r, t + r), (width - t - r, t + r), (t + r, height - t - r), (width - t - r, height - t - r)):
+            in_corner = (px < cx if cx < width / 2 else px > cx) and (py < cy if cy < height / 2 else py > cy)
+            if in_corner and (px - cx) ** 2 + (py - cy) ** 2 > r * r:
+                return 0
+        return 1
+
+    return lambda x, y: max(0.0, outer(x, y) - coverage(inside_inner, x, y))
 
 
 def flare_alpha(size, outer_x):
