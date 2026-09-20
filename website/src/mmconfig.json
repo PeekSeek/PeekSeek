@@ -306,6 +306,19 @@
                     ]
                 }
             ]
+        },
+        {
+            "name": "Raid",
+            "kitsAllowed": ["meta"],
+            "teams": 2,
+            "playersPerTeam": 1,
+            "usesElo": false,
+            "optionBanningEnabled": false,
+            "map": ["Alpha Valley"],
+            "movement": [true, false],
+            "ballistics": [true, false],
+            "defaultItems": [],
+            "powerups": []
         }
     ],
 
