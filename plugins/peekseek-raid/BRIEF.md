@@ -77,3 +77,9 @@ item beside the flag.
 
 **Attackers may place charges.** The brief's raid tools were carried and thrown. With no
 claim bubble a demolition charge can go on a wall, so it does.
+
+**The gamemode ships as PeekSeek RAID, on PeekSeek Match.** The brief asked for the
+code to be "hookable" by a future match plugin; that plugin now has the hooks
+(`PeekSeek.Gamemodes`), and Siege became the RAID gamemode plugin on them. `/start`
+moved to Match with it, as `/start raid`, and the kits come from the match rather than
+from a fetch of this plugin's own.

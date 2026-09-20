@@ -9,6 +9,8 @@
 <p align="center">
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/website.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/website.yml/badge.svg" alt="website"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml/badge.svg" alt="peekseek-plugin"></a>
+  <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-arena.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-arena.yml/badge.svg" alt="peekseek-arena"></a>
+  <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-raid.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-raid.yml/badge.svg" alt="peekseek-raid"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml/badge.svg" alt="peekseek-lobby"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/utelemetry.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/utelemetry.yml/badge.svg" alt="utelemetry"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-armor-skin.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-armor-skin.yml/badge.svg" alt="peekseek-armor-skin"></a>
@@ -17,7 +19,7 @@
 
 ---
 
-Six deployables live here. The website is the backend the plugins talk to, which is
+Eight deployables live here. The website is the backend the plugins talk to, which is
 why they share a repo: a change to the `/server/v1/*` API and the plugin call that hits
 it lands in one commit. That contract is written down in
 [website/API.md](website/API.md).
@@ -25,7 +27,9 @@ it lands in one commit. That contract is written down in
 | Component | What it is | Language |
 | --- | --- | --- |
 | [website/](website/) | The whole site and API: pages, JSON endpoints, and the `/server/v1/*` API game servers run on | FastAPI, Python 3.12 |
-| [plugins/peekseek/](plugins/peekseek/) | RocketMod plugin that runs matches: lobby lifecycle, match state, ping-based damage scaling | C#, net48 |
+| [plugins/peekseek/](plugins/peekseek/) | PeekSeek Match: the RocketMod plugin that runs a match server, the session, the roster, the score, the result and every in-game screen; gamemodes plug into it | C#, net48 |
+| [plugins/peekseek-arena/](plugins/peekseek-arena/) | PeekSeek ARENA: the arena round, last team standing, as a gamemode for Match | C#, net48 |
+| [plugins/peekseek-raid/](plugins/peekseek-raid/) | PeekSeek RAID: build a base, then take turns cracking each other's, as a gamemode for Match | C#, net48 |
 | [plugins/peekseek-lobby/](plugins/peekseek-lobby/) | RocketMod plugin that runs the waiting arena: queueing from in-game, kits, AFK handling | C#, net48 |
 | [plugins/utelemetry/](plugins/utelemetry/) | RocketMod plugin for PvP telemetry beyond kill counts | C#, net48 |
 | [plugins/peekseek-armor-skin/](plugins/peekseek-armor-skin/) | RocketMod plugin that gives every player one of four skin colours and a full military set's damage resistance, whatever they wear | C#, net48 |

@@ -16,14 +16,17 @@ The Unity UIs PeekSeek draws in game, built from one project into two Workshop i
   chat.
 - **The match HUD**, along the top of the screen for the whole match: score and clock on
   one block in the middle, drawn over the game's own arena boxes, a face per player to
-  either side with their pick hanging off its corner, the viewer's own team on the left.
+  either side with their pick on its corner and their health under it, the viewer's own
+  team on the left.
 - **The build panel**, beside the screen during the build phase: what the team has left
   to lay, a row per kind of piece.
-- **The kill feed**, its own item (`Assets/PeekSeekKillFeed/`) for its own plugin: a row
-  per kill at the top right, the weapon a white silhouette.
+- **The kill feed**, its own item (`Assets/PeekSeekKillFeed/`) so the lobby can carry it
+  without the rest: a row per kill at the top right, the weapon a white silhouette.
 
-Any gamemode can drive them; the plugin's `MatchHud` takes plain data and knows nothing
-about Siege.
+All of them are PeekSeek Match's (`plugin/Core/Hud/`), driven by whatever gamemode is
+running: the bar asks the gamemode for its role markers, its picks and its clock, and
+a gamemode asks for a board through `Host.Board`. Nothing here knows which gamemode
+that is.
 
 This folder is a Unity project. Everything in it that matters is text you can diff:
 
@@ -72,20 +75,35 @@ language: `#f2f2f2` ink, one flat `#0f0f0f` block in the middle reading
 `team 0 [castle] 0:30 [swords] 1 team2`, a blue castle beside whoever holds the flag
 this round and red swords beside whoever is after it, both drawn by `unityyaml.py` so
 they are nobody else's. Faces sit on nothing to either side, 50px like the site's
-`.userProfile` chip, the pick tilted off the outer bottom corner, and a face at half
-strength is a player out of the round. No names and no guns. Sizes are px at UI scale 1.
+`.userProfile` chip, and a face at half strength is a player out of the round. No names
+and no guns. Sizes are px at UI scale 1.
 
-The block is 360 by 60 because that is the game's number. Unturned draws two boxes of
-its own at the top of every Arena map, from the map type the client reads out of its own
-`Level.dat`: the arena message and the round number, together 360 wide at the centre of
-the screen, from 10 down to 60, with the compass under them from 70 to 120. Nothing a
-server sends can switch them off, so the block is their width, runs from the screen's
-top edge to their bottom edge, and stops there; the compass is left showing. Its corners
-are the site's 8px, and the game's boxes are drawn a pixel inside their rect with a
-radius of nine, so nothing of theirs shows past ours. Faces are ten short of the block
-and sit on its bottom edge. The clock is monospaced because a proportional one shuffled
-the whole readout every second, and TextMeshPro cannot ask a font for tabular figures;
-it is the only thing on the block besides the score.
+**The score line is a layout row.** Not every gamemode has a castle and swords, or a
+clock, so the block is not a list of pixel positions: it is uGUI's own
+HorizontalLayoutGroup, each field at its own width, and a field that is switched off is
+left out of the run, so the rest close up round it. On the arena the line is
+`team 0  1 team2`, centred, with no hole where a marker would be.
+
+**Under every face, a health bar**, and on its outer bottom corner, the pick. The bar is
+a rounded track, 50 by 6, three under the face, with ten steps of fill inside it in
+green and again in amber; the plugin lights the steps and picks the colour, green above
+half and amber from half down, because it can switch an image on but not recolour it.
+The track is a mask, so the steps come out with its rounded ends. A whole face has no
+bar and neither does a dead one, and a player only sees the bars of their own team;
+spectators see them all. The pick is a chip of the block's fill, 20px, mostly on the
+face and three pixels past its edge, tilted ten degrees outward, with the item's picture
+inset; a face with no pick has no chip.
+
+The block is 360 by 50, ten down, because that is the game's rect. Unturned draws two
+boxes of its own at the top of every Arena map, from the map type the client reads out
+of its own `Level.dat`: the arena message and the round number, together 360 wide at
+the centre of the screen, from 10 down to 60, with the compass under them from 70 to
+120. Nothing a server sends can switch them off, so the block is exactly their rect and
+stops there; the compass is left showing. Its corners are the site's 8px, and the
+game's boxes are drawn a pixel inside their rect with a radius of nine, so nothing of
+theirs shows past ours. Faces are the block's height and sit beside it on its line. The
+clock is monospaced because a proportional one shuffled the whole readout every second,
+and TextMeshPro cannot ask a font for tabular figures.
 
 **The build panel and the kill feed are the overlay too.** The panel is the block's fill
 at 90% with the site's corner, a row per piece: picture, count in ink, name in muted.
@@ -113,7 +131,7 @@ TMP and only when the prefab has no legacy `Text` at all.
 
 **Buttons need nothing but a name.** `createUIEffect` walks every `Button` in the prefab
 and attaches a `PluginButtonListener` to it, and the name that reaches the server is the
-Button's GameObject name. So the tiles are `SiegePick0` to `SiegePick4` and carry no
+Button's GameObject name. So the tiles are `BoardPick0` to `BoardPick4` and carry no
 script. The prefix is deliberate: `onEffectButtonClicked` is global, and a click on some
 other plugin's UI would otherwise land in this board's handler.
 
@@ -162,7 +180,7 @@ starts hidden:
 | `{P}` | GameObject | the panel, shown for the board being asked |
 | `{P}_Headline` | TMP text | `Round 2. You are defending North.` |
 | `{P}_Timer` | TMP text | seconds left, red under six |
-| `Siege{P}{n}` | Button | the tile; hidden past the options offered |
+| `Board{P}{n}` | Button | the tile; hidden past the options offered |
 | `{P}{n}_Name` | TMP text | the option's name |
 | `{P}{n}_Blurb` | TMP text | one short line under the name |
 | `{P}{n}_Taken` | GameObject | the selected fill and label, on the picked tile |
@@ -171,9 +189,9 @@ starts hidden:
 | `Spawn{s}{n}_On` | GameObject | the white dot, on the spawn this viewer chose |
 | `Spawn{s}{n}_Face{k}` | `Image` | a teammate coming in at that dot, up to five, shown while there is one |
 
-The attack screen has no headline. And back, via `onEffectButtonClicked`: `SiegePick0`
-to `SiegePick4`, `SiegeShape0` and `SiegeShape1`, `SiegeSwap0` to `SiegeSwap5`,
-`SiegeAttack0` to `SiegeAttack4`, and the dots, `SiegeSpawn{s}{n}`. The attack screen
+The attack screen has no headline. And back, via `onEffectButtonClicked`: `BoardPick0`
+to `BoardPick4`, `BoardShape0` and `BoardShape1`, `BoardSwap0` to `BoardSwap5`,
+`BoardAttack0` to `BoardAttack4`, and the dots, `BoardSpawn{s}{n}`. The attack screen
 stays up until both its answers are in, lit where it has been answered.
 
 The HUD (`Hud/MatchHud.cs`, key `MatchHudKey`; `L` is the viewer's team, `R` the other):
@@ -182,12 +200,16 @@ The HUD (`Hud/MatchHud.cs`, key `MatchHudKey`; `L` is the viewer's team, `R` the
 | --- | --- | --- |
 | `Team0_Name`, `Team1_Name` | TMP text | team names, left and right of the score |
 | `Score0`, `Score1` | TMP text | rounds won |
-| `Castle0`, `Swords0`, `Castle1`, `Swords1` | GameObject | the role beside each score |
-| `Timer` | TMP text | `m:ss`, once a second |
+| `Castle0`, `Swords0`, `Castle1`, `Swords1` | GameObject | the role beside each score, or nothing |
+| `Timer` | TMP text | `m:ss`, on while the gamemode has a clock |
 | `L{n}`, `R{n}` | GameObject | a face, shown only while somebody is in that seat |
 | `L{n}_Avatar` | `Image` | the player's Steam picture, on while they are in the round |
 | `L{n}_Faded` | `Image` | the same picture at half strength, on while they are out |
-| `L{n}_Pick` | `Image` | the option they took this round |
+| `L{n}_Pick` | GameObject | the chip on the face's corner, on while there is a pick |
+| `L{n}_Pick_Icon` | `Image` | the item they took this round |
+| `L{n}_Health` | GameObject | the bar under the face, on while it has something to say |
+| `L{n}_HealthGreen`, `L{n}_HealthAmber` | GameObject | which colour the bar is in |
+| `L{n}_Green{k}`, `L{n}_Amber{k}` | GameObject | step `k` of ten, lit up to the health |
 
 The build panel (`Hud/BuildPanel.cs`, key `BuildPanelKey`), sixteen rows:
 
@@ -198,7 +220,7 @@ The build panel (`Hud/BuildPanel.cs`, key `BuildPanelKey`), sixteen rows:
 | `Row{n}_Count` | TMP text | how many are left |
 | `Row{n}_Name` | TMP text | the piece's name |
 
-The kill feed (`plugins/peekseek-killfeed`, key `EffectKey`), six rows, newest at the top:
+The kill feed (`Hud/KillFeed.cs`, key `KillFeedKey`), six rows, newest at the top:
 
 | Child | Component | What goes in it |
 | --- | --- | --- |
@@ -208,11 +230,12 @@ The kill feed (`plugins/peekseek-killfeed`, key `EffectKey`), six rows, newest a
 | `Row{n}_Weapon` | `Image` | the weapon, drawn as a silhouette |
 | `Row{n}_Mine` | GameObject | the red hairline, on when the viewer is either name |
 
-`MatchHud.Show` redraws the whole bar for every viewer on every change, and only the
-clock is sent on its own once a second. It used to send just what changed and keep a
-record per viewer, and the record outlived a reconnect, so a player who came back got
-patches to a HUD they no longer had. Pictures are cached by URL on the client, so a
-redraw downloads nothing.
+`MatchHud.Show` redraws the whole bar for every viewer on every change; the tick, four
+times a second, sends only the clock and any health that moved, against a record of
+what each viewer was last sent, and a redraw resets that record. An earlier version
+sent only what changed for everything and its record outlived a reconnect, so a player
+who came back got patches to a HUD they no longer had. Pictures are cached by URL on
+the client, so a redraw downloads nothing.
 
 ## Building it
 
@@ -255,9 +278,10 @@ output and git ignores them.
 ## Getting it in front of a player
 
 Each folder is a mod. They are Workshop items **3803930118** (PeekSeek UI) and
-**3804490030** (PeekSeek Kill Feed), both unlisted, and the debug server lists them in
-`File_IDs` in `Servers/unturned/WorkshopDownloadConfig.json`, so the server fetches them
-at boot and every client is handed them on join. After a rebuild:
+**3804490030** (PeekSeek Kill Feed), both unlisted. A match server lists both in
+`File_IDs` in `Servers/unturned/WorkshopDownloadConfig.json`, the lobby only the kill
+feed, so the server fetches them at boot and every client is handed them on join. After
+a rebuild:
 
 ```
 cd tools/WorkshopUpload

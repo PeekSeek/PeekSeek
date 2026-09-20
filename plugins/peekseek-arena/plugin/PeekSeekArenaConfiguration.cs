@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Xml.Serialization;
 using Rocket.API;
 using UnityEngine;
 
@@ -20,6 +21,7 @@ public class SerializableVector3 {
     public Vector3 ToVector3() => new(x, y, z);
 }
 
+[XmlRoot("Config")]
 public class PeekSeekArenaConfiguration : IRocketPluginConfiguration {
     /// Where the teams come down each round. The teams rotate through these, one
     /// step per round, so nobody holds the good end of the map for the whole match.

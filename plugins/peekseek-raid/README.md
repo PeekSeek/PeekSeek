@@ -1,6 +1,10 @@
-# PeekSeek Siege
+# PeekSeek RAID
 
 Build a base. Then take turns cracking each other's.
+
+A gamemode for [PeekSeek Match](../peekseek/), which runs the match, the roster, the
+score and the screens; this plugin is the rules. It was built as "Siege", and the
+original brief in `BRIEF.md` still calls it that.
 
 Two teams get five minutes on opposite ends of Alpha Valley to put up a building. After
 that the buildings never change again: they are photographed, and re-laid brick for brick
@@ -33,7 +37,7 @@ player spawns of an Arena map are its lobby (the alt spawns are the arena drop),
 plugin reads them off the level rather than knowing where they are. A pick phase where
 people can run is a head start, which is what the rooting and the distance are for.
 
-## The rules that make it a siege
+## The rules that make it a raid
 
 **Defenders take damage standing on dirt.** Three seconds off your own building and open
 ground starts killing you. The grace period matters more than the damage: vaulting a
@@ -120,21 +124,23 @@ sticky grenades (100 each), six impact grenades (100), six frags (50, mostly for
 
 ## The map
 
-Siege runs on vanilla **Alpha Valley**, an Arena map. Unturned draws its arena message
+Raid runs on vanilla **Alpha Valley**, an Arena map. Unturned draws its arena message
 and round number on every Arena map, from the client's own copy of the map, and no server
-setting or plugin can switch them off, so the HUD's middle block is drawn exactly over
+setting or plugin can switch them off, so the bar's middle block is drawn exactly over
 them: 360 wide at the centre of the screen, down to where they end. The compass under
-them stays, on purpose. The game's own arena round system is patched out
-(`Patches/ArenaPatches.cs`), and `Items.Spawn_Chance` in the server config sets the loot
-to nothing.
+them stays, on purpose. The game's own arena round system is switched off by Match for
+every gamemode, and `Items.Spawn_Chance` in the server config sets the loot to nothing.
 
 ## Running it
 
+A real match comes from the site, through Match, once the site has a gamemode called
+`Raid`. Until then, and for testing, Match starts one from whoever is on the server:
+
 ```
-/start          two or more players, split into two teams
-/start solo     one player, for testing
-/stop           end it
-/siege          where the match is
+/start raid         two or more players, split into two teams
+/start raid solo    one player, for testing
+/stop               end it
+/raid               where the match is
 ```
 
 Solo is how the whole loop gets tested without finding a second person for a five-minute
@@ -143,65 +149,52 @@ normally with you on whichever side you ask for. With nobody to defend, the flag
 a free tile by itself.
 
 ```
-/siege skip           end the current phase (a round goes to the defenders, as the clock would)
-/siege skip atk       end the round, give it to the attackers
-/siege side           swap which side you are playing, solo only
+/raid skip           end the current phase (a round goes to the defenders, as the clock would)
+/raid skip atk       end the round, give it to the attackers
+/raid side           swap which side you are playing, solo only
+/raid find <text>    look an item up by name
 ```
 
-`/siege skip` is what makes a bug in round four findable in under a minute instead of
+`/raid skip` is what makes a bug in round four findable in under a minute instead of
 half an hour.
 
-## The UI
+## The screens
 
-Unturned cannot draw a custom UI from plugin code. `EffectManager.SendUIEffect` takes an
-`EffectAsset`, and an `EffectAsset` only exists inside a Unity asset bundle the client has
-already downloaded, so a UI cannot ship in a `.dll`, only in a workshop mod.
-
-A server with the `ui/` mod loaded draws the real Unity layouts: the boards, the HUD
-along the top for everybody all match, and the build panel. The same mod carries the
-flag and the sentry as items. A server without it logs a line and every board answers
-itself with its first option; there is no chat form, because a board is pictures and a
-numbered list in chat was a worse board nobody was going to read. A client without the
-mod is kicked by the game's own asset check, which is what the Workshop id in the
-server's `WorkshopDownloadConfig.json` is for.
-
-`ui/` is the Unity project that mod is built from, and `ui/README.md` says how it works
-and how to build it.
-
-The kill feed is not part of this plugin. It is `plugins/peekseek-killfeed`, its own
-plugin and its own workshop item, because every PeekSeek server wants one.
+Every screen Raid uses is Match's, in the PeekSeek UI workshop item built from
+`plugins/peekseek/ui`: the bar along the top, the footprint board, the swap board, the
+defenders' powerup board, the attackers' map, and the build panel. The same item carries
+the flag and the sentry as items. Raid asks for a board through `Host.Board` and tells
+the bar what it needs to know through `IGamemode`: which team holds and which attacks
+this round, what each player picked, and the clock. See `../peekseek/ui/README.md`.
 
 ## Where things are
 
 ```
-plugin/PeekSeekSiege.cs         Rocket entry point, and every line of player-facing copy
-plugin/Core/Siege.cs            the gamemode: phases, rounds, the flag, and the rules above
-plugin/Core/SiegeHost.cs        what starts a match and feeds it Unturned's events
-plugin/Core/SiegeWorld.cs       everything Siege does to the world, and the build/salvage gate
+plugin/PeekSeekRaid.cs          Rocket entry point, registers the gamemode, every line of copy
+plugin/Core/Raid.cs             the gamemode: phases, rounds, the flag, and the rules above
+plugin/Core/RaidWorld.cs        everything Raid does to the world, and the build/salvage gate
 plugin/Core/BuildBudget.cs      the team's pile of pieces, and the inventories that mirror it
 plugin/Core/BaseSnapshot.cs     photographing a base and re-laying it
 plugin/Core/RoundOrder.cs       who defends round N, and when a match is over
-plugin/Core/PickBoard.cs        the option, footprint and swap boards, both ways of drawing them
-plugin/Core/Hud/MatchHud.cs     the score, clock and faces along the top; any gamemode can drive it
-plugin/Core/Hud/BuildPanel.cs   what is left to lay, beside the screen
 plugin/Core/Models/             the housing grid, the budget arithmetic, material families
-plugin/Core/IGamemode.cs        the seam the main PeekSeek plugin will drive this through
-ui/                             the Unity project the screens and the two items are built from
+plugin/Commands/RaidCommand.cs  the test console
 ```
 
-## The gamemode seam
+## The seam
 
-`IGamemode` is what the main PeekSeek plugin will eventually drive this through: hand it a
-match, tick it, tell it about players arriving, leaving and dying, end it. `SiegeHost` is
-the temporary host that fills that role today, from a `/start` command on a server with no
-matchmaking on it.
+`Raid` implements `PeekSeek.Gamemodes.IGamemode` and is registered with
+`Gamemodes.Register` when the plugin loads. Match hands it every match the site calls
+`Raid`, ticks it, tells it about players arriving, leaving, dying and coming back, and
+ends it. Everything Raid needs from the server it asks `PeekSeek.Gamemodes.Host` for:
+who is playing, who is still alive this round, the score, a round or the match won, a
+player's kit, the boards, the panel, and chat in the house style.
 
-Nothing in `Siege` reaches for `PSManager`, and nothing outside `SiegeHost` knows how the
-match was started. When PeekSeek's match plugin grows gamemode hooks, `SiegeHost` is
-deleted and replaced by a registration line; `Siege` does not change.
+Match owns the score. Raid tells it a round was won and with what line to say so, and
+then asks `RoundOrder` whether that ends the match; a Raid match is blocks of rounds, not
+first to N, so that arithmetic is Raid's.
 
-Kits already come from the live site (`GET /server/v1/players/{steam64}/kits`, the `meta`
-category), fetched on join and held until the player leaves; a round hands out gear right
-now and is not going to wait on an HTTP round trip.
+The plugin is compiled against `PeekSeek.dll` and loaded beside it; the DLL is never
+shipped with it, since a second `PeekSeek.dll` under `Rocket/Plugins` loads as a second
+plugin.
 
 See `BRIEF.md` for the original instructions and the places this deviates from them.
