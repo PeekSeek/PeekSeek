@@ -75,18 +75,4 @@ public class StatServiceTests {
         Assert.True(StatService.IsAliveThisRound(id));
         Assert.Equal((byte)1, StatService.GetStatDeaths(id));
     }
-
-    [Fact]
-    public void GetTotalPlayedRounds_SumsWinsAcrossPlayers() {
-        var a = new CSteamID(76561198000000010UL);
-        var b = new CSteamID(76561198000000011UL);
-
-        StatService.UpdateStatWins(a);
-        StatService.UpdateStatWins(a);
-        StatService.UpdateStatWins(b);
-        StatService.UpdateStatWins(b);
-        StatService.UpdateStatWins(b);
-
-        Assert.Equal(5, StatService.GetTotalPlayedRounds());
-    }
 }

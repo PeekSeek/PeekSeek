@@ -1,0 +1,23 @@
+GUID d5e6f70819a2b3c4d5e6f7a8b9c0d1e2
+Type Barricade
+Rarity Legendary
+Useable Barricade
+Build Barricade
+ID 43130
+
+// The claim flag as it looks, without the claim: the vanilla model, no 32m bubble,
+// and enough health to be an objective. Nelson does the same for Cobra_Jam.
+Master_Bundle_Override core.masterbundle
+Bundle_Override_Path /Items/Barricades/Claim
+
+Size_X 2
+Size_Y 2
+Size_Z 0.7
+
+Health 600
+Range 4
+Radius 0.5
+Offset 1.12
+
+Explosion 36
+Vulnerable

@@ -126,7 +126,7 @@ what happens to a match whose result was slow to arrive.
 
 | Route | What it does |
 |---|---|
-| `GET /players/{steam64}` | Rank and whereabouts. **No side effects.** |
+| `GET /players/{steam64}` | Name, picture, rank and whereabouts. **No side effects.** |
 | `PUT /players/{steam64}/queue` | Queue them, and answer the same thing. |
 | `DELETE /players/{steam64}/queue` | Take them out of the queue. |
 | `GET /players/{steam64}/kits` | Every saved kit, resolved into ready-to-equip items. |
@@ -138,7 +138,8 @@ Both reads answer the same shape:
 
 ```jsonc
 {
-  "steam64": "7656…", "elo": 300, "matchId": 42, "relayTo": null,
+  "steam64": "7656…", "name": "Ferret", "avatar": "https://avatars.steamstatic.com/…_full.jpg",
+  "elo": 300, "matchId": 42, "relayTo": null,
   "choose": {
     "kits": ["meta", "sniper"],
     "powerups": ["Movement", "Ammo", "Boom"],

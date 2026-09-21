@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using PeekSeek.Hud;
 using PeekSeekLobby.Core.Models;
 using PeekSeekLobby.Core.Web;
 using Rocket.Core.Utils;
@@ -216,6 +217,11 @@ internal abstract class LobbyManager {
     private const string HarmonyId = "peekseek.lobby";
     private static Harmony Instrument;
 
+    /// The kill feed on everybody's screen, the match servers' own, drawn here too, and
+    /// the bar along the top with everybody's face on it.
+    private static KillFeed Feed;
+    private static LobbyBar Bar;
+
     internal static void Init() {
         Provider.onServerConnected += OnPlayerConnected;
         Provider.onServerDisconnected += OnPlayerDisconnected;
@@ -237,6 +243,17 @@ internal abstract class LobbyManager {
         LastArenaReset = Time.realtimeSinceStartup;
         TargetRange.Init();
         RemoteAPI.Init();
+
+        Feed = new KillFeed(new KillFeedSettings {
+            EffectGUID = PeekSeekLobby.Config.KillFeedEffectGUID,
+            EffectKey = PeekSeekLobby.Config.KillFeedKey,
+            ItemIconURL = PeekSeekLobby.Config.ItemIconURL,
+            Rows = PeekSeekLobby.Config.KillFeedRows,
+            RowSeconds = PeekSeekLobby.Config.KillFeedRowSeconds,
+            NameLength = PeekSeekLobby.Config.KillFeedNameLength
+        });
+        Feed.Hook();
+        Bar = new LobbyBar();
     }
 
     /// Refusing the drop outright is cheaper and cleaner than spawning it and
@@ -339,6 +356,9 @@ internal abstract class LobbyManager {
 
         TargetRange.Shutdown();
         RemoteAPI.Shutdown();
+        Feed.Unhook();
+        Feed.Clear();
+        Bar.Hide();
     }
 
     private static void OnPlayerConnected(CSteamID steamID) {
@@ -352,6 +372,8 @@ internal abstract class LobbyManager {
             QueueFrom = Time.realtimeSinceStartup + QueueGraceSeconds,
         };
         Players[steamID.m_SteamID] = state;
+        Bar.Joined(steamID.m_SteamID);
+        RemoteAPI.FetchAvatar(steamID.m_SteamID, url => Bar.Picture(steamID.m_SteamID, url));
 
         // Someone arriving as someone else leaves keeps the count identical, and the
         // new player would never be sent a number they have not seen before.
@@ -399,6 +421,7 @@ internal abstract class LobbyManager {
     }
 
     private static void OnPlayerDisconnected(CSteamID steamID) {
+        Bar.Left(steamID.m_SteamID);
         TargetRange.Forget(steamID.m_SteamID);
         OfferRangeToWhoeverIsLeft();
 
@@ -838,6 +861,10 @@ internal abstract class LobbyManager {
     ///
     /// The queue is deliberately untouched. Stepping away from the keyboard is not
     /// leaving matchmaking, and a match found while AFK still pulls them into it.
+    private static bool IsAfk(ulong steam64) {
+        return Players.TryGetValue(steam64, out PlayerState state) && state.Afk;
+    }
+
     internal static bool ToggleAfk(CSteamID steamID) {
         if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
 
@@ -1335,6 +1362,8 @@ internal abstract class LobbyManager {
     /// happens the moment the life updates.
     internal static void Tick() {
         float now = Time.realtimeSinceStartup;
+        Feed.Tick();
+        Bar.Tick(IsAfk);
 
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
             CSteamID steamID = new(entry.Key);

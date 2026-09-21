@@ -1,9 +1,8 @@
-using System;
 using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
 using JetBrains.Annotations;
-using PeekSeek.Core.Models;
-using PeekSeek.Core.Models.Enums;
+using PeekSeek.Gamemodes;
 using SDG.NetTransport;
 using SDG.Unturned;
 using Steamworks;
@@ -11,84 +10,50 @@ using UnityEngine;
 using Logger = Rocket.Core.Logging.Logger;
 using Random = UnityEngine.Random;
 
-namespace PeekSeek.Core.Patches;
+namespace PeekSeekArena.Patches;
 
+/// Unturned's arena loop, made PeekSeek's.
+///
+/// PeekSeek Match switches the native loop off for every gamemode by patching these
+/// same four methods to do nothing. These prefixes run beside those, and do the work
+/// only while the arena is the gamemode in play; Harmony runs every prefix on a method
+/// and skips the original if any of them says so, so the two never fight.
+///
+/// The wait for the roster is Match's and happens before Begin. What is left for the
+/// lobby state here is the moment between rounds: a side that has gone home has
+/// forfeited, nobody at all releases the match, and otherwise the next round starts.
 [HarmonyPatch(typeof(LevelManager), "arenaLobby")]
 [UsedImplicitly]
-internal class LevelManagerPatch {
-    private static float LastCountdownBroadcast;
-
-    /// The lobby is polled every frame, so "everyone is here" would otherwise be
-    /// announced dozens of times in the moment before the round spawns. Reset by the
-    /// spawn patch below, which is what ends the wait.
-    internal static bool AnnouncedEveryoneHere;
-
+internal class ArenaLobbyPatch {
     [UsedImplicitly]
     private static bool Prefix(LevelManager __instance) {
-        if (PSManager.Status != EPSStatus.IN_PROGRESS) return false;
+        if (PeekSeekArena.Arena is not { InPlay: true }) return false;
 
         __instance.findGroups();
 
-        float secondsLeft = PeekSeek.Config.LobbyTimeoutSeconds - (Time.realtimeSinceStartup - PSManager.MatchReady);
-
-        if (secondsLeft <= 0) {
-            ResolveTimedOutLobby();
+        if (!Host.Players().Any()) {
+            Host.Abandon();
             return false;
         }
 
-        if (PSManager.HaveAllPlayersJoined()) {
-            if (!AnnouncedEveryoneHere) {
-                AnnouncedEveryoneHere = true;
-                PSManager.Announce(PeekSeek.Instance.Translate("lobby_everyone_here"));
-            }
-            LevelManager.arenaState = EArenaState.CLEAR;
+        int alone = Host.TeamLeftAlone();
+        if (alone >= 0) {
+            Host.Forfeit(alone);
             return false;
-        }
-
-        if (LevelManager.arenaMessage != 0)
-            LevelManager.SendArenaMessage.InvokeAndLoopback(ENetReliability.Reliable,
-                Provider.GatherRemoteClientConnections(), EArenaMessage.LOBBY);
-
-        BroadcastCountdown(secondsLeft);
-        return false;
-    }
-
-    /// Nobody left to play for gets the match released; one team present wins it by default;
-    /// otherwise the match starts short-handed.
-    private static void ResolveTimedOutLobby() {
-        if (!PSManager.HasAnyPlayerJoined()) {
-            PSManager.AbandonMatch();
-            return;
-        }
-
-        PSTeam onlyTeam = PSManager.OnlyTeamOnline();
-        if (onlyTeam != null) {
-            PSManager.NotifyTeamForcedWin(onlyTeam);
-            return;
         }
 
         LevelManager.arenaState = EArenaState.CLEAR;
-    }
-
-    private static void BroadcastCountdown(float secondsLeft) {
-        if (Time.realtimeSinceStartup - LastCountdownBroadcast < 1f) return;
-        LastCountdownBroadcast = Time.realtimeSinceStartup;
-
-        // Null when the config file predates this field: XmlSerializer leaves it unset rather than defaulted.
-        List<ushort> broadcastAt = PeekSeek.Config.LobbyTimeoutBroadcastSecondsRemaining;
-
-        ushort rounded = (ushort)Mathf.Round(secondsLeft);
-        if (broadcastAt == null || !broadcastAt.Contains(rounded)) return;
-
-        PSManager.Announce(PeekSeek.Instance.Translate("lobby_countdown", rounded));
+        return false;
     }
 }
 
 [HarmonyPatch(typeof(LevelManager), "arenaPlay")]
 [UsedImplicitly]
-internal class LevelManagerArenaPlayPatch {
+internal class ArenaPlayPatch {
     [UsedImplicitly]
     private static bool Prefix(LevelManager __instance) {
+        if (PeekSeekArena.Arena is not { InPlay: true }) return false;
+
         if (LevelManager.arenaMessage != EArenaMessage.PLAY)
             LevelManager.SendArenaMessage.InvokeAndLoopback(ENetReliability.Reliable,
                 Provider.GatherRemoteClientConnections(), EArenaMessage.PLAY);
@@ -102,11 +67,10 @@ internal class LevelManagerArenaPlayPatch {
                 LevelManager.arenaMessage = EArenaMessage.LOSE;
                 LevelManager.SendArenaPlayer.InvokeAndLoopback(ENetReliability.Reliable, Provider.GatherRemoteClientConnections(), LevelManager.SendArenaPlayer_Write, playersIDs3, EArenaMessage.WIN);
 
-                PSManager.NotifyTeamWon(playersIDs3[0]);
+                PeekSeekArena.Arena.RoundWon(playersIDs3[0]);
             } else {
                 LevelManager.SendArenaMessage.InvokeAndLoopback(ENetReliability.Reliable,
                     Provider.GatherRemoteClientConnections(), EArenaMessage.LOSE);
-
             }
 
             return false;
@@ -159,37 +123,37 @@ internal class LevelManagerArenaPlayPatch {
     }
 }
 
+/// Everybody comes down at once, each team on its own spawn, the spawns rotating one
+/// step per round so nobody keeps the good end of the map.
 [HarmonyPatch(typeof(LevelManager))]
 [HarmonyPatch(nameof(LevelManager.arenaSpawn))]
 [UsedImplicitly]
-internal class LevelManagerArenaSpawnPatch {
+internal class ArenaSpawnPatch {
     [UsedImplicitly]
     private static bool Prefix(LevelManager __instance) {
-        List<HomelessSpawn> altSpawns = [.. PeekSeek.Config.Spawns];
-        Dictionary<CSteamID, HomelessSpawn> assignedGroupSpawns = [];
+        if (PeekSeekArena.Arena is not { InPlay: true }) return false;
 
-        StatService.BeginRound();
-        LevelManagerPatch.AnnouncedEveryoneHere = false;
-        PSManager.AnnounceRoundStart();
+        List<SerializableVector3> spawns = [.. PeekSeekArena.Config.Spawns ?? []];
+        if (spawns.Count == 0) {
+            Logger.LogError("PeekSeekArena has no Spawns configured, so nobody can be put anywhere. Write them into PeekSeekArena.configuration.xml.");
+            return false;
+        }
+        Dictionary<CSteamID, SerializableVector3> assignedGroupSpawns = [];
+
+        Host.BeginRound();
+        int roundNumber = Host.RoundsPlayed + 1;
+        Host.Announce(PeekSeekArena.Instance.Translate("round_start", roundNumber, Host.ScoreLine()));
         Logger.Log("[alive-check] Round starting — everyone marked alive again.");
 
-        var roundNumber = StatService.GetTotalPlayedRounds() + 1;
-        var teamIndex = 0;
-
-        var totalSpawns = altSpawns.Count;
-
-        foreach (var team in PSManager.Data.Teams) {
-            var spawnIndex = (roundNumber - 1 + teamIndex) % totalSpawns;
-            assignedGroupSpawns[PSManager.GetTeamGroupID(team)] = altSpawns[spawnIndex];
-            teamIndex++;
+        for (int team = 0; team < Host.Match.Teams.Count; team++) {
+            int spawnIndex = (roundNumber - 1 + team) % spawns.Count;
+            assignedGroupSpawns[new CSteamID(Host.Match.Teams[team].GroupId)] = spawns[spawnIndex];
         }
 
         List<SteamPlayer> list = [.. Provider.clients];
-        list.RemoveAll(
-            PSManager.IsSpectator
-        );
+        list.RemoveAll(client => Host.IsSpectator(client.playerID.steamID.m_SteamID));
 
-        while (altSpawns.Count > 0 && list.Count != 0) {
+        while (spawns.Count > 0 && list.Count != 0) {
             var index = Random.Range(0, list.Count);
             if (list[index] == null) {
                 list.RemoveAtFast(index);
@@ -206,7 +170,7 @@ internal class LevelManagerArenaSpawnPatch {
             }
 
             steamPlayer.player.life.sendRevive();
-            steamPlayer.player.teleportToLocationUnsafe(spawn.Position.ToVector3(), steamPlayer.player.look.yaw);
+            steamPlayer.player.teleportToLocationUnsafe(spawn.ToVector3(), steamPlayer.player.look.yaw);
             LevelManager.arenaPlayers.Add(new ArenaPlayer(steamPlayer));
         }
 
@@ -217,17 +181,21 @@ internal class LevelManagerArenaSpawnPatch {
     }
 }
 
+/// The game's own count of who is still in, minus spectators, who are on the server
+/// but not in the round.
 [HarmonyPatch(typeof(LevelManager))]
 [HarmonyPatch(nameof(LevelManager.findGroups))]
 [UsedImplicitly]
-public class LevelManagerFindGroupsPatch {
+public class FindGroupsPatch {
     [UsedImplicitly]
     private static bool Prefix() {
+        if (PeekSeekArena.Arena is not { InPlay: true }) return false;
+
         LevelManager.nonGroups = 0;
         LevelManager.arenaGroups.Clear();
         foreach (var client in Provider.clients) {
             if (client == null || client.player == null ||
-                client.player.life.isDead || PSManager.IsSpectator(client)) continue;
+                client.player.life.isDead || Host.IsSpectator(client.playerID.steamID.m_SteamID)) continue;
             if (!client.player.quests.isMemberOfAGroup)
                 ++LevelManager.nonGroups;
             else if (!LevelManager.arenaGroups.Contains(client.player.quests.groupID))

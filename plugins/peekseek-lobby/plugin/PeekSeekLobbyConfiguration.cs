@@ -149,6 +149,24 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public float RangeDistance;
     public float RangeSpreadDegrees;
 
+    /// The kill feed at the top right, from the PeekSeek Kill Feed workshop item
+    /// (`plugins/peekseek/ui`), which the server has to list in
+    /// WorkshopDownloadConfig.json. Left empty, there is no feed; the chat lines stay
+    /// either way. The key is any small number no other plugin here uses.
+    public string KillFeedEffectGUID;
+    public short KillFeedKey;
+    public string ItemIconURL;
+    public int KillFeedRows;
+    public float KillFeedRowSeconds;
+    public int KillFeedNameLength;
+
+    /// The bar along the top, from the same workshop item: the PeekSeek mark and a face
+    /// per player. The picture for a player the site has no picture for yet is Steam's
+    /// own placeholder.
+    public string LobbyBarEffectGUID;
+    public short LobbyBarKey;
+    public string DefaultAvatarURL;
+
     public void LoadDefaults() {
         szAPIURL = "https://api.peekseek.com";
         szHexDefaultChatColor = "#FFFFFF";
@@ -225,6 +243,17 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         ShowEloAsReputation = true;
         szDiscordURL = "https://discord.gg/NKgTe6RnvH";
         szMatchURL = "https://dev.peekseek.net/match";
+
+        KillFeedEffectGUID = "c4d5e6f708192a3b4c5d6e7f8091a2b3";
+        KillFeedKey = 27320;
+        ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
+        KillFeedRows = 6;
+        KillFeedRowSeconds = 7f;
+        KillFeedNameLength = 24;
+
+        LobbyBarEffectGUID = "d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1";
+        LobbyBarKey = 27321;
+        DefaultAvatarURL = "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg";
 
         // The same first-option gun, attachments and outfit the website would
         // resolve for a player who has never saved a kit — see kits.json and

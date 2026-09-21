@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>PeekSeekRaid</RootNamespace>
+    <AssemblyName>PeekSeekRaid</AssemblyName>
+    <Product>PeekSeekRaid</Product>
+    <Version>0.2.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RestoreMonarchy.RocketRedist" Version="3.*" ExcludeAssets="runtime" />
+    <PackageReference Include="Krafs.Publicizer" Version="2.3.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Publicize Include="Assembly-CSharp" IncludeCompilerGeneratedMembers="false" />
+  </ItemGroup>
+
+  <!-- Compiled against PeekSeek Match and loaded beside it, never shipped with it: a
+       second PeekSeek.dll under Rocket/Plugins would load as a second plugin. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\peekseek\plugin\PeekSeek.csproj" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PeekSeekRaid.Tests" />
+  </ItemGroup>
+
+</Project>

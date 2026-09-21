@@ -1,11 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using PeekSeek.Core.Models;
 using Rocket.Core.Utils;
 using SDG.Unturned;
@@ -50,7 +54,63 @@ internal static class RemoteAPI {
         Cancellation?.Cancel();
         Client?.Dispose();
         Client = null;
+        Avatars.Clear();
     }
+
+    // ---- players --------------------------------------------------------------
+
+    /// Each player's Steam picture, for the bar. Fetched when a player joins and held
+    /// until they leave, because a match starts by drawing the bar right now and is
+    /// not going to wait on an HTTP round trip.
+    private static readonly Dictionary<ulong, string> Avatars = [];
+
+    internal static string AvatarFor(ulong steam64) {
+        return Avatars.TryGetValue(steam64, out string avatar) ? avatar : PeekSeek.Config.DefaultAvatarURL;
+    }
+
+    internal static void Forget(ulong steam64) {
+        Avatars.Remove(steam64);
+    }
+
+    internal static void FetchPlayer(ulong steam64) {
+        if (Client == null) return;
+
+        Task.Run(async () => {
+            string avatar = await ReadAvatar(steam64) ?? await ReadAvatarFromSteam(steam64);
+            if (avatar != null) TaskDispatcher.QueueOnMainThread(() => Avatars[steam64] = avatar);
+        });
+    }
+
+    /// `GET /players/{steam64}` carries `avatar` alongside the rank and whereabouts a
+    /// lobby reads off it, from the same cache every page of the site uses.
+    private static async Task<string> ReadAvatar(ulong steam64) {
+        try {
+            HttpResponseMessage response = await Client.GetAsync($"{Base}/players/{steam64}");
+            if (!response.IsSuccessStatusCode) return null;
+
+            JObject body = JObject.Parse(await response.Content.ReadAsStringAsync());
+            string avatar = (string)body["avatar"];
+            return string.IsNullOrEmpty(avatar) ? null : avatar;
+        } catch (Exception ex) {
+            TaskDispatcher.QueueOnMainThread(() => Logger.LogWarning($"Failed to fetch the profile of {steam64}: {ex.Message}"));
+            return null;
+        }
+    }
+
+    /// Steam's own answer, for a site that does not carry the picture yet: the public
+    /// profile as XML, which needs no key and answers for a private profile too.
+    private static async Task<string> ReadAvatarFromSteam(ulong steam64) {
+        try {
+            string xml = await Client.GetStringAsync($"https://steamcommunity.com/profiles/{steam64}?xml=1");
+            Match full = Regex.Match(xml, @"<avatarFull><!\[CDATA\[(.*?)\]\]></avatarFull>");
+            return full.Success ? full.Groups[1].Value : null;
+        } catch (Exception ex) {
+            TaskDispatcher.QueueOnMainThread(() => Logger.LogWarning($"Failed to fetch the Steam picture of {steam64}: {ex.Message}"));
+            return null;
+        }
+    }
+
+    // ---- the session --------------------------------------------------------------
 
     /// The code players paste into Unturned's connect box — the game server's Steam ID,
     /// the same value the in-game "Copy Server Code" button copies. Provider.server is

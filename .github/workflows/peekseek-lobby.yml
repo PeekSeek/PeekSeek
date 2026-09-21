@@ -3,10 +3,10 @@ name: peekseek-lobby
 on:
   push:
     branches: [main, develop]
-    paths: ["plugins/peekseek-lobby/**", ".github/workflows/peekseek-lobby.yml"]
+    paths: ["plugins/peekseek-lobby/**", "plugins/peekseek/plugin/Core/Hud/**", ".github/workflows/peekseek-lobby.yml"]
   pull_request:
     branches: [main]
-    paths: ["plugins/peekseek-lobby/**", ".github/workflows/peekseek-lobby.yml"]
+    paths: ["plugins/peekseek-lobby/**", "plugins/peekseek/plugin/Core/Hud/**", ".github/workflows/peekseek-lobby.yml"]
   workflow_dispatch: # path filters mean a shared change may not trigger this on its own
 
 permissions:

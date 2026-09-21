@@ -60,7 +60,6 @@ public class PeekSeek : RocketPlugin<PeekSeekConfiguration> {
         { "lobby_countdown", "<color=white>{0}s</color> to join. If only one team is here when that runs out, that team takes the match." },
         { "lobby_everyone_here", "Everyone is here. <color=white>Starting now.</color>" },
 
-        { "round_start", "<color=white>Round {0}.</color> {1}" },
         { "round_won", "<color=white>{0}</color> won round {1}. {2}" },
         { "match_won", "<color=white>{0}</color> wins the match {1}. Well played." },
         { "match_forfeit", "<color=white>{0}</color> takes the match. Nobody from the other side turned up." },

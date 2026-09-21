@@ -13,8 +13,11 @@ nowhere to be played.
 
 import logging
 import threading
+from datetime import datetime, timedelta, timezone
 from itertools import combinations
 from time import time
+
+from sqlalchemy import false, or_
 
 from .db import open
 from .settings import settings
@@ -203,9 +206,36 @@ def _recentOpponentPairs() -> set[frozenset]:
     thing to keep in step. Counts matches that are still being played, not just
     finished ones, so back-to-back rematches are caught while the first one is live.
     """
-    cutoff = time() - settings.rematch_cooldown
+    cooldown = settings.rematch_cooldown
+    endedSince = datetime.now(timezone.utc) - timedelta(seconds=cooldown)
+
     with open() as db:
-        recent = db.query(data.Match).where(data.Match.time >= cutoff).all()
+        # Three ways a match is still too fresh to run back, because Match.time is when
+        # a match was *made*: a twenty-minute match is already outside a five-minute
+        # cooldown by the time anybody could rematch, which is why this rule never fired
+        # in production while passing every test -- the tests all rematch off a match
+        # created seconds ago.
+        endedRecently = {
+            row.matchId
+            for row in db.query(data.MatchResult)
+            .where(data.MatchResult.endTime >= endedSince)
+            .all()
+            if row.matchId
+        }
+        recent = (
+            db.query(data.Match)
+            .where(
+                or_(
+                    # Still being played, so the rematch clock has not started at all.
+                    data.Match.finished.is_(False),
+                    # Scored or written off within the cooldown.
+                    data.Match.id.in_(endedRecently) if endedRecently else false(),
+                    # Made within it, for a finished match that never got a result row.
+                    data.Match.time >= time() - cooldown,
+                )
+            )
+            .all()
+        )
 
     pairs = set()
     for match in recent:
@@ -300,7 +330,9 @@ def attemptCreateEventMatch(trackSteam64: int, eventId: int) -> bool:
 
         if len(teams) < 2:
             return False
-        teams = teams[:2]
+        teams = _eventPairing(teams)
+        if teams is None:
+            return False
         meta = event.data["meta"]
         spectators = [str(x) for x in event.data.get("spectators", [])]
 
@@ -323,14 +355,39 @@ def attemptCreateEventMatch(trackSteam64: int, eventId: int) -> bool:
     return any(int(team["users"][0]) == int(trackSteam64) for team in teams)
 
 
+def _eventPairing(teams: list[dict]) -> list[dict] | None:
+    """The first two queued teams who have not just played each other, or None.
+
+    Queue order first, so the pair that has been waiting longest still goes first when
+    nothing is stale. Searching past that pair rather than stopping at it is what keeps
+    a three-team event moving: the front two being on cooldown finds the third team a
+    match instead of holding the whole event until the clock runs out. An event with
+    only two teams does wait, which is what a cooldown is.
+    """
+    recentOpponents = _recentOpponentPairs()
+    for home, away in combinations(teams, 2):
+        roster = [[int(u) for u in home["users"]], [int(u) for u in away["users"]]]
+        if not _wouldRepeatAFixture(roster, recentOpponents):
+            return [home, away]
+    return None
+
+
 def _eventTeam(db, heartbeat, event) -> dict | None:
     """The heartbeat owner's team entry, or None if the team can't play now."""
     if data.User.getCurrentMatchId(heartbeat.steam64):
         return None
 
+    # Scoped to this event. Without the event_id a player who had ever signed up for
+    # anything got whichever row came back first, which is the oldest -- so a finished
+    # event's signup, with its matchesplayed already at that event's cap, refused them a
+    # match in the event they were actually queueing for. Deleting the old signups
+    # "fixed" it because it left only one row to find.
     signup = (
         db.query(data.EventSignup)
-        .where(data.EventSignup.ownerSteam64 == heartbeat.steam64)
+        .where(
+            data.EventSignup.event_id == event.id,
+            data.EventSignup.ownerSteam64 == heartbeat.steam64,
+        )
         .first()
     )
     if not signup:

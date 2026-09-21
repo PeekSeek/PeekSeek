@@ -1,0 +1,7 @@
+GUID 7a3d9c2e5f8b4b1c9d0e1f2a3b4c5d6e
+Type Effect
+ID 43112
+
+// The build panel: what the team has left to lay, beside the screen for the build
+// phase. Kept up by the plugin, so no Lifetime, and nothing to pool.
+Preload 0

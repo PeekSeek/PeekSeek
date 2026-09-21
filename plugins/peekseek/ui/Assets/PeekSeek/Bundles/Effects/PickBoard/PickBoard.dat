@@ -1,0 +1,7 @@
+GUID 69fcf241396b44dbb536cf4fc08abbe3
+Type Effect
+ID 43110
+
+// A plugin UI. Spawned by key from the Siege plugin and cleared by it, never on a
+// timer, so no Lifetime. Nothing to pool, so no Preload.
+Preload 0

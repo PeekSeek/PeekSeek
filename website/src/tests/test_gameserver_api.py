@@ -687,6 +687,24 @@ def test_a_player_the_site_has_never_seen_gets_a_real_account(gameserver, monkey
     assert data.User.getSteamData(stranger).name == "RandomJoiner"
 
 
+def test_a_player_read_carries_their_steam_face(gameserver, user_factory, monkeypatch):
+    """A server drawing a scoreboard needs the same name and picture the site shows,
+    and asking Steam itself would need a key on every game server. So the one read a
+    server already polls carries them, from the site's own cache."""
+    from src.core import steam
+
+    player = user_factory()
+    monkeypatch.setattr(
+        steam,
+        "get_steam_user_data",
+        lambda s: {"personaname": "Ferret", "avatarfull": "https://av/ferret.jpg"},
+    )
+
+    r = gameserver.get(f"/server/v1/players/{player.steam64}").json()
+    assert r["name"] == "Ferret"
+    assert r["avatar"] == "https://av/ferret.jpg"
+
+
 def test_an_account_is_still_made_when_steam_will_not_answer(gameserver, monkeypatch):
     """Steam being down must not stop somebody playing. The account is created with
     no profile rather than with a placeholder, so the next lookup can still fill it
