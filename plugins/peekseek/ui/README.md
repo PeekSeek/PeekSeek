@@ -145,6 +145,12 @@ guesses about how plugin UIs work are wrong.
 at. It has to be TMP rather than the legacy `Text`, because the font fixup only runs for
 TMP and only when the prefab has no legacy `Text` at all.
 
+**Text goes on the node the plugin names, not on a child of it.**
+`ReceiveUIEffectText` finds the child by name and does `GetComponent<TextMeshProUGUI>()`
+on it: a container whose text sits one level down takes the message and drops it
+silently, and the screen keeps whatever the prefab was saved with. That is how every
+face on the lobby's bar showed the placeholder `12` for its kills.
+
 **Buttons need nothing but a name.** `createUIEffect` walks every `Button` in the prefab
 and attaches a `PluginButtonListener` to it, and the name that reaches the server is the
 Button's GameObject name. So the tiles are `BoardPick0` to `BoardPick4` and carry no

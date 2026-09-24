@@ -599,9 +599,14 @@ def lobby_bar():
             image(frame.add(stretch(f"{prefix}{i}_Avatar")), "#ffffff", enabled=False)
             image(frame.add(stretch(f"{prefix}{i}_Faded", active=False)), "#ffffff", 0.5, enabled=False)
 
+            # The text sits on this node rather than on a child of it: the server
+            # addresses a child by name and sets the text on whatever component it
+            # finds there, so a container with the text one level down takes the
+            # message and drops it, and the face keeps whatever the prefab was saved
+            # with.
             kills = seat.add(Node(f"{prefix}{i}_Kills", anchor_min=(corner, 0), anchor_max=(corner, 0),
                                   position=(6 if corner == 0 else -6, 4), size=(KILLS_W, 18), rotation=tilt, active=False))
-            text(kills.add(stretch("Number")), "12", size=14, colour=INK, halign=CENTER, bold=True)
+            text(kills, "0", size=14, colour=INK, halign=CENTER, bold=True)
             away = seat.add(Node(f"{prefix}{i}_Away", anchor_min=(1 - corner, 1), anchor_max=(1 - corner, 1),
                                  position=(2 if corner == 1 else -2, -2), size=(26, 12), active=False))
             text(away.add(stretch("Label")), "AFK", size=8, colour=INK, halign=CENTER, bold=True)
