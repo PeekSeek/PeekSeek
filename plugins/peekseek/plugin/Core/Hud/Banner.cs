@@ -21,7 +21,6 @@ public class BannerSettings {
 public class Banner {
     private readonly BannerSettings settings;
     private EffectAsset effect;
-    private bool effectLookedUp;
     private float until;
 
     public Banner(BannerSettings settings) {
@@ -73,8 +72,7 @@ public class Banner {
     }
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(settings.EffectGUID, "BannerEffectGUID", "No banner.");
         return effect;

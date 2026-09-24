@@ -48,7 +48,6 @@ internal class LobbyBar {
     private string drawnBlock;
 
     private EffectAsset effect;
-    private bool effectLookedUp;
 
     internal void Picture(ulong steam64, string url) {
         avatars[steam64] = url;
@@ -148,8 +147,7 @@ internal class LobbyBar {
     }
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(PeekSeekLobby.Config.LobbyBarEffectGUID, "LobbyBarEffectGUID", "No lobby bar.");
         return effect;

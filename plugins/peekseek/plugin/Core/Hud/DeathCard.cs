@@ -43,7 +43,6 @@ public class DeathInfo {
 public class DeathCard {
     private readonly DeathCardSettings settings;
     private EffectAsset effect;
-    private bool effectLookedUp;
 
     /// Per viewer: when their card comes down, and whether the count is on. Absent
     /// means nothing of this effect is on their screen.
@@ -160,8 +159,7 @@ public class DeathCard {
     }
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(settings.EffectGUID, "DeathCardEffectGUID", "No death card.");
         return effect;

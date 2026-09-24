@@ -51,7 +51,6 @@ public class KillFeed {
     private readonly KillFeedSettings settings;
     private readonly Feed feed;
     private EffectAsset effect;
-    private bool effectLookedUp;
     private float nextExpiry;
 
     public KillFeed(KillFeedSettings settings) {
@@ -179,8 +178,7 @@ public class KillFeed {
     }
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(settings.EffectGUID, "KillFeedEffectGUID", "No kill feed.");
         return effect;

@@ -14,7 +14,6 @@ public class BuildPanel {
     private const int Rows = 16;
 
     private EffectAsset effect;
-    private bool effectLookedUp;
 
     /// Draw the list, with the row for `laying` picked out in ink: the kind the
     /// builder is putting down right now.
@@ -49,8 +48,7 @@ public class BuildPanel {
     }
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(PeekSeek.Config.BuildPanelEffectGUID, "BuildPanelEffectGUID", "No build panel.");
         return effect;

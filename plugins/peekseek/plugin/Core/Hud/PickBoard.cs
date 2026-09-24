@@ -101,7 +101,6 @@ public class PickBoard {
     private readonly Dictionary<ulong, Seat> seats = [];
 
     private EffectAsset effect;
-    private bool effectLookedUp;
 
     public bool IsOpen => seats.Values.Any(seat => seat.Up);
 
@@ -400,8 +399,7 @@ public class PickBoard {
     }
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(PeekSeek.Config.PickUIEffectGUID, "PickUIEffectGUID", "Every board will answer itself.");
         return effect;

@@ -83,7 +83,6 @@ internal class MatchHud {
     private const string Orange = "#ffa34e";
 
     private EffectAsset effect;
-    private bool effectLookedUp;
 
     /// What each viewer was last sent that the tick may resend. Absent means never
     /// drawn to.
@@ -332,8 +331,7 @@ internal class MatchHud {
     }
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(PeekSeek.Config.MatchHudEffectGUID, "MatchHudEffectGUID", "No match HUD.");
         return effect;

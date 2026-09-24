@@ -13,7 +13,6 @@ internal class QueuePrompt {
 
     private readonly HashSet<ulong> up = [];
     private EffectAsset effect;
-    private bool effectLookedUp;
 
     internal bool IsUp(ulong steam64) => up.Contains(steam64);
 
@@ -60,8 +59,7 @@ internal class QueuePrompt {
     }
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(PeekSeekLobby.Config.ChoiceEffectGUID, "ChoiceEffectGUID", "Nobody is asked to queue.");
         return effect;

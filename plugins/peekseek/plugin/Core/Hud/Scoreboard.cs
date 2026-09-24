@@ -46,7 +46,6 @@ public class Scoreboard {
 
     private readonly ScoreboardSettings settings;
     private EffectAsset effect;
-    private bool effectLookedUp;
     private readonly HashSet<ulong> up = [];
 
     public Scoreboard(ScoreboardSettings settings) {
@@ -118,8 +117,7 @@ public class Scoreboard {
     public void Forget(ulong steam64) => up.Remove(steam64);
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(settings.EffectGUID, "ScoreboardEffectGUID", "No scoreboard.");
         return effect;

@@ -12,7 +12,6 @@ public class Tag {
     private const int Pips = 3;
 
     private EffectAsset effect;
-    private bool effectLookedUp;
     private readonly HashSet<ulong> up = [];
 
     /// `pips` lit of three, or -1 for none; `hurt` in red after the word, or null.
@@ -42,8 +41,7 @@ public class Tag {
     public void Forget(ulong steam64) => up.Remove(steam64);
 
     private EffectAsset Effect() {
-        if (effectLookedUp) return effect;
-        effectLookedUp = true;
+        if (effect != null) return effect;
 
         effect = Effects.Find(PeekSeek.Config.TagEffectGUID, "TagEffectGUID", "No tag.");
         return effect;
