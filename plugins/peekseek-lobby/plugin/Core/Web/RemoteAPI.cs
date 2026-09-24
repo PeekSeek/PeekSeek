@@ -62,18 +62,17 @@ internal static class RemoteAPI {
         /// hosted right now and this player will be let in.
         internal string RelayTo;
 
-        /// The name of the rank their Elo earns, for the board, or null from a site
-        /// that does not say.
-        internal string Rank;
+        /// The badge the rank their Elo earns wears, for the board, or null from a
+        /// site that does not say.
+        internal string RankIcon;
     }
 
     /// Queue this player and read back where they stand. Both jobs in one call because
     /// they are one question: a player standing in the lobby wants a match, and the
     /// answer is either "not yet" or "here is where to go".
-    internal static void RefreshQueued(ulong steam64) {
+    internal static void RefreshQueued(ulong steam64, ushort gamemodes, string region) {
         Send(HttpMethod.Put,
-            $"{Base}/players/{steam64}/queue"
-            + $"?gamemodes={PeekSeekLobby.Config.GamemodeBitmask}&region={PeekSeekLobby.Config.szRegion}",
+            $"{Base}/players/{steam64}/queue?gamemodes={gamemodes}&region={Uri.EscapeDataString(region)}",
             steam64);
     }
 
@@ -136,7 +135,7 @@ internal static class RemoteAPI {
                     Elo = Number(body["elo"]) ?? 0,
                     MatchId = Number(body["matchId"]) ?? 0,
                     RelayTo = Text(body["relayTo"]),
-                    Rank = Text(body["rank"]),
+                    RankIcon = Text(body["rankIcon"]),
                     Ban = ParseBan(body["ban"])
                 };
                 bool eloKnown = body["elo"] != null && body["elo"].Type != JTokenType.Null;

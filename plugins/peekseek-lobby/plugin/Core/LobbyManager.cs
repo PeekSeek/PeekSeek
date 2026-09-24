@@ -75,10 +75,10 @@ internal abstract class LobbyManager {
         internal string RelayedTo;
 
         /// The player's Elo, re-asserted as their reputation on a timer because
-        /// Unturned moves reputation itself on kills, and the name of the rank it
-        /// earns, for the board.
+        /// Unturned moves reputation itself on kills, and the badge the rank it earns
+        /// wears, for the board.
         internal int Elo;
-        internal string Rank;
+        internal string RankIcon;
 
         /// Whether the site has actually answered with an Elo yet. Kept separate
         /// from the value because zero is a legitimate Elo, and because a player
@@ -226,7 +226,7 @@ internal abstract class LobbyManager {
     private static Banner Banner;
     private static DeathCard Card;
     private static Scoreboard Scores;
-    private static readonly QueuePrompt Prompt = new();
+    private static readonly QueueBoard Queue = new();
 
     /// When the board everybody is looking at comes down again, after a reset. Zero
     /// while it is nobody's but whoever is holding the key.
@@ -449,7 +449,7 @@ internal abstract class LobbyManager {
         Bar.Left(steamID.m_SteamID);
         Card.Forget(steamID.m_SteamID);
         Scores.Forget(steamID.m_SteamID);
-        Prompt.Forget(steamID.m_SteamID);
+        Queue.Forget(steamID.m_SteamID);
         TargetRange.Forget(steamID.m_SteamID);
         OfferRangeToWhoeverIsLeft();
 
@@ -868,12 +868,6 @@ internal abstract class LobbyManager {
 
     internal static bool QueueEnabled => PeekSeekLobby.Config.EnableQueue;
 
-    internal static bool ToggleQueueing(CSteamID steamID) {
-        if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
-
-        return SetQueueing(steamID, !state.Queueing);
-    }
-
     internal static bool SetQueueing(CSteamID steamID, bool queueing) {
         if (!QueueEnabled) return false;
         if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
@@ -885,7 +879,10 @@ internal abstract class LobbyManager {
             // stop a match landing on somebody who has not finished arriving, and
             // somebody typing the command has plainly arrived.
             state.QueueFrom = 0;
-            RemoteAPI.RefreshQueued(steamID.m_SteamID);
+            QueueChoice choice = Queue.ChoiceOf(steamID.m_SteamID);
+            RemoteAPI.RefreshQueued(steamID.m_SteamID,
+                choice?.Bitmask ?? PeekSeekLobby.Config.GamemodeBitmask,
+                choice?.RegionCode ?? PeekSeekLobby.Config.szRegion);
         } else {
             RemoteAPI.LeaveQueue(steamID.m_SteamID);
         }
@@ -991,7 +988,7 @@ internal abstract class LobbyManager {
             state.Elo = remote.Elo;
             state.EloKnown = true;
         }
-        if (remote.Rank != null) state.Rank = remote.Rank;
+        if (remote.RankIcon != null) state.RankIcon = remote.RankIcon;
 
         if (remote.MatchId != 0 && state.MatchId == 0) SendToMatch(steam64, state, remote.MatchId);
         if (state.LostTheirMatch(remote.MatchId)) ReturnToArena(steam64, state);
@@ -1076,7 +1073,7 @@ internal abstract class LobbyManager {
         // gives them the end of the fight they are already in, and tells them why the
         // ground is about to move.
         state.PullAt = Time.realtimeSinceStartup + PeekSeekLobby.Config.MatchWarningSeconds;
-        Prompt.Close(player.channel.owner);
+        Queue.Close(player.channel.owner);
         Banner.ShowTo(player.channel.owner, "MATCH FOUND", PeekSeekLobby.Instance.Translate("match_found_name"),
             PeekSeekLobby.Instance.Translate("match_found_line", Mathf.RoundToInt(PeekSeekLobby.Config.MatchWarningSeconds)));
     }
@@ -1448,7 +1445,10 @@ internal abstract class LobbyManager {
             if (wantsAMatch) {
                 wanting++;
                 if (entry.Value.QueueingSince == 0) entry.Value.QueueingSince = now;
-                RemoteAPI.RefreshQueued(entry.Key);
+                QueueChoice choice = Queue.ChoiceOf(entry.Key);
+                RemoteAPI.RefreshQueued(entry.Key,
+                    choice?.Bitmask ?? PeekSeekLobby.Config.GamemodeBitmask,
+                    choice?.RegionCode ?? PeekSeekLobby.Config.szRegion);
                 continue;
             }
 
@@ -1523,10 +1523,10 @@ internal abstract class LobbyManager {
         if (player != null) Card.ShowRespawn(player.channel.owner, Mathf.Max(0, seconds));
     }
 
-    /// The one question: queue for a match, or stay. Asked once, with what queueing
-    /// from here means at their ping written under it, because a match here cuts
-    /// damage above a certain ping and a player who finds that out mid-match has
-    /// been sent somewhere they should have been warned about.
+    /// The queue screen, put in front of them once. It says what their ping costs
+    /// here, because a match on this region cuts a shooter's damage above a number
+    /// and finding that out mid-match means being sent somewhere nobody warned you
+    /// about.
     private static void AskToQueue(CSteamID steamID, PlayerState state) {
         state.Prompted = true;
         if (!QueueEnabled) return;
@@ -1536,24 +1536,36 @@ internal abstract class LobbyManager {
 
         int ping = Ping.Milliseconds(player.channel.owner);
         string line = ping >= PeekSeekLobby.Config.HighPingMs
-            ? PeekSeekLobby.Instance.Translate("prompt_high_ping", ping, PeekSeekLobby.Config.HighPingMs)
-            : PeekSeekLobby.Instance.Translate("prompt_line");
-        Prompt.Open(player.channel.owner, line);
+            ? PeekSeekLobby.Instance.Translate("queue_high_ping", ping, PeekSeekLobby.Config.HighPingMs)
+            : null;
+        Queue.Open(player.channel.owner, line);
+    }
+
+    /// `/q` opens the same screen rather than toggling silently: what they are
+    /// queueing for is a choice, and the command is how they change it.
+    internal static void OpenQueueBoard(CSteamID steamID) {
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null || !QueueEnabled) return;
+
+        AskToQueue(steamID, Players.TryGetValue(steamID.m_SteamID, out PlayerState state) ? state : new PlayerState());
     }
 
     private static void OnButtonClicked(Player player, string button) {
-        bool? answer = Prompt.Answer(player.channel.owner, button);
-        if (answer != true) return;
+        bool? answer = Queue.Answer(player.channel.owner, button);
+        if (answer == null) return;
 
-        SetQueueing(player.channel.owner.playerID.steamID, true);
+        SetQueueing(player.channel.owner.playerID.steamID, answer.Value);
     }
 
-    /// The board as it stands: everybody here by kills, with their rank from the
-    /// site beside their numbers.
+    /// The board as it stands: everybody here by kills, their rank as the badge on
+    /// their face, and the arena's clock in the corner when it is running.
     private static ScoreSheet Sheet() {
         ScoreSheet sheet = new() {
-            Title = PeekSeekLobby.Instance.Translate("board_title", Mathf.RoundToInt(PeekSeekLobby.Config.ResetIntervalSeconds / 60f)),
-            Columns = ["K", "D", "HS%", "RANK"]
+            Title = PeekSeekLobby.Instance.Translate("board_title"),
+            Columns = ["K", "D", "HS%", "MS", "ELO"],
+            Timer = ArenaCountingSince > 0
+                ? LobbyBar.Clock(PeekSeekLobby.Config.ResetIntervalSeconds - (Time.realtimeSinceStartup - ArenaCountingSince))
+                : null
         };
 
         foreach (KeyValuePair<ulong, PlayerState> entry in Players.OrderByDescending(e => e.Value.Kills).ThenBy(e => e.Value.Deaths)) {
@@ -1566,7 +1578,14 @@ internal abstract class LobbyManager {
                 Steam64 = entry.Key,
                 AvatarUrl = Bar.AvatarOf(entry.Key),
                 Name = client.playerID.characterName,
-                Values = [state.Kills.ToString(), state.Deaths.ToString(), hs.ToString(), state.Rank ?? (state.EloKnown ? state.Elo.ToString() : "")]
+                RankIconUrl = state.RankIcon == null ? null : string.Format(PeekSeekLobby.Config.RankIconURL, state.RankIcon),
+                Values = [
+                    state.Kills.ToString(),
+                    state.Deaths.ToString(),
+                    hs.ToString(),
+                    Ping.Milliseconds(client).ToString(),
+                    state.EloKnown ? state.Elo.ToString() : ""
+                ]
             });
         }
         return sheet;

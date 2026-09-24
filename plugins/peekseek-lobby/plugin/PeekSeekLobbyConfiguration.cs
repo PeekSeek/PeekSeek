@@ -35,10 +35,17 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// short enough that the match is not kept waiting on them.
     public float MatchWarningSeconds;
 
-    /// How long somebody is here before the lobby asks whether they want a match,
-    /// on a board. Nobody is queued until they say so; long enough to have had a
-    /// fight, short enough that somebody who came for a match is not left wondering.
+    /// How long somebody is here before the lobby puts the queue screen in front of
+    /// them. Nobody is queued until they say so; long enough to have had a fight,
+    /// short enough that somebody who came for a match is not left wondering.
     public float QueuePromptSeconds;
+
+    /// The tiles on that screen, and the regions under them. The gamemodes are in the
+    /// bitmask's order, so the first is bit 0, the same order the site's mmconfig
+    /// lists them in; a player lights the ones they are up for and the screen adds
+    /// them up. Six tiles fit, and four regions.
+    public List<QueueGamemode> QueueGamemodes;
+    public List<QueueRegion> QueueRegions;
 
     /// The ping from which the question warns them. Matches in this region scale a
     /// shooter's damage down above a ping, and a player who finds that out mid-match
@@ -163,8 +170,13 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public float DeathCardSeconds;
     public string ScoreboardEffectGUID;
     public short ScoreboardKey;
-    public string ChoiceEffectGUID;
-    public short ChoiceKey;
+    public string QueueEffectGUID;
+    public short QueueKey;
+
+    /// Where a rank badge comes from, with `{0}` standing for the rank's icon name,
+    /// which the site answers on every player read. The site serves the same badges
+    /// its own pages wear.
+    public string RankIconURL;
 
     /// Fill in the fields this file is too old to carry. See PeekSeek's
     /// Core/ConfigDefaults.cs: Rocket never merges a new field into a written
@@ -186,8 +198,11 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         DeathCardSeconds = defaults.Or(DeathCardSeconds, fresh.DeathCardSeconds, nameof(DeathCardSeconds));
         ScoreboardEffectGUID = defaults.Or(ScoreboardEffectGUID, fresh.ScoreboardEffectGUID, nameof(ScoreboardEffectGUID));
         ScoreboardKey = defaults.Or(ScoreboardKey, fresh.ScoreboardKey, nameof(ScoreboardKey));
-        ChoiceEffectGUID = defaults.Or(ChoiceEffectGUID, fresh.ChoiceEffectGUID, nameof(ChoiceEffectGUID));
-        ChoiceKey = defaults.Or(ChoiceKey, fresh.ChoiceKey, nameof(ChoiceKey));
+        QueueEffectGUID = defaults.Or(QueueEffectGUID, fresh.QueueEffectGUID, nameof(QueueEffectGUID));
+        QueueKey = defaults.Or(QueueKey, fresh.QueueKey, nameof(QueueKey));
+        RankIconURL = defaults.Or(RankIconURL, fresh.RankIconURL, nameof(RankIconURL));
+        QueueGamemodes = QueueGamemodes is { Count: > 0 } ? QueueGamemodes : fresh.QueueGamemodes;
+        QueueRegions = QueueRegions is { Count: > 0 } ? QueueRegions : fresh.QueueRegions;
 
         return defaults.Filled;
     }
@@ -208,6 +223,21 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         MatchWarningSeconds = 3f;
         QueuePromptSeconds = 60f;
         HighPingMs = 100;
+        // The site's own gamemodes and regions, in mmconfig's order, said the way the
+        // play page says them.
+        QueueGamemodes = [
+            new QueueGamemode { Name = "Competitive", Blurb = "META, SNIPER   1v1   Ranked" },
+            new QueueGamemode { Name = "Drums", Blurb = "META   1v1   Ranked" },
+            new QueueGamemode { Name = "Ranged", Blurb = "SNIPER   1v1   Ranked" },
+            new QueueGamemode { Name = "Casual Duo", Blurb = "META, SNIPER   2v2" },
+            new QueueGamemode { Name = "Raid", Blurb = "META   1v1   Build a base" }
+        ];
+        QueueRegions = [
+            new QueueRegion { Name = "EU-West", Code = "paris" },
+            new QueueRegion { Name = "AS-South", Code = "singapore" },
+            new QueueRegion { Name = "US-West", Code = "utah" },
+            new QueueRegion { Name = "SA-East", Code = "brazil" }
+        ];
         SpareMagazines = 1;
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = true;
@@ -284,8 +314,9 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         DeathCardSeconds = 5f;
         ScoreboardEffectGUID = "6441527b813a4bd7b17809470064a1af";
         ScoreboardKey = 27324;
-        ChoiceEffectGUID = "4369a4e938bf4db3862c83355a910129";
-        ChoiceKey = 27325;
+        QueueEffectGUID = "4369a4e938bf4db3862c83355a910129";
+        QueueKey = 27325;
+        RankIconURL = "https://peekseek.net/static/ranks/{0}.png";
 
         // The same first-option gun, attachments and outfit the website would
         // resolve for a player who has never saved a kit — see kits.json and

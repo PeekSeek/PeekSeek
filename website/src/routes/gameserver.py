@@ -60,7 +60,11 @@ def _match(match: data.Match) -> dict:
     return {
         "id": match.id,
         "region": match.region,
-        "gamemode": {"id": match.gamemode, "name": gamemode["name"]},
+        "gamemode": {
+            "id": match.gamemode,
+            "name": gamemode["name"],
+            "usesElo": gamemode["usesElo"],
+        },
         "roundsToWin": match.meta.get("roundsToWin", 3),
         "settings": {
             "map": match.meta["map"],
@@ -441,7 +445,9 @@ def _player(steam64: int) -> dict:
         "name": profile.name,
         "avatar": profile.avatar,
         "elo": data.Stat.getElo(steam64),
-        "rank": data.Stat.rankFor(steam64).name,
+        # The badge, not the tier's name: a server draws it on the player's face the
+        # way the site draws it beside their name, from /static/ranks/<icon>.png.
+        "rankIcon": data.Stat.rankFor(steam64).icon,
         "matchId": matchId or None,
         "relayTo": match.connectCode() if match else None,
         "choose": _choices(match, steam64) if match else None,

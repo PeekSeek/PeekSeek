@@ -162,7 +162,7 @@ def panel(face, tiles, tile_w, tile_h, headline, make_tile):
     board_h = tiles_y + tile_h + PANEL_PAD
 
     board = centered(face, 0, 40, board_w, board_h, active=False)
-    image(board, PAGE, 0.94, sprite=SPR["round8"])
+    image(board, PAGE, sprite=SPR["round8"])
 
     text(board.add(top_left(f"{face}_Headline", PANEL_PAD, PANEL_PAD, board_w - PANEL_PAD * 2 - 130, HEADLINE_H)),
          headline, size=20, colour=TEXT, bold=True)
@@ -319,7 +319,7 @@ MAP_GUIDS = ("e2f1a3b4c5d6e7f8a9b0c1d2e3f4a5b6", "f3a2b4c5d6e7f8a9b0c1d2e3f4a5b6
 
 def attack_screen():
     screen = stretch("Attack", active=False)
-    image(screen, PAGE, 0.94)
+    image(screen, PAGE)
 
     # A column down the middle, from under the HUD to just off the bottom edge.
     text(screen.add(top_center("Attack_Headline", 0, HEADLINE_Y, 700, 26)), "Round 4  You attack North",
@@ -776,19 +776,47 @@ def death_card():
 
 # ---- the scoreboard -------------------------------------------------------------------
 #
-# A page of the site: a title, four numbered columns, and a row per player with their
-# face and name, the viewer's own row filled. A row can instead be a section heading,
-# a team's name over its players, so one prefab draws a two-team match and a lobby's
-# single list. Held up on a plugin key during play; up for everybody, unasked, when
-# a match ends or the lobby's arena resets.
+# A page of the site: a heading with the PeekSeek mark and what this board is, a clock
+# on the right when there is one to show, five numbered columns, and a row per player
+# with their face and name. A row can instead be a section heading, a team's name over
+# its players, so one prefab draws a two-team match and a lobby's single list. The
+# columns are filled by whoever draws it: the lobby's are K, D, HS%, MS and ELO, a
+# match's K, D, HS%, DMG and MS.
+#
+# A face carries its rank the way a player on the bar carries their pick: the badge on
+# the bottom-right corner, tilted outward, on nothing. Everything inside a row is 3px
+# from its edges, the same 3px on every row, rather than a share of the row's height.
+#
+# The panel is a share of the screen rather than a fixed 620px, so a bigger monitor
+# gets a bigger board, and nothing inside it is placed from the left: the columns hang
+# off the right edge at fixed widths and the name takes whatever is between them and
+# the face. That is what makes it fit at any width instead of growing a gap in the
+# middle or running its numbers off the edge.
+#
+# The panel is opaque. It is read while standing still, not composited over play, and
+# a scoreboard you can see the map through is a scoreboard nobody can read.
 
-BOARD_PANEL_W = 620
+BOARD_WIDE = 0.46       # of the screen
 BOARD_ROWS = 12
-BOARD_ROW_H = 28
+BOARD_PAD = 3           # inside a row, on every side
+BOARD_ROW_H = 30
 BOARD_ROW_GAP = 2
-BOARD_COLS = ("A", "B", "C", "D")
-BOARD_COL_W = 56
-BOARD_ROWS_Y = 84
+BOARD_FACE = BOARD_ROW_H - 2 * BOARD_PAD
+BOARD_RANK = 13         # the badge on a face's corner
+BOARD_COLS = ("A", "B", "C", "D", "E")
+BOARD_COL_W = 54
+BOARD_HEAD_H = 26
+BOARD_SUB_H = 18
+BOARD_LOGO_H = 18
+BOARD_ROWS_Y = PANEL_PAD + BOARD_HEAD_H + BOARD_SUB_H + 20
+BOARD_NAME_MIN = 150    # what is left for a name once the columns have their width
+
+
+def wide(name, left, y, right, h, **kw):
+    """A node that spans its parent's width minus `left` and `right`, `h` tall, `y`
+    down from the top. The one shape a board built from the right edge needs."""
+    return Node(name, anchor_min=(0, 1), anchor_max=(1, 1), pivot=(0, 1),
+                position=(left, -y), size=(-(left + right), h), **kw)
 
 
 def scoreboard():
@@ -796,74 +824,135 @@ def scoreboard():
     canvas(root, sorting_order=1)
 
     height = BOARD_ROWS_Y + BOARD_ROWS * (BOARD_ROW_H + BOARD_ROW_GAP) + PANEL_PAD
-    board = root.add(centered("Board", 0, 20, BOARD_PANEL_W, height))
-    image(board, PAGE, 0.94, sprite=SPR["round8"])
+    board = root.add(Node("Board", anchor_min=(0.5 - BOARD_WIDE / 2, 0.5), anchor_max=(0.5 + BOARD_WIDE / 2, 0.5),
+                          position=(0, 20), size=(0, height)))
+    image(board, PAGE, sprite=SPR["round8"])
 
-    text(board.add(top_left("Board_Title", PANEL_PAD, PANEL_PAD, BOARD_PANEL_W - 2 * PANEL_PAD, 26)), "North wins 3-1",
-         size=20, colour=TEXT, bold=True)
-    text(board.add(top_left("Board_Sub", PANEL_PAD, PANEL_PAD + 26, BOARD_PANEL_W - 2 * PANEL_PAD, 18)), "",
-         size=12, colour=SECONDARY)
+    # The heading: the mark, what this board is, and a clock only when one applies.
+    logo_w = LOGO_W * BOARD_LOGO_H / LOGO_H
+    logo = board.add(top_left("Logo", PANEL_PAD, PANEL_PAD + 3, logo_w, BOARD_LOGO_H))
+    image(logo, TEXT, sprite=SPR["logo"], sliced=False, preserve_aspect=True)
+    text(board.add(wide("Board_Title", PANEL_PAD + logo_w + 10, PANEL_PAD, PANEL_PAD + 130, BOARD_HEAD_H)),
+         "Lobby", size=20, colour=TEXT, bold=True)
+    text(board.add(top_right("Board_Timer", PANEL_PAD, PANEL_PAD, 120, BOARD_HEAD_H, active=False)), "2:10",
+         size=18, colour=TEXT, halign=RIGHT, mono=True)
 
-    first_col = BOARD_PANEL_W - PANEL_PAD - len(BOARD_COLS) * BOARD_COL_W
+    # Under the title, and on a match always: whether the Elo moves, and the map. The
+    # lobby leaves it empty, which is why the rows start below it either way rather
+    # than shuffling up when there is nothing to say.
+    text(board.add(wide("Board_Sub", PANEL_PAD + logo_w + 10, PANEL_PAD + BOARD_HEAD_H, PANEL_PAD, BOARD_SUB_H)),
+         "", size=12, colour=SECONDARY)
+
     for c, col in enumerate(BOARD_COLS):
-        text(board.add(top_left(f"Head_{col}", first_col + c * BOARD_COL_W, BOARD_ROWS_Y - 18, BOARD_COL_W, 14)), col,
+        right = PANEL_PAD + (len(BOARD_COLS) - 1 - c) * BOARD_COL_W
+        text(board.add(top_right(f"Head_{col}", right, BOARD_ROWS_Y - 18, BOARD_COL_W, 14)), col,
              size=10, colour=SECONDARY, halign=RIGHT, bold=True, spacing=6)
 
     for i in range(BOARD_ROWS):
         y = BOARD_ROWS_Y + i * (BOARD_ROW_H + BOARD_ROW_GAP)
-        line = board.add(top_left(f"Row{i}", PANEL_PAD - 10, y, BOARD_PANEL_W - 2 * PANEL_PAD + 20, BOARD_ROW_H, active=False))
+        line = board.add(wide(f"Row{i}", PANEL_PAD, y, PANEL_PAD, BOARD_ROW_H, active=False))
         image(line.add(stretch(f"Row{i}_Me", active=False)), SELECTED, sprite=SPR["round6"])
 
-        text(line.add(top_left(f"Row{i}_Head", 10, 0, 300, BOARD_ROW_H, active=False)), "NORTH",
+        text(line.add(top_left(f"Row{i}_Head", BOARD_PAD, 0, 300, BOARD_ROW_H, active=False)), "NORTH",
              size=10, colour=SECONDARY, bold=True, spacing=8)
 
         body = line.add(stretch(f"Row{i}_Body"))
-        face = body.add(top_left(f"Row{i}_Frame", 10, (BOARD_ROW_H - 22) / 2, 22, 22))
+        face = body.add(top_left(f"Row{i}_Frame", BOARD_PAD, BOARD_PAD, BOARD_FACE, BOARD_FACE))
         image(face, "#ffffff", sprite=SPR["round6"])
         mask(face)
         image(face.add(stretch(f"Row{i}_Avatar")), "#ffffff", enabled=False)
-        text(body.add(top_left(f"Row{i}_Name", 40, 0, 230, BOARD_ROW_H)), "kieran", size=13, colour=TEXT, bold=True)
-        text(body.add(top_left(f"Row{i}_Tag", 276, 0, 60, BOARD_ROW_H, active=False)), "MVP",
-             size=9, colour=SELECTED_LABEL, bold=True, spacing=8)
+
+        # The rank badge, on the face's bottom-right corner, tilted out, on nothing.
+        rank = body.add(Node(f"Row{i}_Rank", anchor_min=(0, 1), anchor_max=(0, 1), pivot=(0.5, 0.5),
+                             position=(BOARD_PAD + BOARD_FACE - 2, -(BOARD_PAD + BOARD_FACE - 2)),
+                             size=(BOARD_RANK, BOARD_RANK), rotation=-10, active=False))
+        image(rank.add(stretch(f"Row{i}_Rank_Icon")), "#ffffff", enabled=False, preserve_aspect=True)
+
+        name_left = BOARD_PAD + BOARD_FACE + 8
+        columns = len(BOARD_COLS) * BOARD_COL_W
+        text(body.add(wide(f"Row{i}_Name", name_left, 0, columns + 60, BOARD_ROW_H)), "kieran",
+             size=13, colour=TEXT, bold=True)
+        text(body.add(top_right(f"Row{i}_Tag", columns + 4, 0, 56, BOARD_ROW_H, active=False)), "MVP",
+             size=9, colour=SELECTED_LABEL, halign=RIGHT, bold=True, spacing=8)
         for c, col in enumerate(BOARD_COLS):
-            text(body.add(top_left(f"Row{i}_{col}", 10 + first_col - PANEL_PAD + c * BOARD_COL_W, 0, BOARD_COL_W, BOARD_ROW_H)), "0",
+            right = (len(BOARD_COLS) - 1 - c) * BOARD_COL_W
+            text(body.add(top_right(f"Row{i}_{col}", right, 0, BOARD_COL_W, BOARD_ROW_H)), "0",
                  size=13, colour=TEXT, halign=RIGHT)
 
     return root
 
 
-# ---- the choice -----------------------------------------------------------------------
+# ---- the queue screen -----------------------------------------------------------------
 #
-# A question with two answers, the way the boards ask one: a headline, a line under
-# it, and two tiles. The lobby asks whether to queue with it. Buttons are
-# `BoardChoice0` and `BoardChoice1`, in the boards' own naming so a click lands in
-# the same handler shape.
+# What the site's play page asks, asked in game: which gamemodes you are up for, which
+# region, and a button that says go. The tiles are the site's own selectable tile, so a
+# player who has queued on the site is looking at something they have already used.
+#
+# A gamemode tile is a toggle and several can be on at once, because the site queues a
+# bitmask; a region tile is one of four. Buttons are `BoardMode{n}`, `BoardRegion{n}`
+# and `BoardQueue`, which is what reaches the server when one is clicked.
 
-CHOICES = 2
-CHOICE_W, CHOICE_H = 220, 96
-CHOICE_LINE_H = 40
+QUEUE_MODES = 6
+QUEUE_REGIONS = 4
+QUEUE_MODE_W, QUEUE_MODE_H = 190, 74
+QUEUE_REGION_W, QUEUE_REGION_H = 140, 44
+QUEUE_GO_W, QUEUE_GO_H = 200, 44
 
 
-def choice():
+def queue_screen():
     root = Node("Effect")
     canvas(root, sorting_order=0)
 
-    board_w = PANEL_PAD * 2 + CHOICES * CHOICE_W + (CHOICES - 1) * GAP
-    tiles_y = PANEL_PAD + HEADLINE_H + 6 + CHOICE_LINE_H + 10
-    board = root.add(centered("Choice", 0, 40, board_w, tiles_y + CHOICE_H + PANEL_PAD))
-    image(board, PAGE, 0.94, sprite=SPR["round8"])
+    cols = 3
+    rows = QUEUE_MODES // cols
+    board_w = PANEL_PAD * 2 + cols * QUEUE_MODE_W + (cols - 1) * GAP
+    modes_y = PANEL_PAD + HEADLINE_H + 8
+    regions_y = modes_y + rows * (QUEUE_MODE_H + GAP) + 18
+    go_y = regions_y + QUEUE_REGION_H + 18
+    board = root.add(centered("Queue", 0, 30, board_w, go_y + QUEUE_GO_H + PANEL_PAD))
+    image(board, PAGE, sprite=SPR["round8"])
 
-    text(board.add(top_left("Choice_Headline", PANEL_PAD, PANEL_PAD, board_w - 2 * PANEL_PAD, HEADLINE_H)), "Queue for a match?",
-         size=20, colour=TEXT, bold=True)
-    text(board.add(top_left("Choice_Line", PANEL_PAD, PANEL_PAD + HEADLINE_H + 6, board_w - 2 * PANEL_PAD, CHOICE_LINE_H)), "",
-         size=13, colour=SECONDARY, valign=TOP, wrap=True)
+    text(board.add(top_left("Queue_Headline", PANEL_PAD, PANEL_PAD, board_w - 2 * PANEL_PAD, HEADLINE_H)),
+         "Find a match", size=20, colour=TEXT, bold=True)
+    text(board.add(top_right("Queue_Line", PANEL_PAD, PANEL_PAD + 4, 420, 20, active=False)), "",
+         size=12, colour=SECONDARY, halign=RIGHT)
 
-    for i in range(CHOICES):
-        node = board.add(top_left(f"BoardChoice{i}", PANEL_PAD + i * (CHOICE_W + GAP), tiles_y, CHOICE_W, CHOICE_H))
+    for i in range(QUEUE_MODES):
+        x = PANEL_PAD + (i % cols) * (QUEUE_MODE_W + GAP)
+        y = modes_y + (i // cols) * (QUEUE_MODE_H + GAP)
+        node = board.add(top_left(f"BoardMode{i}", x, y, QUEUE_MODE_W, QUEUE_MODE_H, active=False))
         button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
-        text(node.add(top_stretch(f"Choice{i}_Name", 22, 24, 12)), "Queue", size=16, colour=TEXT, halign=CENTER, bold=True)
-        text(node.add(top_stretch(f"Choice{i}_Blurb", 50, 36, 14)), "",
-             size=12, colour=SECONDARY, halign=CENTER, valign=TOP, wrap=True)
+        on = node.add(stretch(f"Mode{i}_On", active=False))
+        image(on, SELECTED, sprite=SPR["round8"])
+        text(on.add(top_right("Label", GAP, 8, 80, 16)), "Queueing", size=10, colour=SELECTED_LABEL, halign=RIGHT, bold=True)
+        text(node.add(top_left(f"Mode{i}_Name", 12, 10, QUEUE_MODE_W - 24, 20)), "Competitive", size=15, colour=TEXT, bold=True)
+        text(node.add(top_left(f"Mode{i}_Blurb", 12, 32, QUEUE_MODE_W - 24, 34)), "META, SNIPER  1v1",
+             size=11, colour=SECONDARY, valign=TOP, wrap=True)
+
+    for i in range(QUEUE_REGIONS):
+        x = PANEL_PAD + i * (QUEUE_REGION_W + GAP)
+        node = board.add(top_left(f"BoardRegion{i}", x, regions_y, QUEUE_REGION_W, QUEUE_REGION_H, active=False))
+        button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
+        image(node.add(stretch(f"Region{i}_On", active=False)), SELECTED, sprite=SPR["round8"])
+        text(node.add(top_left(f"Region{i}_Name", 12, 0, QUEUE_REGION_W - 70, QUEUE_REGION_H)), "EU-West",
+             size=14, colour=TEXT, bold=True)
+        text(node.add(top_right(f"Region{i}_Ping", 12, 0, 56, QUEUE_REGION_H, active=False)), "24 ms",
+             size=12, colour=SECONDARY, halign=RIGHT)
+
+    go = board.add(top_left("BoardQueue", PANEL_PAD, go_y, QUEUE_GO_W, QUEUE_GO_H))
+    button(go, image(go, "#ffffff", sprite=SPR["round8"], raycast=True), TEXT, "#dddddd", "#bbbbbb")
+    text(go.add(stretch("Queue_Go")), "FIND MATCH", size=15, colour=PAGE, halign=CENTER, bold=True, spacing=6)
+
+    stay = board.add(top_left("BoardQueueNo", PANEL_PAD + QUEUE_GO_W + GAP, go_y, QUEUE_GO_W, QUEUE_GO_H))
+    button(stay, image(stay, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
+    text(stay.add(stretch("Queue_No")), "Not now", size=14, colour=SECONDARY, halign=CENTER)
+
+    # Baked rather than sent: the game only swaps `<plugin_0/>` for the key this
+    # player actually has bound when it spawns the effect, so a hint the plugin sends
+    # would name a key nobody pressed. This is also the one place the scoreboard's key
+    # is ever said, which is why it is on the screen everybody is shown.
+    text(board.add(top_right("Queue_Hint", PANEL_PAD, go_y + 12, 320, 20)),
+         "Hold <plugin_0/> for the scoreboard", size=11, colour=SECONDARY, halign=RIGHT)
 
     return root
 
@@ -913,7 +1002,7 @@ if __name__ == "__main__":
         (KILLFEED_EFFECTS / "Banner", banner()),
         (KILLFEED_EFFECTS / "DeathCard", death_card()),
         (KILLFEED_EFFECTS / "Scoreboard", scoreboard()),
-        (KILLFEED_EFFECTS / "Choice", choice()),
+        (KILLFEED_EFFECTS / "Queue", queue_screen()),
     )
     for folder, root in screens:
         target = folder / "Effect.prefab"

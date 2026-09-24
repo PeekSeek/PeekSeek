@@ -19,21 +19,29 @@ public class ScoreRow {
     public string AvatarUrl;
     public string Name;
 
+    /// The rank badge on the face's corner, or null for a board with no ranks to show
+    /// and for a player the site has not answered a rank for yet.
+    public string RankIconUrl;
+
     /// A word after the name, MVP, or null.
     public string Tag;
 
-    /// The four numbers, as text, in the columns' order.
-    public string[] Values = ["", "", "", ""];
+    /// The five numbers, as text, in the columns' order.
+    public string[] Values = ["", "", "", "", ""];
 
     public static ScoreRow Head(string text) => new() { Heading = text };
 }
 
-/// Everything the board says: a title, one line under it, the four column names and
-/// the rows.
+/// Everything the board says: what it is, the line under that, a clock when one
+/// applies, the five column names and the rows.
 public class ScoreSheet {
     public string Title;
     public string Sub;
-    public string[] Columns = ["K", "D", "HS%", "DMG"];
+
+    /// m:ss, or null for a board with no clock.
+    public string Timer;
+
+    public string[] Columns = ["K", "D", "HS%", "DMG", "MS"];
     public List<ScoreRow> Rows = [];
 }
 
@@ -43,6 +51,7 @@ public class ScoreSheet {
 /// heading. The viewer's own row is filled, so nothing on the board has to say "you".
 public class Scoreboard {
     private const int Rows = 12;
+    private static readonly string[] Columns = ["A", "B", "C", "D", "E"];
 
     private readonly ScoreboardSettings settings;
     private EffectAsset effect;
@@ -66,9 +75,11 @@ public class Scoreboard {
         EffectManager.SendUIEffect(asset, key, to, true);
         EffectManager.sendUIEffectText(key, to, true, "Board_Title", sheet.Title ?? "");
         EffectManager.sendUIEffectText(key, to, true, "Board_Sub", sheet.Sub ?? "");
-        string[] columns = ["A", "B", "C", "D"];
-        for (int c = 0; c < columns.Length; c++) {
-            EffectManager.sendUIEffectText(key, to, true, $"Head_{columns[c]}", sheet.Columns.ElementAtOrDefault(c) ?? "");
+        EffectManager.sendUIEffectVisibility(key, to, true, "Board_Timer", sheet.Timer != null);
+        if (sheet.Timer != null) EffectManager.sendUIEffectText(key, to, true, "Board_Timer", sheet.Timer);
+
+        for (int c = 0; c < Columns.Length; c++) {
+            EffectManager.sendUIEffectText(key, to, true, $"Head_{Columns[c]}", sheet.Columns.ElementAtOrDefault(c) ?? "");
         }
 
         for (int i = 0; i < Rows; i++) {
@@ -87,10 +98,12 @@ public class Scoreboard {
 
             EffectManager.sendUIEffectImageURL(key, to, true, $"Row{i}_Avatar", row.AvatarUrl ?? "");
             EffectManager.sendUIEffectText(key, to, true, $"Row{i}_Name", row.Name ?? "");
+            EffectManager.sendUIEffectVisibility(key, to, true, $"Row{i}_Rank", row.RankIconUrl != null);
+            if (row.RankIconUrl != null) EffectManager.sendUIEffectImageURL(key, to, true, $"Row{i}_Rank_Icon", row.RankIconUrl);
             EffectManager.sendUIEffectVisibility(key, to, true, $"Row{i}_Tag", !string.IsNullOrEmpty(row.Tag));
             if (!string.IsNullOrEmpty(row.Tag)) EffectManager.sendUIEffectText(key, to, true, $"Row{i}_Tag", row.Tag);
-            for (int c = 0; c < columns.Length; c++) {
-                EffectManager.sendUIEffectText(key, to, true, $"Row{i}_{columns[c]}", row.Values.ElementAtOrDefault(c) ?? "");
+            for (int c = 0; c < Columns.Length; c++) {
+                EffectManager.sendUIEffectText(key, to, true, $"Row{i}_{Columns[c]}", row.Values.ElementAtOrDefault(c) ?? "");
             }
         }
     }

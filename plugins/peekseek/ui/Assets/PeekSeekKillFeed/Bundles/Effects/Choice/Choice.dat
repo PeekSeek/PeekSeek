@@ -1,6 +1,0 @@
-GUID 4369a4e938bf4db3862c83355a910129
-Type Effect
-ID 43125
-
-// A question with two answers. The lobby asks whether to queue with it.
-Preload 0

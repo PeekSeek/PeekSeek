@@ -24,8 +24,8 @@ internal class NoQueueCommand : IRocketCommand {
             return;
         }
 
-        bool nowQueueing = LobbyManager.ToggleQueueing(player.CSteamID);
-        LobbyManager.Whisper(player.Player.channel.owner,
-            PeekSeekLobby.Instance.Translate(nowQueueing ? "queued" : "not_queued"));
+        // The screen rather than a silent toggle: what they queue for is a choice,
+        // and this is where it is made.
+        LobbyManager.OpenQueueBoard(player.CSteamID);
     }
 }

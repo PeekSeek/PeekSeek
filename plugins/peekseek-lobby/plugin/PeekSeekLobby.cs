@@ -81,18 +81,12 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "report_self", "You cannot report yourself." },
         { "report_sent", "Reported <color=white>{0}</color>. Staff have been sent their screen and this round's stats." },
 
-        // The one question the lobby asks, on a board, and what it says under it at
-        // a ping that will cost them.
-        { "prompt_headline", "Queue for a match?" },
-        { "prompt_line", "Ranked, on this region. You keep fighting here while you wait." },
-        { "prompt_high_ping", "Your ping is {0} ms. Matches here cut your damage from {1} ms. Pick a closer region on peekseek.net, or stay in the arena." },
-        { "prompt_yes", "Queue" },
-        { "prompt_yes_blurb", "Fight here until a match is found." },
-        { "prompt_no", "Not now" },
-        { "prompt_no_blurb", "Stay in the arena. /q queues later." },
+        // The queue screen: the site's play page, asked in game.
+        { "queue_headline", "Find a match" },
+        { "queue_go", "FIND MATCH" },
+        { "queue_no", "Not now" },
+        { "queue_high_ping", "Your ping is {0} ms. A match cuts your damage from {1} ms, so a closer region will play better." },
 
-        { "queued", "You are in the queue." },
-        { "not_queued", "You have <color=white>left the queue</color>." },
         { "afk_on", "You are <color=white>AFK</color> until you type <color=white>/afk</color> again." },
         { "afk_off", "You are <color=white>back</color>." },
         { "queue_disabled", "Matchmaking is <color=white>disabled</color> on this server right now." },
@@ -108,7 +102,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "match_over_name", "Back in the arena" },
         { "match_over_line", "That match ended without you" },
 
-        { "board_title", "Last {0} minutes" },
+        { "board_title", "Lobby" },
         { "match_found_browser", "Open this and log in to select your kit and start your match" },
     };
 }

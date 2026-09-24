@@ -27,11 +27,13 @@ The Unity UIs PeekSeek draws in game, built from one project into two Workshop i
   player round it by kills, the first on the left, the second on the right, six a side,
   each with its kills on its outer corner; a face at half strength is somebody dead, at
   the spawn or away, and away is marked.
-- **The banner, the death card, the scoreboard and the choice**, in the same item, so
-  both servers draw them: a label over a name a quarter of the way down the screen; a
-  card at the bottom saying who killed you and with what, with the respawn count in the
-  middle for the lobby; a page of the site with a row per player; and a question with
-  two tiles, which the lobby asks whether to queue on.
+- **The banner, the death card, the scoreboard and the queue screen**, in the same
+  item, so both servers draw them: a label over a name a quarter of the way down the
+  screen; a card at the bottom saying who killed you and with what, with the respawn
+  count in the middle for the lobby; a page of the site with a row per player, the
+  PeekSeek mark on its heading, a rank badge on every face and five numbered columns;
+  and the site's play page asked in game, gamemode tiles and a region, which is how a
+  player queues from the lobby.
 - **The tag** (`Assets/PeekSeek/Bundles/Effects/Tag/`): a word, three pips and a word in
   red at the bottom of the screen, which Raid says OFF BASE with.
 
@@ -74,7 +76,9 @@ The site and the stream overlay are different systems on purpose (see the
 `peekseek-design` skill), and each screen follows the one it is closest to.
 
 **The boards are pages of the site.** They are something you click, so they are built
-like the kit picker: the `.mainElement` panel (`#0a0a0a`, radius 8, padding 20), tiles in
+like the kit picker, and none of them is see-through: a menu is read while standing
+still, and one you can see the map through is one nobody can read. The `.mainElement`
+panel (`#0a0a0a`, radius 8, padding 20), tiles in
 the sub-panel grey (`#1a1a1a`), the same selected treatment (a `#333` fill and a
 "Selected" label in `#aae0ff`, not a border), `#fff` text with `#aaa` for what is read
 second, and the site's 10px gaps. The timer turns the overlay's jeopardy red for the
@@ -247,11 +251,15 @@ The banner (`Hud/Banner.cs`): `Banner_Label`, `Banner_Name`, `Banner_Line`, TMP 
 The death card (`Hud/DeathCard.cs`): `Card` shown or not, `Card_Label`, `Card_Killer`,
 `Card_Weapon` (a silhouette, off when the game names no item), `Card_Headshot`,
 `Card_Distance`, `Card_Line`; and `Respawn` with `Respawn_Count`. The scoreboard
-(`Hud/Scoreboard.cs`): `Board_Title`, `Board_Sub`, `Head_A` to `Head_D`, and twelve rows
-of `Row{n}`, `Row{n}_Me`, `Row{n}_Head` for a heading row, `Row{n}_Body` with
-`Row{n}_Avatar`, `Row{n}_Name`, `Row{n}_Tag` and `Row{n}_A` to `Row{n}_D`. The choice:
-`Choice_Headline`, `Choice_Line`, `Choice{n}_Name`, `Choice{n}_Blurb`, and the buttons
-`BoardChoice0` and `BoardChoice1`. The tag (`Hud/Tag.cs`): `Tag_Text`, `Tag_Pip0` to
+(`Hud/Scoreboard.cs`): `Board_Title`, `Board_Sub`, `Board_Timer`, `Head_A` to `Head_E`,
+and twelve rows of `Row{n}`, `Row{n}_Me`, `Row{n}_Head` for a heading row, `Row{n}_Body`
+with `Row{n}_Avatar`, `Row{n}_Rank` and its `Row{n}_Rank_Icon`, `Row{n}_Name`,
+`Row{n}_Tag` and `Row{n}_A` to `Row{n}_E`. Its panel is a share of the screen rather
+than a fixed width, and everything in a row hangs off the right edge or off the face,
+so a wider monitor gets a wider board and nothing runs off it. The queue screen:
+`Queue_Headline`, `Queue_Line`, `Queue_Go`, `Queue_No`, `Queue_Hint`, `Mode{n}_Name`,
+`Mode{n}_Blurb`, `Mode{n}_On`, `Region{n}_Name`, `Region{n}_On`, and the buttons
+`BoardMode{n}`, `BoardRegion{n}`, `BoardQueue` and `BoardQueueNo`. The tag (`Hud/Tag.cs`): `Tag_Text`, `Tag_Pip0` to
 `Tag_Pip2`, `Tag_Hurt`. The bar has two more per face, `L{n}_Gone` and `L{n}_Ping`, and
 the clock's second shape, `Clock` with `Clock_Phase` and `Clock_Timer`, shown instead of
 `Timer` when there is a word to put over it. The lobby's block is `State`,

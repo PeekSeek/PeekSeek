@@ -1,0 +1,6 @@
+GUID 4369a4e938bf4db3862c83355a910129
+Type Effect
+ID 43125
+
+// The queue screen: which gamemodes, which region, and a button that says go.
+Preload 0

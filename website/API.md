@@ -148,7 +148,7 @@ Both reads answer the same shape:
 ```jsonc
 {
   "steam64": "7656…", "name": "Ferret", "avatar": "https://avatars.steamstatic.com/…_full.jpg",
-  "elo": 300, "rank": "Gold", "matchId": 42, "relayTo": null,
+  "elo": 300, "rankIcon": "gold1", "matchId": 42, "relayTo": null,
   "choose": {
     "kits": ["meta", "sniper"],
     "powerups": ["Movement", "Ammo", "Boom"],
@@ -172,8 +172,9 @@ than skipping it, so population counts do not include somebody who cannot be mat
 non-null is the site's promise that a server holds the match and this player will be
 let in.** It is set from the moment a server takes the match, during selection, because
 the picks are made on that server as well as here: a player relayed from a lobby gets
-the board there, and one who queued on the site can pick on either. `rank` is the name
-of the rank the Elo earns, for a board.
+the board there, and one who queued on the site can pick on either. `rankIcon` is the
+badge the Elo earns, served at `/static/ranks/<icon>.png`, which a server draws on the
+player's face.
 
 `choose` is what this player still gets to decide, and null when there is nothing: no
 match, or a gamemode that offers them one kit and one powerup. **A list with one entry in

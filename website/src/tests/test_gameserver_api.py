@@ -488,7 +488,7 @@ def test_asking_about_a_player_does_not_queue_them(gameserver, user_factory):
     body = r.json()
     assert body["steam64"] == str(player.steam64)
     assert body["elo"] == 300
-    assert body["rank"]
+    assert body["rankIcon"]
     assert body["matchId"] is None
     assert body["relayTo"] is None
     assert body["choose"] is None

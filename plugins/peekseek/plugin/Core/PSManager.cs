@@ -995,13 +995,14 @@ internal abstract class PSManager {
 
     // ---- the scoreboard ---------------------------------------------------------
 
-    /// The board as it stands: the map and the mode over it, a heading per team with
-    /// its rounds, a row per player on the roster with their numbers this match, the
-    /// MVP tagged.
+    /// The board as it stands: the gamemode over whether the Elo moves and the map, a
+    /// heading per team with its rounds, a row per player on the roster with their
+    /// numbers this match, the MVP tagged.
     private static ScoreSheet Sheet() {
         ScoreSheet sheet = new() {
-            Title = Data?.Settings?.Map ?? "",
-            Sub = Data?.Gamemode?.Name ?? ""
+            Title = Data?.Gamemode?.Name ?? "",
+            Sub = MatchLine(),
+            Timer = Running?.SecondsLeft is int left and >= 0 ? $"{left / 60}:{left % 60:00}" : null
         };
         if (Data == null) return sheet;
 
@@ -1021,12 +1022,32 @@ internal abstract class PSManager {
                         kills.ToString(),
                         StatService.GetStatDeaths(id).ToString(),
                         hs.ToString(),
-                        Mathf.RoundToInt(StatService.GetStatDamageDealt(id)).ToString()
+                        Mathf.RoundToInt(StatService.GetStatDamageDealt(id)).ToString(),
+                        PingOf(id)
                     ]
                 });
             }
         }
         return sheet;
+    }
+
+    /// A player's ping, or nothing at all for one who is not here: the roster is on
+    /// the board whether or not everybody turned up.
+    private static string PingOf(CSteamID steamID) {
+        SteamPlayer client = PlayerTool.getSteamPlayer(steamID);
+        return client == null ? "" : Ping.Milliseconds(client).ToString();
+    }
+
+    /// Whether the Elo moves, and the map, which is the line every match board
+    /// carries. A site too old to say whether the gamemode is ranked leaves the word
+    /// off rather than guessing at somebody's Elo.
+    private static string MatchLine() {
+        string map = Data?.Settings?.Map ?? "";
+        return Data?.Gamemode?.UsesElo switch {
+            true => $"Ranked   {map}",
+            false => $"Unrated   {map}",
+            _ => map
+        };
     }
 
     /// The board on a held plugin key: up while the first one is down, gone when it

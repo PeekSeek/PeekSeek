@@ -59,6 +59,12 @@ internal class PSGamemode {
 
     [JsonProperty("name")]
     internal string Name = null!;
+
+    /// Whether this gamemode moves anybody's Elo, for the word over a scoreboard.
+    /// Null from a site that does not say, which is the one case worth telling apart
+    /// from false.
+    [JsonProperty("usesElo")]
+    internal bool? UsesElo;
 }
 
 [UsedImplicitly]
