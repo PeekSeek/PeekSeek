@@ -706,3 +706,60 @@ def test_leaderboard_renders_for_a_signed_out_visitor(client):
 
     statModule.Stat.forgetTop()
     assert client.get("/esports/").status_code == 200
+
+
+def test_play_page_carries_the_region_activity_it_has(client, login, user_factory):
+    """The play page hands the region line its numbers as data attributes, and the
+    script decides which are worth showing. Without this the line is silently empty on
+    any environment whose lobbies report somewhere else, which is exactly what dev
+    looks like."""
+    from datetime import datetime, timedelta
+    from time import time
+
+    from src.core.db import open as opendb
+    from src.core import models as data
+
+    player = user_factory()
+    with opendb() as db:
+        db.add(data.AuthorizedServer(address="203.0.113.10", region="paris"))
+        db.add(data.LobbyPopulation(address="203.0.113.10", players=6, at=int(time())))
+        match = data.Match(
+            gamemode=0,
+            teams=[{"name": "one", "users": []}, {"name": "two", "users": []}],
+            matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
+        )
+        db.add(match)
+        db.flush()
+        db.add(
+            data.MatchResult(
+                matchId=match.id,
+                region="paris",
+                gamemode=0,
+                startTime=datetime.utcnow() - timedelta(minutes=8),
+                endTime=datetime.utcnow() - timedelta(minutes=4),
+                data={},
+            )
+        )
+
+    login(client, player)
+    r = client.get("/play")
+
+    assert r.status_code == 200
+    assert 'id="regionActivity"' in r.text
+    assert 'data-paris-players="6"' in r.text
+    assert 'data-paris-last="4"' in r.text
+
+
+def test_play_page_says_nothing_about_a_region_with_no_lobby(
+    client, login, user_factory
+):
+    """A quiet region gets no attributes at all, so the line stays hidden rather than
+    advertising an empty arena to the next player who was about to queue."""
+    player = user_factory()
+
+    login(client, player)
+    r = client.get("/play")
+
+    assert r.status_code == 200
+    assert 'id="regionActivity"' in r.text
+    assert "data-paris-players" not in r.text

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from time import time
 from typing import Optional
 
@@ -134,12 +134,15 @@ class LobbyPopulation(SQLModel, table=True):
                 )
                 if region["lastMatchMinutes"] is not None:
                     continue
-                ended = (
-                    result.endTime.timestamp()
-                    if result.endTime.tzinfo
-                    else result.endTime.replace(tzinfo=None).timestamp()
-                )
-                region["lastMatchMinutes"] = max(0, int((time() - ended) // 60))
+                # endTime is written as a naive UTC datetime and read back naive on
+                # SQLite and aware on Postgres. A naive one is read as *local* time by
+                # .timestamp(), which on a UTC+2 box aged every match by two hours and
+                # pushed it past the half hour the page is willing to mention.
+                ended = result.endTime
+                if ended.tzinfo is None:
+                    ended = ended.replace(tzinfo=timezone.utc)
+                since = (datetime.now(timezone.utc) - ended).total_seconds()
+                region["lastMatchMinutes"] = max(0, int(since // 60))
         return activity
 
     @staticmethod
