@@ -247,7 +247,7 @@ MonoBehaviour:
       m_Calls: []
   m_text: 'TAKES ROUND 4'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8e2b4d0f6c3a5b7d9f1e2a3b4c5d6e7f, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: b2d5f8a1c4e7b0d3f6a9c2e5b8d1f4a7, type: 2}
   m_sharedMaterial: {fileID: 0}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
@@ -381,7 +381,7 @@ MonoBehaviour:
       m_Calls: []
   m_text: 'South'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8e2b4d0f6c3a5b7d9f1e2a3b4c5d6e7f, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: b2d5f8a1c4e7b0d3f6a9c2e5b8d1f4a7, type: 2}
   m_sharedMaterial: {fileID: 0}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
@@ -515,7 +515,7 @@ MonoBehaviour:
       m_Calls: []
   m_text: 'The flag is down'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 7d1a3c9e5b2f4a6c8e0d1f2a3b4c5d6e, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: a1c4e7f0b3d6a9c2e5f8b1d4a7c0e3f6, type: 2}
   m_sharedMaterial: {fileID: 0}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}

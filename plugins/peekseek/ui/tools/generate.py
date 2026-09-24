@@ -17,8 +17,9 @@ same px. The match HUD is composited over play like the stream overlay, so it is
 like that: one flat fill, greyscale, red only for jeopardy. Sizes are the site's px and
 the overlay's vw at 1920, which is what the game draws at UI scale 1.
 
-The font is Inter, because the site asks for the system UI font and Inter is the open
-one that reads the same; the game leaves a font that is not TextMeshPro's own alone.
+The font is Selawik, because the site asks for the system UI font, Segoe UI on Windows,
+and Selawik is Microsoft's open stand-in for it; the game leaves a font that is not
+TextMeshPro's own alone.
 """
 
 import sys
@@ -28,7 +29,7 @@ from PIL import Image
 
 import footprints
 import sitemap
-from unityyaml import (CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, button, canvas, column,
+from unityyaml import (CAPLINE, CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, button, canvas, column,
                        castle_alpha, centered, disc_alpha, fit_height, fit_width, ignore_layout, image, layout_size, mask, prefab,
                        ring_alpha, rounded_alpha, row, silhouette, skull_alpha, sprite, sprite_file, stretch, swords_alpha,
                        text, top_center, top_left, top_right, top_stretch)
@@ -559,11 +560,11 @@ def health_bar(seat, name):
 # plugin switches on when there is something to say, in one row that closes up round
 # what is off, so a block with only the arena on it is still centred.
 #
-# There are no teams, so faces go round the block by score, the first on the left, the
-# second on the right, and so on, six a side. On a face's outer corner, their kills
-# this arena as a white tilted number, on nothing; a face at half strength is
-# somebody who is not fighting, dead, waiting at the spawn, or away, and away gets
-# a mark on its inner corner so the two can be told apart.
+# There are no teams, so faces sit either side of the block by score, six a side, read
+# left to right. On every face's bottom-left corner, their kills this arena as a white
+# number leaning left, on nothing; a face at half strength is somebody who is not
+# fighting, dead, waiting at the spawn, or away, and away gets a mark on its top corner
+# nearest the block so the two can be told apart.
 
 LOBBY_SEATS = 6
 LOBBY_WING_W = WING_PAD + LOBBY_SEATS * (SEAT + SEAT_GAP) - SEAT_GAP
@@ -589,7 +590,7 @@ def lobby_bar():
          size=11, colour=MUTED, halign=RIGHT, bold=True, spacing=8)
     text(line.add(top_left("Arena_Timer", 0, 0, 56, ROW, active=False)), "2:10", size=18, colour=INK, halign=LEFT, mono=True)
 
-    for prefix, place, corner, tilt in (("L", top_left, 0, -PICK_TILT), ("R", top_right, 1, PICK_TILT)):
+    for prefix, place, corner in (("L", top_left, 0), ("R", top_right, 1)):
         for i in range(LOBBY_SEATS):
             x = LOBBY_WING_W - WING_PAD - (i + 1) * SEAT - i * SEAT_GAP
             seat = hud.add(place(f"{prefix}{i}", x, BLOCK_Y, SEAT, SEAT, active=False))
@@ -604,8 +605,8 @@ def lobby_bar():
             # finds there, so a container with the text one level down takes the
             # message and drops it, and the face keeps whatever the prefab was saved
             # with.
-            kills = seat.add(Node(f"{prefix}{i}_Kills", anchor_min=(corner, 0), anchor_max=(corner, 0),
-                                  position=(6 if corner == 0 else -6, 4), size=(KILLS_W, 18), rotation=tilt, active=False))
+            kills = seat.add(Node(f"{prefix}{i}_Kills", anchor_min=(0, 0), anchor_max=(0, 0),
+                                  position=(6, 4), size=(KILLS_W, 18), rotation=PICK_TILT, active=False))
             text(kills, "0", size=14, colour=INK, halign=CENTER, bold=True)
             away = seat.add(Node(f"{prefix}{i}_Away", anchor_min=(1 - corner, 1), anchor_max=(1 - corner, 1),
                                  position=(2 if corner == 1 else -2, -2), size=(26, 12), active=False))
@@ -772,8 +773,8 @@ def death_card():
          size=12, colour=MUTED, halign=CENTER)
 
     count = root.add(Node("Respawn", anchor_min=(0.5, 0.5), anchor_max=(0.5, 0.5), position=(0, 40), size=(240, 80), active=False))
-    text(count.add(top_stretch("Respawn_Count", 0, 52, 0)), "5", size=44, colour=INK, halign=CENTER, mono=True)
-    text(count.add(top_stretch("Respawn_Label", 56, 16, 0)), "RESPAWNING",
+    text(count.add(top_stretch("Respawn_Count", 0, 60, 0)), "5", size=44, colour=INK, halign=CENTER, mono=True)
+    text(count.add(top_stretch("Respawn_Label", 62, 16, 0)), "RESPAWNING",
          size=11, colour=MUTED, halign=CENTER, bold=True, spacing=12)
 
     return root
@@ -782,11 +783,20 @@ def death_card():
 # ---- the scoreboard -------------------------------------------------------------------
 #
 # A page of the site: a heading with the PeekSeek mark and what this board is, a clock
-# on the right when there is one to show, five numbered columns, and a row per player
+# on the right when there is one to show, four named columns, and a row per player
 # with their face and name. A row can instead be a section heading, a team's name over
 # its players, so one prefab draws a two-team match and a lobby's single list. The
-# columns are filled by whoever draws it: the lobby's are K, D, HS%, MS and ELO, a
-# match's K, D, HS%, DMG and MS.
+# columns are filled by whoever draws it: the lobby's are K, D, HS% and ELO, a match's
+# K, D, HS% and DMG.
+#
+# The ping sits after the columns with no name over it, because "23 ms" says what it
+# is, and outside the viewer's fill, because it is not a stat of the player but how
+# well they are talking to this server. It is set close after the fill, not at the far
+# end of a column as wide as a stat's, or it reads as belonging to nothing.
+#
+# The heading is the mark at the size it is drawn on the site, and the title beside
+# it at the size of the wordmark's capitals and level with them, so the two read as
+# one line rather than a picture and a word that happen to be near each other.
 #
 # A face carries its rank the way a player on the bar carries their pick: the badge on
 # the bottom-right corner, tilted outward, on nothing. Everything inside a row is 3px
@@ -808,12 +818,14 @@ BOARD_ROW_H = 30
 BOARD_ROW_GAP = 2
 BOARD_FACE = BOARD_ROW_H - 2 * BOARD_PAD
 BOARD_RANK = 13         # the badge on a face's corner
-BOARD_COLS = ("A", "B", "C", "D", "E")
+BOARD_COLS = ("A", "B", "C", "D")
 BOARD_COL_W = 54
-BOARD_HEAD_H = 26
+BOARD_COL_PAD = 12      # between the last number and the end of the fill
+BOARD_PING_W = 56       # after the fill, the ping in it from its left edge
+BOARD_PING_GAP = 8
+BOARD_HEAD_H = LOGO_H   # the mark at the site's own size sets the heading's height
+BOARD_TITLE = 20        # Selawik's capitals at this size are the wordmark's on a 28px mark
 BOARD_SUB_H = 18
-BOARD_LOGO_H = 18
-BOARD_NAME_MIN = 150    # what is left for a name once the columns have their width
 
 
 def wide(name, left, y, right, h, **kw):
@@ -821,6 +833,11 @@ def wide(name, left, y, right, h, **kw):
     down from the top. The one shape a board built from the right edge needs."""
     return Node(name, anchor_min=(0, 1), anchor_max=(1, 1), pivot=(0, 1),
                 position=(left, -y), size=(-(left + right), h), **kw)
+
+
+def board_col(c):
+    """How far column `c`'s right edge is from the board's."""
+    return BOARD_PING_W + BOARD_COL_PAD + (len(BOARD_COLS) - 1 - c) * BOARD_COL_W
 
 
 def scoreboard():
@@ -838,32 +855,28 @@ def scoreboard():
     fit_height(board)
 
     head = board.add(wide("Board_Head", 0, 0, 0, BOARD_HEAD_H))
-    logo_w = LOGO_W * BOARD_LOGO_H / LOGO_H
-    image(head.add(top_left("Logo", 0, 3, logo_w, BOARD_LOGO_H)), TEXT, sprite=SPR["logo"],
+    image(head.add(top_left("Logo", 0, 0, LOGO_W, LOGO_H)), TEXT, sprite=SPR["logo"],
           sliced=False, preserve_aspect=True)
-    text(head.add(wide("Board_Title", logo_w + 10, 0, 130, BOARD_HEAD_H)), "Lobby", size=20, colour=TEXT, bold=True)
+    text(head.add(wide("Board_Title", LOGO_W + 12, 0, 130, BOARD_HEAD_H)), "Lobby",
+         size=BOARD_TITLE, colour=TEXT, valign=CAPLINE, bold=True)
     text(head.add(top_right("Board_Timer", 0, 0, 120, BOARD_HEAD_H, active=False)), "2:10",
-         size=18, colour=TEXT, halign=RIGHT, mono=True)
+         size=18, colour=TEXT, halign=RIGHT, valign=CAPLINE, mono=True)
 
     # On a match always, and never on the lobby, where it is switched off and the rows
     # move up to meet the heading.
-    text(board.add(wide("Board_Sub", logo_w + 10, 0, 0, BOARD_SUB_H, active=False)), "",
+    text(board.add(wide("Board_Sub", LOGO_W + 12, 0, 0, BOARD_SUB_H, active=False)), "",
          size=12, colour=SECONDARY)
 
     headings = board.add(wide("Board_Columns", 0, 0, 0, 16))
     for c, col in enumerate(BOARD_COLS):
-        right = (len(BOARD_COLS) - 1 - c) * BOARD_COL_W
-        text(headings.add(top_right(f"Head_{col}", right, 0, BOARD_COL_W, 14)), col,
+        text(headings.add(top_right(f"Head_{col}", board_col(c), 0, BOARD_COL_W, 14)), col,
              size=10, colour=SECONDARY, halign=RIGHT, bold=True, spacing=6)
 
-    columns = len(BOARD_COLS) * BOARD_COL_W
+    columns = board_col(0) + BOARD_COL_W
     for i in range(BOARD_ROWS):
         line = board.add(wide(f"Row{i}", 0, 0, 0, BOARD_ROW_H, active=False))
 
-        # The fill stops before the last column: the ping is not a stat of the player,
-        # it is how well they are talking to this server, so it sits outside the row
-        # rather than inside it.
-        image(line.add(wide(f"Row{i}_Me", 0, 0, BOARD_COL_W, BOARD_ROW_H, active=False)), SUB, sprite=SPR["round6"])
+        image(line.add(wide(f"Row{i}_Me", 0, 0, BOARD_PING_W, BOARD_ROW_H, active=False)), SUB, sprite=SPR["round6"])
 
         text(line.add(top_left(f"Row{i}_Head", BOARD_PAD, 0, 300, BOARD_ROW_H, active=False)), "NORTH",
              size=10, colour=SECONDARY, bold=True, spacing=8)
@@ -885,9 +898,10 @@ def scoreboard():
         text(body.add(top_right(f"Row{i}_Tag", columns + 4, 0, 56, BOARD_ROW_H, active=False)), "MVP",
              size=9, colour=SELECTED_LABEL, halign=RIGHT, bold=True, spacing=8)
         for c, col in enumerate(BOARD_COLS):
-            right = (len(BOARD_COLS) - 1 - c) * BOARD_COL_W
-            text(body.add(top_right(f"Row{i}_{col}", right, 0, BOARD_COL_W, BOARD_ROW_H)), "0",
+            text(body.add(top_right(f"Row{i}_{col}", board_col(c), 0, BOARD_COL_W, BOARD_ROW_H)), "0",
                  size=13, colour=TEXT, halign=RIGHT)
+        text(body.add(top_right(f"Row{i}_Ping", 0, 0, BOARD_PING_W - BOARD_PING_GAP, BOARD_ROW_H)), "23 ms",
+             size=12, colour=SECONDARY)
 
     return root
 

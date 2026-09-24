@@ -12,7 +12,7 @@ a nine-sliced sprite under a GUID this file chooses, and `image()` can point at 
 
 Fonts: the game replaces a TextMeshPro font at spawn only when the prefab has none or
 has TMP's stock one, so a font of our own is left alone. `text()` references the two
-Inter assets the build script creates under fixed GUIDs.
+Selawik assets the build script creates under fixed GUIDs.
 """
 
 import math
@@ -37,14 +37,25 @@ TEXT_MESH_PRO_UGUI = "f4688fdb7df04437aeb418b961361dc5"
 # GUIDs, so a prefab written here and a font made there agree without either knowing the
 # other exists. The shared material is left null on purpose: TextMeshPro then takes the
 # font's own, which saves this file having to know a sub-asset id Unity generates.
-FONT_REGULAR = "7d1a3c9e5b2f4a6c8e0d1f2a3b4c5d6e"
-FONT_BOLD = "8e2b4d0f6c3a5b7d9f1e2a3b4c5d6e7f"
+#
+# Selawik, because the site asks for the system UI font and on Windows that is Segoe UI,
+# which may not be shipped; Selawik is Microsoft's open stand-in for it, drawn to the
+# same metrics. Inter, the earlier choice, read visibly wider than the site.
+FONT_REGULAR = "a1c4e7f0b3d6a9c2e5f8b1d4a7c0e3f6"
+FONT_BOLD = "b2d5f8a1c4e7b0d3f6a9c2e5b8d1f4a7"
 # JetBrains Mono Bold, for a clock: every digit the same width, so 0:59 to 1:00 does
 # not shift the text. TextMeshPro cannot ask a proportional font for tabular figures.
 FONT_MONO = "9f3c5e1a7d4b6c8e0a2f3b4c5d6e7f8a"
 
+# How tall a line of each font is, as a multiple of its size: ascent to descent, off
+# the font assets BuildBundle.cs makes.
+LINE_HEIGHT = {FONT_REGULAR: 1.2, FONT_BOLD: 1.2, FONT_MONO: 1.32}
+
 LEFT, CENTER, RIGHT = 1, 2, 4
 TOP, MIDDLE, BOTTOM = 256, 512, 1024
+# The middle of the capitals on the middle of the box, rather than the middle of the
+# line's ascent and descent: what puts a word level with a picture beside it.
+CAPLINE = 8192
 
 HEADER = [
     "  m_ObjectHideFlags: 0",
@@ -408,11 +419,22 @@ def button(node, target_image_id, normal, hover, pressed):
     ])
 
 
+def fits_line(node, line, wrap):
+    """Refuse a box shorter than one line of its text. The overflow mode is Ellipsis,
+    and TextMeshPro draws nothing at all when even the first line does not fit, so a
+    box a few pixels short is a blank one in game rather than a clipped one."""
+    fixed_height = node.anchor_min[1] == node.anchor_max[1]
+    if wrap or not fixed_height or node.size[1] >= line:
+        return
+    raise ValueError(f"{node.name} is {node.size[1]:g}px tall, its text needs {line:.1f}")
+
+
 def text(node, content, *, size, colour, halign=LEFT, valign=MIDDLE, bold=False,
          wrap=False, spacing=0, uppercase=False, mono=False):
     """TextMeshPro text. `spacing` is letter spacing in hundredths of an em, the unit
     TMP uses, so CSS's 0.1em is 10."""
     font = FONT_MONO if mono else FONT_BOLD if bold else FONT_REGULAR
+    fits_line(node, size * LINE_HEIGHT[font], wrap)
     node.component(222, ["m_CullTransparentMesh: 1"])
     node.mono(TEXT_MESH_PRO_UGUI, [
         "m_Material: {fileID: 0}",

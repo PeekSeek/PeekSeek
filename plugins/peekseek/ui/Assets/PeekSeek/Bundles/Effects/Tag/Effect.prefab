@@ -291,7 +291,7 @@ MonoBehaviour:
       m_Calls: []
   m_text: 'OFF BASE'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8e2b4d0f6c3a5b7d9f1e2a3b4c5d6e7f, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: b2d5f8a1c4e7b0d3f6a9c2e5b8d1f4a7, type: 2}
   m_sharedMaterial: {fileID: 0}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
@@ -713,7 +713,7 @@ MonoBehaviour:
       m_Calls: []
   m_text: '-12 / s'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8e2b4d0f6c3a5b7d9f1e2a3b4c5d6e7f, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: b2d5f8a1c4e7b0d3f6a9c2e5b8d1f4a7, type: 2}
   m_sharedMaterial: {fileID: 0}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}

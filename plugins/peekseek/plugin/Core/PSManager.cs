@@ -95,6 +95,7 @@ internal abstract class PSManager {
     /// a bar that shows a teammate at half health two seconds after the hit is a bar
     /// nobody trusts.
     private const float HudIntervalSeconds = 0.25f;
+    private static float LastStaminaTopUp;
     private static float LastHudTick;
 
     /// Separate from UpdateIntervalSeconds: this is a console log for debugging alive/dead
@@ -517,6 +518,7 @@ internal abstract class PSManager {
     private static void OnClientConnected(CSteamID steamID) {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
+        Stamina.HideBar(player);
 
         RemoteAPI.FetchPlayer(steamID.m_SteamID);
 
@@ -1022,9 +1024,9 @@ internal abstract class PSManager {
                         kills.ToString(),
                         StatService.GetStatDeaths(id).ToString(),
                         hs.ToString(),
-                        Mathf.RoundToInt(StatService.GetStatDamageDealt(id)).ToString(),
-                        PingOf(id)
-                    ]
+                        Mathf.RoundToInt(StatService.GetStatDamageDealt(id)).ToString()
+                    ],
+                    Ping = PingOf(id)
                 });
             }
         }
@@ -1033,9 +1035,9 @@ internal abstract class PSManager {
 
     /// A player's ping, or nothing at all for one who is not here: the roster is on
     /// the board whether or not everybody turned up.
-    private static string PingOf(CSteamID steamID) {
+    private static int? PingOf(CSteamID steamID) {
         SteamPlayer client = PlayerTool.getSteamPlayer(steamID);
-        return client == null ? "" : Ping.Milliseconds(client).ToString();
+        return client == null ? null : Ping.Milliseconds(client);
     }
 
     /// Whether the Elo moves, and the map, which is the line every match board
@@ -1347,6 +1349,10 @@ internal abstract class PSManager {
         // Ahead of the Data guard: a server with no match is exactly the one that
         // should be thinking about going down for updates.
         TickRestart(now);
+        if (now - LastStaminaTopUp >= Stamina.TopUpIntervalSeconds) {
+            LastStaminaTopUp = now;
+            Stamina.Refill();
+        }
         Feed.Tick();
         Banner.Tick();
         Card.Tick();
@@ -1362,6 +1368,7 @@ internal abstract class PSManager {
         if (now - LastHudTick >= HudIntervalSeconds) {
             LastHudTick = now;
             Hud.Tick(HudState());
+            if (Scores.AnyUp) Scores.Refresh(Sheet());
         }
 
         if (now - LastVisibilityCheck >= VisibilityIntervalSeconds) {

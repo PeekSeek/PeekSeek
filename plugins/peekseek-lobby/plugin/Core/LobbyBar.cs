@@ -31,11 +31,11 @@ internal class LobbyView {
 }
 
 /// The bar along the top of the lobby: the block in the middle with the queue and the
-/// arena's clock on it, and a face per player round it, the first on the left, the
-/// second on the right, and so on, six a side, by kills. A face at full strength is
-/// somebody out in the arena; at half strength somebody who is not: dead, waiting at
-/// the spawn, which the game calls being safe, or away, which gets its own mark. Each
-/// face carries its kills on its outer corner.
+/// arena's clock on it, and a face per player either side of it, six a side, read left
+/// to right by kills: the most on the far left, the fewest on the far right. A face at
+/// full strength is somebody out in the arena; at half strength somebody who is not:
+/// dead, waiting at the spawn, which the game calls being safe, or away, which gets its
+/// own mark. Each face carries its kills on its bottom-left corner.
 ///
 /// Redrawn whole for every viewer whenever a face changes, like the match bar; the
 /// block's cells are patched on their own when only a clock moved. Checked twice a
@@ -102,11 +102,18 @@ internal class LobbyBar {
         EffectManager.SendUIEffect(asset, key, viewer.transportConnection, true);
         DrawBlock(viewer, view);
 
-        for (int i = 0; i < Seats * 2; i++) {
-            string slot = $"{(i % 2 == 0 ? "L" : "R")}{i / 2}";
-            LobbyFace face = view.Faces.ElementAtOrDefault(i);
-            Visible(viewer, slot, face != null);
-            if (face == null) continue;
+        List<LobbyFace> faces = view.Faces.Take(Seats * 2).ToList();
+        int leftOfBlock = Mathf.Min(Seats, (faces.Count + 1) / 2);
+        for (int seat = 0; seat < Seats; seat++) {
+            Visible(viewer, $"L{seat}", seat < leftOfBlock);
+            Visible(viewer, $"R{seat}", seat < faces.Count - leftOfBlock);
+        }
+
+        for (int i = 0; i < faces.Count; i++) {
+            // Seats are numbered outward from the block on both sides, so the left
+            // side is filled from its far end to put the order in reading order.
+            string slot = i < leftOfBlock ? $"L{leftOfBlock - 1 - i}" : $"R{i - leftOfBlock}";
+            LobbyFace face = faces[i];
 
             string picture = avatars.TryGetValue(face.Steam64, out string url) ? url : PeekSeekLobby.Config.DefaultAvatarURL;
             EffectManager.sendUIEffectImageURL(key, viewer.transportConnection, true, $"{slot}_Avatar", picture);

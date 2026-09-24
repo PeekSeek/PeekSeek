@@ -20,7 +20,7 @@ using UnityEngine.TextCore.LowLevel;
 /// all three platforms are present. It exists so the whole SDK does not have to be
 /// cloned to build screens that use none of it.
 ///
-/// It also makes the two Inter font assets the prefabs reference. TextMeshPro needs an
+/// It also makes the two Selawik font assets the prefabs reference. TextMeshPro needs an
 /// SDF font asset, which only the Editor can create from a .ttf, and the prefabs are
 /// written outside Unity against fixed GUIDs, so the assets are made here and pinned to
 /// those GUIDs. They are build output, not source: git ignores them.
@@ -45,8 +45,8 @@ public static class BuildBundle {
         ImportTextMeshProResources();
 
         // The GUIDs unityyaml.py writes into every text component.
-        EnsureFont("Inter-Regular", "7d1a3c9e5b2f4a6c8e0d1f2a3b4c5d6e");
-        EnsureFont("Inter-Bold", "8e2b4d0f6c3a5b7d9f1e2a3b4c5d6e7f");
+        EnsureFont("Selawik-Regular", "a1c4e7f0b3d6a9c2e5f8b1d4a7c0e3f6");
+        EnsureFont("Selawik-Bold", "b2d5f8a1c4e7b0d3f6a9c2e5b8d1f4a7");
         EnsureFont("JetBrainsMono-Bold", "9f3c5e1a7d4b6c8e0a2f3b4c5d6e7f8a");
 
         foreach (Mod mod in Mods()) BuildMod(mod);

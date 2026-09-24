@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using PeekSeek;
 using PeekSeek.Hud;
 using PeekSeekLobby.Core.Models;
 using PeekSeekLobby.Core.Web;
@@ -197,17 +198,11 @@ internal abstract class LobbyManager {
     private const float MagazineCheckIntervalSeconds = 2f;
     private const float ReputationSyncIntervalSeconds = 5f;
     private const float ProtectedNoticeIntervalSeconds = 3f;
-    private const float StaminaTopUpIntervalSeconds = 0.5f;
     private const float HudIntervalSeconds = 1f;
 
     private static float LastStaminaTopUp;
     private static float LastHudUpdate;
     private const int LeaderboardPlaces = 5;
-
-    /// Stamina is a byte out of 100. Refilling from just under full would send a
-    /// packet for a sliver nobody can see move, so it waits until some is genuinely
-    /// gone — still far faster than a sprint can empty it.
-    private const byte StaminaTopUpThreshold = 90;
 
     /// The player count the arena HUD was last told about. -1 so the first tick
     /// always sends, and so a connect can force a resend by putting it back.
@@ -410,6 +405,7 @@ internal abstract class LobbyManager {
     private static void OnPlayerConnected(CSteamID steamID) {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
+        Stamina.HideBar(player);
 
         PlayerState state = new() {
             KitCategory = DefaultKitCategory(),
@@ -1231,9 +1227,9 @@ internal abstract class LobbyManager {
             }
         }
 
-        if (PeekSeekLobby.Config.UnlimitedStamina && now - LastStaminaTopUp >= StaminaTopUpIntervalSeconds) {
+        if (PeekSeekLobby.Config.UnlimitedStamina && now - LastStaminaTopUp >= Stamina.TopUpIntervalSeconds) {
             LastStaminaTopUp = now;
-            RefillStamina();
+            Stamina.Refill();
         }
 
         if (now - LastHudUpdate >= HudIntervalSeconds) {
@@ -1246,6 +1242,9 @@ internal abstract class LobbyManager {
         if (now - LastBarUpdate >= BarIntervalSeconds) {
             LastBarUpdate = now;
             Bar.Show(View(now));
+            // The board held up at a reset is the arena that just ended; the numbers
+            // behind it are already back at zero.
+            if (Scores.AnyUp && now >= ScoresLockedUntil) Scores.Refresh(Sheet());
         }
 
         if (now - LastReputationSync >= ReputationSyncIntervalSeconds) {
@@ -1333,22 +1332,6 @@ internal abstract class LobbyManager {
 
         foreach (SteamPlayer client in Provider.clients) {
             if (client?.player != null) ForceSolo(client.player);
-        }
-    }
-
-    /// Topped back up rather than disabled outright: there is no switch for
-    /// infinite stamina, and refilling faster than it can visibly drain is
-    /// indistinguishable from having none.
-    ///
-    /// Only for whoever has actually spent some. serverModifyStamina replicates, so
-    /// topping up a bar that is already full is a packet per player, twice a second,
-    /// for the entire life of the server, that changes nothing on the receiving end.
-    private static void RefillStamina() {
-        foreach (SteamPlayer client in Provider.clients) {
-            if (client?.player == null || client.player.life.isDead) continue;
-            if (client.player.life.stamina >= StaminaTopUpThreshold) continue;
-
-            client.player.life.serverModifyStamina(byte.MaxValue);
         }
     }
 
@@ -1580,7 +1563,7 @@ internal abstract class LobbyManager {
     private static ScoreSheet Sheet() {
         ScoreSheet sheet = new() {
             Title = PeekSeekLobby.Instance.Translate("board_title"),
-            Columns = ["K", "D", "HS%", "ELO", "MS"],
+            Columns = ["K", "D", "HS%", "ELO"],
             Timer = ArenaCountingSince > 0
                 ? LobbyBar.Clock(PeekSeekLobby.Config.ResetIntervalSeconds - (Time.realtimeSinceStartup - ArenaCountingSince))
                 : null
@@ -1601,9 +1584,9 @@ internal abstract class LobbyManager {
                     state.Kills.ToString(),
                     state.Deaths.ToString(),
                     hs.ToString(),
-                    state.EloKnown ? state.Elo.ToString() : "",
-                    Ping.Milliseconds(client).ToString()
-                ]
+                    state.EloKnown ? state.Elo.ToString() : ""
+                ],
+                Ping = Ping.Milliseconds(client)
             });
         }
         return sheet;

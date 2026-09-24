@@ -31,7 +31,7 @@ The Unity UIs PeekSeek draws in game, built from one project into two Workshop i
   item, so both servers draw them: a label over a name a quarter of the way down the
   screen; a card at the bottom saying who killed you and with what, with the respawn
   count in the middle for the lobby; a page of the site with a row per player, the
-  PeekSeek mark on its heading, a rank badge on every face and five numbered columns;
+  PeekSeek mark on its heading, a rank badge on every face, four columns and the ping;
   and the site's play page asked in game, gamemode tiles and a region, which is how a
   player queues from the lobby.
 - **The tag** (`Assets/PeekSeek/Bundles/Effects/Tag/`): a word, three pips and a word in
@@ -55,7 +55,7 @@ Assets/PeekSeek/Bundles/Items/                             the flag and the sent
 Assets/PeekSeekKillFeed/Bundles/                           the kill feed's bundle and effect
 Assets/PeekSeek/Shaders/                                   the silhouette shader and its material
 Assets/PeekSeek/Sprites/                                   corners, role icons, the two footprints, the two maps
-Assets/PeekSeek/Fonts/                                     Inter and JetBrains Mono, OFL
+Assets/PeekSeek/Fonts/                                     Selawik and JetBrains Mono, OFL
 Assets/Editor/BuildBundle.cs                               turns the above into a mod
 tools/unityyaml.py                                         the Unity objects a screen is made of
 tools/footprints.py                                        draws a starting base from above
@@ -130,8 +130,9 @@ since uGUI has no border to set. A death nobody dealt, or one the server cannot 
 item to, is a shorter row: a skull and the name. The weapon is drawn with a shader of our own that
 takes only the sprite's alpha, so the site's coloured icons come out as white shapes.
 
-**The font is Inter**, with JetBrains Mono for the clock. The site asks for the system
-UI font, which cannot be shipped in a mod; Inter is the open one that reads the same.
+**The font is Selawik**, with JetBrains Mono for the clock. The site asks for the system
+UI font, which on Windows is Segoe UI and cannot be shipped in a mod; Selawik is
+Microsoft's open stand-in for it, drawn to the same metrics.
 The game only replaces a TextMeshPro font it recognises as TMP's stock one, so ours are
 left alone.
 
