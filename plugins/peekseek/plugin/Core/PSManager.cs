@@ -1026,7 +1026,9 @@ internal abstract class PSManager {
                         hs.ToString(),
                         Mathf.RoundToInt(StatService.GetStatDamageDealt(id)).ToString()
                     ],
-                    Ping = PingOf(id)
+                    // Ping is only worth reading while players are still choosing; once a
+                    // round is on, the board is about the fight.
+                    Ping = Status == EPSStatus.WAITING ? PingOf(id) : null
                 });
             }
         }
