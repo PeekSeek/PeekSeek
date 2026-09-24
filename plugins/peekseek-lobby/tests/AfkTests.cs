@@ -66,16 +66,17 @@ public class AfkTests {
     /// leaving matchmaking, and a match found while AFK still pulls the player into it.
     [Fact]
     public void GoingAfkLeavesQueueingAlone() {
-        LobbyManager.PlayerState state = new() { Afk = true };
+        LobbyManager.PlayerState state = new() { Queueing = true, Afk = true };
 
         Assert.True(state.Queueing);
     }
 
-    /// An AFK player is still queued, so they are still offered matches once their
-    /// arrival grace has passed. SendToMatch is what clears the AFK on the way out.
+    /// An AFK player who asked for the queue is still in it, so they are still offered
+    /// matches once their arrival grace has passed. SendToMatch is what clears the AFK
+    /// on the way out.
     [Fact]
     public void AnAfkPlayerIsStillOfferedMatches() {
-        LobbyManager.PlayerState state = new() { Afk = true, QueueFrom = 0 };
+        LobbyManager.PlayerState state = new() { Queueing = true, Afk = true, QueueFrom = 0 };
 
         Assert.True(state.WantsAMatch(100f));
     }

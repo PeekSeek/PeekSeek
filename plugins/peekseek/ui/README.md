@@ -23,9 +23,17 @@ The Unity UIs PeekSeek draws in game, built from one project into two Workshop i
 - **The kill feed**, its own item (`Assets/PeekSeekKillFeed/`) so the lobby can carry it
   without the rest: a row per kill at the top right, the weapon a white silhouette.
 - **The lobby's bar** (`Assets/PeekSeekKillFeed/Bundles/Effects/LobbyBar/`, in the same item):
-  the match bar's block with the PeekSeek mark on it and a face per player round it, the
-  first on the left, the second on the right, six a side; a face at half strength is
-  somebody dead, at the spawn or away.
+  the match bar's block with the queue and the arena's clock on it, and a face per
+  player round it by kills, the first on the left, the second on the right, six a side,
+  each with its kills on its outer corner; a face at half strength is somebody dead, at
+  the spawn or away, and away is marked.
+- **The banner, the death card, the scoreboard and the choice**, in the same item, so
+  both servers draw them: a label over a name a quarter of the way down the screen; a
+  card at the bottom saying who killed you and with what, with the respawn count in the
+  middle for the lobby; a page of the site with a row per player; and a question with
+  two tiles, which the lobby asks whether to queue on.
+- **The tag** (`Assets/PeekSeek/Bundles/Effects/Tag/`): a word, three pips and a word in
+  red at the bottom of the screen, which Raid says OFF BASE with.
 
 All of them are PeekSeek Match's (`plugin/Core/Hud/`), driven by whatever gamemode is
 running: the bar asks the gamemode for its role markers, its picks and its clock, and
@@ -234,6 +242,22 @@ The kill feed (`Hud/KillFeed.cs`, key `KillFeedKey`), six rows, newest at the to
 | `Row{n}_Weapon` | `Image` | the weapon, drawn as a silhouette, off when the game names no item |
 | `Row{n}_Headshot` | GameObject | the skull after the weapon, on for a headshot |
 | `Row{n}_Mine` | GameObject | the red hairline, on when the viewer is either name |
+
+The banner (`Hud/Banner.cs`): `Banner_Label`, `Banner_Name`, `Banner_Line`, TMP text.
+The death card (`Hud/DeathCard.cs`): `Card` shown or not, `Card_Label`, `Card_Killer`,
+`Card_Weapon` (a silhouette, off when the game names no item), `Card_Headshot`,
+`Card_Distance`, `Card_Line`; and `Respawn` with `Respawn_Count`. The scoreboard
+(`Hud/Scoreboard.cs`): `Board_Title`, `Board_Sub`, `Head_A` to `Head_D`, and twelve rows
+of `Row{n}`, `Row{n}_Me`, `Row{n}_Head` for a heading row, `Row{n}_Body` with
+`Row{n}_Avatar`, `Row{n}_Name`, `Row{n}_Tag` and `Row{n}_A` to `Row{n}_D`. The choice:
+`Choice_Headline`, `Choice_Line`, `Choice{n}_Name`, `Choice{n}_Blurb`, and the buttons
+`BoardChoice0` and `BoardChoice1`. The tag (`Hud/Tag.cs`): `Tag_Text`, `Tag_Pip0` to
+`Tag_Pip2`, `Tag_Hurt`. The bar has two more per face, `L{n}_Gone` and `L{n}_Ping`, and
+the clock's second shape, `Clock` with `Clock_Phase` and `Clock_Timer`, shown instead of
+`Timer` when there is a word to put over it. The lobby's block is `State`,
+`State_Timer`, `Gap`, `Arena` and `Arena_Timer`; its faces carry `L{n}_Kills` and
+`L{n}_Away`. The attack screen adds `Attack_Headline`, `Attack_Line`, `Attack_Site` and
+a `Spawn{s}{n}_Label` under every dot; every powerup tile has a `_Blurb`.
 
 `MatchHud.Show` redraws the whole bar for every viewer on every change; the tick, four
 times a second, sends only the clock and any health that moved, against a record of

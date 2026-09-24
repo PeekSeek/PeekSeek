@@ -275,3 +275,75 @@
   0%, 100% { transform: scaleX(0.15); }
   50% { transform: scaleX(1); }
 }
+
+/* ---- The rail: where the match is, in four steps ------------------------ */
+.rail {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 640px;
+} .rail div {
+  background: #121212;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #aaa;
+  min-width: 0;
+} .rail div b {
+  display: block;
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+} .rail div.now {
+  background: #1a1a1a;
+  outline: 3px solid #3334;
+} .rail div.now b {
+  color: #47bbe9;
+} .rail div.done b {
+  color: #aaa;
+}
+@media (max-width: 640px) { .rail { grid-template-columns: 1fr 1fr; } }
+
+/* ---- The turn row: the one thing that is yours right now ---------------- */
+.turn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 640px;
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 12px 14px;
+} .turn .t {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+} .turn .t b {
+  font-size: 15px;
+} .turn .t span {
+  color: #aaa;
+  font-size: 13px;
+}
+
+/* ---- The join line: the server's own deadline, in its words ------------- */
+.joinline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 640px;
+  background: #643c177f;
+  color: #ffa34e;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+} .joinline b {
+  font-variant-numeric: tabular-nums;
+}

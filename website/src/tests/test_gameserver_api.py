@@ -443,19 +443,31 @@ def test_queueing_reports_the_match_a_player_has_been_given(gameserver, user_fac
     r = gameserver.put(f"/server/v1/players/{first.steam64}/queue")
 
     assert r.json()["matchId"] == matchId
-    assert r.json()["relayTo"] is None, "not until the match is actually being hosted"
+    assert (
+        r.json()["relayTo"] == SERVER_CODE
+    ), "a server holds it, so there is somewhere to go"
 
 
-def test_a_player_is_only_relayed_once_their_match_is_live(gameserver, user_factory):
+def test_a_player_is_relayed_as_soon_as_a_server_holds_their_match(
+    gameserver, user_factory
+):
     """`relayTo` is the lobby's whole decision: null means keep them, set means send
-    them. It must not be set while the server is still waiting on picks, or players
-    arrive at a server that will refuse them."""
+    them. It is set from the moment a server holds the match, because the picks are
+    made on that server: the wait answer carries the roster so the server lets them
+    in, and the options so it can put the board in front of them."""
     first, second = user_factory(), user_factory()
     queue(first, second)
-    matchId = poll(gameserver)["matchId"]
+    wait = poll(gameserver)
+    matchId = wait["matchId"]
 
-    assert (
-        gameserver.get(f"/server/v1/players/{first.steam64}").json()["relayTo"] is None
+    assert wait["action"] == "wait"
+    assert {str(first.steam64), str(second.steam64)} == {
+        p for team in wait["match"]["teams"] for p in team["players"]
+    }
+    assert wait["options"]["kits"] and wait["options"]["powerups"]
+    assert wait["picked"][str(first.steam64)] == {"kit": None, "powerup": None}
+    assert gameserver.get(f"/server/v1/players/{first.steam64}").json()["relayTo"] == (
+        SERVER_CODE
     )
 
     endSelection(matchId)
@@ -473,14 +485,14 @@ def test_asking_about_a_player_does_not_queue_them(gameserver, user_factory):
 
     r = gameserver.get(f"/server/v1/players/{player.steam64}")
 
-    assert r.json() == {
-        "steam64": str(player.steam64),
-        "elo": 300,
-        "matchId": None,
-        "relayTo": None,
-        "choose": None,
-        "ban": None,
-    }
+    body = r.json()
+    assert body["steam64"] == str(player.steam64)
+    assert body["elo"] == 300
+    assert body["rank"]
+    assert body["matchId"] is None
+    assert body["relayTo"] is None
+    assert body["choose"] is None
+    assert body["ban"] is None
     with opendb() as db:
         assert db.query(data.UserHB).count() == 0
 
@@ -540,7 +552,7 @@ def test_match_status_reports_where_to_send_players(gameserver, user_factory):
         "id": matchId,
         "region": "paris",
         "status": "picking",
-        "relayTo": None,
+        "relayTo": SERVER_CODE,
     }
     assert gameserver.get(f"/server/v1/players/{first.steam64}").json()["matchId"] == (
         matchId

@@ -282,6 +282,9 @@ internal static class RaidWorld {
     /// it is asked once a second while a round runs.
     internal static bool MarkerStands(RaidSite site) => Marker(site) != null;
 
+    /// Where a site's flag stands, or null while there is none.
+    internal static Vector3? FlagPoint(RaidSite site) => Marker(site)?.GetServersideData().point;
+
     /// A layout offset turned to face the site and put on its anchor.
     private static Vector3 OnSite(RaidSite site, float x, float y, float z) {
         return site.AnchorPoint + Quaternion.Euler(0f, site.Yaw, 0f) * new Vector3(x, y, z);

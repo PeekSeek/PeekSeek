@@ -26,7 +26,7 @@ public class ConfigurationRoundTripTests {
         PeekSeekLobbyConfiguration loaded = RoundTrip(config);
 
         Assert.Equal(config.AllowedKitCategories, loaded.AllowedKitCategories);
-        Assert.Equal(config.szDiscordURL, loaded.szDiscordURL);
+        Assert.Equal(config.ChoiceEffectGUID, loaded.ChoiceEffectGUID);
         Assert.Equal(config.KillRewards.Count, loaded.KillRewards.Count);
         Assert.Equal(config.KillRewards[0].ItemID, loaded.KillRewards[0].ItemID);
         Assert.Equal(config.KillRewards[0].MaxCarried, loaded.KillRewards[0].MaxCarried);

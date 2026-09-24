@@ -66,6 +66,11 @@ public class PickBoard {
         internal int Site;
         internal int SpawnPick = -1;
 
+        /// What the attack screen says over the map, and under every dot.
+        internal string Line;
+        internal string SiteName;
+        internal string[] SpawnLabels = [];
+
         internal bool Answered => Pick >= 0 && (Spawns == 0 || SpawnPick >= 0);
 
         /// Whether the board is on the player's screen. An answer is only taken from a
@@ -146,12 +151,29 @@ public class PickBoard {
     }
 
     /// Put the attack screen up for one player: the map of site `site` with `spawns`
-    /// dots on it, and the raid options.
-    public void OpenAttack(SteamPlayer viewer, List<BoardOption> choices, int site, int spawns) {
-        Seat seat = new() { Options = choices, Face = BoardFace.Attack, Site = site, Spawns = spawns };
+    /// dots on it, and the raid options. `headline` says which round and which base,
+    /// `line` what the board wants, `spawnLabels` which way and how far for each dot.
+    public void OpenAttack(SteamPlayer viewer, List<BoardOption> choices, int site, int spawns,
+                           string headline, string line, string siteName, string[] spawnLabels) {
+        Seat seat = new() {
+            Options = choices, Face = BoardFace.Attack, Site = site, Spawns = spawns,
+            Headline = headline, Line = line, SiteName = siteName, SpawnLabels = spawnLabels ?? []
+        };
         seats[viewer.playerID.steamID.m_SteamID] = seat;
 
         Draw(viewer, seat, -1);
+    }
+
+    /// Answer a player's board for them, with what a teammate chose: the first answer
+    /// on a team counts, so the rest of the team is told rather than asked. Their
+    /// board comes down the way an answered one does.
+    public void Stamp(ulong steam64, int index) {
+        if (!seats.TryGetValue(steam64, out Seat seat) || seat.Pick >= 0) return;
+        if (index < 0 || index >= seat.Options.Count) return;
+
+        seat.Pick = index;
+        SteamPlayer player = PlayerTool.getSteamPlayer(new CSteamID(steam64));
+        if (player != null) Confirm(player, seat, $"{seat.Face}{index}_Taken");
     }
 
     /// Take one player's board down without an answer.
@@ -267,9 +289,11 @@ public class PickBoard {
         EffectManager.SendUIEffect(asset, PeekSeek.Config.PickUIKey, viewer.transportConnection, true);
         Visible(viewer, face, true);
 
-        // The attack screen has no headline: the map says which base, and the bar says
-        // which round. Everything else has one line above the tiles.
-        if (seat.Face != BoardFace.Attack) Send(viewer, $"{face}_Headline", seat.Headline);
+        Send(viewer, $"{face}_Headline", seat.Headline);
+        if (seat.Face == BoardFace.Attack) {
+            Send(viewer, "Attack_Line", seat.Line);
+            Send(viewer, "Attack_Site", seat.SiteName);
+        }
 
         for (int i = 0; i < Tiles(seat.Face); i++) {
             BoardOption option = seat.Options.ElementAtOrDefault(i);
@@ -279,15 +303,15 @@ public class PickBoard {
             Send(viewer, $"{face}{i}_Name", option.Name);
             Visible(viewer, $"{face}{i}_Taken", i == marked);
 
-            // A powerup tile is the items themselves, a row each with its count. The
-            // footprint tiles carry their own picture and a line; the swap tiles one
-            // picture and a line with what is left.
+            // Every tile has its one line. A powerup tile is the items themselves
+            // under it, a row each with its count; the footprint tiles carry their own
+            // picture; the swap tiles one picture.
+            Send(viewer, $"{face}{i}_Blurb", option.Blurb);
             if (seat.Face is BoardFace.Pick or BoardFace.Attack) {
                 DrawItems(viewer, $"{face}{i}", option);
                 continue;
             }
 
-            Send(viewer, $"{face}{i}_Blurb", option.Blurb);
             if (seat.Face == BoardFace.Swap) Picture(viewer, $"{face}{i}_Icon", IconUrl(option.IconItemId));
         }
 
@@ -319,6 +343,7 @@ public class PickBoard {
         for (int dot = 0; dot < seat.Spawns; dot++) {
             string name = $"Spawn{seat.Site}{dot}";
             Visible(viewer, $"{name}_On", dot == seat.SpawnPick);
+            Send(viewer, $"{name}_Label", seat.SpawnLabels.ElementAtOrDefault(dot) ?? "");
 
             List<ulong> there = seats
                 .Where(entry => entry.Value.Face == BoardFace.Attack && entry.Value.Site == seat.Site && entry.Value.SpawnPick == dot)

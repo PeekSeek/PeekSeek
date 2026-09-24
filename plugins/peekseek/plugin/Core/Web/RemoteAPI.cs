@@ -301,6 +301,17 @@ internal static class RemoteAPI {
         Post($"{Base}/matches/{matchId}/kills", JsonConvert.SerializeObject(killEvent));
     }
 
+    /// Lock a pick a player made on the board here, the same door the site's own
+    /// match page uses. Either half may be null. Fire-and-forget: the next session
+    /// poll carries the site's view of who has picked, which is the one that counts.
+    internal static void Decide(ulong steam64, string kit, string powerup) {
+        string query = string.Join("&", new[] {
+            kit == null ? null : $"kit={Uri.EscapeDataString(kit)}",
+            powerup == null ? null : $"powerup={Uri.EscapeDataString(powerup)}"
+        }.Where(part => part != null));
+        Post($"{Base}/players/{steam64}/decide?{query}", "{}");
+    }
+
     private static void Post(string url, string json) {
         Task.Run(async () => {
             try {

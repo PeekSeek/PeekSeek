@@ -6,7 +6,7 @@
     <RootNamespace>PeekSeekLobby</RootNamespace>
     <AssemblyName>PeekSeekLobby</AssemblyName>
     <Product>PeekSeekLobby</Product>
-    <Version>1.10.0</Version>
+    <Version>1.11.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -33,6 +33,9 @@
     <Compile Include="..\..\peekseek\plugin\Core\Hud\Effects.cs" Link="Core\Hud\Effects.cs" />
     <Compile Include="..\..\peekseek\plugin\Core\Hud\Feed.cs" Link="Core\Hud\Feed.cs" />
     <Compile Include="..\..\peekseek\plugin\Core\Hud\KillFeed.cs" Link="Core\Hud\KillFeed.cs" />
+    <Compile Include="..\..\peekseek\plugin\Core\Hud\Banner.cs" Link="Core\Hud\Banner.cs" />
+    <Compile Include="..\..\peekseek\plugin\Core\Hud\DeathCard.cs" Link="Core\Hud\DeathCard.cs" />
+    <Compile Include="..\..\peekseek\plugin\Core\Hud\Scoreboard.cs" Link="Core\Hud\Scoreboard.cs" />
   </ItemGroup>
 
 </Project>

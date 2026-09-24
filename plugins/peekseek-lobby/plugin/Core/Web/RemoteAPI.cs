@@ -62,10 +62,9 @@ internal static class RemoteAPI {
         /// hosted right now and this player will be let in.
         internal string RelayTo;
 
-        /// What the site is still waiting on this player to choose about their match.
-        /// Null when they have no match, or when the gamemode leaves them nothing to
-        /// decide.
-        internal MatchPicks Choose;
+        /// The name of the rank their Elo earns, for the board, or null from a site
+        /// that does not say.
+        internal string Rank;
     }
 
     /// Queue this player and read back where they stand. Both jobs in one call because
@@ -137,7 +136,7 @@ internal static class RemoteAPI {
                     Elo = Number(body["elo"]) ?? 0,
                     MatchId = Number(body["matchId"]) ?? 0,
                     RelayTo = Text(body["relayTo"]),
-                    Choose = Choices(body["choose"]),
+                    Rank = Text(body["rank"]),
                     Ban = ParseBan(body["ban"])
                 };
                 bool eloKnown = body["elo"] != null && body["elo"].Type != JTokenType.Null;
@@ -153,16 +152,10 @@ internal static class RemoteAPI {
         });
     }
 
-    /// The site's `choose` block, or null when there is nothing to choose.
-    ///
-    /// Internal rather than private so the shape the site actually sends can be pinned
-    /// by a test: this is the seam where a renamed field stops the loadout prompt
-    /// appearing at all, and it fails silently everywhere else.
     /// The site's `ban` block, or null when this player may play.
     ///
-    /// Internal rather than private for the same reason as Choices: this is the seam
-    /// where a renamed field would silently stop a banned player being removed, and
-    /// nothing else in the lobby would look wrong.
+    /// Internal so a test can hold the seam where a renamed field would silently stop
+    /// a banned player being removed, and nothing else in the lobby would look wrong.
     internal static BanInfo ParseBan(JToken token) {
         if (token == null || token.Type != JTokenType.Object) return null;
 
@@ -230,49 +223,6 @@ internal static class RemoteAPI {
         });
     }
 
-    internal static MatchPicks Choices(JToken token) {
-        if (token == null || token.Type != JTokenType.Object) return null;
-
-        MatchPicks picks = new() {
-            Kit = Text(token["kit"]),
-            Powerup = Text(token["powerup"])
-        };
-        Fill(picks.Kits, token["kits"]);
-        Fill(picks.Powerups, token["powerups"]);
-        return picks;
-    }
-
-    private static void Fill(List<string> into, JToken array) {
-        if (array == null || array.Type != JTokenType.Array) return;
-        foreach (JToken entry in array) into.Add(entry.ToString());
-    }
-
-    /// Lock a matched player's kit and/or powerup from in-game.
-    ///
-    /// Fire and forget, and deliberately not deduplicated with the refresh in flight:
-    /// this is the one call the player is actually waiting on, and the next refresh
-    /// reads back whatever the site really stored, so a request that fails costs a
-    /// couple of seconds rather than a menu that lies.
-    internal static void Decide(ulong steam64, string kit, string powerup) {
-        List<string> query = [];
-        if (kit != null) query.Add("kit=" + Uri.EscapeDataString(kit));
-        if (powerup != null) query.Add("powerup=" + Uri.EscapeDataString(powerup));
-        if (query.Count == 0) return;
-
-        string url = $"{Base}/players/{steam64}/decide?" + string.Join("&", query);
-        Task.Run(async () => {
-            try {
-                HttpResponseMessage response = await Client.PostAsync(url, null);
-                ReportStatus(response.StatusCode);
-            } catch (Exception ex) {
-                ReportFailure(ex.Message);
-            }
-        });
-    }
-
-    /// Null unless the response really is JSON. The site answers with an HTML error page
-    /// when it is down or behind a proxy that is, and every player is refreshed every
-    /// few seconds — parsing that would bury the console in identical parse errors.
     private static async Task<JObject> ReadJson(HttpResponseMessage response) {
         if (response.Content.Headers.ContentType?.MediaType != "application/json") return null;
         return JObject.Parse(await response.Content.ReadAsStringAsync());
@@ -286,8 +236,8 @@ internal static class RemoteAPI {
         return token == null || token.Type == JTokenType.Null ? null : token.ToString();
     }
 
-    /// What this arena looks like right now: how many are in it, how many of those want
-    /// a match, and how many of those this lobby is holding back from the queue.
+    /// What this arena looks like right now: how many are in it, and how many of those
+    /// want a match.
     ///
     /// One call for the whole server rather than one per player, because all three are
     /// facts about the server. The queue cannot stand in for the first of them: this
@@ -307,11 +257,11 @@ internal static class RemoteAPI {
     ///
     /// Fire and forget — nothing here reads the answer, and a reading that misses a
     /// beat is a counter that is a few seconds stale rather than a lobby that stops.
-    internal static void ReportPopulation(int players, int queueing, int held) {
+    internal static void ReportPopulation(int players, int queueing) {
         Task.Run(async () => {
             try {
                 StringContent body = new(
-                    $"{{\"players\":{players},\"queueing\":{queueing},\"held\":{held}}}",
+                    $"{{\"players\":{players},\"queueing\":{queueing}}}",
                     Encoding.UTF8, "application/json");
                 await Client.PostAsync($"{Base}/lobby/population", body);
             } catch (Exception ex) {

@@ -13,15 +13,28 @@ internal class HudSeat {
     internal ushort PickItemId;
     internal bool Alive = true;
 
+    /// Whether they are on the server at all. A face that is not is marked, because
+    /// faded alone says dead, and a leaver is not coming back next round.
+    internal bool Online = true;
+
     /// 0 to 100. The bar only draws it between those: full health has nothing to say
     /// and a dead face already says it.
     internal int Health = 100;
+
+    /// Their ping and what it is costing them, drawn under their own face only:
+    /// 0 for nothing, 1 for some of their damage, 2 for half or more.
+    internal int PingMs;
+    internal int PingLevel;
 }
 
 internal class HudTeam {
     internal string Name;
     internal int Score;
     internal HudRole Role = HudRole.None;
+
+    /// Whether the next round they win ends the match, which paints the score red.
+    internal bool MatchPoint;
+
     internal List<HudSeat> Seats = [];
 }
 
@@ -32,6 +45,10 @@ internal class HudState {
 
     /// Seconds on the clock, or -1 for no clock, which leaves no gap where it was.
     internal int SecondsLeft = -1;
+
+    /// A word over the clock, or null for the clock alone. The one phase a gamemode
+    /// needs to name.
+    internal string Phase;
 
     /// Who may see everybody's health rather than only their own team's.
     internal HashSet<ulong> Spectators = [];
@@ -45,9 +62,9 @@ internal class HudState {
 ///
 /// Every change redraws the whole bar for every viewer, which is what makes it unable
 /// to drift: the server never has to know what a client still has. The one exception
-/// is the tick, which sends only the clock and any health that moved, against a
-/// record of what each viewer was last sent; a redraw resets that record. Pictures
-/// are not re-downloaded by a redraw; the client caches them by URL.
+/// is the tick, which sends only the clock, the ping and any health that moved,
+/// against a record of what each viewer was last sent; a redraw resets that record.
+/// Pictures are not re-downloaded by a redraw; the client caches them by URL.
 ///
 /// Nothing on the block is placed by a pixel count. The score line is a layout row,
 /// so a marker or a clock a gamemode does not have is not a hole in the row: the
@@ -59,15 +76,22 @@ internal class MatchHud {
     /// At or under this the bar is amber rather than green.
     private const int LowHealth = 50;
 
+    /// Under this many seconds the clock is red.
+    private const int Jeopardy = 10;
+
+    private const string Red = "#ff4f4f";
+    private const string Orange = "#ffa34e";
+
     private EffectAsset effect;
     private bool effectLookedUp;
 
-    /// What each viewer was last sent that the tick may resend: the clock, and every
-    /// seat's health as steps lit and which colour. Absent means never drawn to.
+    /// What each viewer was last sent that the tick may resend. Absent means never
+    /// drawn to.
     private readonly Dictionary<ulong, Drawn> drawn = [];
 
     private sealed class Drawn {
         internal string Clock;
+        internal string Ping;
         internal readonly Dictionary<string, (int Steps, bool Low)> Health = [];
     }
 
@@ -82,8 +106,9 @@ internal class MatchHud {
         }
     }
 
-    /// The clock and any health that moved, for viewers who have the bar. Kept apart
-    /// from Show so the frequent call is a handful of messages rather than the lot.
+    /// The clock, the ping and any health that moved, for viewers who have the bar.
+    /// Kept apart from Show so the frequent call is a handful of messages rather than
+    /// the lot.
     internal void Tick(HudState state) {
         if (Effect() == null) return;
 
@@ -95,16 +120,21 @@ internal class MatchHud {
             string clock = Clock(seen.SecondsLeft);
             if (record.Clock != clock) {
                 record.Clock = clock;
-                Visible(viewer, "Timer", seen.SecondsLeft >= 0);
-                Send(viewer, "Timer", clock);
+                DrawClock(viewer, seen, clock);
             }
 
             ForEachSeat(seen, (slot, seat) => {
                 (int Steps, bool Low) health = HealthOf(seat, seen, me);
-                if (record.Health.TryGetValue(slot, out (int Steps, bool Low) last) && last == health) return;
+                if (!record.Health.TryGetValue(slot, out (int Steps, bool Low) last) || last != health) {
+                    record.Health[slot] = health;
+                    DrawHealth(viewer, slot, health);
+                }
 
-                record.Health[slot] = health;
-                DrawHealth(viewer, slot, health);
+                if (seat.Steam64 != me) return;
+                string ping = PingText(seat);
+                if (record.Ping == ping) return;
+                record.Ping = ping;
+                DrawPing(viewer, slot, ping);
             });
         }
     }
@@ -136,13 +166,13 @@ internal class MatchHud {
         EffectManager.SendUIEffect(Effect(), PeekSeek.Config.MatchHudKey, viewer.transportConnection, true);
 
         for (int team = 0; team < 2; team++) {
-            Send(viewer, $"Team{team}_Name", seen.Teams[team].Name);
-            Send(viewer, $"Score{team}", seen.Teams[team].Score.ToString());
-            Visible(viewer, $"Castle{team}", seen.Teams[team].Role == HudRole.Holding);
-            Visible(viewer, $"Swords{team}", seen.Teams[team].Role == HudRole.Attacking);
+            HudTeam side = seen.Teams[team];
+            Send(viewer, $"Team{team}_Name", side.Name);
+            Send(viewer, $"Score{team}", side.MatchPoint ? $"<color={Red}>{side.Score}</color>" : side.Score.ToString());
+            Visible(viewer, $"Castle{team}", side.Role == HudRole.Holding);
+            Visible(viewer, $"Swords{team}", side.Role == HudRole.Attacking);
         }
-        Visible(viewer, "Timer", seen.SecondsLeft >= 0);
-        Send(viewer, "Timer", record.Clock);
+        DrawClock(viewer, seen, record.Clock);
 
         for (int team = 0; team < 2; team++) {
             string side = team == 0 ? "L" : "R";
@@ -154,7 +184,29 @@ internal class MatchHud {
                 (int Steps, bool Low) health = HealthOf(seat, seen, me);
                 record.Health[$"{side}{i}"] = health;
                 DrawSeat(viewer, $"{side}{i}", seat, health, MaySee(seat, seen, me));
+
+                bool mine = seat.Steam64 == me;
+                if (mine) record.Ping = PingText(seat);
+                DrawPing(viewer, $"{side}{i}", mine ? record.Ping : null);
             }
+        }
+    }
+
+    /// The clock in one of its two shapes: bare on the line, or under the phase's
+    /// word. Both off leaves no gap.
+    private void DrawClock(SteamPlayer viewer, HudState seen, string clock) {
+        bool on = seen.SecondsLeft >= 0;
+        bool labelled = on && !string.IsNullOrEmpty(seen.Phase);
+
+        Visible(viewer, "Timer", on && !labelled);
+        Visible(viewer, "Clock", labelled);
+        if (!on) return;
+
+        if (labelled) {
+            Send(viewer, "Clock_Phase", seen.Phase);
+            Send(viewer, "Clock_Timer", clock);
+        } else {
+            Send(viewer, "Timer", clock);
         }
     }
 
@@ -166,8 +218,9 @@ internal class MatchHud {
     private static void DrawSeat(SteamPlayer viewer, string slot, HudSeat seat, (int Steps, bool Low) health, bool inside) {
         Picture(viewer, $"{slot}_Avatar", seat.AvatarUrl);
         Picture(viewer, $"{slot}_Faded", seat.AvatarUrl);
-        Visible(viewer, $"{slot}_Avatar", seat.Alive);
-        Visible(viewer, $"{slot}_Faded", !seat.Alive);
+        Visible(viewer, $"{slot}_Avatar", seat.Alive && seat.Online);
+        Visible(viewer, $"{slot}_Faded", !seat.Alive || !seat.Online);
+        Visible(viewer, $"{slot}_Gone", !seat.Online);
 
         Visible(viewer, $"{slot}_Pick", inside && seat.PickItemId != 0);
         Picture(viewer, $"{slot}_Pick_Icon", inside ? ItemIcon(seat.PickItemId) : "");
@@ -190,12 +243,30 @@ internal class MatchHud {
         }
     }
 
+    /// The viewer's own ping under their own face, or nothing under anybody else's.
+    private static void DrawPing(SteamPlayer viewer, string slot, string ping) {
+        Visible(viewer, $"{slot}_Ping", ping != null);
+        if (ping != null) Send(viewer, $"{slot}_Ping", ping);
+    }
+
+    /// The ping in the colour of what it costs: plain while it costs nothing, orange
+    /// while some damage is taken off, red from half. The number is the milliseconds;
+    /// the cut itself is never said.
+    private static string PingText(HudSeat seat) {
+        string text = $"{seat.PingMs} ms";
+        return seat.PingLevel switch {
+            2 => $"<color={Red}>{text}</color>",
+            1 => $"<color={Orange}>{text}</color>",
+            _ => text
+        };
+    }
+
     /// What one viewer sees of a seat's health, as lit steps: nothing for a face that
-    /// is whole or out of the round, and nothing for a seat the viewer may not see
-    /// inside.
+    /// is whole or out of the round, nothing for their own, since the game already
+    /// draws that, and nothing for a seat the viewer may not see inside.
     private static (int Steps, bool Low) HealthOf(HudSeat seat, HudState seen, ulong viewer) {
-        if (!seat.Alive || seat.Health >= 100 || seat.Health <= 0) return (0, false);
-        if (!MaySee(seat, seen, viewer)) return (0, false);
+        if (!seat.Alive || !seat.Online || seat.Health >= 100 || seat.Health <= 0) return (0, false);
+        if (seat.Steam64 == viewer || !MaySee(seat, seen, viewer)) return (0, false);
 
         int steps = (seat.Health * HealthSteps + 99) / 100;
         return (steps, seat.Health <= LowHealth);
@@ -227,14 +298,19 @@ internal class MatchHud {
         return new HudState {
             Teams = onSecond ? [state.Teams[1], state.Teams[0]] : [state.Teams[0], state.Teams[1]],
             SecondsLeft = state.SecondsLeft,
+            Phase = state.Phase,
             Spectators = state.Spectators
         };
     }
 
     // ---- the wire ---------------------------------------------------------------
 
+    /// m:ss, red for the last few seconds of whatever it is counting.
     private static string Clock(int seconds) {
-        return seconds < 0 ? "" : $"{seconds / 60}:{seconds % 60:00}";
+        if (seconds < 0) return "";
+
+        string text = $"{seconds / 60}:{seconds % 60:00}";
+        return seconds < Jeopardy ? $"<color={Red}>{text}</color>" : text;
     }
 
     private static string ItemIcon(ushort itemId) {

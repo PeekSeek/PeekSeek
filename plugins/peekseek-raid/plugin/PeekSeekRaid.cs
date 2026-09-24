@@ -46,14 +46,11 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
     /// the match servers and the warm-up lobby use, so a player who moves between them
     /// reads the same kind of line in the same shape.
     ///
-    /// Every line here answers a question somebody actually has at that moment. During
-    /// the build phase that is "how long have I got and what am I allowed to do"; during
-    /// a round it is "which side am I, where is the clock, why am I taking damage". The
-    /// two that matter most are the off-base warning and the leash, because both are
-    /// rules this gamemode invented and neither is visible on screen.
+    /// Chat is the last place an answer goes. The phase, the round, the score and the
+    /// flag are on the bar; a round's end is the banner; off base is a tag. What is
+    /// left here is either a board's text or a line to one person about the one thing
+    /// they are holding.
     public override TranslationList DefaultTranslations => new TranslationList() {
-        { "welcome", "<color=white>Raid</color> is in the <color=white>{0}</color> phase. Round <color=white>{1}</color>, score <color=white>{2}-{3}</color>." },
-
         // Said once, at the top, before anybody has done anything. It is the only place
         // the shape of the whole match is explained, so it says the shape and nothing else.
         { "match_intro", "<color=white>Raid.</color> Build a base, then take turns cracking each other's. <color=white>{0}</color> rounds each side. You get <color=white>{1}</color> to build." },
@@ -74,12 +71,11 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
         { "swap_remove", "Remove" },
         { "swap_remove_blurb", "Take it down. It goes back on the pile." },
 
-        // The one line a round is allowed: who took it and how. The score is on the HUD
-        // and the reason is the thing it cannot show.
-        { "round_won_wipe", "<color=white>{0}</color> take round {1}. Nobody left." },
-        { "round_won_clock", "<color=white>{0}</color> hold round {1}. The flag is still up." },
-        { "round_won_flag", "<color=white>{0}</color> take round {1}. The flag is down." },
-        { "round_won_skipped", "Round {1} given to <color=white>{0}</color>." },
+        // The banner's line under the winner's name: how the round was won.
+        { "round_won_wipe", "Nobody left" },
+        { "round_won_clock", "The flag is still up" },
+        { "round_won_flag", "The flag is down" },
+        { "round_won_skipped", "Given by the console" },
 
         // Said to the one defender handed the flag, because nothing on screen says it
         // is them, and again if they carry it off the base.
@@ -87,13 +83,13 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
         { "flag_leashed", "<color=white>Stay on your base</color> until the flag is down." },
         { "flag_where", "The flag goes on one of the <color=white>starting floors</color>, and not next to a door." },
 
-        // The defenders' board says the one word it is; the tiles say the rest, and
-        // the HUD already says which round and which side.
-        { "board_defend", "Powerup" },
+        // The boards' headlines: which round, which base, and what the board wants.
+        { "board_defend", "Round {0}  You defend {1}" },
+        { "board_attack", "Round {0}  You attack {1}" },
+        { "board_attack_line", "Where you come in, then what you bring" },
 
-        // The two invented rules. Both are said the moment they bite, because neither
-        // is something a player can see coming.
-        { "off_base", "<color=white>Get back on your base.</color> Open ground is killing you." },
+        // The leash while building. Said the moment it bites, because it is a rule
+        // nobody can see coming.
         { "leashed", "That is far enough. The other team is building where you were about to look." },
 
         { "raid_nothing_running", "No Raid match is running." },
@@ -102,7 +98,7 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
 
         { "find_usage", "<color=white>/raid find <text></color> looks an item up by name." },
         { "find_none", "Nothing is called anything like \"{0}\"." },
-        { "find_hit", "<color=white>{0}</color> — id <color=white>{1}</color>" },
+        { "find_hit", "<color=white>{0}</color>  id <color=white>{1}</color>" },
         { "find_more", "...and <color=white>{0}</color> more." }
     };
 }

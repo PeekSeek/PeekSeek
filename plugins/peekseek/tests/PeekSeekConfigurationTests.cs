@@ -18,8 +18,8 @@ public class PeekSeekConfigurationTests {
 
         Assert.NotNull(config.PingConfig);
         Assert.NotEmpty(config.PingConfig);
-        Assert.NotNull(config.LobbyTimeoutBroadcastSecondsRemaining);
-        Assert.NotEmpty(config.LobbyTimeoutBroadcastSecondsRemaining);
+        Assert.NotEmpty(config.BannerEffectGUID);
+        Assert.NotEmpty(config.ScoreboardEffectGUID);
     }
 
     [Fact]
@@ -50,14 +50,15 @@ public class PeekSeekConfigurationTests {
     /// does not recognise without complaining, so a field this project renames or never declares
     /// silently reverts to its default on a server that has been running for years.
     ///
-    /// `Spawns` is the one element that has knowingly left: the round spawns belong to
-    /// PeekSeek ARENA now and live in its own config, which has to be written by hand on
-    /// every server that gets it.
+    /// Two elements have knowingly left: `Spawns`, because the round spawns belong to
+    /// PeekSeek ARENA now and live in its own config, and
+    /// `LobbyTimeoutBroadcastSecondsRemaining`, because the wait is on the bar's clock
+    /// and no longer counted down in chat.
     [Fact]
     public void Live10Config_HasAFieldForEveryElementItSets() {
         var declared = new HashSet<string>(
             typeof(PeekSeekConfiguration).GetFields().Select(field => field.Name)
-        ) { "Spawns" };
+        ) { "Spawns", "LobbyTimeoutBroadcastSecondsRemaining" };
 
         var elements = XDocument.Load(FixturePath("live-1.0.configuration.xml"))
             .Root.Elements()

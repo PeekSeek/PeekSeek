@@ -79,6 +79,20 @@ public static class Host {
 
     public static BuildPanel Panel => PSManager.Panel;
 
+    /// The tag at the bottom of a player's screen: a word, pips, a word in red.
+    public static Tag Tag => PSManager.Tag;
+
+    /// The banner a quarter of the way down everybody's screen, for a few seconds:
+    /// a small label, a large name, one line under it.
+    public static void Banner(string label, string name, string line = null) => PSManager.Banner.Show(label, name, line);
+
+    /// Root a player to the spot, or let them go. Speed and jump both, because a
+    /// standing jump is a way to move.
+    public static void Freeze(Player player, bool frozen) => PSManager.Freeze(player, frozen);
+
+    /// A player's kills this match, for a board or a face.
+    public static int Kills(ulong steam64) => StatService.GetStatKills(new CSteamID(steam64));
+
     /// A player's Steam picture, or the placeholder while it is still being fetched.
     public static string AvatarFor(ulong steam64) => RemoteAPI.AvatarFor(steam64);
 

@@ -2,96 +2,95 @@ using System.Collections.Generic;
 using System.Linq;
 using PeekSeek.Hud;
 using SDG.Unturned;
-using Steamworks;
 using UnityEngine;
 
 namespace PeekSeekLobby.Core;
 
-/// The bar along the top of the lobby: the PeekSeek mark on the block and a face per
-/// player round it, the first on the left, the second on the right, and so on, six a
-/// side, in the order people arrived. A face at full strength is somebody out in the
-/// arena; at half strength somebody who is not: dead, waiting at the spawn, which the
-/// game calls being safe, or away. Nothing else, because a lobby has no teams, no
-/// picks and no round.
+/// One player on the bar: who, whether they are out in the arena, whether they have
+/// stepped away, and their kills this arena.
+internal class LobbyFace {
+    internal ulong Steam64;
+    internal bool Playing;
+    internal bool Away;
+    internal int Kills;
+}
+
+/// What the bar says at one moment: the faces in the order they go round the block,
+/// and the block's two cells. A null cell is off, and the row closes up round it.
+internal class LobbyView {
+    internal List<LobbyFace> Faces = [];
+
+    /// The queue cell: its word and its clock. QUEUE with the time waited, MATCH
+    /// FOUND with the seconds until the pull, AFK with nothing.
+    internal string State;
+    internal string StateTimer;
+
+    /// The arena cell's clock: the time until the reset, or null while the arena is
+    /// not counting.
+    internal string ArenaTimer;
+}
+
+/// The bar along the top of the lobby: the block in the middle with the queue and the
+/// arena's clock on it, and a face per player round it, the first on the left, the
+/// second on the right, and so on, six a side, by kills. A face at full strength is
+/// somebody out in the arena; at half strength somebody who is not: dead, waiting at
+/// the spawn, which the game calls being safe, or away, which gets its own mark. Each
+/// face carries its kills on its outer corner.
 ///
-/// Redrawn whole for every viewer whenever a face changes, like the match bar, and
-/// checked twice a second, because stepping out of the safezone is not an event.
+/// Redrawn whole for every viewer whenever a face changes, like the match bar; the
+/// block's cells are patched on their own when only a clock moved. Checked twice a
+/// second, because stepping out of the safezone is not an event.
 internal class LobbyBar {
     private const int Seats = 6;
-    private const float CheckIntervalSeconds = 0.5f;
 
-    private readonly List<ulong> arrived = [];
     private readonly Dictionary<ulong, string> avatars = [];
-    private readonly Dictionary<ulong, bool> lastShownPlaying = [];
+    private string drawnFaces;
+    private string drawnBlock;
 
     private EffectAsset effect;
     private bool effectLookedUp;
-    private float nextCheck;
-
-    internal void Joined(ulong steam64) {
-        if (!arrived.Contains(steam64)) arrived.Add(steam64);
-        Show();
-    }
-
-    internal void Left(ulong steam64) {
-        arrived.Remove(steam64);
-        avatars.Remove(steam64);
-        lastShownPlaying.Remove(steam64);
-        Show();
-    }
 
     internal void Picture(ulong steam64, string url) {
         avatars[steam64] = url;
-        Show();
+        drawnFaces = null;
     }
 
-    /// Whether a face is drawn at full strength: alive, out of the safezone, and here.
-    private static bool IsPlaying(Player player, bool afk) {
-        return !afk && !player.life.isDead && !player.movement.isSafe;
+    internal string AvatarOf(ulong steam64) {
+        return avatars.TryGetValue(steam64, out string url) ? url : PeekSeekLobby.Config.DefaultAvatarURL;
     }
 
-    /// Redraw when anybody's state has moved since the last draw.
-    internal void Tick(System.Func<ulong, bool> isAfk) {
-        if (Time.realtimeSinceStartup < nextCheck) return;
-        nextCheck = Time.realtimeSinceStartup + CheckIntervalSeconds;
-
-        bool changed = false;
-        foreach (SteamPlayer client in Provider.clients) {
-            if (client.player == null) continue;
-
-            ulong steam64 = client.playerID.steamID.m_SteamID;
-            bool playing = IsPlaying(client.player, isAfk(steam64));
-            if (lastShownPlaying.TryGetValue(steam64, out bool shown) && shown == playing) continue;
-
-            changed = true;
-        }
-
-        if (changed) Show(isAfk);
+    internal void Left(ulong steam64) {
+        avatars.Remove(steam64);
+        drawnFaces = null;
     }
 
-    internal void Show() => Show(_ => false);
-
-    internal void Show(System.Func<ulong, bool> isAfk) {
+    /// Draw what has changed since the last call: the whole bar when a face has, the
+    /// block's cells when only they have.
+    internal void Show(LobbyView view) {
         EffectAsset asset = Effect();
         if (asset == null) return;
 
-        List<SteamPlayer> present = arrived
-            .Select(steam64 => PlayerTool.getSteamPlayer(new CSteamID(steam64)))
-            .Where(client => client?.player != null)
-            .ToList();
+        string faces = string.Join(";", view.Faces.Select(face => $"{face.Steam64}:{face.Playing}:{face.Away}:{face.Kills}"));
+        string block = $"{view.State}|{view.StateTimer}|{view.ArenaTimer}";
 
-        foreach (SteamPlayer viewer in Provider.clients.ToList()) {
-            Draw(viewer, asset, present, isAfk);
+        if (faces != drawnFaces) {
+            foreach (SteamPlayer viewer in Provider.clients.ToList()) Draw(viewer, asset, view);
+            drawnFaces = faces;
+            drawnBlock = block;
+            return;
         }
 
-        lastShownPlaying.Clear();
-        foreach (SteamPlayer client in present) {
-            lastShownPlaying[client.playerID.steamID.m_SteamID] = IsPlaying(client.player, isAfk(client.playerID.steamID.m_SteamID));
-        }
+        if (block == drawnBlock) return;
+        drawnBlock = block;
+        foreach (SteamPlayer viewer in Provider.clients.ToList()) DrawBlock(viewer, view);
     }
+
+    /// Everybody gets the whole bar again, for a viewer who has just arrived.
+    internal void Redraw() => drawnFaces = null;
 
     internal void Hide() {
         EffectAsset asset = Effect();
+        drawnFaces = null;
         if (asset == null) return;
 
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
@@ -99,25 +98,53 @@ internal class LobbyBar {
         }
     }
 
-    private void Draw(SteamPlayer viewer, EffectAsset asset, List<SteamPlayer> present, System.Func<ulong, bool> isAfk) {
+    private void Draw(SteamPlayer viewer, EffectAsset asset, LobbyView view) {
         short key = PeekSeekLobby.Config.LobbyBarKey;
         EffectManager.SendUIEffect(asset, key, viewer.transportConnection, true);
+        DrawBlock(viewer, view);
 
         for (int i = 0; i < Seats * 2; i++) {
             string slot = $"{(i % 2 == 0 ? "L" : "R")}{i / 2}";
-            SteamPlayer seat = present.ElementAtOrDefault(i);
-            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, slot, seat != null);
-            if (seat == null) continue;
+            LobbyFace face = view.Faces.ElementAtOrDefault(i);
+            Visible(viewer, slot, face != null);
+            if (face == null) continue;
 
-            ulong steam64 = seat.playerID.steamID.m_SteamID;
-            string picture = avatars.TryGetValue(steam64, out string url) ? url : PeekSeekLobby.Config.DefaultAvatarURL;
-            bool playing = IsPlaying(seat.player, isAfk(steam64));
-
+            string picture = avatars.TryGetValue(face.Steam64, out string url) ? url : PeekSeekLobby.Config.DefaultAvatarURL;
             EffectManager.sendUIEffectImageURL(key, viewer.transportConnection, true, $"{slot}_Avatar", picture);
             EffectManager.sendUIEffectImageURL(key, viewer.transportConnection, true, $"{slot}_Faded", picture);
-            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{slot}_Avatar", playing);
-            EffectManager.sendUIEffectVisibility(key, viewer.transportConnection, true, $"{slot}_Faded", !playing);
+            Visible(viewer, $"{slot}_Avatar", face.Playing);
+            Visible(viewer, $"{slot}_Faded", !face.Playing);
+            Visible(viewer, $"{slot}_Away", face.Away);
+            Visible(viewer, $"{slot}_Kills", face.Kills > 0);
+            if (face.Kills > 0) Send(viewer, $"{slot}_Kills", face.Kills.ToString());
         }
+    }
+
+    private static void DrawBlock(SteamPlayer viewer, LobbyView view) {
+        bool state = view.State != null;
+        bool arena = view.ArenaTimer != null;
+        Visible(viewer, "State", state);
+        Visible(viewer, "State_Timer", state && view.StateTimer != null);
+        Visible(viewer, "Gap", state && arena);
+        Visible(viewer, "Arena", arena);
+        Visible(viewer, "Arena_Timer", arena);
+        if (state) Send(viewer, "State", view.State);
+        if (state && view.StateTimer != null) Send(viewer, "State_Timer", view.StateTimer);
+        if (arena) Send(viewer, "Arena_Timer", view.ArenaTimer);
+    }
+
+    /// m:ss, for both clocks.
+    internal static string Clock(float seconds) {
+        int whole = Mathf.Max(0, Mathf.CeilToInt(seconds));
+        return $"{whole / 60}:{whole % 60:00}";
+    }
+
+    private static void Send(SteamPlayer viewer, string child, string text) {
+        EffectManager.sendUIEffectText(PeekSeekLobby.Config.LobbyBarKey, viewer.transportConnection, true, child, text ?? "");
+    }
+
+    private static void Visible(SteamPlayer viewer, string child, bool visible) {
+        EffectManager.sendUIEffectVisibility(PeekSeekLobby.Config.LobbyBarKey, viewer.transportConnection, true, child, visible);
     }
 
     private EffectAsset Effect() {

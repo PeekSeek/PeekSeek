@@ -62,4 +62,13 @@ public interface IGamemode {
     ushort PickOf(ulong steam64);
 
     int SecondsLeft { get; }
+
+    /// A word over the clock, or null for the clock alone. The one phase a gamemode
+    /// needs to name; everything else the clock and the roles already say.
+    string PhaseLabel { get; }
+
+    /// Whether the next round this team wins ends the match, which paints its score
+    /// red. A gamemode with its own arithmetic for when a match is over answers it
+    /// from that.
+    bool IsMatchPoint(int team);
 }

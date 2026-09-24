@@ -62,9 +62,15 @@ internal class Arena : IGamemode {
         if (Host.Score(team) >= Host.RoundsToWin) Host.MatchWon(team);
     }
 
+    /// The block is the two scores and nothing between them: the arena has no clock,
+    /// and no word to put over one.
     public HudRole RoleOf(int team) => HudRole.None;
 
     public ushort PickOf(ulong steam64) => 0;
 
     public int SecondsLeft => -1;
+
+    public string PhaseLabel => null;
+
+    public bool IsMatchPoint(int team) => Host.Score(team) + 1 >= Host.RoundsToWin;
 }

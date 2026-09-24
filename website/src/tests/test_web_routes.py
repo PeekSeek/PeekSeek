@@ -346,9 +346,10 @@ def test_match_page_renders_the_commit_list(client, login, user_factory):
     assert r.status_code == 200
     assert 'id="commitlist"' in r.text
     assert 'id="commitcount"' in r.text
-    assert 'id="connectprogress"' in r.text
+    assert 'id="rail"' in r.text
+    assert 'id="turn"' in r.text
+    assert 'id="joinline"' in r.text
     assert 'id="matchsettings"' in r.text
-    assert 'id="picktimer"' in r.text
     # No checkmark badge, and kit/powerup tiles are real buttons (keyboard-reachable),
     # not divs with an onclick.
     assert "checkmark" not in r.text
