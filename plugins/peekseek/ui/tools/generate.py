@@ -28,8 +28,8 @@ from PIL import Image
 
 import footprints
 import sitemap
-from unityyaml import (CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, button, canvas,
-                       castle_alpha, centered, disc_alpha, fit_width, ignore_layout, image, layout_size, mask, prefab,
+from unityyaml import (CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, button, canvas, column,
+                       castle_alpha, centered, disc_alpha, fit_height, fit_width, ignore_layout, image, layout_size, mask, prefab,
                        ring_alpha, rounded_alpha, row, silhouette, skull_alpha, sprite, sprite_file, stretch, swords_alpha,
                        text, top_center, top_left, top_right, top_stretch)
 
@@ -808,7 +808,6 @@ BOARD_COL_W = 54
 BOARD_HEAD_H = 26
 BOARD_SUB_H = 18
 BOARD_LOGO_H = 18
-BOARD_ROWS_Y = PANEL_PAD + BOARD_HEAD_H + BOARD_SUB_H + 20
 BOARD_NAME_MIN = 150    # what is left for a name once the columns have their width
 
 
@@ -823,35 +822,43 @@ def scoreboard():
     root = Node("Effect")
     canvas(root, sorting_order=1)
 
-    height = BOARD_ROWS_Y + BOARD_ROWS * (BOARD_ROW_H + BOARD_ROW_GAP) + PANEL_PAD
+    # The panel is a column: a heading, the line under it, the column names, and a row
+    # per player. A child that is switched off takes no space, so a board with three
+    # players on it is three rows tall rather than nine rows of empty panel, and the
+    # lobby's empty sub line costs nothing.
     board = root.add(Node("Board", anchor_min=(0.5 - BOARD_WIDE / 2, 0.5), anchor_max=(0.5 + BOARD_WIDE / 2, 0.5),
-                          position=(0, 20), size=(0, height)))
+                          position=(0, 20), size=(0, 0)))
     image(board, PAGE, sprite=SPR["round8"])
+    column(board, spacing=BOARD_ROW_GAP, padding=PANEL_PAD, top=PANEL_PAD)
+    fit_height(board)
 
-    # The heading: the mark, what this board is, and a clock only when one applies.
+    head = board.add(wide("Board_Head", 0, 0, 0, BOARD_HEAD_H))
     logo_w = LOGO_W * BOARD_LOGO_H / LOGO_H
-    logo = board.add(top_left("Logo", PANEL_PAD, PANEL_PAD + 3, logo_w, BOARD_LOGO_H))
-    image(logo, TEXT, sprite=SPR["logo"], sliced=False, preserve_aspect=True)
-    text(board.add(wide("Board_Title", PANEL_PAD + logo_w + 10, PANEL_PAD, PANEL_PAD + 130, BOARD_HEAD_H)),
-         "Lobby", size=20, colour=TEXT, bold=True)
-    text(board.add(top_right("Board_Timer", PANEL_PAD, PANEL_PAD, 120, BOARD_HEAD_H, active=False)), "2:10",
+    image(head.add(top_left("Logo", 0, 3, logo_w, BOARD_LOGO_H)), TEXT, sprite=SPR["logo"],
+          sliced=False, preserve_aspect=True)
+    text(head.add(wide("Board_Title", logo_w + 10, 0, 130, BOARD_HEAD_H)), "Lobby", size=20, colour=TEXT, bold=True)
+    text(head.add(top_right("Board_Timer", 0, 0, 120, BOARD_HEAD_H, active=False)), "2:10",
          size=18, colour=TEXT, halign=RIGHT, mono=True)
 
-    # Under the title, and on a match always: whether the Elo moves, and the map. The
-    # lobby leaves it empty, which is why the rows start below it either way rather
-    # than shuffling up when there is nothing to say.
-    text(board.add(wide("Board_Sub", PANEL_PAD + logo_w + 10, PANEL_PAD + BOARD_HEAD_H, PANEL_PAD, BOARD_SUB_H)),
-         "", size=12, colour=SECONDARY)
+    # On a match always, and never on the lobby, where it is switched off and the rows
+    # move up to meet the heading.
+    text(board.add(wide("Board_Sub", logo_w + 10, 0, 0, BOARD_SUB_H, active=False)), "",
+         size=12, colour=SECONDARY)
 
+    headings = board.add(wide("Board_Columns", 0, 0, 0, 16))
     for c, col in enumerate(BOARD_COLS):
-        right = PANEL_PAD + (len(BOARD_COLS) - 1 - c) * BOARD_COL_W
-        text(board.add(top_right(f"Head_{col}", right, BOARD_ROWS_Y - 18, BOARD_COL_W, 14)), col,
+        right = (len(BOARD_COLS) - 1 - c) * BOARD_COL_W
+        text(headings.add(top_right(f"Head_{col}", right, 0, BOARD_COL_W, 14)), col,
              size=10, colour=SECONDARY, halign=RIGHT, bold=True, spacing=6)
 
+    columns = len(BOARD_COLS) * BOARD_COL_W
     for i in range(BOARD_ROWS):
-        y = BOARD_ROWS_Y + i * (BOARD_ROW_H + BOARD_ROW_GAP)
-        line = board.add(wide(f"Row{i}", PANEL_PAD, y, PANEL_PAD, BOARD_ROW_H, active=False))
-        image(line.add(stretch(f"Row{i}_Me", active=False)), SELECTED, sprite=SPR["round6"])
+        line = board.add(wide(f"Row{i}", 0, 0, 0, BOARD_ROW_H, active=False))
+
+        # The fill stops before the last column: the ping is not a stat of the player,
+        # it is how well they are talking to this server, so it sits outside the row
+        # rather than inside it.
+        image(line.add(wide(f"Row{i}_Me", 0, 0, BOARD_COL_W, BOARD_ROW_H, active=False)), SUB, sprite=SPR["round6"])
 
         text(line.add(top_left(f"Row{i}_Head", BOARD_PAD, 0, 300, BOARD_ROW_H, active=False)), "NORTH",
              size=10, colour=SECONDARY, bold=True, spacing=8)
@@ -868,9 +875,7 @@ def scoreboard():
                              size=(BOARD_RANK, BOARD_RANK), rotation=-10, active=False))
         image(rank.add(stretch(f"Row{i}_Rank_Icon")), "#ffffff", enabled=False, preserve_aspect=True)
 
-        name_left = BOARD_PAD + BOARD_FACE + 8
-        columns = len(BOARD_COLS) * BOARD_COL_W
-        text(body.add(wide(f"Row{i}_Name", name_left, 0, columns + 60, BOARD_ROW_H)), "kieran",
+        text(body.add(wide(f"Row{i}_Name", BOARD_PAD + BOARD_FACE + 8, 0, columns + 60, BOARD_ROW_H)), "kieran",
              size=13, colour=TEXT, bold=True)
         text(body.add(top_right(f"Row{i}_Tag", columns + 4, 0, 56, BOARD_ROW_H, active=False)), "MVP",
              size=9, colour=SELECTED_LABEL, halign=RIGHT, bold=True, spacing=8)

@@ -26,6 +26,7 @@ BUTTON = "4e29b1a8efbd4b44bb3f3716e73f07ff"
 MASK = "31a19414c41e5ae4aae2af33fee712f6"
 ASPECT_RATIO_FITTER = "86710e43de46f6f4bac7c8e50813a599"
 HORIZONTAL_LAYOUT_GROUP = "30649d3a9faa99c48a7b1166b86bf2a0"
+VERTICAL_LAYOUT_GROUP = "59f8146938fff824cb5fd77236b75775"
 CONTENT_SIZE_FITTER = "3245ec927659c4140ac4f8d17403cc18"
 LAYOUT_ELEMENT = "306cc8c2b49d7114eaa3623786fc2126"
 CANVAS_SCALER = "0cd44c1031e13a943bb63640046fad76"
@@ -305,6 +306,38 @@ def row(node, spacing=0, align=MIDDLE_CENTER, padding=0, control_width=False):
         "m_ChildScaleWidth: 0",
         "m_ChildScaleHeight: 0",
         "m_ReverseArrangement: 0",
+    ])
+
+
+def column(node, spacing=0, padding=0, top=0):
+    """uGUI's VerticalLayoutGroup: the node's active children stacked, each as wide as
+    the node and as tall as it already is. A child that is switched off is left out,
+    so a board of twelve row slots with three players in it is three rows tall rather
+    than nine rows of empty panel."""
+    node.mono(VERTICAL_LAYOUT_GROUP, [
+        "m_Padding:",
+        f"  m_Left: {padding}",
+        f"  m_Right: {padding}",
+        f"  m_Top: {top}",
+        f"  m_Bottom: {padding}",
+        "m_ChildAlignment: 0",
+        f"m_Spacing: {spacing:g}",
+        "m_ChildForceExpandWidth: 1",
+        "m_ChildForceExpandHeight: 0",
+        "m_ChildControlWidth: 1",
+        "m_ChildControlHeight: 0",
+        "m_ChildScaleWidth: 0",
+        "m_ChildScaleHeight: 0",
+        "m_ReverseArrangement: 0",
+    ])
+
+
+def fit_height(node):
+    """uGUI's ContentSizeFitter, vertical only: the node becomes as tall as its layout
+    says it wants to be. Its pivot decides which way it grows."""
+    node.mono(CONTENT_SIZE_FITTER, [
+        "m_HorizontalFit: 0",
+        "m_VerticalFit: 2",
     ])
 
 

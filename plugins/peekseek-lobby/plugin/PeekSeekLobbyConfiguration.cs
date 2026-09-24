@@ -40,11 +40,9 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// short enough that somebody who came for a match is not left wondering.
     public float QueuePromptSeconds;
 
-    /// The tiles on that screen, and the regions under them. The gamemodes are in the
-    /// bitmask's order, so the first is bit 0, the same order the site's mmconfig
-    /// lists them in; a player lights the ones they are up for and the screen adds
-    /// them up. Six tiles fit, and four regions.
-    public List<QueueGamemode> QueueGamemodes;
+    /// The regions under the tiles on that screen. The gamemodes are not here: they
+    /// are the site's, read from `/server/v1/gamemodes` on load, because a list that
+    /// drifted from the site would queue players for the wrong thing.
     public List<QueueRegion> QueueRegions;
 
     /// The ping from which the question warns them. Matches in this region scale a
@@ -201,7 +199,6 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         QueueEffectGUID = defaults.Or(QueueEffectGUID, fresh.QueueEffectGUID, nameof(QueueEffectGUID));
         QueueKey = defaults.Or(QueueKey, fresh.QueueKey, nameof(QueueKey));
         RankIconURL = defaults.Or(RankIconURL, fresh.RankIconURL, nameof(RankIconURL));
-        QueueGamemodes = QueueGamemodes is { Count: > 0 } ? QueueGamemodes : fresh.QueueGamemodes;
         QueueRegions = QueueRegions is { Count: > 0 } ? QueueRegions : fresh.QueueRegions;
 
         return defaults.Filled;
@@ -223,15 +220,6 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         MatchWarningSeconds = 3f;
         QueuePromptSeconds = 60f;
         HighPingMs = 100;
-        // The site's own gamemodes and regions, in mmconfig's order, said the way the
-        // play page says them.
-        QueueGamemodes = [
-            new QueueGamemode { Name = "Competitive", Blurb = "META, SNIPER   1v1   Ranked" },
-            new QueueGamemode { Name = "Drums", Blurb = "META   1v1   Ranked" },
-            new QueueGamemode { Name = "Ranged", Blurb = "SNIPER   1v1   Ranked" },
-            new QueueGamemode { Name = "Casual Duo", Blurb = "META, SNIPER   2v2" },
-            new QueueGamemode { Name = "Raid", Blurb = "META   1v1   Build a base" }
-        ];
         QueueRegions = [
             new QueueRegion { Name = "EU-West", Code = "paris" },
             new QueueRegion { Name = "AS-South", Code = "singapore" },

@@ -74,7 +74,8 @@ public class Scoreboard {
 
         EffectManager.SendUIEffect(asset, key, to, true);
         EffectManager.sendUIEffectText(key, to, true, "Board_Title", sheet.Title ?? "");
-        EffectManager.sendUIEffectText(key, to, true, "Board_Sub", sheet.Sub ?? "");
+        EffectManager.sendUIEffectVisibility(key, to, true, "Board_Sub", !string.IsNullOrEmpty(sheet.Sub));
+        if (!string.IsNullOrEmpty(sheet.Sub)) EffectManager.sendUIEffectText(key, to, true, "Board_Sub", sheet.Sub);
         EffectManager.sendUIEffectVisibility(key, to, true, "Board_Timer", sheet.Timer != null);
         if (sheet.Timer != null) EffectManager.sendUIEffectText(key, to, true, "Board_Timer", sheet.Timer);
 

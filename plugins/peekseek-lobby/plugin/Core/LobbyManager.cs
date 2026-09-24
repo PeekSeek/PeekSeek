@@ -236,6 +236,12 @@ internal abstract class LobbyManager {
     /// an arena with one player in it has nothing to reset and no reason to count.
     private static float ArenaCountingSince;
 
+    /// What a player can queue for, as the site lists it, or null while the site has
+    /// not said. Null is not an empty list: it means nobody is queued and nobody is
+    /// asked, because a bitmask guessed from config would queue people for a gamemode
+    /// they never chose.
+    internal static List<QueueGamemode> Gamemodes;
+
     internal static void Init() {
         Provider.onServerConnected += OnPlayerConnected;
         Provider.onServerDisconnected += OnPlayerDisconnected;
@@ -284,6 +290,7 @@ internal abstract class LobbyManager {
         });
         PlayerInput.onPluginKeyTick += OnPluginKey;
         EffectManager.onEffectButtonClicked += OnButtonClicked;
+        RemoteAPI.FetchGamemodes(modes => Gamemodes = modes);
     }
 
     /// Refusing the drop outright is cheaper and cleaner than spawning it and
@@ -732,10 +739,14 @@ internal abstract class LobbyManager {
         // simply retried. Everything after it happens once a life.
         player.life.ServerRespawn(false);
 
-        state.ScheduleDeploy(
-            Time.realtimeSinceStartup,
-            PeekSeekLobby.Config.RespawnDelaySeconds,
-            PeekSeekLobby.Config.SpawnProtectionSeconds);
+        if (!state.ScheduleDeploy(
+                Time.realtimeSinceStartup,
+                PeekSeekLobby.Config.RespawnDelaySeconds,
+                PeekSeekLobby.Config.SpawnProtectionSeconds)) return;
+
+        // Drawn here rather than left to the next tick: the wait is short, and a count
+        // that starts a second late is a count that starts at four.
+        ShowRespawnCount(steamID, state, Time.realtimeSinceStartup);
     }
 
     /// The one thing that actually puts people back on their feet, copied from the
@@ -1440,7 +1451,9 @@ internal abstract class LobbyManager {
             // Queueing has a side effect, so it is only ever used for someone who
             // actually wants a match: asking with it would quietly undo a /noqueue, and
             // would put a player who already has a match back in the queue for another.
+            // Nobody is queued until the site has said what there is to queue for.
             bool wantsAMatch = PeekSeekLobby.Config.EnableQueue
+                && Gamemodes != null
                 && entry.Value.WantsAMatch(now);
             if (wantsAMatch) {
                 wanting++;
@@ -1529,7 +1542,7 @@ internal abstract class LobbyManager {
     /// about.
     private static void AskToQueue(CSteamID steamID, PlayerState state) {
         state.Prompted = true;
-        if (!QueueEnabled) return;
+        if (!QueueEnabled || Gamemodes == null) return;
 
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
@@ -1547,6 +1560,11 @@ internal abstract class LobbyManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null || !QueueEnabled) return;
 
+        if (Gamemodes == null) {
+            Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("queue_unavailable"));
+            return;
+        }
+
         AskToQueue(steamID, Players.TryGetValue(steamID.m_SteamID, out PlayerState state) ? state : new PlayerState());
     }
 
@@ -1562,7 +1580,7 @@ internal abstract class LobbyManager {
     private static ScoreSheet Sheet() {
         ScoreSheet sheet = new() {
             Title = PeekSeekLobby.Instance.Translate("board_title"),
-            Columns = ["K", "D", "HS%", "MS", "ELO"],
+            Columns = ["K", "D", "HS%", "ELO", "MS"],
             Timer = ArenaCountingSince > 0
                 ? LobbyBar.Clock(PeekSeekLobby.Config.ResetIntervalSeconds - (Time.realtimeSinceStartup - ArenaCountingSince))
                 : null
@@ -1583,8 +1601,8 @@ internal abstract class LobbyManager {
                     state.Kills.ToString(),
                     state.Deaths.ToString(),
                     hs.ToString(),
-                    Ping.Milliseconds(client).ToString(),
-                    state.EloKnown ? state.Elo.ToString() : ""
+                    state.EloKnown ? state.Elo.ToString() : "",
+                    Ping.Milliseconds(client).ToString()
                 ]
             });
         }

@@ -2,10 +2,14 @@ using System.Xml.Serialization;
 
 namespace PeekSeekLobby.Core.Models;
 
-/// One gamemode tile on the queue screen. The order is the bitmask's: the first entry
-/// is bit 0, which is the order the site's mmconfig lists its gamemodes in and the
-/// convention GamemodeBitmask already uses.
+/// One gamemode tile on the queue screen, as the site describes it. The bit is its
+/// place in the queue bitmask, which is its index in the site's whole gamemode list
+/// rather than in the handful a player is shown: a gamemode kept out of matchmaking
+/// leaves a gap, and closing that gap would queue everybody for the wrong thing.
 public class QueueGamemode {
+    [XmlAttribute]
+    public int Bit;
+
     [XmlAttribute]
     public string Name;
 

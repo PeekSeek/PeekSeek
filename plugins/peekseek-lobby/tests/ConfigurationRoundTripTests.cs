@@ -27,8 +27,6 @@ public class ConfigurationRoundTripTests {
 
         Assert.Equal(config.AllowedKitCategories, loaded.AllowedKitCategories);
         Assert.Equal(config.QueueEffectGUID, loaded.QueueEffectGUID);
-        Assert.Equal(config.QueueGamemodes.Count, loaded.QueueGamemodes.Count);
-        Assert.Equal(config.QueueGamemodes[0].Name, loaded.QueueGamemodes[0].Name);
         Assert.Equal(config.QueueRegions[1].Code, loaded.QueueRegions[1].Code);
         Assert.Equal(config.KillRewards.Count, loaded.KillRewards.Count);
         Assert.Equal(config.KillRewards[0].ItemID, loaded.KillRewards[0].ItemID);

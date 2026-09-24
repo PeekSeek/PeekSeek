@@ -13,11 +13,16 @@ internal class QueueChoice {
     internal readonly HashSet<int> Modes = [];
     internal int Region;
 
-    /// The bitmask the site queues on, which is what the lit gamemode tiles add up to.
+    /// The bitmask the site queues on, which is what the lit tiles add up to. A tile
+    /// carries the bit the site gave it rather than its place on screen.
     internal ushort Bitmask {
         get {
+            List<QueueGamemode> listed = LobbyManager.Gamemodes ?? [];
             ushort mask = 0;
-            foreach (int bit in Modes) mask |= (ushort)(1 << bit);
+            foreach (int tile in Modes) {
+                QueueGamemode mode = listed.ElementAtOrDefault(tile);
+                if (mode != null) mask |= (ushort)(1 << mode.Bit);
+            }
             return mask;
         }
     }
@@ -71,7 +76,7 @@ internal class QueueBoard {
         Visible(viewer, "Queue_Line", line != null);
         if (line != null) Send(viewer, "Queue_Line", line);
 
-        List<QueueGamemode> modes = PeekSeekLobby.Config.QueueGamemodes ?? [];
+        List<QueueGamemode> modes = LobbyManager.Gamemodes ?? [];
         for (int i = 0; i < Tiles; i++) {
             QueueGamemode mode = modes.ElementAtOrDefault(i);
             Visible(viewer, $"BoardMode{i}", mode != null);
@@ -105,9 +110,9 @@ internal class QueueBoard {
         int here = regions.FindIndex(region => region.Code == PeekSeekLobby.Config.szRegion);
         choice.Region = here < 0 ? 0 : here;
 
-        int modes = PeekSeekLobby.Config.QueueGamemodes?.Count ?? 0;
-        for (int i = 0; i < modes; i++) {
-            if ((PeekSeekLobby.Config.GamemodeBitmask & (1 << i)) != 0) choice.Modes.Add(i);
+        List<QueueGamemode> modes = LobbyManager.Gamemodes ?? [];
+        for (int i = 0; i < modes.Count; i++) {
+            if ((PeekSeekLobby.Config.GamemodeBitmask & (1 << modes[i].Bit)) != 0) choice.Modes.Add(i);
         }
         return choice;
     }

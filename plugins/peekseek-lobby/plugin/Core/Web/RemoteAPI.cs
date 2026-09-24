@@ -70,6 +70,39 @@ internal static class RemoteAPI {
     /// Queue this player and read back where they stand. Both jobs in one call because
     /// they are one question: a player standing in the lobby wants a match, and the
     /// answer is either "not yet" or "here is where to go".
+    /// What a player can queue for. Asked once on load and on nothing else: the list
+    /// changes when the site is deployed, which is a restart away anyway.
+    ///
+    /// A site too old to answer leaves the lobby with nothing to offer, and the lobby
+    /// then queues nobody at all rather than guessing at a bitmask. A wrong guess is
+    /// worse than no queue: it puts players in a gamemode they did not choose, or into
+    /// a bit that means something else entirely.
+    internal static void FetchGamemodes(System.Action<List<QueueGamemode>> found) {
+        Task.Run(async () => {
+            try {
+                HttpResponseMessage response = await Client.GetAsync($"{Base}/gamemodes");
+                ReportStatus(response.StatusCode);
+                if (!response.IsSuccessStatusCode) return;
+
+                JObject body = await ReadJson(response);
+                if (body?["gamemodes"] is not JArray listed) return;
+
+                List<QueueGamemode> modes = [];
+                foreach (JToken entry in listed) {
+                    modes.Add(new QueueGamemode {
+                        Bit = Number(entry["bit"]) ?? 0,
+                        Name = Text(entry["name"]),
+                        Blurb = Text(entry["blurb"])
+                    });
+                }
+
+                TaskDispatcher.QueueOnMainThread(() => found(modes));
+            } catch (Exception ex) {
+                ReportFailure(ex.Message);
+            }
+        });
+    }
+
     internal static void RefreshQueued(ulong steam64, ushort gamemodes, string region) {
         Send(HttpMethod.Put,
             $"{Base}/players/{steam64}/queue?gamemodes={gamemodes}&region={Uri.EscapeDataString(region)}",
