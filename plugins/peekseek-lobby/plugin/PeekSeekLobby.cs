@@ -47,32 +47,20 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
     }
 
     /// Highlighting is <color=white> against the grey base chat colour, matching
-    /// the convention the competitive PeekSeek servers already use — Unturned's
-    /// rich text is enabled on every message these send.
+    /// the convention the competitive PeekSeek servers already use.
+    ///
+    /// Chat is the last place an answer goes. Kills are the feed, a death is the
+    /// card, the queue and the arena's clock are the bar, a match is the banner and
+    /// the scores are the board. What is left here is one line on arrival, the
+    /// replies to commands, and the boards' own text.
     public override TranslationList DefaultTranslations => new TranslationList() {
-        // Front-loaded on purpose: what the server is and the loop you're in
-        // first, then the controls, then the things that can wait.
-        { "welcome_what", "<color=white>PeekSeek warm-up lobby.</color> Free-for-all deathmatch. Death sends you to spawn, then back into the fight after <color=white>{0}s</color> with <color=white>{1}s</color> protection." },
-        { "welcome_what_queue", "<color=white>PeekSeek warm-up lobby.</color> You are <color=white>in queue</color>, fight while you wait. Death sends you to spawn, then back into the fight after <color=white>{0}s</color> with <color=white>{1}s</color> protection." },
-        { "welcome_commands", "<color=white>/kit {0}</color> switch loadout. <color=white>/kd</color> your score. <color=white>/ms</color> your latency. <color=white>/afk</color> step out.{1}" },
-        { "welcome_extra", "Every kill earns a <color=white>heal</color>. Kills in a row earn <color=white>more</color>. Arena and scores reset every <color=white>{0} min</color>. Discord: <color=white>peekseek.net/discord</color>" },
+        { "welcome", "<color=white>PeekSeek warm-up lobby.</color> <color=white>/kit {0}</color> switch loadout. <color=white>/q</color> queue for a match. <color=white>/afk</color> step out. <color=white>/report</color> somebody." },
 
-        { "kill_feed", "<color=white>{0}</color> killed <color=white>{1}</color> with {2}." },
-        { "kill_feed_headshot", "<color=white>{0}</color> headshot <color=white>{1}</color> with {2}." },
-        { "kill_feed_streak", "<color=white>{0}</color> killed <color=white>{1}</color> with {2}. <color=white>{3} streak</color>." },
-        { "kill_feed_headshot_streak", "<color=white>{0}</color> headshot <color=white>{1}</color> with {2}. <color=white>{3} streak</color>." },
-
-        { "deploying_in", "Back into the fight in <color=white>{0}s</color>." },
-        { "spawn_protection_over", "Spawn protection <color=white>ended</color>. You can be hurt now." },
         { "target_protected", "<color=white>{0}</color> still has spawn protection." },
-
-        { "leaderboard_header", "<color=white>Round over.</color> Top of the last <color=white>{0} min</color>:" },
-        { "leaderboard_entry", "<color=white>{0}.</color> {1}: <color=white>{2}</color>K {3}D, <color=white>{4}%</color> HS" },
-        { "leaderboard_empty", "<color=white>Round over.</color> Nobody scored a kill. Arena and scores reset." },
-        { "arena_reset", "Arena cleared and scores reset. <color=white>Go.</color>" },
+        { "spawn_protection_over", "Spawn protection <color=white>ended</color>." },
 
         // The solo range. Said to somebody who is on their own, so it leads with
-        // the fact that they are — being first in is the thing they are deciding
+        // the fact that they are: being first in is the thing they are deciding
         // what to do about.
         { "range_hint", "Nobody else here yet. <color=white>/range</color> puts up a timed target run while you wait." },
         { "range_started", "<color=white>{0} targets.</color> One hit each. <color=white>Go.</color>" },
@@ -82,6 +70,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "range_stopped", "Targets <color=white>cleared</color>." },
         { "range_not_alone", "The range is for when you are here on your own. There are <color=white>{0}</color> others in the arena to shoot at." },
         { "range_unavailable", "The range isn't set up on this server." },
+        { "range_ended_players", "<color=white>Somebody joined.</color> Targets cleared, back to the arena." },
 
         // Reporting is the one thing here a player does about somebody else, so the
         // wording stays factual: it says what was sent, not what will happen to them.
@@ -89,46 +78,35 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "report_no_player", "Nobody here called <color=white>{0}</color>." },
         { "report_self", "You cannot report yourself." },
         { "report_sent", "Reported <color=white>{0}</color>. Staff have been sent their screen and this round's stats." },
-        { "range_ended_players", "<color=white>Somebody joined.</color> Targets cleared, back to the arena." },
 
-        // Framed as warming the arena up rather than as a restriction, because that
-        // is what it is: they are in the queue, this lobby just is not volunteering
-        // them for a match while it is this quiet.
-        { "queue_held", "Warming up the arena first. Matches start once there are <color=white>{0}+</color> here, and you are still in the queue." },
+        // The one question the lobby asks, on a board, and what it says under it at
+        // a ping that will cost them.
+        { "prompt_headline", "Queue for a match?" },
+        { "prompt_line", "Ranked, on this region. You keep fighting here while you wait." },
+        { "prompt_high_ping", "Your ping is {0} ms. Matches here cut your damage from {1} ms. Pick a closer region on peekseek.net, or stay in the arena." },
+        { "prompt_yes", "Queue" },
+        { "prompt_yes_blurb", "Fight here until a match is found." },
+        { "prompt_no", "Not now" },
+        { "prompt_no_blurb", "Stay in the arena. /q queues later." },
 
-        { "queued", "You are back in the matchmaking queue." },
-        { "not_queued", "You have <color=white>left the queue</color>. You will not be matched." },
-        { "afk_on", "You are <color=white>AFK</color> and stay out of the arena until you type <color=white>/afk</color> again. You are still in the queue." },
-        { "afk_off", "You are <color=white>back</color>. Into the arena in <color=white>{0}s</color>." },
+        { "queued", "You are in the queue." },
+        { "not_queued", "You have <color=white>left the queue</color>." },
+        { "afk_on", "You are <color=white>AFK</color> until you type <color=white>/afk</color> again." },
+        { "afk_off", "You are <color=white>back</color>." },
         { "queue_disabled", "Matchmaking is <color=white>disabled</color> on this server right now." },
         { "no_player_found", "No player found matching \"{0}\"." },
         { "no_stats", "That player has no stats recorded yet." },
         { "kit_options", "Available kits: <color=white>{0}</color>. Type <color=white>/kit</color> plus a name to switch." },
         { "kit_invalid", "\"{0}\" isn't a kit you can use. Available: <color=white>{1}</color>" },
         { "kit_switched", "Switched to your <color=white>{0}</color> kit." },
-        { "discord_prompt", "Join the PeekSeek Discord for matches, tournaments and updates!" },
-        // Said the moment a match lands, then counted down, so nobody is teleported
-        // out of a fight without warning and without knowing why.
-        { "match_found_warning", "<color=white>Match found.</color> You are out of the arena in <color=white>{0}s</color>. Finish up." },
-        { "match_countdown", "Leaving for your match in <color=white>{0}</color>..." },
 
-        { "match_found", "<color=white>MATCH FOUND.</color> You are out of the arena. Sending you in as soon as it is ready." },
+        // The banners: a match landing, and a match that ended without them.
+        { "match_found_name", "Get ready" },
+        { "match_found_line", "Out of the arena in {0} seconds" },
+        { "match_over_name", "Back in the arena" },
+        { "match_over_line", "That match ended without you" },
 
-        // The loadout prompt. This is the last thing between a match being made and
-        // everyone on it being teleported in, so it says the deadline out loud and
-        // numbers the options: a one-character answer is one people actually give.
-        { "pick_header", "<color=white>Pick your loadout.</color> <color=white>{0}s</color> left, then we pick for you." },
-        { "pick_kit", "Kit: {0}   Type <color=white>/kit 1</color>" },
-        { "pick_powerup", "Powerup: {0}   Type <color=white>/powerup 1</color>" },
-        { "pick_locked", "Locked in: <color=white>{0}</color>." },
-        { "pick_defaulted", "Out of time. You are going in with <color=white>{0}</color>." },
-        { "pick_unknown", "No such option. Pick one of: {0}" },
-        { "pick_nothing_to_pick", "You have nothing to pick right now." },
+        { "board_title", "Last {0} minutes" },
         { "match_found_browser", "Open this and log in to select your kit and start your match" },
-        { "match_started", "Your match is <color=white>ready</color>. Sending you to the server now." },
-        // Said to somebody who was taken out of the arena for a match that then ended
-        // without them. Leads with them being back in, because that is the part they can
-        // act on; why it fell through is not something this server can honestly say.
-        { "match_over_returning", "That match <color=white>ended without you</color>. You are back in the arena and back in the queue." },
     };
 }

@@ -16,7 +16,7 @@ public class MatchHandoverTests {
     private const int NoMatch = 0;
 
     private static LobbyManager.PlayerState Matched(int matchId = 6953) {
-        return new LobbyManager.PlayerState { MatchId = matchId };
+        return new LobbyManager.PlayerState { Queueing = true, MatchId = matchId };
     }
 
     [Fact]

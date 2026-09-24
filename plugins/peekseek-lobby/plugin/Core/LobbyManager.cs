@@ -21,7 +21,9 @@ namespace PeekSeekLobby.Core;
 
 internal abstract class LobbyManager {
     internal class PlayerState {
-        internal bool Queueing = true;
+        /// Whether they want a match. Nobody does until they say so: the lobby asks,
+        /// on a board, once they have been here a while, and /q says it any time.
+        internal bool Queueing;
         internal byte Kills;
         internal byte Deaths;
         internal byte Headshots;
@@ -37,6 +39,10 @@ internal abstract class LobbyManager {
         internal int HeadshotHits;
 
         internal float SpawnProtectedUntil;
+
+        /// What they have done to each player this life, for the card when it ends:
+        /// damage and hits, by the other player.
+        internal readonly Dictionary<ulong, (int Damage, int Hits)> DamageTo = [];
 
         /// When Tick should deploy this player from the standard spawn into the
         /// arena. Zero once they are fighting, which is also what everyone who
@@ -69,8 +75,10 @@ internal abstract class LobbyManager {
         internal string RelayedTo;
 
         /// The player's Elo, re-asserted as their reputation on a timer because
-        /// Unturned moves reputation itself on kills.
+        /// Unturned moves reputation itself on kills, and the name of the rank it
+        /// earns, for the board.
         internal int Elo;
+        internal string Rank;
 
         /// Whether the site has actually answered with an Elo yet. Kept separate
         /// from the value because zero is a legitimate Elo, and because a player
@@ -97,11 +105,6 @@ internal abstract class LobbyManager {
         /// once however many times Tick runs inside that second.
         internal int LastCountdownSecond;
 
-        /// The choices this player's match is waiting on, once the site has answered
-        /// with a match. Null while they have none, and null for a gamemode that leaves
-        /// them nothing to decide.
-        internal MatchPicks Picks;
-
         /// Whether this player has stepped away. They keep their queue heartbeat and
         /// their stats, they are simply never put back into the arena until they say
         /// so, which is the whole difference between /afk and /noqueue.
@@ -115,15 +118,14 @@ internal abstract class LobbyManager {
         /// asked for the queue themselves with /noqueue.
         internal float QueueFrom;
 
-        /// When this player started wanting a match, used to order the queue hold so
-        /// the longest wait is offered first. Zero while they do not want one, which
-        /// is also what makes stopping and starting again go to the back of the line.
+        /// When this player started wanting a match, for the clock on the block.
         internal float QueueingSince;
 
-        /// Whether they have already been told they are being held back, so it is
-        /// said once when it starts rather than every heartbeat for as long as it
-        /// lasts.
-        internal bool ToldHeld;
+        /// When the lobby asks whether they want a match, and whether it has. Asked
+        /// once, after they have had time to get a feel for the place; /q is the
+        /// answer any time after.
+        internal float PromptAt;
+        internal bool Prompted;
 
         /// Whether the site should be asked to queue this player on this tick.
         ///
@@ -186,7 +188,6 @@ internal abstract class LobbyManager {
     private static float LastRefreshSent;
     private static float LastMagazineCheck;
     private static float LastReputationSync;
-    private static float LastArenaReset;
 
     /// How long after connecting a player starts being offered matches. Not configurable
     /// and not announced: it is not a rule anybody needs to know, it is the beat between
@@ -217,10 +218,23 @@ internal abstract class LobbyManager {
     private const string HarmonyId = "peekseek.lobby";
     private static Harmony Instrument;
 
-    /// The kill feed on everybody's screen, the match servers' own, drawn here too, and
-    /// the bar along the top with everybody's face on it.
+    /// The screens, the match servers' own, drawn here too: the kill feed, the bar
+    /// along the top with everybody's face on it, the banner, the death card with the
+    /// respawn count in it, the scoreboard, and the one question this lobby asks.
     private static KillFeed Feed;
     private static LobbyBar Bar;
+    private static Banner Banner;
+    private static DeathCard Card;
+    private static Scoreboard Scores;
+    private static readonly QueuePrompt Prompt = new();
+
+    /// When the board everybody is looking at comes down again, after a reset. Zero
+    /// while it is nobody's but whoever is holding the key.
+    private static float ScoresLockedUntil;
+
+    /// When the arena started counting towards its reset, or zero while it is not:
+    /// an arena with one player in it has nothing to reset and no reason to count.
+    private static float ArenaCountingSince;
 
     internal static void Init() {
         Provider.onServerConnected += OnPlayerConnected;
@@ -240,7 +254,6 @@ internal abstract class LobbyManager {
         UseableGun.onBulletSpawned += OnBulletSpawned;
         UseableGun.onBulletHit += OnBulletHit;
 
-        LastArenaReset = Time.realtimeSinceStartup;
         TargetRange.Init();
         RemoteAPI.Init();
 
@@ -254,6 +267,23 @@ internal abstract class LobbyManager {
         });
         Feed.Hook();
         Bar = new LobbyBar();
+        Banner = new Banner(new BannerSettings {
+            EffectGUID = PeekSeekLobby.Config.BannerEffectGUID,
+            EffectKey = PeekSeekLobby.Config.BannerKey,
+            Seconds = PeekSeekLobby.Config.BannerSeconds
+        });
+        Card = new DeathCard(new DeathCardSettings {
+            EffectGUID = PeekSeekLobby.Config.DeathCardEffectGUID,
+            EffectKey = PeekSeekLobby.Config.DeathCardKey,
+            ItemIconURL = PeekSeekLobby.Config.ItemIconURL,
+            Seconds = PeekSeekLobby.Config.DeathCardSeconds
+        });
+        Scores = new Scoreboard(new ScoreboardSettings {
+            EffectGUID = PeekSeekLobby.Config.ScoreboardEffectGUID,
+            EffectKey = PeekSeekLobby.Config.ScoreboardKey
+        });
+        PlayerInput.onPluginKeyTick += OnPluginKey;
+        EffectManager.onEffectButtonClicked += OnButtonClicked;
     }
 
     /// Refusing the drop outright is cheaper and cleaner than spawning it and
@@ -319,8 +349,12 @@ internal abstract class LobbyManager {
             // player: damage a spawn-protected target absorbs never happened, and
             // reporting it would credit a shooter for damage nobody took.
             if (attacker != CSteamID.Nil && attacker != victimID
-                    && Players.TryGetValue(attacker.m_SteamID, out PlayerState dealer))
-                dealer.DamageDealt += Mathf.RoundToInt(parameters.damage * parameters.times);
+                    && Players.TryGetValue(attacker.m_SteamID, out PlayerState dealer)) {
+                int dealt = Mathf.RoundToInt(parameters.damage * parameters.times);
+                dealer.DamageDealt += dealt;
+                dealer.DamageTo.TryGetValue(victimID.m_SteamID, out (int Damage, int Hits) sofar);
+                dealer.DamageTo[victimID.m_SteamID] = (sofar.Damage + dealt, sofar.Hits + 1);
+            }
             return;
         }
 
@@ -359,20 +393,24 @@ internal abstract class LobbyManager {
         Feed.Unhook();
         Feed.Clear();
         Bar.Hide();
+        Banner.Clear();
+        Card.Clear();
+        Scores.HideAll();
+        PlayerInput.onPluginKeyTick -= OnPluginKey;
+        EffectManager.onEffectButtonClicked -= OnButtonClicked;
     }
 
     private static void OnPlayerConnected(CSteamID steamID) {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
-        bool queueing = PeekSeekLobby.Config.EnableQueue;
         PlayerState state = new() {
             KitCategory = DefaultKitCategory(),
-            Queueing = queueing,
             QueueFrom = Time.realtimeSinceStartup + QueueGraceSeconds,
+            PromptAt = Time.realtimeSinceStartup + PeekSeekLobby.Config.QueuePromptSeconds,
         };
         Players[steamID.m_SteamID] = state;
-        Bar.Joined(steamID.m_SteamID);
+        Bar.Redraw();
         RemoteAPI.FetchAvatar(steamID.m_SteamID, url => Bar.Picture(steamID.m_SteamID, url));
 
         // Someone arriving as someone else leaves keeps the count identical, and the
@@ -389,32 +427,19 @@ internal abstract class LobbyManager {
         // grace runs out, which is Tick's job rather than this one's.
         RemoteAPI.Refresh(steamID.m_SteamID);
 
-        SendWelcome(player, queueing);
-
-        player.sendBrowserRequest(PeekSeekLobby.Instance.Translate("discord_prompt"), PeekSeekLobby.Config.szDiscordURL);
+        SendWelcome(player);
     }
 
-    /// Three short lines instead of one long one: what this server is and the
-    /// loop you are already in, then the controls, then what can wait. Someone
-    /// who reads only the first line still knows how the place works.
-    private static void SendWelcome(Player player, bool queueing) {
+    /// One line: what this server is and the commands, and the range when it applies.
+    /// Somebody who walked into a full arena does not need to be told about shooting
+    /// mannequins, and somebody who walked into an empty one needs it more than
+    /// anything else.
+    private static void SendWelcome(Player player) {
         PeekSeekLobbyConfiguration config = PeekSeekLobby.Config;
 
-        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
-            queueing ? "welcome_what_queue" : "welcome_what",
-            Mathf.RoundToInt(config.RespawnDelaySeconds), Mathf.RoundToInt(config.SpawnProtectionSeconds)));
-
         string kits = string.Join("|", config.AllowedKitCategories ?? []);
-        string queueHint = queueing ? " <color=white>/noqueue</color> leave the queue." : string.Empty;
-        Whisper(player.channel.owner,
-            PeekSeekLobby.Instance.Translate("welcome_commands", kits, queueHint));
+        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("welcome", kits));
 
-        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
-            "welcome_extra", Mathf.RoundToInt(config.ResetIntervalSeconds / 60f)));
-
-        // Last, and only when it applies. Somebody who walked into a full arena
-        // does not need to be told about shooting mannequins, and somebody who
-        // walked into an empty one needs it more than anything above.
         if (config.RangeEnabled && Provider.clients.Count <= 1) {
             Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("range_hint"));
         }
@@ -422,6 +447,9 @@ internal abstract class LobbyManager {
 
     private static void OnPlayerDisconnected(CSteamID steamID) {
         Bar.Left(steamID.m_SteamID);
+        Card.Forget(steamID.m_SteamID);
+        Scores.Forget(steamID.m_SteamID);
+        Prompt.Forget(steamID.m_SteamID);
         TargetRange.Forget(steamID.m_SteamID);
         OfferRangeToWhoeverIsLeft();
 
@@ -445,8 +473,9 @@ internal abstract class LobbyManager {
         if (alone != null) Whisper(alone, PeekSeekLobby.Instance.Translate("range_hint"));
     }
 
-    /// Ordinary lobby kills are public — there's no stream overlay here to carry a
-    /// kill feed the way a real match's does, so chat is the only kill feed there is.
+    /// The feed carries the kill for everybody. What the one who died gets is the
+    /// card: who, with what, from how far, what they had left and what they did to
+    /// them, while it still matters.
     private static void OnPlayerDead(UnturnedPlayer victim, EDeathCause cause, ELimb limb, CSteamID murderer) {
         if (cause == EDeathCause.ARENA) return;
         if (!Players.TryGetValue(victim.CSteamID.m_SteamID, out PlayerState victimState)) return;
@@ -454,6 +483,8 @@ internal abstract class LobbyManager {
         victimState.Deaths++;
         // Dying ends a streak outright, however recent the last kill was.
         victimState.Streak.End();
+        Card.Show(victim.Player.channel.owner, DeathOf(victim, victimState, cause, limb, murderer));
+        victimState.DamageTo.Clear();
 
         // Putting them back on their feet is OnLifeUpdated's job, not this
         // event's: a ServerRespawn from in here is ignored, because Unturned has
@@ -474,12 +505,41 @@ internal abstract class LobbyManager {
 
         GrantRewards(killer.Player, spawning: false);
 
-        // The streak is advanced before the kill is announced so the feed can name
-        // it, then the reward is paid out after, which reads as "what they did"
-        // followed by "what they got".
         StreakReward earned = killerState == null ? null : AdvanceStreak(killerState);
-        AnnounceKill(killer, victim, limb, killerState?.Streak.Kills ?? 0);
         if (earned != null) PayOutStreak(killer, killerState, earned);
+        Bar.Redraw();
+    }
+
+    /// The card for one death. With a killer: who, what they held, whether it was
+    /// the head, how far, what they had left and what the victim had done to them
+    /// this life. Without one: the cause, in the few words the game can name.
+    private static DeathInfo DeathOf(UnturnedPlayer victim, PlayerState victimState, EDeathCause cause, ELimb limb, CSteamID murderer) {
+        UnturnedPlayer killer = murderer == CSteamID.Nil || murderer == victim.CSteamID ? null : UnturnedPlayer.FromCSteamID(murderer);
+        if (killer?.Player == null) return new DeathInfo { Cause = CauseLabel(cause) };
+
+        string line = $"They had {killer.Player.life.health} HP left";
+        if (victimState.DamageTo.TryGetValue(murderer.m_SteamID, out (int Damage, int Hits) given)) {
+            line += $"    You dealt {given.Damage} in {given.Hits} hit{(given.Hits == 1 ? "" : "s")}";
+        }
+
+        return new DeathInfo {
+            Killer = killer.CharacterName,
+            Weapon = KillFeed.Weapon(cause, killer.Player),
+            Headshot = limb == ELimb.SKULL,
+            Distance = Mathf.RoundToInt(Vector3.Distance(killer.Player.transform.position, victim.Player.transform.position)),
+            Line = line
+        };
+    }
+
+    private static string CauseLabel(EDeathCause cause) {
+        return cause switch {
+            EDeathCause.BONES => "FELL",
+            EDeathCause.WATER => "DROWNED",
+            EDeathCause.BLEEDING => "BLED OUT",
+            EDeathCause.SUICIDE => "SUICIDE",
+            EDeathCause.GRENADE or EDeathCause.LANDMINE or EDeathCause.MISSILE or EDeathCause.CHARGE => "BLOWN UP",
+            _ => "DIED"
+        };
     }
 
     /// A streak is kills in a row with no death and no long gap between them. At
@@ -612,28 +672,6 @@ internal abstract class LobbyManager {
         return count;
     }
 
-    /// One kill is not a streak, so the feed only mentions the run once it is worth
-    /// mentioning — from two up. Below that the line just says who killed whom.
-    private static void AnnounceKill(UnturnedPlayer killer, UnturnedPlayer victim, ELimb limb, byte streak) {
-        string weapon = WeaponName(killer.Player.equipment.itemID);
-        bool headshot = limb == ELimb.SKULL;
-
-        if (streak < 2) {
-            Announce(PeekSeekLobby.Instance.Translate(
-                headshot ? "kill_feed_headshot" : "kill_feed",
-                killer.CharacterName, victim.CharacterName, weapon));
-            return;
-        }
-
-        Announce(PeekSeekLobby.Instance.Translate(
-            headshot ? "kill_feed_headshot_streak" : "kill_feed_streak",
-            killer.CharacterName, victim.CharacterName, weapon, streak));
-    }
-
-    private static string WeaponName(ushort itemID) {
-        return Assets.find(EAssetType.ITEM, itemID) is ItemAsset asset ? asset.itemName : "something";
-    }
-
     /// Puts a player into the arena, kitted and briefly protected.
     ///
     /// The AFK guard lives here rather than at the call sites because there are several
@@ -652,6 +690,7 @@ internal abstract class LobbyManager {
         }
 
         TeleportToArena(player);
+        Card.HideRespawn(player.channel.owner);
 
         state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
 
@@ -693,14 +732,10 @@ internal abstract class LobbyManager {
         // simply retried. Everything after it happens once a life.
         player.life.ServerRespawn(false);
 
-        bool scheduled = state.ScheduleDeploy(
+        state.ScheduleDeploy(
             Time.realtimeSinceStartup,
             PeekSeekLobby.Config.RespawnDelaySeconds,
             PeekSeekLobby.Config.SpawnProtectionSeconds);
-        if (!scheduled) return;
-
-        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
-            "deploying_in", Mathf.RoundToInt(PeekSeekLobby.Config.RespawnDelaySeconds)));
     }
 
     /// The one thing that actually puts people back on their feet, copied from the
@@ -834,10 +869,17 @@ internal abstract class LobbyManager {
     internal static bool QueueEnabled => PeekSeekLobby.Config.EnableQueue;
 
     internal static bool ToggleQueueing(CSteamID steamID) {
+        if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
+
+        return SetQueueing(steamID, !state.Queueing);
+    }
+
+    internal static bool SetQueueing(CSteamID steamID, bool queueing) {
         if (!QueueEnabled) return false;
         if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
 
-        state.Queueing = !state.Queueing;
+        state.Queueing = queueing;
+        state.Prompted = true;
         if (state.Queueing) {
             // Asking for the queue by name skips the arrival grace. That grace exists to
             // stop a match landing on somebody who has not finished arriving, and
@@ -861,10 +903,6 @@ internal abstract class LobbyManager {
     ///
     /// The queue is deliberately untouched. Stepping away from the keyboard is not
     /// leaving matchmaking, and a match found while AFK still pulls them into it.
-    private static bool IsAfk(ulong steam64) {
-        return Players.TryGetValue(steam64, out PlayerState state) && state.Afk;
-    }
-
     internal static bool ToggleAfk(CSteamID steamID) {
         if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
 
@@ -953,8 +991,7 @@ internal abstract class LobbyManager {
             state.Elo = remote.Elo;
             state.EloKnown = true;
         }
-
-        RememberPicks(state, remote);
+        if (remote.Rank != null) state.Rank = remote.Rank;
 
         if (remote.MatchId != 0 && state.MatchId == 0) SendToMatch(steam64, state, remote.MatchId);
         if (state.LostTheirMatch(remote.MatchId)) ReturnToArena(steam64, state);
@@ -1038,41 +1075,24 @@ internal abstract class LobbyManager {
         // of a firefight the instant a match lands reads as the server breaking. This
         // gives them the end of the fight they are already in, and tells them why the
         // ground is about to move.
-        float warning = PeekSeekLobby.Config.MatchWarningSeconds;
-        state.PullAt = Time.realtimeSinceStartup + warning;
-        state.LastCountdownSecond = 0;
-
-        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate(
-            "match_found_warning", Mathf.RoundToInt(warning)));
+        state.PullAt = Time.realtimeSinceStartup + PeekSeekLobby.Config.MatchWarningSeconds;
+        Prompt.Close(player.channel.owner);
+        Banner.ShowTo(player.channel.owner, "MATCH FOUND", PeekSeekLobby.Instance.Translate("match_found_name"),
+            PeekSeekLobby.Instance.Translate("match_found_line", Mathf.RoundToInt(PeekSeekLobby.Config.MatchWarningSeconds)));
     }
 
-    /// Says each remaining second once, then pulls them in when it runs out. Counting
-    /// out loud rather than waiting silently is the point: a number ticking down in
-    /// chat is what makes somebody stop pushing a fight they are about to be taken out
-    /// of, and it is the difference between being moved and being interrupted.
+    /// Pulls them in when the count on the block runs out. The count is what makes
+    /// somebody stop pushing a fight they are about to be taken out of; it is the
+    /// difference between being moved and being interrupted.
     private static void CountDownToMatch(CSteamID steamID, PlayerState state, float now) {
-        int remaining = Mathf.CeilToInt(state.PullAt - now);
+        if (now < state.PullAt) return;
 
-        if (remaining <= 0) {
-            state.PullAt = 0;
-            PullIntoMatch(steamID, state);
-            return;
-        }
-
-        if (remaining == state.LastCountdownSecond) return;
-        state.LastCountdownSecond = remaining;
-
-        Player player = PlayerTool.getPlayer(steamID);
-        if (player == null) return;
-
-        Whisper(player.channel.owner,
-            PeekSeekLobby.Instance.Translate("match_countdown", remaining));
+        state.PullAt = 0;
+        PullIntoMatch(steamID, state);
     }
 
-    /// The end of the countdown: out of the arena, onto a spawn point, and handed the
-    /// link that logs them in and lands them on their match page. Hitting /match while
-    /// logged out is itself what records it as the page to return to, so the site sends
-    /// them back there after login without needing a redirect parameter.
+    /// The end of the countdown: out of the arena, onto a spawn point, until the site
+    /// says which server to go to, which is usually the next refresh.
     private static void PullIntoMatch(CSteamID steamID, PlayerState state) {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
@@ -1085,212 +1105,16 @@ internal abstract class LobbyManager {
         // middle of a fight to read the link from.
         TeleportToSafeSpawn(player);
         state.SpawnProtectedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.SpawnProtectionSeconds;
-
-        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_found"));
-        BeginPicks(steamID, state);
     }
 
-    /// How long a player gets to answer the loadout prompt when the config does not say.
-    /// Only reached when MatchPickSeconds is missing from the live XML, which Rocket
-    /// deserialises to zero rather than to its LoadDefaults value.
-    private const float FallbackPickSeconds = 8f;
-
-    /// How often the prompt is said again while the window runs down. Once is not
-    /// enough in a chat box that a firefight is still writing to.
-    private const int PromptEverySeconds = 3;
-
-    /// Keeps what the site says there is to choose, without losing a choice just made.
-    ///
-    /// The site is the truth about the options, but a pick made a moment ago may not be
-    /// in its answer yet: the refresh carrying it can land after one that was already in
-    /// flight. Keeping a local choice the site has not contradicted is what stops the
-    /// menu reappearing under somebody who has already answered it.
-    private static void RememberPicks(PlayerState state, RemoteAPI.PlayerState remote) {
-        if (remote.MatchId == 0) {
-            state.Picks = null;
-            return;
-        }
-        if (remote.Choose == null) return;
-
-        MatchPicks known = state.Picks;
-        state.Picks = remote.Choose;
-        if (known == null) return;
-
-        state.Picks.Kit ??= known.Kit;
-        state.Picks.Powerup ??= known.Powerup;
-        state.Picks.DecideBy = known.DecideBy;
-        state.Picks.LastPromptSecond = known.LastPromptSecond;
-    }
-
-    /// Puts the match's remaining choices in front of the player and starts the clock.
-    ///
-    /// The kit is locked to whatever they are already holding rather than asked about.
-    /// It is the kit they chose to fight the arena with, so it is the best guess anyone
-    /// has, and a choice already made is one less thing between them and the match. The
-    /// prompt still says what it is and how to change it.
-    private static void BeginPicks(CSteamID steamID, PlayerState state) {
-        MatchPicks picks = state.Picks;
-        if (picks == null || !picks.Outstanding) return;
-
-        if (picks.NeedsKit && picks.Kits.Contains(state.KitCategory)) {
-            Decide(steamID.m_SteamID, state, state.KitCategory, null);
-        }
-
-        float window = PeekSeekLobby.Config.MatchPickSeconds;
-        if (window <= 0f) {
-            Logger.LogWarning(
-                $"MatchPickSeconds is {window} in the live config, so nobody would get a "
-                + $"chance to choose. Using {FallbackPickSeconds}s. Add the field to "
-                + "PeekSeekLobby.configuration.xml.");
-            window = FallbackPickSeconds;
-        }
-
-        picks.DecideBy = Time.realtimeSinceStartup + window;
-        picks.LastPromptSecond = 0;
-
-        if (!picks.Outstanding) {
-            picks.DecideBy = 0f;
-            return;
-        }
-        ShowPicks(steamID, state);
-    }
-
-    /// The prompt. Said again every few seconds while the window lasts, because one line
-    /// in a chat box a firefight is still writing to is a line nobody reads.
-    private static void ShowPicks(CSteamID steamID, PlayerState state) {
-        Player player = PlayerTool.getPlayer(steamID);
-        if (player == null) return;
-
-        MatchPicks picks = state.Picks;
-        int remaining = Mathf.Max(0, Mathf.CeilToInt(picks.DecideBy - Time.realtimeSinceStartup));
-
-        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("pick_header", remaining));
-        if (picks.NeedsKit) {
-            Whisper(player.channel.owner,
-                PeekSeekLobby.Instance.Translate("pick_kit", Numbered(picks.Kits)));
-        }
-        if (picks.NeedsPowerup) {
-            Whisper(player.channel.owner,
-                PeekSeekLobby.Instance.Translate("pick_powerup", Numbered(picks.Powerups)));
-        }
-    }
-
-    /// "1 meta, 2 sniper". Numbering them is what makes the answer one character long.
-    private static string Numbered(List<string> options) {
-        string[] parts = new string[options.Count];
-        for (int i = 0; i < options.Count; i++) {
-            parts[i] = $"<color=white>{i + 1}</color> {options[i]}";
-        }
-        return string.Join(", ", parts);
-    }
-
-    /// Counts the window down and takes the decision away when it runs out.
-    ///
-    /// Locking the first option rather than letting the window lapse is the point: the
-    /// site hands a match over as soon as everyone has chosen, so somebody who ignores
-    /// the prompt otherwise costs their opponent the rest of selectKitsTime.
-    private static void TickPicks(CSteamID steamID, PlayerState state, float now) {
-        MatchPicks picks = state.Picks;
-        if (picks == null || picks.DecideBy == 0f) return;
-
-        if (!picks.Outstanding) {
-            picks.DecideBy = 0f;
-            return;
-        }
-
-        int remaining = Mathf.CeilToInt(picks.DecideBy - now);
-        if (remaining <= 0) {
-            picks.DecideBy = 0f;
-            LockRemaining(steamID, state);
-            return;
-        }
-
-        if (remaining == picks.LastPromptSecond) return;
-        if (remaining % PromptEverySeconds != 0) return;
-
-        picks.LastPromptSecond = remaining;
-        ShowPicks(steamID, state);
-    }
-
-    /// The end of the window: whatever is still unanswered goes in as the first option,
-    /// which is the same fallback the site applies when nobody ever picks.
-    private static void LockRemaining(CSteamID steamID, PlayerState state) {
-        MatchPicks picks = state.Picks;
-        string kit = picks.NeedsKit ? picks.Kits[0] : null;
-        string powerup = picks.NeedsPowerup ? picks.Powerups[0] : null;
-        if (kit == null && powerup == null) return;
-
-        Decide(steamID.m_SteamID, state, kit, powerup);
-
-        Player player = PlayerTool.getPlayer(steamID);
-        if (player == null) return;
-        Whisper(player.channel.owner,
-            PeekSeekLobby.Instance.Translate("pick_defaulted", Loadout(picks)));
-    }
-
-    /// Records a choice locally as well as sending it.
-    ///
-    /// Applied here because the site is a couple of seconds away and the prompt is not:
-    /// without it the player picks, sees the same menu on the next tick, and picks again.
-    private static void Decide(ulong steam64, PlayerState state, string kit, string powerup) {
-        if (kit != null) state.Picks.Kit = kit;
-        if (powerup != null) state.Picks.Powerup = powerup;
-        RemoteAPI.Decide(steam64, kit, powerup);
-    }
-
-    private static string Loadout(MatchPicks picks) {
-        if (picks.Powerup == null) return picks.Kit;
-        return picks.Kit == null ? picks.Powerup : $"{picks.Kit} + {picks.Powerup}";
-    }
-
-    /// Whether this player has a match kit to choose, which is what tells /kit whether
-    /// it is picking a loadout or switching an arena gun.
-    ///
-    /// True for as long as the choice exists rather than only until it is first made:
-    /// somebody who picks meta and then changes their mind is still out of the arena
-    /// with nothing else /kit could sensibly mean, and a second answer is free right up
-    /// until the match is handed over.
-    internal static bool HasMatchKitChoice(CSteamID steamID) {
-        return Players.TryGetValue(steamID.m_SteamID, out PlayerState state)
-            && state.Picks != null && state.Picks.Kits.Count > 1;
-    }
-
-    /// /kit and /powerup, once they know which list they are answering. `choice` is
-    /// either the option's name or its number in the prompt. False and an untouched
-    /// state for anything unrecognised, so the caller can say what the options were.
-    internal static bool ChooseForMatch(CSteamID steamID, bool powerup, string choice) {
-        if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
-        if (state.Picks == null) return false;
-
-        string picked = state.Picks.OptionFor(powerup, choice);
-        if (picked == null) return false;
-
-        Decide(steamID.m_SteamID, state, powerup ? null : picked, powerup ? picked : null);
-
-        Player player = PlayerTool.getPlayer(steamID);
-        if (player != null) {
-            Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("pick_locked", picked));
-        }
-        if (!state.Picks.Outstanding) state.Picks.DecideBy = 0f;
-        return true;
-    }
-
-    /// The options a player is choosing between, for a command that has to list them
-    /// back. Null when they are not choosing anything.
-    internal static List<string> MatchOptions(CSteamID steamID, bool powerup) {
-        if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return null;
-        if (state.Picks == null) return null;
-        return powerup ? state.Picks.Powerups : state.Picks.Kits;
-    }
-
-    /// The site only fills in a server code once the match is genuinely being hosted, so
-    /// this is the moment the player can be handed over and be sure of getting in — the
-    /// same relay the match plugin uses to send everyone back here when a match ends.
+    /// The site fills in a server code the moment a server holds the match, and that
+    /// server takes the picks on a board of its own, so this is the moment the player
+    /// is handed over: the same relay the match plugin uses to send everyone back here
+    /// when a match ends.
     ///
     /// Sent once per match server rather than once per match: a relay the client refuses
     /// leaves the player standing here, and the site goes on answering with the same
-    /// code until the match is over, so relaying every few seconds would fill their chat
-    /// with an invitation they have already declined.
+    /// code until the match is over.
     private static void RelayToMatch(ulong steam64, PlayerState state, string serverCode) {
         if (!state.ShouldRelayTo(serverCode)) return;
         if (!ulong.TryParse(serverCode, out ulong serverId) || serverId == 0) return;
@@ -1299,7 +1123,6 @@ internal abstract class LobbyManager {
         if (player == null) return;
 
         state.RelayedTo = serverCode;
-        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_started"));
         player.sendRelayToServer(new CSteamID(serverId), string.Empty, true);
     }
 
@@ -1323,7 +1146,8 @@ internal abstract class LobbyManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
-        Whisper(player.channel.owner, PeekSeekLobby.Instance.Translate("match_over_returning"));
+        Banner.ShowTo(player.channel.owner, "MATCH OVER", PeekSeekLobby.Instance.Translate("match_over_name"),
+            PeekSeekLobby.Instance.Translate("match_over_line"));
         SpawnPlayer(steamID, state);
     }
 
@@ -1363,7 +1187,13 @@ internal abstract class LobbyManager {
     internal static void Tick() {
         float now = Time.realtimeSinceStartup;
         Feed.Tick();
-        Bar.Tick(IsAfk);
+        Banner.Tick();
+        Card.Tick();
+        TickArenaClock(now);
+        if (ScoresLockedUntil > 0 && now >= ScoresLockedUntil) {
+            ScoresLockedUntil = 0;
+            Scores.HideAll();
+        }
 
         foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
             CSteamID steamID = new(entry.Key);
@@ -1375,7 +1205,8 @@ internal abstract class LobbyManager {
             if (state.StreakMagItemId != 0) TakeBackSpentStreakMagazine(steamID, state);
 
             if (state.PullAt > 0) CountDownToMatch(steamID, state, now);
-            TickPicks(steamID, state, now);
+            if (!state.Prompted && state.MatchId == 0 && !state.Afk && now >= state.PromptAt) AskToQueue(steamID, state);
+            if (state.DeployAt > 0 && !state.Afk) ShowRespawnCount(steamID, state, now);
 
             // An AFK player's deploy stays booked rather than being cancelled, so
             // coming back puts them into the arena on the next tick instead of making
@@ -1404,13 +1235,18 @@ internal abstract class LobbyManager {
             RespawnAnyoneStillDead();
         }
 
+        if (now - LastBarUpdate >= BarIntervalSeconds) {
+            LastBarUpdate = now;
+            Bar.Show(View(now));
+        }
+
         if (now - LastReputationSync >= ReputationSyncIntervalSeconds) {
             LastReputationSync = now;
             SyncReputations();
         }
 
-        if (now - LastArenaReset >= PeekSeekLobby.Config.ResetIntervalSeconds) {
-            LastArenaReset = now;
+        if (ArenaCountingSince > 0 && now - ArenaCountingSince >= PeekSeekLobby.Config.ResetIntervalSeconds) {
+            ArenaCountingSince = now;
             ResetArena();
         }
 
@@ -1558,7 +1394,8 @@ internal abstract class LobbyManager {
         // range, so there is nothing else the wipe would have tidied up.
         if (TargetRange.AnyRunning) return;
 
-        AnnounceLeaderboard();
+        ScoresLockedUntil = Time.realtimeSinceStartup + PeekSeekLobby.Config.ResetBoardSeconds;
+        Scores.ShowAll(Sheet());
 
         ItemManager.askClearAllItems();
         BarricadeManager.askClearAllBarricades();
@@ -1585,36 +1422,7 @@ internal abstract class LobbyManager {
             if (player.life.isDead) player.life.ServerRespawn(false);
             SpawnPlayer(steamID, state);
         }
-
-        Announce(PeekSeekLobby.Instance.Translate("arena_reset"));
-    }
-
-    /// Read out before the wipe, since the scores it reports are exactly what is
-    /// about to be cleared.
-    private static void AnnounceLeaderboard() {
-        List<KeyValuePair<ulong, PlayerState>> ranked = Players
-            .Where(entry => entry.Value.Kills > 0)
-            .OrderByDescending(entry => entry.Value.Kills)
-            .ThenBy(entry => entry.Value.Deaths)
-            .Take(LeaderboardPlaces)
-            .ToList();
-
-        int minutes = Mathf.RoundToInt(PeekSeekLobby.Config.ResetIntervalSeconds / 60f);
-        if (ranked.Count == 0) {
-            Announce(PeekSeekLobby.Instance.Translate("leaderboard_empty"));
-            return;
-        }
-
-        Announce(PeekSeekLobby.Instance.Translate("leaderboard_header", minutes));
-        for (int place = 0; place < ranked.Count; place++) {
-            PlayerState state = ranked[place].Value;
-            string name = UnturnedPlayer.FromCSteamID(new CSteamID(ranked[place].Key))?.CharacterName
-                ?? ranked[place].Key.ToString();
-            int headshotPercent = state.Kills > 0 ? state.Headshots * 100 / state.Kills : 0;
-
-            Announce(PeekSeekLobby.Instance.Translate(
-                "leaderboard_entry", place + 1, name, state.Kills, state.Deaths, headshotPercent));
-        }
+        Bar.Redraw();
     }
 
     /// One request per player, every tick. Whether it queues them or only asks about
@@ -1626,7 +1434,6 @@ internal abstract class LobbyManager {
     /// would be a second place deciding who is in the arena and who is waiting.
     private static void RefreshPlayers() {
         float now = Time.realtimeSinceStartup;
-        HashSet<ulong> offered = OfferedAMatch(now);
         int inArena = 0;
         int wanting = 0;
 
@@ -1638,62 +1445,141 @@ internal abstract class LobbyManager {
             // would put a player who already has a match back in the queue for another.
             bool wantsAMatch = PeekSeekLobby.Config.EnableQueue
                 && entry.Value.WantsAMatch(now);
-            if (wantsAMatch) wanting++;
-
-            if (wantsAMatch && offered.Contains(entry.Key)) {
-                entry.Value.ToldHeld = false;
+            if (wantsAMatch) {
+                wanting++;
+                if (entry.Value.QueueingSince == 0) entry.Value.QueueingSince = now;
                 RemoteAPI.RefreshQueued(entry.Key);
                 continue;
             }
 
-            // Held back, not forgotten: the site is still asked about them, so a match
-            // made on the site or in a party still reaches them. The only thing being
-            // withheld is this lobby volunteering them for a new one.
-            if (wantsAMatch) TellHeld(entry.Key, entry.Value);
+            entry.Value.QueueingSince = 0;
             RemoteAPI.Refresh(entry.Key);
         }
 
-        // Everyone offered a match wanted one, so whoever wanted one and was not offered
-        // is exactly who this lobby is holding back.
-        RemoteAPI.ReportPopulation(inArena, wanting, wanting - offered.Count);
+        RemoteAPI.ReportPopulation(inArena, wanting);
     }
 
-    /// Who this lobby is willing to put into the queue this tick, keeping enough
-    /// people in the arena that the server is still worth joining from the browser.
-    private static HashSet<ulong> OfferedAMatch(float now) {
-        Dictionary<ulong, float> waiting = [];
+    // ---- the screens ---------------------------------------------------------------
 
-        foreach (KeyValuePair<ulong, PlayerState> entry in Players) {
-            PlayerState state = entry.Value;
-            if (!PeekSeekLobby.Config.EnableQueue || !state.WantsAMatch(now)) {
-                // Stopping resets the clock, so coming back goes to the back of the
-                // line rather than keeping a wait they spent not wanting a match.
-                state.QueueingSince = 0;
-                continue;
-            }
+    private const float BarIntervalSeconds = 0.5f;
+    private static float LastBarUpdate;
 
-            if (state.QueueingSince == 0) state.QueueingSince = now;
-            waiting[entry.Key] = state.QueueingSince;
+    /// The bar as it stands: faces by kills, the queue cell for the viewer's own
+    /// state, which is the same for everybody since the block is one block, and the
+    /// arena's clock while it counts.
+    ///
+    /// The block is shared, so the queue cell shows the state most worth showing:
+    /// a match found for anybody counts down for everybody to see, else the queue
+    /// with the longest wait on it, else nothing.
+    private static LobbyView View(float now) {
+        LobbyView view = new();
+
+        foreach (SteamPlayer client in Provider.clients) {
+            if (client.player == null || !Players.TryGetValue(client.playerID.steamID.m_SteamID, out PlayerState state)) continue;
+            view.Faces.Add(new LobbyFace {
+                Steam64 = client.playerID.steamID.m_SteamID,
+                Playing = !state.Afk && !client.player.life.isDead && !client.player.movement.isSafe,
+                Away = state.Afk,
+                Kills = state.Kills
+            });
+        }
+        view.Faces = view.Faces.OrderByDescending(face => face.Kills).ToList();
+
+        PlayerState pulled = Players.Values.Where(state => state.PullAt > 0).OrderBy(state => state.PullAt).FirstOrDefault();
+        PlayerState queued = Players.Values.Where(state => state.WantsAMatch(now) && state.QueueingSince > 0)
+            .OrderBy(state => state.QueueingSince).FirstOrDefault();
+        if (pulled != null) {
+            view.State = "MATCH FOUND";
+            view.StateTimer = Mathf.CeilToInt(pulled.PullAt - now).ToString();
+        } else if (queued != null) {
+            view.State = "QUEUE";
+            view.StateTimer = LobbyBar.Clock(now - queued.QueueingSince);
         }
 
-        return QueueHold.Offered(
-            waiting,
-            Provider.clients.Count,
-            PeekSeekLobby.Config.MinLobbyPopulation,
-            PeekSeekLobby.Config.LobbyHoldMaxSeconds,
-            now);
+        if (ArenaCountingSince > 0) {
+            view.ArenaTimer = LobbyBar.Clock(PeekSeekLobby.Config.ResetIntervalSeconds - (now - ArenaCountingSince));
+        }
+        return view;
     }
 
-    /// Said once, when the hold starts. A wait nobody explains reads as matchmaking
-    /// being broken, which is the reading that makes people leave.
-    private static void TellHeld(ulong steam64, PlayerState state) {
-        if (state.ToldHeld) return;
-        state.ToldHeld = true;
+    /// The arena counts towards a reset from the moment there are two people in it,
+    /// and stops when there are not: one player has nobody to be reset against.
+    private static void TickArenaClock(float now) {
+        int here = Players.Values.Count(state => state.MatchId == 0);
+        if (here >= 2) {
+            if (ArenaCountingSince == 0) ArenaCountingSince = now;
+            return;
+        }
+        ArenaCountingSince = 0;
+    }
 
-        SteamPlayer client = PlayerTool.getPlayer(new CSteamID(steam64))?.channel?.owner;
-        if (client == null) return;
+    /// The count in the middle of a dead player's screen, once a second.
+    private static void ShowRespawnCount(CSteamID steamID, PlayerState state, float now) {
+        int seconds = Mathf.CeilToInt(state.DeployAt - now);
+        if (seconds == state.LastCountdownSecond) return;
+        state.LastCountdownSecond = seconds;
 
-        Whisper(client, PeekSeekLobby.Instance.Translate(
-            "queue_held", PeekSeekLobby.Config.MinLobbyPopulation));
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player != null) Card.ShowRespawn(player.channel.owner, Mathf.Max(0, seconds));
+    }
+
+    /// The one question: queue for a match, or stay. Asked once, with what queueing
+    /// from here means at their ping written under it, because a match here cuts
+    /// damage above a certain ping and a player who finds that out mid-match has
+    /// been sent somewhere they should have been warned about.
+    private static void AskToQueue(CSteamID steamID, PlayerState state) {
+        state.Prompted = true;
+        if (!QueueEnabled) return;
+
+        Player player = PlayerTool.getPlayer(steamID);
+        if (player == null) return;
+
+        int ping = Ping.Milliseconds(player.channel.owner);
+        string line = ping >= PeekSeekLobby.Config.HighPingMs
+            ? PeekSeekLobby.Instance.Translate("prompt_high_ping", ping, PeekSeekLobby.Config.HighPingMs)
+            : PeekSeekLobby.Instance.Translate("prompt_line");
+        Prompt.Open(player.channel.owner, line);
+    }
+
+    private static void OnButtonClicked(Player player, string button) {
+        bool? answer = Prompt.Answer(player.channel.owner, button);
+        if (answer != true) return;
+
+        SetQueueing(player.channel.owner.playerID.steamID, true);
+    }
+
+    /// The board as it stands: everybody here by kills, with their rank from the
+    /// site beside their numbers.
+    private static ScoreSheet Sheet() {
+        ScoreSheet sheet = new() {
+            Title = PeekSeekLobby.Instance.Translate("board_title", Mathf.RoundToInt(PeekSeekLobby.Config.ResetIntervalSeconds / 60f)),
+            Columns = ["K", "D", "HS%", "RANK"]
+        };
+
+        foreach (KeyValuePair<ulong, PlayerState> entry in Players.OrderByDescending(e => e.Value.Kills).ThenBy(e => e.Value.Deaths)) {
+            PlayerState state = entry.Value;
+            SteamPlayer client = PlayerTool.getSteamPlayer(new CSteamID(entry.Key));
+            if (client == null) continue;
+
+            int hs = state.Kills > 0 ? state.Headshots * 100 / state.Kills : 0;
+            sheet.Rows.Add(new ScoreRow {
+                Steam64 = entry.Key,
+                AvatarUrl = Bar.AvatarOf(entry.Key),
+                Name = client.playerID.characterName,
+                Values = [state.Kills.ToString(), state.Deaths.ToString(), hs.ToString(), state.Rank ?? (state.EloKnown ? state.Elo.ToString() : "")]
+            });
+        }
+        return sheet;
+    }
+
+    /// The board on a held plugin key: up while the first one is down, gone when it
+    /// comes up. While the reset's board is everybody's it stays.
+    private static void OnPluginKey(Player player, uint simulation, byte key, bool state) {
+        if (key != 0 || ScoresLockedUntil > 0) return;
+
+        SteamPlayer viewer = player.channel.owner;
+        bool up = Scores.IsUp(viewer.playerID.steamID.m_SteamID);
+        if (state && !up) Scores.Show(viewer, Sheet());
+        else if (!state && up) Scores.Hide(viewer);
     }
 }

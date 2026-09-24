@@ -31,7 +31,10 @@ five is over. Level at 3-3 goes to overtime, two rounds each, over and over, dec
 same way. Never earlier, because half a block is not a fair swap.
 
 Nobody moves until the round is live, except the one defender walking the flag, who
-cannot leave the base. Everybody else spends the pick in the map's own lobby, the
+cannot leave the base. The bar says BUILD over its clock for the build and nothing over
+it otherwise; a round's end, the swap of sides and overtime are banners. A defender who
+dies is put in the map's lobby for the rest of the round, with the bar and the feed
+still in front of them, rather than left on a death screen. Everybody else spends the pick in the map's own lobby, the
 building in the corner of Alpha Valley that the game itself uses as one: the regular
 player spawns of an Arena map are its lobby (the alt spawns are the arena drop), so the
 plugin reads them off the level rather than knowing where they are. A pick phase where
@@ -40,7 +43,8 @@ people can run is a head start, which is what the rooting and the distance are f
 ## The rules that make it a raid
 
 **Defenders take damage standing on dirt.** Three seconds off your own building and open
-ground starts killing you. The grace period matters more than the damage: vaulting a
+ground starts killing you, and a tag at the bottom of the screen says OFF BASE with the
+grace draining in its pips and the damage in red after. The grace period matters more than the damage: vaulting a
 windowsill, dropping through a hatch, landing a jump short and stepping out to meet
 somebody at the door all leave you briefly on the ground while doing exactly what a
 defender should be doing. Three seconds covers all of that and nothing longer.
@@ -77,6 +81,8 @@ alone put people inside the walls a hexagonal base grows from its centre.
 **Attackers always know where they are going.** From the moment they are put down for
 a round until it ends, the base they are taking is on every attacker's map and compass,
 as the game's own marker with the site's name on it, and they spawn facing it. The
+defenders get the same marker on their flag, because the rest of the team was in the
+lobby while the bearer stood it. The
 spawns are a hundred metres out on a map with two bases, and "which way" is not a
 question a round should be spent on.
 

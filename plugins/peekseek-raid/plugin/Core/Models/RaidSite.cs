@@ -60,6 +60,21 @@ public class RaidSite {
 
     public bool Contains(Vector3 point) => Contains(point.x, point.z);
 
+    /// Which way a point lies from the anchor and how far, as a label for its dot on
+    /// the map: "NE  106 m". North is up the map, which is +z.
+    public string Bearing(SerializableVector3 point) {
+        float dx = point.X - Anchor.X;
+        float dz = point.Z - Anchor.Z;
+        float metres = (float)Math.Sqrt(dx * dx + dz * dz);
+
+        // Compass degrees, clockwise from north.
+        float degrees = (float)((Math.Atan2(dx, dz) * 180 / Math.PI + 360) % 360);
+        string[] points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+        string way = points[(int)Math.Round(degrees / 45) % 8];
+
+        return $"{way}  {Math.Round(metres)} m";
+    }
+
     /// Where an attacker who chose spawn `spawn` stands, as the `index`th of `total`
     /// who chose it. One stands on the point itself; more stand in a ring round it, so
     /// the spot on the map is where the first one is and the rest are within arm's reach.

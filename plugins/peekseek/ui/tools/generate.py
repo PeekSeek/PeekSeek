@@ -195,32 +195,33 @@ def tile(parent, face, i, x, y, w, h, fill_tile):
     return node
 
 
-POWERUP_W, POWERUP_H = 160, 150
+POWERUP_W, POWERUP_H = 160, 172
+BLURB_Y, BLURB_H = 32, 42
 
 
 def powerup_tile(parent, face, i, x, y, w=POWERUP_W, h=POWERUP_H):
-    """A powerup as the site's match page draws one (`.powerupbutton`): a card with a
-    hairline, the name, then a row per item, `2x` and the item's picture. What you get
-    is the picture, which is the whole point; the number is there to say "I take 2".
-    Selected is the match page's red hairline and tint, with no label."""
+    """A powerup: the site's selectable tile (`.qgridoption`, no outline), the name,
+    one line saying what it does, then a row per item, `2x` and the item's picture.
+    Selected is the same fill and label every other tile uses."""
     node = parent.add(top_left(f"Board{face}{i}", x, y, w, h))
-    # The card's own image is the hairline colour; the fill sits a pixel inside it,
-    # which is the only border uGUI can draw.
-    button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), CARD_LINE, CARD_HOVER, CARD_HOVER)
-    image(node.add(Node("Fill", anchor_min=(0, 0), anchor_max=(1, 1), size=(-2, -2))), CARD, sprite=SPR["round8"])
+    button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
 
     taken = node.add(stretch(f"{face}{i}_Taken", active=False))
-    image(taken, CARD_RED, sprite=SPR["round8"])
-    image(taken.add(Node("Fill", anchor_min=(0, 0), anchor_max=(1, 1), size=(-2, -2))), CARD_RED_FILL, sprite=SPR["round8"])
+    image(taken, SELECTED, sprite=SPR["round8"])
+    text(taken.add(top_right("Label", GAP, 8, 80, 16)), "Selected",
+         size=12, colour=SELECTED_LABEL, halign=RIGHT, bold=True)
 
-    text(node.add(top_left(f"{face}{i}_Number", 10, 10, 20, 18)), str(i + 1), size=13, colour=MUTED, bold=True)
-    text(node.add(top_left(f"{face}{i}_Name", 28, 10, w - 38, 18)), "Demolition", size=13, colour=MUTED, bold=True)
+    text(node.add(top_left(f"{face}{i}_Number", 10, 10, 20, 18)), str(i + 1), size=13, colour=SECONDARY, bold=True)
+    text(node.add(top_left(f"{face}{i}_Name", 28, 10, w - 38, 18)), "Demolition", size=13, colour=TEXT, bold=True)
+    # The one line that says what the pile of pictures under it adds up to.
+    text(node.add(top_stretch(f"{face}{i}_Blurb", BLURB_Y, BLURB_H, 10)), "",
+         size=11, colour=SECONDARY, valign=TOP, wrap=True)
 
     for k in range(ITEMS):
-        row = node.add(top_left(f"{face}{i}_Item{k}", 0, 40 + k * 24, w, 24, active=False))
-        text(row.add(top_left(f"{face}{i}_Item{k}_Count", w / 2 - 44, 0, 40, 24)), "3x",
-             size=13, colour=MUTED, halign=RIGHT, bold=True)
-        image(row.add(top_left(f"{face}{i}_Item{k}_Icon", w / 2 + 2, 2, 40, 20)), "#ffffff", enabled=False, preserve_aspect=True)
+        row = node.add(top_left(f"{face}{i}_Item{k}", 0, BLURB_Y + BLURB_H + 4 + k * 22, w, 22, active=False))
+        text(row.add(top_left(f"{face}{i}_Item{k}_Count", w / 2 - 44, 0, 40, 22)), "3x",
+             size=13, colour=SECONDARY, halign=RIGHT, bold=True)
+        image(row.add(top_left(f"{face}{i}_Item{k}_Icon", w / 2 + 2, 1, 40, 20)), "#ffffff", enabled=False, preserve_aspect=True)
 
     return node
 
@@ -275,8 +276,9 @@ def boards():
 # picture cropped round the anchor with a keep on it and a dot on every spawn, and
 # the five raid tiles under it. A dot is a button; the plugin lights the viewer's own
 # and hangs the faces of teammates off whichever dot each of them chose, so the
-# team's spread is on the map without a word. There is no headline: the map says
-# which base and the HUD says which round. The one line of text is the hint.
+# team's spread is on the map without a word. Two lines under the HUD say which
+# round, which base, and that the board wants two answers; every dot carries which
+# way and how far, sent by the plugin from the same numbers the spawns are.
 #
 # The map sits in the middle third of the screen and nothing of ours is above or left
 # of it, because the game draws chat top-left and a team wants to read each other
@@ -298,6 +300,7 @@ def boards():
 MAP_PX = 640            # the map at most; the sprite is twice this
 MAP_METRES = 260        # of ground across it: the furthest spawn is 108 m out
 MAP_Y = 136             # below the HUD's line of faces
+HEADLINE_Y = 74         # the two lines between the HUD and the map
 MAP_BOTTOM = 30         # under the tiles
 DOT = 40
 FACE = 24               # a teammate on a dot, the site's .userProfile.small chip
@@ -319,6 +322,11 @@ def attack_screen():
     image(screen, PAGE, 0.94)
 
     # A column down the middle, from under the HUD to just off the bottom edge.
+    text(screen.add(top_center("Attack_Headline", 0, HEADLINE_Y, 700, 26)), "Round 4  You attack North",
+         size=20, colour=TEXT, halign=CENTER, bold=True)
+    text(screen.add(top_center("Attack_Line", 0, HEADLINE_Y + 28, 700, 20)), "Where you come in, then what you bring",
+         size=13, colour=SECONDARY, halign=CENTER)
+
     column = screen.add(Node("Attack_Column", anchor_min=(0.5, 0), anchor_max=(0.5, 1),
                              position=(0, (MAP_BOTTOM - MAP_Y) / 2), size=(BOARD_W, -(MAP_Y + MAP_BOTTOM))))
 
@@ -348,6 +356,7 @@ def attack_screen():
     image(keep.add(centered("KeepFigure", 0, 0, 32, 32)), TEXT, sprite=SPR["keep"], sliced=False)
 
     text(frame.add(top_left("North", 12, 8, 20, 20)), "N", size=12, colour=TEXT, bold=True)
+    text(frame.add(top_left("Attack_Site", 34, 8, 200, 20)), "North", size=14, colour=TEXT, bold=True)
 
     chip = frame.add(top_right("Clock", 10, 10, 80, CHIP_H))
     image(chip, PAGE, 0.9, sprite=SPR["round8"])
@@ -374,6 +383,11 @@ def dot(ground, site, i, fx, fy):
     on = node.add(stretch(f"Spawn{site}{i}_On", active=False))
     image(on, "#ffffff", sprite=SPR["disc"], sliced=False)
     text(on.add(stretch("Number")), str(i + 1), size=16, colour=PAGE, halign=CENTER, bold=True)
+
+    # Which way and how far, under the dot; the plugin sends it, from the spawn's own
+    # numbers, so a dot is something a team can name to each other.
+    text(node.add(Node(f"Spawn{site}{i}_Label", anchor_min=(0.5, 0), anchor_max=(0.5, 0), pivot=(0.5, 1),
+                       position=(0, -2), size=(160, 18))), "NE  106 m", size=12, colour=TEXT, halign=CENTER, bold=True)
 
     for k in range(FACES):
         face = node.add(top_left(f"Spawn{site}{i}_Face{k}_Frame", DOT + 6 + k * (FACE + 3), (DOT - FACE) / 2, FACE, FACE))
@@ -432,6 +446,8 @@ ROLE = 20               # the castle or the swords
 HEALTH_H = 6            # the bar under a face
 HEALTH_GAP = 3
 HEALTH_STEPS = 10       # what the plugin lights, one message each
+PING_H = 13             # the viewer's own ping under their face
+GONE = 16               # the cross on a face whose player has left
 
 GREEN = "#6fb65a"       # the health bar, above half
 AMBER = "#d9a521"       # and at half or under
@@ -442,18 +458,24 @@ def match_hud():
     root = Node("Effect")
     canvas(root, sorting_order=16)
 
-    hud = root.add(top_center("Hud", 0, 0, HUD_W, BLOCK_Y + BLOCK_H + HEALTH_GAP + HEALTH_H))
+    hud = root.add(top_center("Hud", 0, 0, HUD_W, BLOCK_Y + BLOCK_H + HEALTH_GAP + HEALTH_H + PING_H))
 
     block = hud.add(top_center("Block", 0, BLOCK_Y, BLOCK_W, BLOCK_H))
     image(block, FLAT, sprite=SPR["round8"])
 
     # The score line: every field at its own width, closed up round whatever is off.
+    # The clock comes in two shapes the plugin chooses between: bare, centred on the
+    # line, or under a label, for the one phase that needs naming.
     line = block.add(stretch("Line"))
     row(line, spacing=4)
     text(line.add(top_left("Team0_Name", 0, 0, 80, ROW)), "North", size=16, colour=INK, halign=RIGHT, bold=True)
     text(line.add(top_left("Score0", 0, 0, 28, ROW)), "0", size=22, colour=INK, halign=CENTER, bold=True)
     role(line, "Castle0", "Swords0")
     text(line.add(top_left("Timer", 0, 0, 68, ROW, active=False)), "0:30", size=18, colour=INK, halign=CENTER, mono=True)
+    clock = line.add(top_left("Clock", 0, 0, 68, ROW, active=False))
+    text(clock.add(top_left("Clock_Phase", 0, 7, 68, 12)), "BUILD",
+         size=9, colour=MUTED, halign=CENTER, bold=True, spacing=12)
+    text(clock.add(top_left("Clock_Timer", 0, 19, 68, 26)), "4:12", size=18, colour=INK, halign=CENTER, mono=True)
     role(line, "Castle1", "Swords1")
     text(line.add(top_left("Score1", 0, 0, 28, ROW)), "1", size=22, colour=INK, halign=CENTER, bold=True)
     text(line.add(top_left("Team1_Name", 0, 0, 80, ROW)), "South", size=16, colour=INK, halign=LEFT, bold=True)
@@ -465,7 +487,7 @@ def match_hud():
     for prefix, place, corner, tilt in (("L", top_left, 0, -PICK_TILT), ("R", top_right, 1, PICK_TILT)):
         for i in range(SEATS):
             x = WING_W - WING_PAD - (i + 1) * SEAT - i * SEAT_GAP
-            seat = hud.add(place(f"{prefix}{i}", x, BLOCK_Y + BLOCK_H - SEAT, SEAT, SEAT + HEALTH_GAP + HEALTH_H, active=False))
+            seat = hud.add(place(f"{prefix}{i}", x, BLOCK_Y + BLOCK_H - SEAT, SEAT, SEAT + HEALTH_GAP + HEALTH_H + PING_H, active=False))
 
             frame = seat.add(top_left(f"{prefix}{i}_Frame", 0, 0, SEAT, SEAT))
             image(frame, "#ffffff", sprite=SPR["round8"])
@@ -474,7 +496,12 @@ def match_hud():
             image(frame.add(stretch(f"{prefix}{i}_Faded", active=False)), "#ffffff", 0.5, enabled=False)
 
             pick_chip(seat, f"{prefix}{i}_Pick", corner, tilt)
+            gone_mark(seat, f"{prefix}{i}_Gone", 1 - corner)
             health_bar(seat, f"{prefix}{i}")
+            # Under the health bar, for the viewer's own face only: their ping, in the
+            # colour of what it is costing them. Off for everybody else.
+            text(seat.add(top_left(f"{prefix}{i}_Ping", -10, SEAT + HEALTH_GAP + HEALTH_H + 1, SEAT + 20, PING_H, active=False)),
+                 "190 ms", size=10, colour=INK, halign=CENTER, bold=True)
 
     return root
 
@@ -488,16 +515,23 @@ def role(line, castle, swords):
 
 
 def pick_chip(seat, name, corner, tilt):
-    """The pick on a face's outer bottom corner: the block's fill with the item's
-    picture inset, mostly on the face, a little past its edge, tilted outward. Off
-    until there is a pick to show."""
+    """The pick on a face's outer bottom corner: the item's picture on nothing, mostly
+    on the face, a little past its edge, tilted outward. Off until there is a pick to
+    show."""
     centre_x = PICK / 2 - PICK_OVER
     chip = seat.add(Node(name, anchor_min=(corner, 1), anchor_max=(corner, 1),
                          position=(centre_x if corner == 0 else -centre_x, -(SEAT - PICK / 2 + 1)),
                          size=(PICK, PICK), rotation=tilt, active=False))
-    image(chip, FLAT, 0.95, sprite=SPR["round6"])
-    image(chip.add(Node(f"{name}_Icon", anchor_min=(0, 0), anchor_max=(1, 1), size=(-4, -4))),
-          "#ffffff", enabled=False, preserve_aspect=True)
+    image(chip.add(stretch(f"{name}_Icon")), "#ffffff", enabled=False, preserve_aspect=True)
+
+
+def gone_mark(seat, name, corner):
+    """A cross on the face's inner top corner for a player who has left the server,
+    which a faded face alone does not say: faded is dead, and a leaver is not coming
+    back next round."""
+    mark = seat.add(Node(name, anchor_min=(corner, 1), anchor_max=(corner, 1),
+                         position=(4 if corner == 0 else -4, -4), size=(GONE, GONE), active=False))
+    text(mark.add(stretch("Cross")), "×", size=15, colour=INK, halign=CENTER, bold=True)
 
 
 def health_bar(seat, name):
@@ -519,14 +553,21 @@ def health_bar(seat, name):
 # ---- the lobby's bar -----------------------------------------------------------------
 #
 # The match bar, for a server with no match on it: the same block, ten down and the
-# arena boxes' width, with the PeekSeek mark on it and nothing else, and a face per
-# player to either side. There are no teams, so faces go round the block in the order
-# people arrived, the first on the left, the second on the right, and so on, six a
-# side. No picks and no health: a face at full strength is somebody out in the arena,
-# and at half strength somebody who is not, dead, waiting at the spawn, or away.
+# arena boxes' width, and a face per player to either side. On the block, two things
+# a player standing here wants to know: whether they are queued and for how long,
+# and how long the arena has left before it resets. Each is a label and a clock the
+# plugin switches on when there is something to say, in one row that closes up round
+# what is off, so a block with only the arena on it is still centred.
+#
+# There are no teams, so faces go round the block by score, the first on the left, the
+# second on the right, and so on, six a side. On a face's outer corner, their kills
+# this arena as a white tilted number, on nothing; a face at half strength is
+# somebody who is not fighting, dead, waiting at the spawn, or away, and away gets
+# a mark on its inner corner so the two can be told apart.
 
 LOBBY_SEATS = 6
 LOBBY_WING_W = WING_PAD + LOBBY_SEATS * (SEAT + SEAT_GAP) - SEAT_GAP
+KILLS_W = 30
 
 
 def lobby_bar():
@@ -537,18 +578,33 @@ def lobby_bar():
 
     block = hud.add(top_center("Block", 0, BLOCK_Y, BLOCK_W, BLOCK_H))
     image(block, FLAT, sprite=SPR["round8"])
-    logo = block.add(centered("Logo", 0, 0, 0, LOGO_H))
-    image(logo, INK, sprite=SPR["logo"], sliced=False, preserve_aspect=True)
-    logo.size = (LOGO_W, LOGO_H)
 
-    for prefix, place in (("L", top_left), ("R", top_right)):
+    line = block.add(stretch("Line"))
+    row(line, spacing=8)
+    text(line.add(top_left("State", 0, 0, 90, ROW, active=False)), "QUEUE",
+         size=11, colour=MUTED, halign=RIGHT, bold=True, spacing=8)
+    text(line.add(top_left("State_Timer", 0, 0, 56, ROW, active=False)), "1:24", size=18, colour=INK, halign=LEFT, mono=True)
+    line.add(top_left("Gap", 0, 0, 16, ROW, active=False))
+    text(line.add(top_left("Arena", 0, 0, 62, ROW, active=False)), "ARENA",
+         size=11, colour=MUTED, halign=RIGHT, bold=True, spacing=8)
+    text(line.add(top_left("Arena_Timer", 0, 0, 56, ROW, active=False)), "2:10", size=18, colour=INK, halign=LEFT, mono=True)
+
+    for prefix, place, corner, tilt in (("L", top_left, 0, -PICK_TILT), ("R", top_right, 1, PICK_TILT)):
         for i in range(LOBBY_SEATS):
             x = LOBBY_WING_W - WING_PAD - (i + 1) * SEAT - i * SEAT_GAP
             seat = hud.add(place(f"{prefix}{i}", x, BLOCK_Y, SEAT, SEAT, active=False))
-            image(seat, "#ffffff", sprite=SPR["round8"])
-            mask(seat)
-            image(seat.add(stretch(f"{prefix}{i}_Avatar")), "#ffffff", enabled=False)
-            image(seat.add(stretch(f"{prefix}{i}_Faded", active=False)), "#ffffff", 0.5, enabled=False)
+            frame = seat.add(top_left(f"{prefix}{i}_Frame", 0, 0, SEAT, SEAT))
+            image(frame, "#ffffff", sprite=SPR["round8"])
+            mask(frame)
+            image(frame.add(stretch(f"{prefix}{i}_Avatar")), "#ffffff", enabled=False)
+            image(frame.add(stretch(f"{prefix}{i}_Faded", active=False)), "#ffffff", 0.5, enabled=False)
+
+            kills = seat.add(Node(f"{prefix}{i}_Kills", anchor_min=(corner, 0), anchor_max=(corner, 0),
+                                  position=(6 if corner == 0 else -6, 4), size=(KILLS_W, 18), rotation=tilt, active=False))
+            text(kills.add(stretch("Number")), "12", size=14, colour=INK, halign=CENTER, bold=True)
+            away = seat.add(Node(f"{prefix}{i}_Away", anchor_min=(1 - corner, 1), anchor_max=(1 - corner, 1),
+                                 position=(2 if corner == 1 else -2, -2), size=(26, 12), active=False))
+            text(away.add(stretch("Label")), "AFK", size=8, colour=INK, halign=CENTER, bold=True)
 
     return root
 
@@ -649,6 +705,198 @@ def kill_feed():
     return root
 
 
+# ---- the banner -----------------------------------------------------------------------
+#
+# The overlay's banner, in game: a small label over a large name, and one line under
+# it, centred a quarter of the way down the screen for a few seconds after a round or
+# a match. The same three lines the stream shows, so a viewer and a player read the
+# same thing. Red is the plugin's, by rich text, for the match-winning one.
+
+BANNER_W, BANNER_H = 620, 92
+
+
+def banner():
+    root = Node("Effect")
+    canvas(root, sorting_order=17)
+
+    box = root.add(Node("Banner", anchor_min=(0.5, 0.74), anchor_max=(0.5, 0.74), size=(BANNER_W, BANNER_H)))
+    image(box, FLAT, 0.9, sprite=SPR["round8"])
+    text(box.add(top_stretch("Banner_Label", 10, 16, 16)), "TAKES ROUND 4",
+         size=11, colour=MUTED, halign=CENTER, bold=True, spacing=12)
+    text(box.add(top_stretch("Banner_Name", 26, 38, 16)), "South", size=30, colour=INK, halign=CENTER, bold=True)
+    text(box.add(top_stretch("Banner_Line", 66, 18, 16)), "The flag is down", size=12, colour=MUTED, halign=CENTER)
+
+    return root
+
+
+# ---- the death card -------------------------------------------------------------------
+#
+# What a death is, said to the one it happened to: who, with what, from how far, what
+# they had left and what you did to them. Bottom centre, above the game's own hotbar,
+# for a few seconds. The top line is a run of parts, as wide as it is; the second
+# line is one sentence. A death nobody dealt is the top line with the cause alone.
+#
+# The respawn count sits in the same effect, in the middle of the screen, for a server
+# that brings the dead back on a clock: the lobby. A match server never turns it on.
+
+CARD_W = 560
+CARD_Y = 150            # up from the bottom edge, clear of the hotbar
+
+
+def death_card():
+    root = Node("Effect")
+    canvas(root, sorting_order=17)
+
+    card = root.add(bottom_center("Card", 0, CARD_Y, CARD_W, 62, active=False))
+    image(card, FLAT, 0.9, sprite=SPR["round8"])
+
+    top = card.add(top_center("Card_Top", 0, 10, 0, 22))
+    row(top, spacing=8, control_width=True)
+    fit_width(top)
+    text(top.add(top_left("Card_Label", 0, 0, 0, 22)), "KILLED BY", size=11, colour=MUTED, bold=True, spacing=10)
+    text(top.add(top_left("Card_Killer", 0, 0, 0, 22)), "Ferret", size=14, colour=INK, bold=True)
+    weapon = top.add(top_left("Card_Weapon", 0, 0, WEAPON_W, 20, active=False))
+    image(weapon, "#ffffff", enabled=False, preserve_aspect=True, material=SILHOUETTE)
+    layout_size(weapon, WEAPON_W, 20)
+    skull = top.add(top_left("Card_Headshot", 0, 0, HEADSHOT, HEADSHOT, active=False))
+    image(skull, INK, sprite=SPR["skull"], sliced=False)
+    layout_size(skull, HEADSHOT, HEADSHOT)
+    text(top.add(top_left("Card_Distance", 0, 0, 0, 22, active=False)), "34 m", size=13, colour=INK)
+
+    text(card.add(top_stretch("Card_Line", 36, 18, 12)), "They had 27 HP left    You dealt 73 in 2 hits",
+         size=12, colour=MUTED, halign=CENTER)
+
+    count = root.add(Node("Respawn", anchor_min=(0.5, 0.5), anchor_max=(0.5, 0.5), position=(0, 40), size=(240, 80), active=False))
+    text(count.add(top_stretch("Respawn_Count", 0, 52, 0)), "5", size=44, colour=INK, halign=CENTER, mono=True)
+    text(count.add(top_stretch("Respawn_Label", 56, 16, 0)), "RESPAWNING",
+         size=11, colour=MUTED, halign=CENTER, bold=True, spacing=12)
+
+    return root
+
+
+# ---- the scoreboard -------------------------------------------------------------------
+#
+# A page of the site: a title, four numbered columns, and a row per player with their
+# face and name, the viewer's own row filled. A row can instead be a section heading,
+# a team's name over its players, so one prefab draws a two-team match and a lobby's
+# single list. Held up on a plugin key during play; up for everybody, unasked, when
+# a match ends or the lobby's arena resets.
+
+BOARD_PANEL_W = 620
+BOARD_ROWS = 12
+BOARD_ROW_H = 28
+BOARD_ROW_GAP = 2
+BOARD_COLS = ("A", "B", "C", "D")
+BOARD_COL_W = 56
+BOARD_ROWS_Y = 84
+
+
+def scoreboard():
+    root = Node("Effect")
+    canvas(root, sorting_order=1)
+
+    height = BOARD_ROWS_Y + BOARD_ROWS * (BOARD_ROW_H + BOARD_ROW_GAP) + PANEL_PAD
+    board = root.add(centered("Board", 0, 20, BOARD_PANEL_W, height))
+    image(board, PAGE, 0.94, sprite=SPR["round8"])
+
+    text(board.add(top_left("Board_Title", PANEL_PAD, PANEL_PAD, BOARD_PANEL_W - 2 * PANEL_PAD, 26)), "North wins 3-1",
+         size=20, colour=TEXT, bold=True)
+    text(board.add(top_left("Board_Sub", PANEL_PAD, PANEL_PAD + 26, BOARD_PANEL_W - 2 * PANEL_PAD, 18)), "",
+         size=12, colour=SECONDARY)
+
+    first_col = BOARD_PANEL_W - PANEL_PAD - len(BOARD_COLS) * BOARD_COL_W
+    for c, col in enumerate(BOARD_COLS):
+        text(board.add(top_left(f"Head_{col}", first_col + c * BOARD_COL_W, BOARD_ROWS_Y - 18, BOARD_COL_W, 14)), col,
+             size=10, colour=SECONDARY, halign=RIGHT, bold=True, spacing=6)
+
+    for i in range(BOARD_ROWS):
+        y = BOARD_ROWS_Y + i * (BOARD_ROW_H + BOARD_ROW_GAP)
+        line = board.add(top_left(f"Row{i}", PANEL_PAD - 10, y, BOARD_PANEL_W - 2 * PANEL_PAD + 20, BOARD_ROW_H, active=False))
+        image(line.add(stretch(f"Row{i}_Me", active=False)), SELECTED, sprite=SPR["round6"])
+
+        text(line.add(top_left(f"Row{i}_Head", 10, 0, 300, BOARD_ROW_H, active=False)), "NORTH",
+             size=10, colour=SECONDARY, bold=True, spacing=8)
+
+        body = line.add(stretch(f"Row{i}_Body"))
+        face = body.add(top_left(f"Row{i}_Frame", 10, (BOARD_ROW_H - 22) / 2, 22, 22))
+        image(face, "#ffffff", sprite=SPR["round6"])
+        mask(face)
+        image(face.add(stretch(f"Row{i}_Avatar")), "#ffffff", enabled=False)
+        text(body.add(top_left(f"Row{i}_Name", 40, 0, 230, BOARD_ROW_H)), "kieran", size=13, colour=TEXT, bold=True)
+        text(body.add(top_left(f"Row{i}_Tag", 276, 0, 60, BOARD_ROW_H, active=False)), "MVP",
+             size=9, colour=SELECTED_LABEL, bold=True, spacing=8)
+        for c, col in enumerate(BOARD_COLS):
+            text(body.add(top_left(f"Row{i}_{col}", 10 + first_col - PANEL_PAD + c * BOARD_COL_W, 0, BOARD_COL_W, BOARD_ROW_H)), "0",
+                 size=13, colour=TEXT, halign=RIGHT)
+
+    return root
+
+
+# ---- the choice -----------------------------------------------------------------------
+#
+# A question with two answers, the way the boards ask one: a headline, a line under
+# it, and two tiles. The lobby asks whether to queue with it. Buttons are
+# `BoardChoice0` and `BoardChoice1`, in the boards' own naming so a click lands in
+# the same handler shape.
+
+CHOICES = 2
+CHOICE_W, CHOICE_H = 220, 96
+CHOICE_LINE_H = 40
+
+
+def choice():
+    root = Node("Effect")
+    canvas(root, sorting_order=0)
+
+    board_w = PANEL_PAD * 2 + CHOICES * CHOICE_W + (CHOICES - 1) * GAP
+    tiles_y = PANEL_PAD + HEADLINE_H + 6 + CHOICE_LINE_H + 10
+    board = root.add(centered("Choice", 0, 40, board_w, tiles_y + CHOICE_H + PANEL_PAD))
+    image(board, PAGE, 0.94, sprite=SPR["round8"])
+
+    text(board.add(top_left("Choice_Headline", PANEL_PAD, PANEL_PAD, board_w - 2 * PANEL_PAD, HEADLINE_H)), "Queue for a match?",
+         size=20, colour=TEXT, bold=True)
+    text(board.add(top_left("Choice_Line", PANEL_PAD, PANEL_PAD + HEADLINE_H + 6, board_w - 2 * PANEL_PAD, CHOICE_LINE_H)), "",
+         size=13, colour=SECONDARY, valign=TOP, wrap=True)
+
+    for i in range(CHOICES):
+        node = board.add(top_left(f"BoardChoice{i}", PANEL_PAD + i * (CHOICE_W + GAP), tiles_y, CHOICE_W, CHOICE_H))
+        button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
+        text(node.add(top_stretch(f"Choice{i}_Name", 22, 24, 12)), "Queue", size=16, colour=TEXT, halign=CENTER, bold=True)
+        text(node.add(top_stretch(f"Choice{i}_Blurb", 50, 36, 14)), "",
+             size=12, colour=SECONDARY, halign=CENTER, valign=TOP, wrap=True)
+
+    return root
+
+
+# ---- the tag --------------------------------------------------------------------------
+#
+# One short thing said at the bottom of the screen for as long as it is true: a word,
+# up to three pips counting something down, and a second word in red. Raid says OFF
+# BASE with it, the grace running out in the pips and the damage in red after.
+
+TAG_Y = 110
+PIP_W, PIP_H = 10, 5
+
+
+def tag():
+    root = Node("Effect")
+    canvas(root, sorting_order=17)
+
+    box = root.add(bottom_center("Tag", 0, TAG_Y, 0, 30))
+    image(box, FLAT, 0.9, sprite=SPR["round6"])
+    row(box, spacing=8, padding=12, control_width=True)
+    fit_width(box)
+
+    text(box.add(top_left("Tag_Text", 0, 0, 0, 30)), "OFF BASE", size=12, colour=INK, bold=True, spacing=8)
+    for k in range(3):
+        pip = box.add(top_left(f"Tag_Pip{k}", 0, 0, PIP_W, PIP_H, active=False))
+        image(pip, INK, sprite=SPR["round3"])
+        layout_size(pip, PIP_W, PIP_H)
+    text(box.add(top_left("Tag_Hurt", 0, 0, 0, 30, active=False)), "-12 / s", size=12, colour=RED, bold=True)
+
+    return root
+
+
 if __name__ == "__main__":
     write_sprites()
     with Image.open(SPRITES / "Logo.png") as mark:
@@ -659,8 +907,13 @@ if __name__ == "__main__":
         (EFFECTS / "PickBoard", boards()),
         (EFFECTS / "MatchHud", match_hud()),
         (EFFECTS / "BuildPanel", build_panel()),
+        (EFFECTS / "Tag", tag()),
         (KILLFEED_EFFECTS / "KillFeed", kill_feed()),
         (KILLFEED_EFFECTS / "LobbyBar", lobby_bar()),
+        (KILLFEED_EFFECTS / "Banner", banner()),
+        (KILLFEED_EFFECTS / "DeathCard", death_card()),
+        (KILLFEED_EFFECTS / "Scoreboard", scoreboard()),
+        (KILLFEED_EFFECTS / "Choice", choice()),
     )
     for folder, root in screens:
         target = folder / "Effect.prefab"

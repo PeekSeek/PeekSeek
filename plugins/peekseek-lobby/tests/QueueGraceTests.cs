@@ -3,21 +3,27 @@ using Xunit;
 
 namespace PeekSeekLobby.Tests;
 
-/// Everyone is in the queue by default, but not from the instant they connect. The gap
-/// is plain arithmetic on PlayerState, so every case is checkable without a server.
+/// Nobody is in the queue until they say so, and somebody who says so on arrival is
+/// still not offered a match from the instant they connect. The gap is plain
+/// arithmetic on PlayerState, so every case is checkable without a server.
 public class QueueGraceTests {
     private const float Grace = 10f;
 
     private static LobbyManager.PlayerState Joined(float at = 100f) {
-        return new LobbyManager.PlayerState { QueueFrom = at + Grace };
+        return new LobbyManager.PlayerState { Queueing = true, QueueFrom = at + Grace };
     }
 
     [Fact]
-    public void ANewPlayerIsQueueingButNotYetOffered() {
-        LobbyManager.PlayerState state = Joined();
+    public void ANewPlayerIsNotQueueingUntilTheySaySo() {
+        LobbyManager.PlayerState state = new() { QueueFrom = 110f };
 
-        Assert.True(state.Queueing);
-        Assert.False(state.WantsAMatch(100f));
+        Assert.False(state.Queueing);
+        Assert.False(state.WantsAMatch(999f));
+    }
+
+    [Fact]
+    public void AQueueingPlayerIsNotYetOfferedWhileArriving() {
+        Assert.False(Joined().WantsAMatch(100f));
     }
 
     [Theory]

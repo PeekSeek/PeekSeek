@@ -142,8 +142,7 @@ internal class ArenaSpawnPatch {
 
         Host.BeginRound();
         int roundNumber = Host.RoundsPlayed + 1;
-        Host.Announce(PeekSeekArena.Instance.Translate("round_start", roundNumber, Host.ScoreLine()));
-        Logger.Log("[alive-check] Round starting — everyone marked alive again.");
+        Logger.Log("[alive-check] Round starting, everyone marked alive again.");
 
         for (int team = 0; team < Host.Match.Teams.Count; team++) {
             int spawnIndex = (roundNumber - 1 + team) % spawns.Count;

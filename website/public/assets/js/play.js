@@ -172,6 +172,27 @@ window.addEventListener("beforeunload", e => {
     e.preventDefault();
 });
 
+/* The chosen region's activity, and only the part of it worth saying: two or more in
+   the lobby, a match inside the last half hour. Anything less is left blank rather than
+   written down, since a number that reads as "nobody is here" turns away exactly the
+   player who would have made it two. */
+function showActivity() {
+    const box = document.getElementById("regionActivity");
+    if (!box) return;
+    const region = document.getElementById("region").value;
+    const players = parseInt(box.dataset[region + "Players"] || "0", 10);
+    const last = box.dataset[region + "Last"];
+    const parts = [];
+    if (players >= 2) parts.push(`<b>${players}</b> in the lobby`);
+    if (last !== undefined && last !== "" && parseInt(last, 10) <= 30) {
+        const minutes = parseInt(last, 10);
+        parts.push(minutes < 1 ? "a match just finished" : `last match <b>${minutes} min</b> ago`);
+    }
+    box.innerHTML = parts.join('<span class="sep"></span>');
+    box.style.display = parts.length ? "flex" : "none";
+}
+document.addEventListener("DOMContentLoaded", showActivity);
+
 let originalQgridHTML = null;
 
 function updateGamemodes() {

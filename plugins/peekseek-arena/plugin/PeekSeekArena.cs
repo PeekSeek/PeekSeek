@@ -1,7 +1,6 @@
 using System.Reflection;
 using HarmonyLib;
 using PeekSeek.Gamemodes;
-using Rocket.API.Collections;
 using Rocket.Core.Logging;
 using Rocket.Core.Plugins;
 using SDG.Unturned;
@@ -58,10 +57,4 @@ public class PeekSeekArena : RocketPlugin<PeekSeekArenaConfiguration> {
     private static void OnLifeUpdated(Player player) {
         if (Arena is { InPlay: true } && player.life.isDead) player.life.ServerRespawn(false);
     }
-
-    public override TranslationList DefaultTranslations => new TranslationList() {
-        // Said as the round spawns everyone in, so the first thing a player sees on
-        // landing is which round this is and where the match stands.
-        { "round_start", "<color=white>Round {0}.</color> {1}" }
-    };
 }

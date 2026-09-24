@@ -99,6 +99,35 @@ internal class PSMatch {
     }
 }
 
+[UsedImplicitly]
+internal class PSPowerup {
+    [JsonProperty("name")]
+    internal string Name = null!;
+
+    [JsonProperty("items")]
+    internal List<PSItem> Items = [];
+}
+
+/// The choices a gamemode leaves its players: kit categories and powerups, each an
+/// empty list where there is only one and so nothing to choose.
+[UsedImplicitly]
+internal class PSOptions {
+    [JsonProperty("kits")]
+    internal List<string> Kits = [];
+
+    [JsonProperty("powerups")]
+    internal List<PSPowerup> Powerups = [];
+}
+
+[UsedImplicitly]
+internal class PSPicked {
+    [JsonProperty("kit")]
+    internal string Kit;
+
+    [JsonProperty("powerup")]
+    internal string Powerup;
+}
+
 /// One answer to one session poll. Exactly one `action` comes back, and everything
 /// else on this object is whatever that action carries.
 [UsedImplicitly]
@@ -123,6 +152,15 @@ internal class PSSessionAnswer {
 
     [JsonProperty("selectionEndsAt")]
     internal long SelectionEndsAt;
+
+    /// What there is to choose, and what each player has chosen so far, for the wait
+    /// action: the server puts the board in front of whoever is here and still
+    /// choosing. `Match` carries the roster on a wait, without settings or kits.
+    [JsonProperty("options")]
+    internal PSOptions Options;
+
+    [JsonProperty("picked")]
+    internal Dictionary<string, PSPicked> Picked = [];
 
     [JsonProperty("reason")]
     internal string Reason;

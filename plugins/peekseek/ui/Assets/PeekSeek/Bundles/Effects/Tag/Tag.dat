@@ -1,0 +1,6 @@
+GUID 6332e535ea424756a69540c928951fe0
+Type Effect
+ID 43113
+
+// The tag at the bottom of the screen: a word, pips counting down, a word in red. Raid says OFF BASE with it.
+Preload 0

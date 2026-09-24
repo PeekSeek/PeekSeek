@@ -1,0 +1,6 @@
+GUID df8dfb9bbb304f6faf46884227651559
+Type Effect
+ID 43122
+
+// The banner: a label over a name and a line, a quarter of the way down the screen, for a few seconds after a round or a match. Kept by the plugin.
+Preload 0

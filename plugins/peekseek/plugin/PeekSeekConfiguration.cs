@@ -8,7 +8,6 @@ namespace PeekSeek;
 [XmlRoot("Config")]
 public class PeekSeekConfiguration : IRocketPluginConfiguration {
     public ushort LobbyTimeoutSeconds;
-    public List<ushort> LobbyTimeoutBroadcastSecondsRemaining;
     public ushort DelayKickAfterWin;
     public ulong LobbyServerRelaySGSSteamID;
     public string szHexDefaultChatColor;
@@ -50,14 +49,25 @@ public class PeekSeekConfiguration : IRocketPluginConfiguration {
     public short PickUIKey;
     public string BuildPanelEffectGUID;
     public short BuildPanelKey;
+    public string TagEffectGUID;
+    public short TagKey;
 
-    /// The kill feed, from the PeekSeek Kill Feed workshop item, which is its own item
-    /// so the lobby can carry the feed without the rest.
+    /// The screens from the PeekSeek Kill Feed workshop item, which is its own item so
+    /// the lobby can carry them without the rest: the kill feed, the banner, the death
+    /// card and the scoreboard.
     public string KillFeedEffectGUID;
     public short KillFeedKey;
     public int KillFeedRows;
     public float KillFeedRowSeconds;
     public int KillFeedNameLength;
+    public string BannerEffectGUID;
+    public short BannerKey;
+    public float BannerSeconds;
+    public string DeathCardEffectGUID;
+    public short DeathCardKey;
+    public float DeathCardSeconds;
+    public string ScoreboardEffectGUID;
+    public short ScoreboardKey;
 
     /// Where a picture of an item comes from, with `{0}` standing for the item id. The
     /// site serves every item for its loadout editor, so the screens show the same
@@ -70,7 +80,6 @@ public class PeekSeekConfiguration : IRocketPluginConfiguration {
 
     public void LoadDefaults() {
         LobbyTimeoutSeconds = 120;
-        LobbyTimeoutBroadcastSecondsRemaining = [5, 10, 30, 60, 90];
         DelayKickAfterWin = 10;
         LobbyServerRelaySGSSteamID = 0;
         szHexDefaultChatColor = "#FFFFFF";
@@ -96,12 +105,22 @@ public class PeekSeekConfiguration : IRocketPluginConfiguration {
         PickUIKey = 27310;
         BuildPanelEffectGUID = "7a3d9c2e5f8b4b1c9d0e1f2a3b4c5d6e";
         BuildPanelKey = 27312;
+        TagEffectGUID = "6332e535ea424756a69540c928951fe0";
+        TagKey = 27313;
 
         KillFeedEffectGUID = "c4d5e6f708192a3b4c5d6e7f8091a2b3";
         KillFeedKey = 27320;
         KillFeedRows = 6;
         KillFeedRowSeconds = 7f;
         KillFeedNameLength = 24;
+        BannerEffectGUID = "df8dfb9bbb304f6faf46884227651559";
+        BannerKey = 27322;
+        BannerSeconds = 4f;
+        DeathCardEffectGUID = "6969104457d9419fa2f3e53f5e1c6b76";
+        DeathCardKey = 27323;
+        DeathCardSeconds = 5f;
+        ScoreboardEffectGUID = "6441527b813a4bd7b17809470064a1af";
+        ScoreboardKey = 27324;
 
         ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
         DefaultAvatarURL = "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg";

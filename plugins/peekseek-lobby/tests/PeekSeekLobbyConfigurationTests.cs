@@ -79,7 +79,7 @@ public class PeekSeekLobbyConfigurationTests {
 
         config.LoadDefaults();
 
-        Assert.Equal(10f, config.StreakWindowSeconds);
+        Assert.Equal(60f, config.StreakWindowSeconds);
         Assert.All(config.StreakRewards, reward => Assert.Equal(60f, reward.CooldownSeconds));
     }
 
@@ -92,7 +92,7 @@ public class PeekSeekLobbyConfigurationTests {
         Assert.Equal((ushort)1, config.GamemodeBitmask);
         Assert.Equal("paris", config.szRegion);
         Assert.Equal(5f, config.SpawnProtectionSeconds);
-        Assert.Equal(10f, config.RespawnDelaySeconds);
+        Assert.Equal(5f, config.RespawnDelaySeconds);
         Assert.Equal("#FFFFFF", config.szHexDefaultChatColor);
         Assert.Equal(["meta", "sniper"], config.AllowedKitCategories);
     }

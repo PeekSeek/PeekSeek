@@ -176,14 +176,57 @@ def _answerAboutHeldMatch(matchId: int, serverCode: str) -> dict:
     return _hostOrWait(match)
 
 
+def _roster(match: data.Match) -> dict:
+    """The match as a server holding it during selection needs to see it: who is on it,
+    so they can be let in and put in their groups, and nothing that is still being
+    decided."""
+    gamemode = mmconfig["gamemodes"][match.gamemode]
+    return {
+        "id": match.id,
+        "gamemode": {"id": match.gamemode, "name": gamemode["name"]},
+        "teams": [
+            {"name": team["name"], "players": [str(u) for u in team["users"]]}
+            for team in match.teams
+        ],
+        "spectators": [str(s) for s in match.spectators],
+    }
+
+
+def _options(match: data.Match) -> dict:
+    """What there is to choose on this match, for a server to draw a board with: the
+    kit categories and the powerups with their items, or empty lists where the
+    gamemode leaves no choice, the same rule `_choices` applies per player."""
+    gm = mmconfig["gamemodes"][match.gamemode]
+    kits = list(gm["kitsAllowed"]) if len(gm["kitsAllowed"]) > 1 else []
+    powerups = (
+        [{"name": p["name"], "items": _items(p["items"])} for p in gm["powerups"]]
+        if len(gm["powerups"]) > 1
+        else []
+    )
+    return {"kits": kits, "powerups": powerups}
+
+
 def _hostOrWait(match: data.Match) -> dict:
-    """Hand over a match whose selection is done, or say what it is still waiting on."""
+    """Hand over a match whose selection is done, or say what it is still waiting on.
+
+    The wait carries the roster and the options, because the players are already on
+    their way: a match has a connect code from the moment a server holds it, so the
+    lobby relays them at once and the server puts the board in front of whoever has
+    not picked. Every pick made there comes back through `decidePlayer`, the same
+    door the site's own match page uses.
+    """
     if not match.readyToHost():
         return {
             "action": "wait",
             "matchId": match.id,
             "waitingOn": match.waitingOn(),
             "selectionEndsAt": int(match.selectionEndsAt()),
+            "match": _roster(match),
+            "options": _options(match),
+            "picked": {
+                str(steam64): {"kit": user["kit"], "powerup": user["powerup"]}
+                for steam64, user in match.meta["userData"].items()
+            },
         }
 
     payload = _match(match)
@@ -398,6 +441,7 @@ def _player(steam64: int) -> dict:
         "name": profile.name,
         "avatar": profile.avatar,
         "elo": data.Stat.getElo(steam64),
+        "rank": data.Stat.rankFor(steam64).name,
         "matchId": matchId or None,
         "relayTo": match.connectCode() if match else None,
         "choose": _choices(match, steam64) if match else None,

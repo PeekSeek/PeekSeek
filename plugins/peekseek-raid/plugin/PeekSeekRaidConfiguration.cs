@@ -282,12 +282,14 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
         // comes from range, the less of it there is: twelve charges are six walls at
         // the wall, nine rockets are three from across the field. A base that is metal
         // all the way round is four walls deep at most, and the flag is somewhere
-        // inside it.
+        // inside it. Every kit has its own picture on the bar: Demolition is the
+        // detonator and Breacher the charge, because two kits with one picture are
+        // one kit to a teammate glancing up.
         RaidOptions = [
             new RaidOption {
                 Name = "Demolition",
                 Blurb = "Twelve charges and the detonator. Six metal walls, if you can reach them.",
-                Icon = 1241,
+                Icon = 1240,
                 Items = [new RaidItem(1240, 1), new RaidItem(1241, 12)]
             },
             new RaidOption {

@@ -45,6 +45,7 @@ def play(request: Request):
         name="app/play.html",
         context={
             "mmconfig": settings.visible_mmconfig,
+            "activity": data.LobbyPopulation.activity(),
             "events": events,
             "eventPlayers": {
                 e["event"].id: [

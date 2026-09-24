@@ -31,14 +31,16 @@ ARENA beside it.
 nothing else in this assembly is:
 
 - `IGamemode`: what a gamemode is told. Begin with a match, tick, players arriving,
-  leaving, dying and respawning, end; and the three things the bar asks it, which team
-  holds and which attacks this round, what each player picked, and the clock.
+  leaving, dying and respawning, end; and what the bar asks it: which team holds and
+  which attacks this round, what each player picked, the clock, the one word over it,
+  and whether a team is at match point.
 - `Gamemodes.Register(mode, isDefault)`: called when a gamemode plugin loads. Match
   hands a match to the mode whose `Name` matches the site's gamemode name, else to the
   default. Rocket loads plugins in whatever order, so this is a plain static list.
 - `Host`: everything a gamemode may ask of the server. Who is playing, who is alive
   this round, the score, a round or the match won, a forfeit, a player's kit, the
-  boards and the build panel, a redraw of the bar, chat in the house style.
+  boards, the build panel and the tag, a banner, a freeze, a redraw of the bar, chat
+  in the house style.
 - `GamemodeMatch`: the match as a gamemode sees it, teams with their Unturned group,
   spectators, and the site's resolved kit per player.
 
@@ -48,12 +50,15 @@ against the DLL without ever shipping a copy of it: two `PeekSeek.dll`s under
 
 ## A match, start to finish
 
-1. The site answers the session poll with `host` and a match. Everybody on the server
-   is kicked, the groups are made, and the wait begins.
-2. The wait: `LobbyTimeoutSeconds` from the hand-over, ended early the moment
-   everybody on the roster is here. When it runs out, nobody here releases the match,
-   one team here takes it, anything else starts short-handed. The bar is up from the
-   first join, with the wait on its clock.
+1. The site answers the session poll with `wait` and the roster while its players
+   choose. They are let in as they arrive, and whoever still has a kit or a powerup to
+   choose gets the board for it; every answer goes to the site, which is where the
+   match page's answers go too.
+2. The site answers with `host` and the match. Whoever is not on it is kicked, the
+   groups are made, and the wait begins: `LobbyTimeoutSeconds` from the hand-over,
+   ended early the moment everybody on the roster is here. When it runs out, nobody
+   here releases the match, one team here takes it, anything else starts
+   short-handed. The bar is up from the first join, with the wait on its clock.
 3. `Begin`: the gamemode gets the match and everybody present. Whoever joins later
    comes through `OnPlayerJoined`.
 4. Rounds are the gamemode's. It calls `Host.RoundWon` when one is over, and
@@ -73,12 +78,25 @@ item logs one line per screen and draws nothing; the boards then answer themselv
   middle, a face per player to either side, the viewer's own team on the left. A
   gamemode's role markers hang beside the scores and its pick on each face's corner;
   a gamemode that has neither leaves no gap, because the score line is a layout row.
-  Under every face a health bar, green to half and amber after, drawn only while there
-  is something to say, and only for the viewer's own team unless they are spectating.
-- **The boards** a player answers, and **the build panel**, driven by a gamemode
-  through `Host.Board` and `Host.Panel`.
-- **The kill feed**, its own workshop item (3804490030) so the lobby can carry it
-  without the rest. The same source is compiled into the lobby plugin.
+  A gamemode may put one word over the clock (`PhaseLabel`), and its score goes red
+  at match point (`IsMatchPoint`). Under every teammate's face a health bar, green to
+  half and amber after, drawn only while there is something to say; never under the
+  viewer's own, which the game already draws. Under the viewer's own face, their
+  ping, orange while it costs them some damage and red from half. A player who has
+  left gets a cross on their face.
+- **The banner**, a label over a name and a line, a few seconds after a round or a
+  match, the same words the stream overlay shows. A gamemode says its own through
+  `Host.Banner`.
+- **The death card**, to the one who died: who, with what, how far, what they had
+  left and what you did to them, from the same record the site's kill log gets.
+- **The scoreboard**, held up on the first plugin key (`,` by default) during a match,
+  and up for everybody, frozen where they stand, when the match is won.
+- **The boards** a player answers, **the build panel** and **the tag** at the bottom
+  of the screen, driven by a gamemode through `Host.Board`, `Host.Panel` and
+  `Host.Tag`.
+- **The kill feed**, the banner, the death card and the scoreboard are one workshop
+  item (3804490030) so the lobby can carry them without the rest. The same source is
+  compiled into the lobby plugin.
 
 `ui/README.md` has the whole of it, including how a bundle is built and shipped.
 
@@ -98,14 +116,17 @@ server that gets a new version needs the new elements written in by hand.
 | `UseTestingJSON` | Enables test fixtures instead of live backend data. |
 | `PingConfig` | List of `PingPrecentage` entries mapping ping thresholds to damage multiplier percentages. |
 | `LobbyTimeoutSeconds` | How long the wait for the roster lasts. **A config without this element reads as 0 and times out instantly.** |
-| `LobbyTimeoutBroadcastSecondsRemaining` | Seconds-remaining marks at which the wait is announced in chat. |
 | `DelayKickAfterWin` | Seconds between the match-winning round and clearing the server, so players can see the result. |
 | `LobbyServerRelaySGSSteamID` | Steam64 of the lobby server players are relayed to when a match ends. `0` disables relaying and just kicks them. |
 | `RestartWhenIdle`, `MaxUptimeMinutes`, `DrainSeconds` | Whether and when this server takes itself down once idle, so it comes back on the current build. Needs the host's restart schedule; see the repo README. |
 | `MatchHudEffectGUID`, `MatchHudKey` | The bar: the effect in the UI workshop item, and the channel it is sent on. |
 | `PickUIEffectGUID`, `PickUIKey` | The boards. |
 | `BuildPanelEffectGUID`, `BuildPanelKey` | The build panel. |
+| `TagEffectGUID`, `TagKey` | The tag at the bottom of the screen. |
 | `KillFeedEffectGUID`, `KillFeedKey`, `KillFeedRows`, `KillFeedRowSeconds`, `KillFeedNameLength` | The kill feed: the effect in the Kill Feed workshop item, its channel, how many rows the prefab has, how long a row stays, how many characters of a name fit. |
+| `BannerEffectGUID`, `BannerKey`, `BannerSeconds` | The banner, from the same item, and how long it stays. |
+| `DeathCardEffectGUID`, `DeathCardKey`, `DeathCardSeconds` | The death card, likewise. |
+| `ScoreboardEffectGUID`, `ScoreboardKey` | The scoreboard, likewise. |
 | `ItemIconURL` | Where an item's picture comes from, `{0}` the item id. |
 | `DefaultAvatarURL` | The face for a player the site has no picture for yet. |
 

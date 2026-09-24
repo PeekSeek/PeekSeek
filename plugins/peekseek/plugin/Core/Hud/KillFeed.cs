@@ -111,7 +111,7 @@ public class KillFeed {
     /// moment, and the rest is the one item that can cause each of those deaths.
     /// 254 frag, 519 rocket launcher, 1241 demolition charge, 1101 landmine, 386
     /// barbed wire, 1373 sentry.
-    private static ushort Weapon(EDeathCause cause, Player killer) {
+    public static ushort Weapon(EDeathCause cause, Player killer) {
         ushort inHand = killer?.equipment?.itemID ?? 0;
 
         return cause switch {

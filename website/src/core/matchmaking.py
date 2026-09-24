@@ -459,6 +459,8 @@ def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
             "Headshots": player["headshotKills"],
             "Hits": player["hits"],
             "HeadshotHits": player["headshotHits"],
+            "Damage": player["damageDealt"],
+            "Taken": player["damageTaken"],
             "Won": won,
         }
 

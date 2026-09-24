@@ -1,0 +1,6 @@
+GUID 6969104457d9419fa2f3e53f5e1c6b76
+Type Effect
+ID 43123
+
+// The death card at the bottom of the screen, and the respawn count in the middle for a server that brings the dead back on a clock.
+Preload 0

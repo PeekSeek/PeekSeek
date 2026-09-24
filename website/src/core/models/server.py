@@ -94,6 +94,55 @@ class LobbyPopulation(SQLModel, table=True):
             )
 
     @staticmethod
+    def activity(maxAgeSeconds: int = 30) -> dict:
+        """Per region, what a player deciding where to queue would want to hear: how
+        many are in that region's lobbies right now, and how long ago its last match
+        ended, in minutes. Only lobbies still reporting count, as in `countFresh`.
+
+        This is for the play page, which shows a number only when it invites: a lobby
+        with one person in it and a region whose last match was three hours ago are
+        both left unsaid, because somebody about to queue is somebody else's match,
+        and a bad number scares them off before they are anybody's.
+        """
+        from src.core.db import open
+        from .match import MatchResult
+
+        cutoff = int(time()) - maxAgeSeconds
+        activity: dict = {}
+        with open() as db:
+            regions = {
+                server.address: server.region
+                for server in db.query(AuthorizedServer).all()
+            }
+            for row in db.query(LobbyPopulation).all():
+                if row.at < cutoff or regions.get(row.address) is None:
+                    continue
+                region = activity.setdefault(
+                    regions[row.address], {"players": 0, "lastMatchMinutes": None}
+                )
+                region["players"] += row.players
+
+            for result in (
+                db.query(MatchResult)
+                .where(MatchResult.matchId.isnot(None))
+                .order_by(desc(MatchResult.endTime))
+                .limit(200)
+                .all()
+            ):
+                region = activity.setdefault(
+                    result.region, {"players": 0, "lastMatchMinutes": None}
+                )
+                if region["lastMatchMinutes"] is not None:
+                    continue
+                ended = (
+                    result.endTime.timestamp()
+                    if result.endTime.tzinfo
+                    else result.endTime.replace(tzinfo=None).timestamp()
+                )
+                region["lastMatchMinutes"] = max(0, int((time() - ended) // 60))
+        return activity
+
+    @staticmethod
     def playingNow() -> int:
         """Everyone playing PeekSeek anywhere: in a lobby arena, or in a live match.
 

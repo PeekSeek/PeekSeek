@@ -170,9 +170,6 @@ internal class Raid : IGamemode {
     public void OnPlayerJoined(Player player) {
         if (match == null) return;
 
-        Host.Whisper(player.channel.owner, PeekSeekRaid.Instance.Translate("welcome",
-            phase.ToString().ToLowerInvariant(), round, Host.Score(0), Host.Score(1)));
-
         Place(player);
     }
 
@@ -188,12 +185,14 @@ internal class Raid : IGamemode {
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
         offBaseSince.Remove(steam64);
 
+        Host.Tag.Hide(player.channel.owner);
         if (phase != RaidPhase.Playing) return;
 
-        // Dead is dead until the round is over. Unturned would otherwise offer the
-        // respawn button after its own timer and put them back on a map spawn, alive
-        // and counted.
-        player.setPluginWidgetFlag(EPluginWidgetFlags.ShowDeathMenu, false);
+        // Dead is dead until the round is over: Match remembers, whatever the game
+        // does with the body. So the body comes straight back and Place puts it in
+        // the map's lobby, where they keep the bar, the feed and the chat for the
+        // rest of the round instead of a death screen with nothing on it.
+        player.life.ServerRespawn(false);
 
         // A death can end the round, so the check runs on the next tick rather than
         // here: the player is dead but Unturned has not finished moving them yet, and
@@ -220,12 +219,33 @@ internal class Raid : IGamemode {
 
     /// The pick hangs off the face once it is made and stays there for the round it
     /// was made for: that is the "what did they bring" a teammate glances up for.
-    /// Nothing hangs there before the first round; the footprint is not a pick.
+    /// Nothing hangs there before the first round; the footprint is not a pick. The
+    /// one defender walking the flag carries a flag there until they have picked, so
+    /// the team knows who it is before anybody says.
     public ushort PickOf(ulong steam64) {
         bool picked = phase == RaidPhase.Playing
             || (phase >= RaidPhase.Picking && phase <= RaidPhase.Starting && Board.HasAnswered(steam64));
+        if (picked) return Board.Chosen(steam64)?.IconItemId ?? 0;
 
-        return picked ? Board.Chosen(steam64)?.IconItemId ?? 0 : (ushort)0;
+        return phase == RaidPhase.Picking && steam64 == FlagBearer ? FlagPicture : (ushort)0;
+    }
+
+    /// The vanilla claim flag, whose model the PeekSeek Flag wears and whose picture
+    /// the site has.
+    private const ushort FlagPicture = 1158;
+
+    /// The build is the one phase that needs its name over the clock: the clock alone
+    /// reads as a round.
+    public string PhaseLabel => phase == RaidPhase.Building ? "BUILD" : null;
+
+    /// Whether winning the round in play would end the match, by the same block
+    /// arithmetic that ends it.
+    public bool IsMatchPoint(int team) {
+        if (round == 0) return false;
+
+        int zero = Host.Score(0) + (team == 0 ? 1 : 0);
+        int one = Host.Score(1) + (team == 1 ? 1 : 0);
+        return RoundOrder.Winner(round, zero, one) == team;
     }
 
     // ---- the footprint ----------------------------------------------------------
@@ -245,10 +265,24 @@ internal class Raid : IGamemode {
         Board.Reset();
         List<BoardOption> footprints = ShapeOptions();
         foreach (Player player in Players()) {
-            Board.Open(player.channel.owner, footprints, PeekSeekRaid.Instance.Translate("board_shape"), BoardFace.Shape);
+            ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+            Board.Open(player.channel.owner, footprints, PeekSeekRaid.Instance.Translate("board_shape"), BoardFace.Shape,
+                       _ => StampTeam(steam64));
         }
 
         Host.RefreshHud();
+    }
+
+    /// The first answer on a team counts, so the moment one lands the rest of the
+    /// team's boards are answered with it and come down, rather than staying up to
+    /// take an answer that would not have counted.
+    private void StampTeam(ulong chooser) {
+        int index = Board.PickIndex(chooser);
+        if (index < 0) return;
+
+        foreach (ulong mate in Roster(SideOf(chooser))) {
+            if (mate != chooser) Board.Stamp(mate, index);
+        }
     }
 
     private void TickShaping() {
@@ -313,6 +347,7 @@ internal class Raid : IGamemode {
 
         foreach (Player player in Players()) Place(player);
 
+        Host.Banner("BUILD", Wording.Duration(PeekSeekRaid.Config.BuildSeconds), "Salvage a piece to change what it is made of");
         Host.RefreshHud();
     }
 
@@ -470,6 +505,13 @@ internal class Raid : IGamemode {
         flagHanded = false;
         Host.BeginRound();
 
+        // The only two moments the shape of the match changes. Said once each.
+        if (number == RoundOrder.RegulationHalf + 1) {
+            Host.Banner("SIDES SWAP", $"{TeamName(DefendedSite)} defends");
+        } else if (number == RoundOrder.RegulationHalf * 2 + 1) {
+            Host.Banner("OVERTIME", "Two rounds each");
+        }
+
         RestoreBases();
 
         // Everything a round left on the ground: the loot a death dropped, the wall
@@ -558,13 +600,17 @@ internal class Raid : IGamemode {
         Board.Reset();
 
         // One board each, because the two sides are choosing from different lists at the
-        // same moment.
+        // same moment. Both say which round and which base, and the attackers' says
+        // which way and how far each way in is.
+        string[] labels = attacked.AttackerSpawns.Select(spawn => attacked.Bearing(spawn)).ToArray();
         foreach (Player player in Players()) {
             SteamPlayer viewer = player.channel.owner;
             if (IsDefending(viewer.playerID.steamID.m_SteamID)) {
-                Board.Open(viewer, defence, PeekSeekRaid.Instance.Translate("board_defend"));
+                Board.Open(viewer, defence, PeekSeekRaid.Instance.Translate("board_defend", round, attacked.Name));
             } else {
-                Board.OpenAttack(viewer, raid, defender, attacked.AttackerSpawns.Count);
+                Board.OpenAttack(viewer, raid, defender, attacked.AttackerSpawns.Count,
+                    PeekSeekRaid.Instance.Translate("board_attack", round, attacked.Name),
+                    PeekSeekRaid.Instance.Translate("board_attack_line"), attacked.Name, labels);
             }
         }
     }
@@ -708,7 +754,7 @@ internal class Raid : IGamemode {
 
         foreach (Player player in Players()) RaidWorld.Mark(player, null, null);
 
-        Host.RoundWon(winner, PeekSeekRaid.Instance.Translate(reasonKey, TeamName(winner), round));
+        Host.RoundWon(winner, PeekSeekRaid.Instance.Translate(reasonKey));
 
         int matchWinner = RoundOrder.Winner(round, Host.Score(0), Host.Score(1));
         if (matchWinner >= 0) {
@@ -735,21 +781,28 @@ internal class Raid : IGamemode {
     private void PunishOffBase() {
         foreach (Player player in Players()) {
             ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
-            if (!IsDefending(steam64) || player.life.isDead) continue;
+            if (!IsDefending(steam64) || player.life.isDead || !Host.IsAlive(steam64)) continue;
 
             if (RaidWorld.IsStandingOnBuilt(player)) {
-                offBaseSince.Remove(steam64);
+                if (offBaseSince.Remove(steam64)) Host.Tag.Hide(player.channel.owner);
                 continue;
             }
 
             if (!offBaseSince.TryGetValue(steam64, out float since)) {
-                offBaseSince[steam64] = Time.realtimeSinceStartup;
+                since = Time.realtimeSinceStartup;
+                offBaseSince[steam64] = since;
+            }
+
+            // On screen for as long as it is true: the grace draining in the pips,
+            // then the damage in red until they are back on something built.
+            float off = Time.realtimeSinceStartup - since;
+            float grace = PeekSeekRaid.Config.OffBaseGraceSeconds;
+            if (off < grace) {
+                Host.Tag.Show(player.channel.owner, "OFF BASE", Mathf.Min(3, Mathf.CeilToInt((grace - off) / grace * 3)), null);
                 continue;
             }
 
-            float off = Time.realtimeSinceStartup - since;
-            if (off < PeekSeekRaid.Config.OffBaseGraceSeconds) continue;
-
+            Host.Tag.Show(player.channel.owner, "OFF BASE", -1, $"-{PeekSeekRaid.Config.OffBaseDamagePerSecond} / s");
             player.life.askDamage(
                 PeekSeekRaid.Config.OffBaseDamagePerSecond,
                 Vector3.up,
@@ -757,12 +810,6 @@ internal class Raid : IGamemode {
                 ELimb.SPINE,
                 CSteamID.Nil,
                 out EPlayerKill _);
-
-            // Said once, as the damage starts. Every second after that the health bar
-            // is saying it, and a line of chat per second is noise nobody reads.
-            if (off < PeekSeekRaid.Config.OffBaseGraceSeconds + 1f) {
-                Host.Whisper(player.channel.owner, PeekSeekRaid.Instance.Translate("off_base"));
-            }
         }
     }
 
@@ -794,10 +841,15 @@ internal class Raid : IGamemode {
             ? PeekSeekRaid.Config.BuildSalvageSeconds
             : PeekSeekRaid.Config.RoundSalvageSeconds);
 
-        // The base being taken, on every attacker's map and compass from the moment
-        // they are put down for the round until it is over; nobody else has a marker.
-        bool attacking = phase is RaidPhase.Starting or RaidPhase.Playing && !IsDefending(steam64);
-        RaidWorld.Mark(player, attacking ? sites[DefendedSite].AnchorPoint : null, sites[DefendedSite].Name);
+        // The base being taken on every attacker's map and compass, and the flag
+        // itself on every defender's, from the moment they are put down for the round
+        // until it is over. The rest of the team was in the lobby while the bearer
+        // stood it, so they arrive knowing where it is the same way the attackers
+        // know where the base is.
+        bool inRound = phase is RaidPhase.Starting or RaidPhase.Playing && Host.IsAlive(steam64);
+        RaidSite target = sites[DefendedSite];
+        Vector3? mark = !inRound ? null : IsDefending(steam64) ? RaidWorld.FlagPoint(target) ?? target.AnchorPoint : target.AnchorPoint;
+        RaidWorld.Mark(player, mark, IsDefending(steam64) ? "Flag" : target.Name);
 
         switch (phase) {
             case RaidPhase.Shaping:
@@ -838,6 +890,15 @@ internal class Raid : IGamemode {
                 return;
 
             case RaidPhase.Playing:
+                // Out of the round: the map's lobby, with nothing in hand, free to walk
+                // and talk, until the next round puts them back.
+                if (!Host.IsAlive(steam64)) {
+                    Wait(player, side);
+                    RaidWorld.DressPlain(player);
+                    RaidWorld.Freeze(player, false);
+                    return;
+                }
+
                 Spawn(player, steam64, side);
                 RaidWorld.Kit(player, ChosenOption(steam64));
                 RaidWorld.Freeze(player, false);
