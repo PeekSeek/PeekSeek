@@ -1,0 +1,9 @@
+GUID 946f1ae8f323f95f505dd52b783bd746
+Type Effect
+ID 43137
+
+// match_point: a 2D sound for one player, triggered by Hud/Sounds.cs. Written by tools/sounds.py.
+Static
+Lifetime 2.0
+Lifetime_Spread 0
+Preload 0

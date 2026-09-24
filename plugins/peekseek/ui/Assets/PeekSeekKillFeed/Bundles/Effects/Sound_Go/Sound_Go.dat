@@ -1,0 +1,9 @@
+GUID ddc362bc0451ba3804648f28bdbb2907
+Type Effect
+ID 43148
+
+// go: a 2D sound for one player, triggered by Hud/Sounds.cs. Written by tools/sounds.py.
+Static
+Lifetime 1.6
+Lifetime_Spread 0
+Preload 0

@@ -510,6 +510,8 @@ internal abstract class LobbyManager {
 
         StreakReward earned = killerState == null ? null : AdvanceStreak(killerState);
         if (earned != null) PayOutStreak(killer, killerState, earned);
+        // The lobby has no rounds, so the ladder climbs with the streak instead.
+        Sounds.Kill(killer.Player.channel.owner, killerState?.Streak.Kills ?? 1);
         Bar.Redraw();
     }
 
@@ -879,8 +881,11 @@ internal abstract class LobbyManager {
         if (!QueueEnabled) return false;
         if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
 
+        bool changed = state.Queueing != queueing;
         state.Queueing = queueing;
         state.Prompted = true;
+        SteamPlayer client = PlayerTool.getSteamPlayer(steamID);
+        if (changed && client != null) Sounds.Play(client, queueing ? Sound.QueueJoin : Sound.QueueLeave);
         if (state.Queueing) {
             // Asking for the queue by name skips the arrival grace. That grace exists to
             // stop a match landing on somebody who has not finished arriving, and
@@ -1062,6 +1067,7 @@ internal abstract class LobbyManager {
     /// made on the site or in a party has to pull someone out of the arena just the
     /// same, or they fight on unaware their match is waiting.
     private static void SendToMatch(ulong steam64, PlayerState state, int matchId) {
+        if (state.MatchId != matchId) Sounds.Play(PlayerTool.getSteamPlayer(new CSteamID(steam64)), Sound.MatchFound);
         state.MatchId = matchId;
         state.RelayedTo = null;
         // The range was only ever there to fill the wait, and the wait is over.

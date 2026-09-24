@@ -36,6 +36,7 @@
     <Compile Include="..\..\peekseek\plugin\Core\Hud\Feed.cs" Link="Core\Hud\Feed.cs" />
     <Compile Include="..\..\peekseek\plugin\Core\Hud\KillFeed.cs" Link="Core\Hud\KillFeed.cs" />
     <Compile Include="..\..\peekseek\plugin\Core\Hud\Banner.cs" Link="Core\Hud\Banner.cs" />
+    <Compile Include="..\..\peekseek\plugin\Core\Hud\Sounds.cs" Link="Core\Hud\Sounds.cs" />
     <Compile Include="..\..\peekseek\plugin\Core\Hud\DeathCard.cs" Link="Core\Hud\DeathCard.cs" />
     <Compile Include="..\..\peekseek\plugin\Core\Hud\Scoreboard.cs" Link="Core\Hud\Scoreboard.cs" />
   </ItemGroup>

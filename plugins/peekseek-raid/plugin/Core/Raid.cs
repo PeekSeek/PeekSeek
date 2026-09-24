@@ -159,6 +159,7 @@ internal class Raid : IGamemode {
                 TickPicking();
                 break;
             case RaidPhase.Starting:
+                Host.Countdown(SecondsLeft);
                 if (SecondsLeft <= 0) StartPlaying();
                 break;
             case RaidPhase.Playing:

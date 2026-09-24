@@ -1,0 +1,9 @@
+GUID a8b5d5e13eeea5d6d3ad2bfb5b10c51b
+Type Effect
+ID 43141
+
+// queue_leave: a 2D sound for one player, triggered by Hud/Sounds.cs. Written by tools/sounds.py.
+Static
+Lifetime 1.1
+Lifetime_Spread 0
+Preload 0

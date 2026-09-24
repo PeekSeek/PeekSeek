@@ -1,0 +1,9 @@
+GUID 7edb93542fcfd7ac7656638955ac5fd7
+Type Effect
+ID 43139
+
+// match_loss: a 2D sound for one player, triggered by Hud/Sounds.cs. Written by tools/sounds.py.
+Static
+Lifetime 2.5
+Lifetime_Spread 0
+Preload 0
