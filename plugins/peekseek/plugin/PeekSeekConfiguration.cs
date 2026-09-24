@@ -78,6 +78,28 @@ public class PeekSeekConfiguration : IRocketPluginConfiguration {
     /// own placeholder, the same one the site falls back to.
     public string DefaultAvatarURL;
 
+    /// Fill in the fields this file is too old to carry. See Core/ConfigDefaults.cs:
+    /// Rocket never merges a new field into a written configuration.xml, so without
+    /// this every screen added since a server's file was written draws nothing.
+    public System.Collections.Generic.IReadOnlyList<string> FillInWhatOlderFilesLack() {
+        PeekSeekConfiguration fresh = new();
+        fresh.LoadDefaults();
+        Core.ConfigDefaults defaults = new();
+
+        TagEffectGUID = defaults.Or(TagEffectGUID, fresh.TagEffectGUID, nameof(TagEffectGUID));
+        TagKey = defaults.Or(TagKey, fresh.TagKey, nameof(TagKey));
+        BannerEffectGUID = defaults.Or(BannerEffectGUID, fresh.BannerEffectGUID, nameof(BannerEffectGUID));
+        BannerKey = defaults.Or(BannerKey, fresh.BannerKey, nameof(BannerKey));
+        BannerSeconds = defaults.Or(BannerSeconds, fresh.BannerSeconds, nameof(BannerSeconds));
+        DeathCardEffectGUID = defaults.Or(DeathCardEffectGUID, fresh.DeathCardEffectGUID, nameof(DeathCardEffectGUID));
+        DeathCardKey = defaults.Or(DeathCardKey, fresh.DeathCardKey, nameof(DeathCardKey));
+        DeathCardSeconds = defaults.Or(DeathCardSeconds, fresh.DeathCardSeconds, nameof(DeathCardSeconds));
+        ScoreboardEffectGUID = defaults.Or(ScoreboardEffectGUID, fresh.ScoreboardEffectGUID, nameof(ScoreboardEffectGUID));
+        ScoreboardKey = defaults.Or(ScoreboardKey, fresh.ScoreboardKey, nameof(ScoreboardKey));
+
+        return defaults.Filled;
+    }
+
     public void LoadDefaults() {
         LobbyTimeoutSeconds = 120;
         DelayKickAfterWin = 10;

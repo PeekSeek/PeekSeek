@@ -166,6 +166,32 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public string ChoiceEffectGUID;
     public short ChoiceKey;
 
+    /// Fill in the fields this file is too old to carry. See PeekSeek's
+    /// Core/ConfigDefaults.cs: Rocket never merges a new field into a written
+    /// configuration.xml, so without this the board nobody has configured never opens
+    /// and the lobby asks every player to queue the instant they land.
+    public System.Collections.Generic.IReadOnlyList<string> FillInWhatOlderFilesLack() {
+        PeekSeekLobbyConfiguration fresh = new();
+        fresh.LoadDefaults();
+        PeekSeek.Core.ConfigDefaults defaults = new();
+
+        QueuePromptSeconds = defaults.Or(QueuePromptSeconds, fresh.QueuePromptSeconds, nameof(QueuePromptSeconds));
+        HighPingMs = defaults.Or(HighPingMs, fresh.HighPingMs, nameof(HighPingMs));
+        ResetBoardSeconds = defaults.Or(ResetBoardSeconds, fresh.ResetBoardSeconds, nameof(ResetBoardSeconds));
+        BannerEffectGUID = defaults.Or(BannerEffectGUID, fresh.BannerEffectGUID, nameof(BannerEffectGUID));
+        BannerKey = defaults.Or(BannerKey, fresh.BannerKey, nameof(BannerKey));
+        BannerSeconds = defaults.Or(BannerSeconds, fresh.BannerSeconds, nameof(BannerSeconds));
+        DeathCardEffectGUID = defaults.Or(DeathCardEffectGUID, fresh.DeathCardEffectGUID, nameof(DeathCardEffectGUID));
+        DeathCardKey = defaults.Or(DeathCardKey, fresh.DeathCardKey, nameof(DeathCardKey));
+        DeathCardSeconds = defaults.Or(DeathCardSeconds, fresh.DeathCardSeconds, nameof(DeathCardSeconds));
+        ScoreboardEffectGUID = defaults.Or(ScoreboardEffectGUID, fresh.ScoreboardEffectGUID, nameof(ScoreboardEffectGUID));
+        ScoreboardKey = defaults.Or(ScoreboardKey, fresh.ScoreboardKey, nameof(ScoreboardKey));
+        ChoiceEffectGUID = defaults.Or(ChoiceEffectGUID, fresh.ChoiceEffectGUID, nameof(ChoiceEffectGUID));
+        ChoiceKey = defaults.Or(ChoiceKey, fresh.ChoiceKey, nameof(ChoiceKey));
+
+        return defaults.Filled;
+    }
+
     public void LoadDefaults() {
         szAPIURL = "https://api.peekseek.com";
         szHexDefaultChatColor = "#FFFFFF";

@@ -18,6 +18,8 @@ public class PeekSeek : RocketPlugin<PeekSeekConfiguration> {
 
     protected override void Load() {
         Instance = this;
+        string olderFile = Core.ConfigDefaults.Sentence(Config.FillInWhatOlderFilesLack(), "PeekSeek.configuration.xml");
+        if (olderFile != null) Logger.Log(olderFile);
         Logger.Log($"PeekSeek {Assembly.GetName().Version} is now loaded.");
         OnLoad?.Invoke();
 

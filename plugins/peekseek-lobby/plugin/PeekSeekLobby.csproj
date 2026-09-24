@@ -30,6 +30,7 @@
   <!-- The kill feed is the match plugin's, compiled into this one as well: the lobby
        server does not run PeekSeek Match, and a copy of the source would drift. -->
   <ItemGroup>
+    <Compile Include="..\..\peekseek\plugin\Core\ConfigDefaults.cs" Link="Core\ConfigDefaults.cs" />
     <Compile Include="..\..\peekseek\plugin\Core\Hud\Effects.cs" Link="Core\Hud\Effects.cs" />
     <Compile Include="..\..\peekseek\plugin\Core\Hud\Feed.cs" Link="Core\Hud\Feed.cs" />
     <Compile Include="..\..\peekseek\plugin\Core\Hud\KillFeed.cs" Link="Core\Hud\KillFeed.cs" />

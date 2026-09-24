@@ -25,6 +25,8 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         }
 
         Instance = this;
+        string olderFile = PeekSeek.Core.ConfigDefaults.Sentence(Config.FillInWhatOlderFilesLack(), "PeekSeekLobby.configuration.xml");
+        if (olderFile != null) Logger.Log(olderFile);
         Logger.Log($"PeekSeekLobby {Assembly.GetName().Version} is now loaded.");
 
         LobbyManager.Init();

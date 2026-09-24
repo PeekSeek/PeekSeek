@@ -104,8 +104,11 @@ item logs one line per screen and draws nothing; the boards then answer themselv
 
 On first load, Rocket generates `PeekSeek.configuration.xml` next to the plugin DLL. Root
 element is `<Config>`. **Rocket does not merge new fields into an existing file**: a
-field missing from a live XML reads as `0`, `false` or null, not its default, so a
-server that gets a new version needs the new elements written in by hand.
+field missing from a live XML reads as `0`, `false` or null, not its default. For the
+screens and their timings the plugin fills its own gaps on load
+(`Core/ConfigDefaults.cs`) and logs which fields it filled, so a new screen is never
+dark on a server whose file predates it; everything else still has to be written in by
+hand, and a value the file does carry always wins.
 
 | Field | Description |
 | --- | --- |
