@@ -832,3 +832,60 @@ def _onlyMatch() -> data.Match:
         match = s.query(data.Match).first()
         s.expunge(match)
         return match
+
+
+def test_nothing_is_matched_within_the_cooldown_of_the_last_match(
+    user_factory, monkeypatch
+):
+    monkeypatch.setattr(settings, "match_cooldown", 5)
+    players = [user_factory() for _ in range(4)]
+    for player in players:
+        data.User.addToQueue(player.steam64, GAMEMODE_BIT, region="paris")
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
+    assert matchmaking.matchForServer("paris", "another server") is None
+
+    with Session(core_db.engine) as s:
+        s.query(data.Match).update({"time": int(time()) - 5})
+        s.commit()
+    assert matchmaking.matchForServer("paris", "another server") is not None
+
+
+def test_a_second_matchmaker_stands_down_while_the_first_is_working(user_factory):
+    for player in (user_factory(), user_factory()):
+        data.User.addToQueue(player.steam64, GAMEMODE_BIT, region="paris")
+
+    with matchmaking._matchmakerLock() as held:
+        assert held
+        assert matchmaking.matchForServer("paris", SERVER_CODE) is None
+
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
+
+
+def test_players_requeued_while_their_match_is_written_are_not_matched_twice(
+    user_factory, monkeypatch
+):
+    """The lobby re-queues everyone standing in it on a timer, so a player claimed a
+    moment ago is back in the queue before their match exists. A second server polling
+    in that gap used to build the same match again."""
+    first, second = user_factory(), user_factory()
+    for player in (first, second):
+        data.User.addToQueue(player.steam64, GAMEMODE_BIT, region="paris")
+
+    raced = []
+    claim = data.UserHB.claim
+
+    def claimThenLobbyRequeues(steam64s):
+        monkeypatch.setattr(data.UserHB, "claim", staticmethod(claim))
+        taken = claim(steam64s)
+        for steam64 in steam64s:
+            data.User.addToQueue(steam64, GAMEMODE_BIT, region="paris")
+        raced.append(matchmaking.matchForServer("paris", "another server"))
+        return taken
+
+    monkeypatch.setattr(data.UserHB, "claim", staticmethod(claimThenLobbyRequeues))
+    assert matchmaking.matchForServer("paris", SERVER_CODE) is not None
+    assert raced == [None]
+    assert matchmaking.matchForServer("paris", "another server") is None
+    with Session(core_db.engine) as s:
+        assert s.query(data.Match).count() == 1

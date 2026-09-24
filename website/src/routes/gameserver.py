@@ -585,40 +585,6 @@ def gamemodes():
     return {"gamemodes": modes}
 
 
-@router.get("/gamemodes")
-def gamemodes():
-    """What a player can queue for, for a server that asks in game.
-
-    The `bit` is the position in the queue bitmask, which is this gamemode's index in
-    the whole mmconfig list, not in this answer: an event-only gamemode is left out of
-    the list but must not shift everything after it onto the wrong bit.
-
-    The blurb is the same three things the play page's tile says, in the same order, so
-    a player choosing in game and a player choosing on the site are reading one thing.
-    """
-    modes = []
-    for bit, gamemode in enumerate(mmconfig["gamemodes"]):
-        if gamemode.get("hideFromMM"):
-            continue
-
-        players = gamemode["playersPerTeam"]
-        parts = [
-            ", ".join(kit.upper() for kit in gamemode["kitsAllowed"]),
-            "v".join([str(players)] * gamemode["teams"]),
-        ]
-        if gamemode["usesElo"]:
-            parts.append("Ranked")
-        modes.append(
-            {
-                "bit": bit,
-                "name": gamemode["name"],
-                "blurb": "   ".join(parts),
-                "usesElo": gamemode["usesElo"],
-            }
-        )
-    return {"gamemodes": modes}
-
-
 @router.post("/lobby/population")
 def lobbyPopulation(server: GameServer, payload: JsonBody):
     """What this lobby's arena looks like right now.

@@ -34,6 +34,12 @@ def _create_schema():
 
 
 @pytest.fixture(autouse=True)
+def _no_match_cooldown(monkeypatch):
+    """Most tests make several matches in a row; test_matchmaking pins the cooldown."""
+    monkeypatch.setattr(settings, "match_cooldown", 0)
+
+
+@pytest.fixture(autouse=True)
 def _clean_tables():
     """Wipe tables between tests so each one starts fresh."""
     yield
