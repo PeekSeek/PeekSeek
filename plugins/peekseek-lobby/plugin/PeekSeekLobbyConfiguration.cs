@@ -35,14 +35,20 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// short enough that the match is not kept waiting on them.
     public float MatchWarningSeconds;
 
-    /// How long a matched player gets to answer the loadout prompt before the lobby
-    /// locks whatever they have not answered to its first option.
-    ///
-    /// This is the last thing standing between a match being made and everyone on it
-    /// being teleported into it, so it is a conversion setting as much as a fairness
-    /// one: the site cannot hand the match to a server until every player has chosen,
-    /// and a player who is still reading is a player their opponent is waiting on.
-    public float MatchPickSeconds;
+    /// How long somebody is here before the lobby puts the queue screen in front of
+    /// them. Nobody is queued until they say so; long enough to have had a fight,
+    /// short enough that somebody who came for a match is not left wondering.
+    public float QueuePromptSeconds;
+
+    /// The regions under the tiles on that screen. The gamemodes are not here: they
+    /// are the site's, read from `/server/v1/gamemodes` on load, because a list that
+    /// drifted from the site would queue players for the wrong thing.
+    public List<QueueRegion> QueueRegions;
+
+    /// The ping from which the question warns them. Matches in this region scale a
+    /// shooter's damage down above a ping, and a player who finds that out mid-match
+    /// was sent somewhere they should have been warned about first.
+    public int HighPingMs;
 
     public List<LobbySpawn> Spawns;
 
@@ -68,8 +74,8 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
 
     /// How long a streak survives between kills. A kill that lands later than this
     /// starts the count again at one; dying ends a streak outright, whatever the
-    /// gap. Keeping it short makes a streak a burst of fighting rather than a
-    /// tally of the whole life.
+    /// gap. A minute: long enough to cross the arena to the next fight, short
+    /// enough that a streak is still a run and not a tally of the whole life.
     public float StreakWindowSeconds;
 
     /// Everyone fights solo. Steam group membership is applied automatically on
@@ -85,16 +91,18 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// never fills with the guns and magazines of everyone who died in it.
     public bool RemoveDroppedItems;
 
-    /// How often the arena is wiped back to a clean slate — world items and
-    /// player-placed builds cleared, session stats zeroed, everyone respawned.
+    /// How often the arena is wiped back to a clean slate: world items and
+    /// player-placed builds cleared, session stats zeroed, everyone respawned. The
+    /// clock only runs while two or more are in the arena.
     public float ResetIntervalSeconds;
+
+    /// How long the scoreboard is on everybody's screen at a reset.
+    public float ResetBoardSeconds;
 
     /// Mirror each player's Elo into their in-game reputation, as a negative
     /// number. Unturned moves reputation on its own for kills and similar, so this
     /// is re-asserted on a timer rather than set once.
     public bool ShowEloAsReputation;
-
-    public string szDiscordURL;
 
     /// Where a matched player is sent to log in and pick their kit. Opening it
     /// logged out is what records it as the page to come back to, so the site
@@ -112,21 +120,6 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// fight rather than standing in the arena with an empty inventory. One
     /// entry per category in AllowedKitCategories.
     public List<FallbackKit> FallbackKits;
-
-    /// How many players this lobby tries to keep in the arena rather than sending
-    /// off to matches. Only the surplus above this is offered to the queue, longest
-    /// wait first, because a browser listing showing a handful of players is what
-    /// brings the next one in and every 1v1 started takes two of them out of it.
-    ///
-    /// Set it to 0 to go back to queueing everybody the moment they are eligible.
-    public byte MinLobbyPopulation;
-
-    /// How long a player can be held out of the queue by MinLobbyPopulation before
-    /// they are offered a match regardless. The floor is there to keep the arena
-    /// worth joining, not to keep people who came for a match from ever getting
-    /// one — without this a lobby resting exactly on the floor never plays a single
-    /// match and empties itself the slow way instead. Zero means never release.
-    public float LobbyHoldMaxSeconds;
 
     /// Master switch for the solo target range. Off removes /range entirely —
     /// the command still exists but says the range is not set up here.
@@ -149,6 +142,68 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public float RangeDistance;
     public float RangeSpreadDegrees;
 
+    /// The kill feed at the top right, from the PeekSeek Kill Feed workshop item
+    /// (`plugins/peekseek/ui`), which the server has to list in
+    /// WorkshopDownloadConfig.json. Left empty, there is no feed; the chat lines stay
+    /// either way. The key is any small number no other plugin here uses.
+    public string KillFeedEffectGUID;
+    public short KillFeedKey;
+    public string ItemIconURL;
+    public int KillFeedRows;
+    public float KillFeedRowSeconds;
+    public int KillFeedNameLength;
+
+    /// The rest of the screens from the same workshop item: the bar along the top with
+    /// a face per player, the banner, the death card with the respawn count in it,
+    /// the scoreboard, and the board the lobby asks its one question on. The picture
+    /// for a player the site has no picture for yet is Steam's own placeholder.
+    public string LobbyBarEffectGUID;
+    public short LobbyBarKey;
+    public string DefaultAvatarURL;
+    public string BannerEffectGUID;
+    public short BannerKey;
+    public float BannerSeconds;
+    public string DeathCardEffectGUID;
+    public short DeathCardKey;
+    public float DeathCardSeconds;
+    public string ScoreboardEffectGUID;
+    public short ScoreboardKey;
+    public string QueueEffectGUID;
+    public short QueueKey;
+
+    /// Where a rank badge comes from, with `{0}` standing for the rank's icon name,
+    /// which the site answers on every player read. The site serves the same badges
+    /// its own pages wear.
+    public string RankIconURL;
+
+    /// Fill in the fields this file is too old to carry. See PeekSeek's
+    /// Core/ConfigDefaults.cs: Rocket never merges a new field into a written
+    /// configuration.xml, so without this the board nobody has configured never opens
+    /// and the lobby asks every player to queue the instant they land.
+    public System.Collections.Generic.IReadOnlyList<string> FillInWhatOlderFilesLack() {
+        PeekSeekLobbyConfiguration fresh = new();
+        fresh.LoadDefaults();
+        PeekSeek.Core.ConfigDefaults defaults = new();
+
+        QueuePromptSeconds = defaults.Or(QueuePromptSeconds, fresh.QueuePromptSeconds, nameof(QueuePromptSeconds));
+        HighPingMs = defaults.Or(HighPingMs, fresh.HighPingMs, nameof(HighPingMs));
+        ResetBoardSeconds = defaults.Or(ResetBoardSeconds, fresh.ResetBoardSeconds, nameof(ResetBoardSeconds));
+        BannerEffectGUID = defaults.Or(BannerEffectGUID, fresh.BannerEffectGUID, nameof(BannerEffectGUID));
+        BannerKey = defaults.Or(BannerKey, fresh.BannerKey, nameof(BannerKey));
+        BannerSeconds = defaults.Or(BannerSeconds, fresh.BannerSeconds, nameof(BannerSeconds));
+        DeathCardEffectGUID = defaults.Or(DeathCardEffectGUID, fresh.DeathCardEffectGUID, nameof(DeathCardEffectGUID));
+        DeathCardKey = defaults.Or(DeathCardKey, fresh.DeathCardKey, nameof(DeathCardKey));
+        DeathCardSeconds = defaults.Or(DeathCardSeconds, fresh.DeathCardSeconds, nameof(DeathCardSeconds));
+        ScoreboardEffectGUID = defaults.Or(ScoreboardEffectGUID, fresh.ScoreboardEffectGUID, nameof(ScoreboardEffectGUID));
+        ScoreboardKey = defaults.Or(ScoreboardKey, fresh.ScoreboardKey, nameof(ScoreboardKey));
+        QueueEffectGUID = defaults.Or(QueueEffectGUID, fresh.QueueEffectGUID, nameof(QueueEffectGUID));
+        QueueKey = defaults.Or(QueueKey, fresh.QueueKey, nameof(QueueKey));
+        RankIconURL = defaults.Or(RankIconURL, fresh.RankIconURL, nameof(RankIconURL));
+        QueueRegions = QueueRegions is { Count: > 0 } ? QueueRegions : fresh.QueueRegions;
+
+        return defaults.Filled;
+    }
+
     public void LoadDefaults() {
         szAPIURL = "https://api.peekseek.com";
         szHexDefaultChatColor = "#FFFFFF";
@@ -161,9 +216,16 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         GamemodeBitmask = 1;
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;
-        RespawnDelaySeconds = 10f;
+        RespawnDelaySeconds = 5f;
         MatchWarningSeconds = 3f;
-        MatchPickSeconds = 8f;
+        QueuePromptSeconds = 60f;
+        HighPingMs = 100;
+        QueueRegions = [
+            new QueueRegion { Name = "EU-West", Code = "paris" },
+            new QueueRegion { Name = "AS-South", Code = "singapore" },
+            new QueueRegion { Name = "US-West", Code = "utah" },
+            new QueueRegion { Name = "SA-East", Code = "brazil" }
+        ];
         SpareMagazines = 1;
         AllowedKitCategories = ["meta", "sniper"];
         EnableQueue = true;
@@ -175,7 +237,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         KillRewards = [
             new RewardItem { ItemID = 395, MaxCarried = 1, GrantOnSpawn = false }
         ];
-        StreakWindowSeconds = 10f;
+        StreakWindowSeconds = 60f;
         // Two kills buys an umbrella and a bounce, three fits a drum to the gun
         // they are already holding, five is a rampage. Every id here is one the
         // site already hands out in mmconfig.json's powerups.
@@ -213,18 +275,36 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         ];
         RemoveDroppedItems = true;
         ResetIntervalSeconds = 300f;
-        // Two is the floor because a 1v1 takes exactly two: at four the lobby can
-        // start a match and still show two, which the browser still sells.
-        MinLobbyPopulation = 2;
-        LobbyHoldMaxSeconds = 240f;
+        ResetBoardSeconds = 5f;
         RangeEnabled = true;
         RangeTargetItemId = 1408;
         RangeTargetCount = 8;
         RangeDistance = 18f;
         RangeSpreadDegrees = 90f;
         ShowEloAsReputation = true;
-        szDiscordURL = "https://discord.gg/NKgTe6RnvH";
         szMatchURL = "https://dev.peekseek.net/match";
+
+        KillFeedEffectGUID = "c4d5e6f708192a3b4c5d6e7f8091a2b3";
+        KillFeedKey = 27320;
+        ItemIconURL = "https://peekseek.net/static/unturned/{0}.png";
+        KillFeedRows = 6;
+        KillFeedRowSeconds = 7f;
+        KillFeedNameLength = 24;
+
+        LobbyBarEffectGUID = "d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1";
+        LobbyBarKey = 27321;
+        DefaultAvatarURL = "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg";
+        BannerEffectGUID = "df8dfb9bbb304f6faf46884227651559";
+        BannerKey = 27322;
+        BannerSeconds = 4f;
+        DeathCardEffectGUID = "6969104457d9419fa2f3e53f5e1c6b76";
+        DeathCardKey = 27323;
+        DeathCardSeconds = 5f;
+        ScoreboardEffectGUID = "6441527b813a4bd7b17809470064a1af";
+        ScoreboardKey = 27324;
+        QueueEffectGUID = "4369a4e938bf4db3862c83355a910129";
+        QueueKey = 27325;
+        RankIconURL = "https://peekseek.net/static/ranks/{0}.png";
 
         // The same first-option gun, attachments and outfit the website would
         // resolve for a player who has never saved a kit — see kits.json and

@@ -49,7 +49,10 @@ Exactly one of four answers comes back, and `action` is the only field to switch
 ```jsonc
 {"action": "idle"}
 
-{"action": "wait", "matchId": 42, "waitingOn": ["7656…"], "selectionEndsAt": 1786000060}
+{"action": "wait", "matchId": 42, "waitingOn": ["7656…"], "selectionEndsAt": 1786000060,
+ "match": {"id": 42, "gamemode": {…}, "teams": [{"name": "North", "players": ["7656…"]}], "spectators": []},
+ "options": {"kits": ["meta", "sniper"], "powerups": [{"name": "Boom", "items": [{"itemId": 519, "amount": 1, "state": []}]}]},
+ "picked": {"7656…": {"kit": "meta", "powerup": null}}}
 
 {"action": "host", "match": { /* see below */ }}
 
@@ -58,8 +61,14 @@ Exactly one of four answers comes back, and `action` is the only field to switch
 
 - **idle** — nothing to do. Ask again shortly.
 - **wait** — this match is yours, but its players are still choosing. Hold it, keep
-  sending this `matchId`, and do not let anyone in: the roster that says who is even on
-  it has not arrived yet.
+  sending this `matchId`, and let the roster in: `match` is who is on it, without the
+  settings and kits that are still being decided, and the players are already on their
+  way, because a match has a connect code from the moment a server holds it. `options`
+  is what there is to choose, the same lists `choose` gives per player, with each
+  powerup's items so a board can picture them; `picked` is what each player has chosen
+  so far. Put a board in front of whoever is here with something unpicked and lock
+  each answer with `POST /players/{steam64}/decide`; every poll carries the site's
+  view of who has picked, which is what closes a board answered on the site instead.
 - **host** — start it. **Sent exactly once per match.** Ask again while hosting and the
   answer is `idle`, so a slow poll cannot restart a round already being played.
 - **abort** — drop it. `reason` is `unknownMatch`, `matchOver` or `hostedElsewhere`.
@@ -126,7 +135,7 @@ what happens to a match whose result was slow to arrive.
 
 | Route | What it does |
 |---|---|
-| `GET /players/{steam64}` | Rank and whereabouts. **No side effects.** |
+| `GET /players/{steam64}` | Name, picture, rank and whereabouts. **No side effects.** |
 | `PUT /players/{steam64}/queue` | Queue them, and answer the same thing. |
 | `DELETE /players/{steam64}/queue` | Take them out of the queue. |
 | `GET /players/{steam64}/kits` | Every saved kit, resolved into ready-to-equip items. |
@@ -138,7 +147,8 @@ Both reads answer the same shape:
 
 ```jsonc
 {
-  "steam64": "7656…", "elo": 300, "matchId": 42, "relayTo": null,
+  "steam64": "7656…", "name": "Ferret", "avatar": "https://avatars.steamstatic.com/…_full.jpg",
+  "elo": 300, "rankIcon": "gold1", "matchId": 42, "relayTo": null,
   "choose": {
     "kits": ["meta", "sniper"],
     "powerups": ["Movement", "Ammo", "Boom"],
@@ -159,9 +169,12 @@ to queue. For the same reason the site drops a banned player's queue heartbeat r
 than skipping it, so population counts do not include somebody who cannot be matched.
 
 `relayTo` is the whole decision for anything holding players. **Null means keep them;
-non-null is the site's promise that the match is being hosted right now and this player
-will be let in.** It stays null while the match is still in selection, so nobody is ever
-sent to a server that would refuse them.
+non-null is the site's promise that a server holds the match and this player will be
+let in.** It is set from the moment a server takes the match, during selection, because
+the picks are made on that server as well as here: a player relayed from a lobby gets
+the board there, and one who queued on the site can pick on either. `rankIcon` is the
+badge the Elo earns, served at `/static/ranks/<icon>.png`, which a server draws on the
+player's face.
 
 `choose` is what this player still gets to decide, and null when there is nothing: no
 match, or a gamemode that offers them one kit and one powerup. **A list with one entry in

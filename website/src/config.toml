@@ -11,6 +11,7 @@ host_grace = 20      # seconds past selection a serverless match waits before it
 party_timeout = 600  # seconds with nobody looking at a party before it disbands
 max_team_elo_gap = 400   # widest average-Elo gap allowed between the teams in one match
 rematch_cooldown = 300   # seconds before the same two players can be put against each other again
+match_cooldown = 5       # seconds the site waits after making a match before it makes another, anywhere
 
 [ranks]
 # The badge a player's Elo earns them. `elo` is where a tier starts and it runs until

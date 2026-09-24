@@ -33,6 +33,7 @@ class Settings:
         self.party_timeout: int = toml["matchmaking"]["party_timeout"]
         self.max_team_elo_gap: int = toml["matchmaking"]["max_team_elo_gap"]
         self.rematch_cooldown: int = toml["matchmaking"]["rematch_cooldown"]
+        self.match_cooldown: int = toml["matchmaking"]["match_cooldown"]
 
         self.ranks: list[dict] = list(toml["ranks"]["tiers"])
 

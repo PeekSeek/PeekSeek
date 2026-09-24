@@ -1,0 +1,27 @@
+# Everything Unity regenerates from Assets/ and Packages/.
+/Library/
+/Temp/
+/Logs/
+/obj/
+/UserSettings/
+/Build/
+/*.csproj
+/*.sln
+/tools/WorkshopUpload/bin/
+/tools/WorkshopUpload/obj/
+# Unity writes the rest of ProjectSettings/ on first open; only the version is ours.
+/ProjectSettings/*
+!/ProjectSettings/ProjectVersion.txt
+# Made by BuildBundle.cs from the .ttf files beside them, under GUIDs the prefabs know.
+/Assets/PeekSeek/Fonts/*.asset
+/Assets/PeekSeek/Fonts/*.asset.meta
+# Unpacked by BuildBundle.cs from the TextMesh Pro package: shaders a font asset needs.
+/Assets/TextMesh Pro/
+/Assets/TextMesh Pro.meta
+# Unity writes a .meta beside everything; only the sprites' are ours, with GUIDs
+# generate.py pins and the prefabs reference.
+*.meta
+!/Assets/PeekSeek/Sprites/*.meta
+!/Assets/PeekSeek/Shaders/*.meta
+/Packages/packages-lock.json
+/build.log

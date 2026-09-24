@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>PeekSeekArena</RootNamespace>
+    <AssemblyName>PeekSeekArena</AssemblyName>
+    <Product>PeekSeekArena</Product>
+    <Version>1.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RestoreMonarchy.RocketRedist" Version="3.*" ExcludeAssets="runtime" />
+    <PackageReference Include="Lib.Harmony" Version="2.*" ExcludeAssets="runtime" />
+    <PackageReference Include="Krafs.Publicizer" Version="2.3.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Publicize Include="Assembly-CSharp" IncludeCompilerGeneratedMembers="false" />
+  </ItemGroup>
+
+  <!-- Compiled against PeekSeek Match and loaded beside it, never shipped with it: a
+       second PeekSeek.dll under Rocket/Plugins would load as a second plugin. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\peekseek\plugin\PeekSeek.csproj" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PeekSeekArena.Tests" />
+  </ItemGroup>
+
+  <!-- The arena messages are sent with the game's own net writer, which RocketRedist
+       does not carry; Match keeps a copy of the DLL. -->
+  <ItemGroup>
+    <Reference Include="SDG.NetPak.Runtime">
+      <HintPath>..\..\peekseek\plugin\lib\SDG.NetPak.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

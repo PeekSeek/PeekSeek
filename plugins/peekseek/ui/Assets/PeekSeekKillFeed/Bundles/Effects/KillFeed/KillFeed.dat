@@ -1,0 +1,7 @@
+GUID c4d5e6f708192a3b4c5d6e7f8091a2b3
+Type Effect
+ID 43120
+
+// The kill feed: a row per kill at the top right, kept up by the PeekSeekKillFeed
+// plugin for as long as a player is on the server. No Lifetime, nothing to pool.
+Preload 0

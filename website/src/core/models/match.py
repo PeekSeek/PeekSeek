@@ -266,6 +266,7 @@ class Match(SQLModel, table=True):
             return None
 
         self.claimed = serverCode
+        self._tellPlayersToJoin()
         return self
 
     def markHosting(self) -> None:
@@ -281,8 +282,6 @@ class Match(SQLModel, table=True):
         with open() as db:
             db.query(Match).where(Match.id == self.id).update({"meta": self.meta})
 
-        self._tellPlayersToJoin()
-
     def _tellPlayersToJoin(self) -> None:
         """DM everyone on the match a button that launches the game.
 
@@ -292,9 +291,9 @@ class Match(SQLModel, table=True):
         anywhere to go, so by the time there is, the only thing that told them has
         scrolled away.
 
-        This one fires at the moment there is something to join and carries the button
-        that joins it, so the whole path from "your match is ready" to being in the
-        server is one press.
+        This one fires at the moment there is something to join, which is the moment a
+        server takes the match, and carries the button that joins it, so the whole
+        path from "your match is ready" to being in the server is one press.
 
         Failures are swallowed on purpose. This runs inside the session poll that hands
         a server its match, and a Discord outage must not stop a match being played.
@@ -657,13 +656,18 @@ class Match(SQLModel, table=True):
             "liveData": self.livedata,
             "startsAfter": self.selectionEndsAt(),
             "config": mmconfig["gamemodes"][self.gamemode],
+            "joinTimeoutSeconds": mmconfig.get("joinTimeoutSeconds", 120),
         }
 
     def connectCode(self) -> str | None:
         """What a player types into Unturned to join this match, once there is anything
-        to join. Null while the match is still being set up, and null for the "0"
-        sentinel a server too old to report its own code holds it with."""
-        if self.status != Match.LIVE or self.claimed in (None, "0"):
+        to join: from the moment a server holds it, since the picks are made on that
+        server as well as here. Null before that, and null for the "0" sentinel a
+        server too old to report its own code holds it with."""
+        if self.status not in (Match.PICKING, Match.LIVE) or self.claimed in (
+            None,
+            "0",
+        ):
             return None
         return self.claimed
 

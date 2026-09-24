@@ -17,28 +17,29 @@
 {% block content %}
 
 <div class="mainElement centerflex">
-  <span id="message">Waiting for</span>
-
-  <a id="turn" class="userProfile uprof">Loading...</a>
-  
-  <span id="type">Loading...</span>
-  <span id="picktimer" class="picktimer"></span>
-
-  <div class="decisionRow">
-    <button class="mbutton" id="b1" onclick="decide('0')">
-      Yes
-    </button>
-    <button class="mbutton" id="b2"  onclick="decide('1')">
-      No
-    </button>
+  {# The rail is the one fixed thing on the page: where the match is, in four steps.
+     Everything under it keeps its place; only the turn row changes what it asks. #}
+  <div class="rail" id="rail">
+    <div id="railBans"><b>Bans</b><span></span></div>
+    <div id="railPicks"><b>Picks</b><span></span></div>
+    <div id="railServer"><b>Server</b><span></span></div>
+    <div id="railReady"><b>Ready</b><span></span></div>
   </div>
 
-  <audio id="welcome-sound" src="/static/assets/trumpet.mp3" preload="auto"></audio>
+  <div class="turn" id="turn">
+    <a id="turnAvatar" class="userProfile uprof"></a>
+    <div class="t"><b id="turnTitle"></b><span id="turnLine"></span></div>
+    <div class="decisionRow" id="turnButtons">
+      <button class="mbutton" id="b1" onclick="decide('0')">Yes</button>
+      <button class="mbutton" id="b2" onclick="decide('1')">No</button>
+    </div>
+  </div>
 
-  <div id = "kits">
+  <span id="message"></span>
+
+  <div id="kits">
     {% if len(dataAsDict["config"]["kitsAllowed"]) > 1 %}
     <h1 class="botmargin">Kit</h1>
-    <p class="pickPrompt">Pick one — the match starts the moment everyone has.</p>
 
     <div class="choicegrid">
       {% for kit in dataAsDict["config"]["kitsAllowed"] %}
@@ -47,13 +48,10 @@
       </button>
       {% endfor %}
     </div>
-
-
     {% endif %}
 
     {% if len(dataAsDict["config"]["powerups"]) > 1 %}
     <h1 class="botmargin">Powerup</h1>
-    <p class="pickPrompt">Pick one — the match starts the moment everyone has.</p>
 
     <div class="choicegrid">
       {% for powerup in dataAsDict["config"]["powerups"] %}
@@ -65,19 +63,19 @@
         </button>
       {% endfor %}
     </div>
-
     {% endif %}
   </div>
 
   <div class="timerow" id="commitcount"></div>
   <div id="commitlist"></div>
 
-  <div id="connectprogress">
-    <div class="progressline"><i></i></div>
-    <span class="caption" id="connectcaption"></span>
-  </div>
-
   <div class="settingpills" id="matchsettings"></div>
+
+  <div class="joinline" id="joinline">
+    <span id="joinText"></span>
+    <a id="joinConnect"><button type="button" class="mbutton connect">Connect to server</button></a>
+    <button type="button" class="mbutton" id="joinCopy">Copy server code</button>
+  </div>
 
   <span class="muted">Matchid: {{ dataAsDict["id"] }}</span>
 </div>

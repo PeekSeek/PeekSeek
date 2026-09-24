@@ -1,0 +1,6 @@
+GUID 6441527b813a4bd7b17809470064a1af
+Type Effect
+ID 43124
+
+// The scoreboard: held up on a plugin key during play, and up for everybody when a match ends or the arena resets.
+Preload 0

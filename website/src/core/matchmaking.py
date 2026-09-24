@@ -13,10 +13,14 @@ nowhere to be played.
 
 import logging
 import threading
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from itertools import combinations
 from time import time
 
-from .db import open
+from sqlalchemy import false, func, or_, text
+
+from .db import engine, open
 from .settings import settings
 from . import models as data
 from . import notify
@@ -45,7 +49,57 @@ def matchForServer(region: str, serverCode: str) -> "data.Match | None":
         if taken:
             return taken
 
-    return _matchFromQueue(region, serverCode)
+    return _asTheMatchmaker(lambda: _matchFromQueue(region, serverCode))
+
+
+# Any number works, so long as nothing else takes an advisory lock on the same one.
+MATCHMAKER_LOCK = 0x5045454B
+
+_testLock = threading.Lock()
+
+
+def _asTheMatchmaker(makeMatch):
+    """Run makeMatch as the only matchmaker on the whole site, or not at all.
+
+    Every server polls every second and any copy of the site can answer, so without this
+    two polls scan the queue at once. The first takes its players out of the queue, the
+    lobby puts them straight back in before the first has written their match, and the
+    second finds them queued and free and builds the same match again.
+
+    The lock is held in Postgres rather than in this process so it covers every copy of
+    the site, and it is only let go once the match is written. Nobody makes another
+    until `match_cooldown` after the newest one, so the next scan always sees who the
+    last one took. A poll that loses either way is told to idle and asks again.
+    """
+    with _matchmakerLock() as held:
+        if not held or _madeOneRecently():
+            return None
+        return makeMatch()
+
+
+@contextmanager
+def _matchmakerLock():
+    """Yields whether this call holds the lock. Never waits for it."""
+    if engine.dialect.name != "postgresql":
+        # SQLite is only ever the tests, which run in one process.
+        held = _testLock.acquire(blocking=False)
+        try:
+            yield held
+        finally:
+            if held:
+                _testLock.release()
+        return
+
+    with engine.connect() as connection, connection.begin():
+        yield connection.execute(
+            text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": MATCHMAKER_LOCK}
+        ).scalar()
+
+
+def _madeOneRecently() -> bool:
+    with open() as db:
+        newest = db.query(func.max(data.Match.time)).scalar()
+    return newest is not None and time() - newest < settings.match_cooldown
 
 
 def _matchFromQueue(region: str, serverCode: str) -> "data.Match | None":
@@ -203,9 +257,36 @@ def _recentOpponentPairs() -> set[frozenset]:
     thing to keep in step. Counts matches that are still being played, not just
     finished ones, so back-to-back rematches are caught while the first one is live.
     """
-    cutoff = time() - settings.rematch_cooldown
+    cooldown = settings.rematch_cooldown
+    endedSince = datetime.now(timezone.utc) - timedelta(seconds=cooldown)
+
     with open() as db:
-        recent = db.query(data.Match).where(data.Match.time >= cutoff).all()
+        # Three ways a match is still too fresh to run back, because Match.time is when
+        # a match was *made*: a twenty-minute match is already outside a five-minute
+        # cooldown by the time anybody could rematch, which is why this rule never fired
+        # in production while passing every test -- the tests all rematch off a match
+        # created seconds ago.
+        endedRecently = {
+            row.matchId
+            for row in db.query(data.MatchResult)
+            .where(data.MatchResult.endTime >= endedSince)
+            .all()
+            if row.matchId
+        }
+        recent = (
+            db.query(data.Match)
+            .where(
+                or_(
+                    # Still being played, so the rematch clock has not started at all.
+                    data.Match.finished.is_(False),
+                    # Scored or written off within the cooldown.
+                    data.Match.id.in_(endedRecently) if endedRecently else false(),
+                    # Made within it, for a finished match that never got a result row.
+                    data.Match.time >= time() - cooldown,
+                )
+            )
+            .all()
+        )
 
     pairs = set()
     for match in recent:
@@ -283,6 +364,10 @@ def _createMatch(
 def attemptCreateEventMatch(trackSteam64: int, eventId: int) -> bool:
     """Pair up event teams whose owners are queueing. True if trackSteam64's
     team got a match."""
+    return bool(_asTheMatchmaker(lambda: _eventMatch(trackSteam64, eventId)))
+
+
+def _eventMatch(trackSteam64: int, eventId: int) -> bool:
     with open() as db:
         event = db.query(data.Event).where(data.Event.id == eventId).first()
         in_queue_time = any(
@@ -300,7 +385,9 @@ def attemptCreateEventMatch(trackSteam64: int, eventId: int) -> bool:
 
         if len(teams) < 2:
             return False
-        teams = teams[:2]
+        teams = _eventPairing(teams)
+        if teams is None:
+            return False
         meta = event.data["meta"]
         spectators = [str(x) for x in event.data.get("spectators", [])]
 
@@ -323,14 +410,39 @@ def attemptCreateEventMatch(trackSteam64: int, eventId: int) -> bool:
     return any(int(team["users"][0]) == int(trackSteam64) for team in teams)
 
 
+def _eventPairing(teams: list[dict]) -> list[dict] | None:
+    """The first two queued teams who have not just played each other, or None.
+
+    Queue order first, so the pair that has been waiting longest still goes first when
+    nothing is stale. Searching past that pair rather than stopping at it is what keeps
+    a three-team event moving: the front two being on cooldown finds the third team a
+    match instead of holding the whole event until the clock runs out. An event with
+    only two teams does wait, which is what a cooldown is.
+    """
+    recentOpponents = _recentOpponentPairs()
+    for home, away in combinations(teams, 2):
+        roster = [[int(u) for u in home["users"]], [int(u) for u in away["users"]]]
+        if not _wouldRepeatAFixture(roster, recentOpponents):
+            return [home, away]
+    return None
+
+
 def _eventTeam(db, heartbeat, event) -> dict | None:
     """The heartbeat owner's team entry, or None if the team can't play now."""
     if data.User.getCurrentMatchId(heartbeat.steam64):
         return None
 
+    # Scoped to this event. Without the event_id a player who had ever signed up for
+    # anything got whichever row came back first, which is the oldest -- so a finished
+    # event's signup, with its matchesplayed already at that event's cap, refused them a
+    # match in the event they were actually queueing for. Deleting the old signups
+    # "fixed" it because it left only one row to find.
     signup = (
         db.query(data.EventSignup)
-        .where(data.EventSignup.ownerSteam64 == heartbeat.steam64)
+        .where(
+            data.EventSignup.event_id == event.id,
+            data.EventSignup.ownerSteam64 == heartbeat.steam64,
+        )
         .first()
     )
     if not signup:
@@ -402,6 +514,8 @@ def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
             "Headshots": player["headshotKills"],
             "Hits": player["hits"],
             "HeadshotHits": player["headshotHits"],
+            "Damage": player["damageDealt"],
+            "Taken": player["damageTaken"],
             "Won": won,
         }
 

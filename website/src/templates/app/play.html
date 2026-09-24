@@ -49,13 +49,19 @@
           {% endfor %}
         </select>
         <button type="button" name="button" id="q" onclick="queue()">FIND MATCH</button>
-        <select name="region" id="region">
+        <select name="region" id="region" onchange="showActivity()">
           <option value="paris">EU-West</option>
           <option value="singapore">AS-South</option>
           <option value="utah">US-West</option>
           <option value="brazil">SA-East</option>
         </select>
       </div>
+
+      {# What the chosen region is like right now, said only when it invites: a lobby
+         with people in it, a match played minutes ago. A quiet region says nothing,
+         because the person reading this is the next player in it. #}
+      <div class="regionActivity" id="regionActivity"
+        {% for region, seen in activity.items() %}data-{{region}}-players="{{seen.players}}" data-{{region}}-last="{{seen.lastMatchMinutes if seen.lastMatchMinutes is not none else ''}}"{% endfor %}></div>
     </div>
     <span class="muted">Please note that by closing this tab you will stop queue'ing.</span>
   </div>
