@@ -1,0 +1,9 @@
+GUID 3a100eda770dc3e5f765cceec8e3212c
+Type Effect
+ID 43134
+
+// kill_5: a 2D sound for one player, triggered by Hud/Sounds.cs. Written by tools/sounds.py.
+Static
+Lifetime 1.8
+Lifetime_Spread 0
+Preload 0

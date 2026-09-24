@@ -1,0 +1,9 @@
+GUID 2a04635eea77f2e1e04736123c18f835
+Type Effect
+ID 43149
+
+// time_10s: a 2D sound for one player, triggered by Hud/Sounds.cs. Written by tools/sounds.py.
+Static
+Lifetime 1.3
+Lifetime_Spread 0
+Preload 0

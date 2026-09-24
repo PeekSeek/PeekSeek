@@ -33,6 +33,10 @@ public static class Host {
     /// Everybody is back in play. A gamemode says so as a round starts.
     public static void BeginRound() => StatService.BeginRound();
 
+    /// Seconds until the fight, once a second from 5 down to 0 for GO; anything else is
+    /// ignored and a repeat of the same second plays once.
+    public static void Countdown(int secondsToGo) => PSManager.Countdown(secondsToGo);
+
     public static int Score(int team) => PSManager.Score(team);
 
     public static int RoundsPlayed => PSManager.RoundsPlayed;

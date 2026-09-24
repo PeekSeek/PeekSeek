@@ -1,0 +1,9 @@
+GUID e69f83bd56985408f34f7ba3cc93fc63
+Type Effect
+ID 43136
+
+// round_loss: a 2D sound for one player, triggered by Hud/Sounds.cs. Written by tools/sounds.py.
+Static
+Lifetime 1.9
+Lifetime_Spread 0
+Preload 0

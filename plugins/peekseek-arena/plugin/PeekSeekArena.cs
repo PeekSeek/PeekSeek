@@ -36,6 +36,7 @@ public class PeekSeekArena : RocketPlugin<PeekSeekArenaConfiguration> {
         instrument = new Harmony("blaze.ps.arena");
         instrument.PatchAll(Assembly.GetExecutingAssembly());
         PlayerLife.onPlayerLifeUpdated += OnLifeUpdated;
+        LevelManager.onLevelNumberUpdated += OnLevelNumber;
 
         Gamemodes.Register(Arena, isDefault: true);
         Logger.Log($"PeekSeekArena {Assembly.GetName().Version} is now loaded.");
@@ -46,9 +47,16 @@ public class PeekSeekArena : RocketPlugin<PeekSeekArenaConfiguration> {
 
         Gamemodes.Unregister(Arena);
         PlayerLife.onPlayerLifeUpdated -= OnLifeUpdated;
+        LevelManager.onLevelNumberUpdated -= OnLevelNumber;
         instrument?.UnpatchAll(instrument.Id);
         Arena = null;
         Instance = null;
+    }
+
+    /// The game counts the warmup down once a second through this event, and reuses it
+    /// for the player count once the round is on, hence the check on the state.
+    private static void OnLevelNumber(int number) {
+        if (Arena is { InPlay: true } && LevelManager.arenaState == EArenaState.WARMUP) Host.Countdown(number);
     }
 
     /// Safety net: if a death is ever resolved without the death event firing, this

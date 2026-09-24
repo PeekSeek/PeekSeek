@@ -1,0 +1,9 @@
+GUID e0793ae0496d4b86713ada194985cc7c
+Type Effect
+ID 43147
+
+// count_5: a 2D sound for one player, triggered by Hud/Sounds.cs. Written by tools/sounds.py.
+Static
+Lifetime 1.5
+Lifetime_Spread 0
+Preload 0

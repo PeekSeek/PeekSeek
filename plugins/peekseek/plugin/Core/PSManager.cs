@@ -893,10 +893,49 @@ internal abstract class PSManager {
         }
 
         Banner.Show($"TAKES ROUND {RoundsPlayed}", winner.Name, announcement ?? AceLine(winner));
+        // The round that wins the match sounds as the match, which MatchWon plays next.
+        if (Score(team) < Data.RoundsToWin) PlayRoundSounds(team);
         RecordEvent("roundWon", winner.Name);
         SendUpdateState();
         RoundLog.Clear();
         RefreshHud();
+    }
+
+    /// Win or loss by which side a player is on; a spectator hears the winner's. Then
+    /// match point, for everybody, when the round has put a team one from the match.
+    private static void PlayRoundSounds(int team) {
+        PlayBySide(team, Sound.RoundWin, Sound.RoundLoss);
+        if (Enumerable.Range(0, Data.Teams.Count).Any(t => Running?.IsMatchPoint(t) ?? false)) Sounds.PlayToAll(Sound.MatchPoint);
+    }
+
+    private static int lastClock = -1;
+
+    /// Once, as any gamemode's clock crosses ten seconds: the pick, the build, a timed round.
+    private static void WarnAtTenSeconds() {
+        int clock = Running?.SecondsLeft ?? -1;
+        if (lastClock > 10 && clock is > 0 and <= 10) Sounds.PlayToAll(Sound.Time10s);
+        lastClock = clock;
+    }
+
+    private static int lastCountdown = -1;
+
+    internal static void Countdown(int secondsToGo) {
+        if (secondsToGo is < 0 or > 5) {
+            lastCountdown = -1;
+            return;
+        }
+        if (secondsToGo == lastCountdown) return;
+
+        lastCountdown = secondsToGo == 0 ? -1 : secondsToGo;
+        Sounds.PlayToAll(secondsToGo == 0 ? Sound.Go : Sound.Count1 + secondsToGo - 1);
+    }
+
+    private static void PlayBySide(int team, Sound won, Sound lost) {
+        foreach (SteamPlayer viewer in Provider.clients.ToList()) {
+            ulong steam64 = viewer.playerID.steamID.m_SteamID;
+            bool loser = Data.Teams.Where((_, t) => t != team).Any(other => other.Players.Contains(steam64));
+            Sounds.Play(viewer, loser ? lost : won);
+        }
     }
 
     /// The gamemode calls the match. Everybody gets a moment to see the result, then
@@ -907,6 +946,7 @@ internal abstract class PSManager {
 
         UpdateStatus(EPSStatus.DELAY);
         Banner.Show($"WINS THE MATCH {ScoreLine()}", $"<color=#ff4f4f>{winner.Name}</color>", MvpLine());
+        PlayBySide(team, Sound.MatchWin, Sound.MatchLoss);
         RecordEvent("matchWon", winner.Name);
         SendUpdateState();
         RoundLog.Clear();
@@ -1248,6 +1288,7 @@ internal abstract class PSManager {
             StatService.UpdateStatKills(murderer);
             if (limb == ELimb.SKULL) StatService.UpdateStatHeadshots(murderer);
             RoundLog.RecordKill(murderer);
+            if (unturnedInstigator != null) Sounds.Kill(unturnedInstigator.Player.channel.owner, RoundLog.KillsBy(murderer));
         }
 
         Card.Show(player.Player.channel.owner, DeathOf(player, cause, limb, unturnedInstigator));
@@ -1356,6 +1397,7 @@ internal abstract class PSManager {
             Stamina.Refill();
         }
         Feed.Tick();
+        WarnAtTenSeconds();
         Banner.Tick();
         Card.Tick();
 

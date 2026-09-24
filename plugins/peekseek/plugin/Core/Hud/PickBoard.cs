@@ -206,6 +206,7 @@ public class PickBoard {
         seat.Pick = oneBased - 1;
         BoardOption taken = seat.Options[seat.Pick];
         Confirm(player, seat, $"{seat.Face}{seat.Pick}_Taken");
+        Sounds.Play(player, Sound.PickLock);
         seat.OnAnswer?.Invoke(taken);
         return taken;
     }

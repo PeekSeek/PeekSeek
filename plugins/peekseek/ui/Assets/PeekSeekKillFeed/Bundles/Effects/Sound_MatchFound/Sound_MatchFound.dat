@@ -1,0 +1,9 @@
+GUID 9d5a654928c8ef301edec650c789ce0d
+Type Effect
+ID 43142
+
+// match_found: a 2D sound for one player, triggered by Hud/Sounds.cs. Written by tools/sounds.py.
+Static
+Lifetime 2.3
+Lifetime_Spread 0
+Preload 0
