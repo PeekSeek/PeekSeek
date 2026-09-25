@@ -25,6 +25,9 @@ namespace PeekSeekArena.Patches;
 [HarmonyPatch(typeof(LevelManager), "arenaLobby")]
 [UsedImplicitly]
 internal class ArenaLobbyPatch {
+    // First, or Match's own do-nothing prefix on the same method runs first and
+    // Harmony skips every prefix after one that returns false: this never ran.
+    [HarmonyPriority(Priority.First)]
     [UsedImplicitly]
     private static bool Prefix(LevelManager __instance) {
         if (PeekSeekArena.Arena is not { InPlay: true }) return false;
@@ -50,6 +53,9 @@ internal class ArenaLobbyPatch {
 [HarmonyPatch(typeof(LevelManager), "arenaPlay")]
 [UsedImplicitly]
 internal class ArenaPlayPatch {
+    // First, or Match's own do-nothing prefix on the same method runs first and
+    // Harmony skips every prefix after one that returns false: this never ran.
+    [HarmonyPriority(Priority.First)]
     [UsedImplicitly]
     private static bool Prefix(LevelManager __instance) {
         if (PeekSeekArena.Arena is not { InPlay: true }) return false;
@@ -129,6 +135,9 @@ internal class ArenaPlayPatch {
 [HarmonyPatch(nameof(LevelManager.arenaSpawn))]
 [UsedImplicitly]
 internal class ArenaSpawnPatch {
+    // First, or Match's own do-nothing prefix on the same method runs first and
+    // Harmony skips every prefix after one that returns false: this never ran.
+    [HarmonyPriority(Priority.First)]
     [UsedImplicitly]
     private static bool Prefix(LevelManager __instance) {
         if (PeekSeekArena.Arena is not { InPlay: true }) return false;
@@ -200,6 +209,9 @@ internal class ArenaSpawnPatch {
 [HarmonyPatch(nameof(LevelManager.findGroups))]
 [UsedImplicitly]
 public class FindGroupsPatch {
+    // First, or Match's own do-nothing prefix on the same method runs first and
+    // Harmony skips every prefix after one that returns false: this never ran.
+    [HarmonyPriority(Priority.First)]
     [UsedImplicitly]
     private static bool Prefix() {
         if (PeekSeekArena.Arena is not { InPlay: true }) return false;
