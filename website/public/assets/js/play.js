@@ -91,6 +91,11 @@ let t = 0;
 const region = document.getElementById("region");
 const game = document.getElementById("game");
 
+/* The same sounds the game plays for the queue, from /static/sounds. */
+function playSound(name) {
+    new Audio(`/static/sounds/${name}.mp3`).play().catch(() => {});
+}
+
 function stopQueue() {
     isQueing = false;
     const el = document.getElementById("q");
@@ -124,7 +129,9 @@ function heartbeat() {
             r.json().then(d => {
                 if (!d.matchid) return;
                 isQueing = false;
-                window.location.href = "/match/";
+                playSound("match_found");
+                // Long enough for the sound to be heard before the page goes.
+                setTimeout(() => window.location.href = "/match/", 900);
             });
         } else {
             r.text().then(msg => setError(msg));
@@ -137,6 +144,7 @@ function heartbeat() {
 function queue() {
     const el = document.getElementById("q");
     if (el.classList.contains("isQueing")) {
+        playSound("queue_leave");
         stopQueue();
     } else {
         if (window.partyBlocksQueue) {
@@ -148,6 +156,7 @@ function queue() {
             setError("Please select gamemode(s) before queue'ing.");
             return;
         }
+        playSound("queue_join");
         heartbeat();
     }
 }
