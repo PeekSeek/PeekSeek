@@ -478,6 +478,27 @@ internal abstract class PSManager {
         Begin();
     }
 
+    /// No match outlives this, counted from the hand-over. RAID at its very longest,
+    /// the build, six rounds and both overtimes, is under an hour, and nothing else
+    /// comes close. A match still going past it is stuck, not close: an arena round
+    /// held open by a player who was never put in it ran for an hour and a half.
+    private const float MaxMatchSeconds = 75 * 60f;
+
+    /// Ends a stuck match on the score: the team ahead wins it, and a level one is
+    /// released unplayed so nobody's Elo moves on a result nobody earned.
+    private static void TickOverlong(float now) {
+        if (Status != EPSStatus.IN_PROGRESS || now - MatchReady < MaxMatchSeconds) return;
+
+        Logger.LogWarning($"Match {Data.Id} has run {MaxMatchSeconds / 60f:0} minutes. Ending it on the score ({ScoreLine()}).");
+        int[] scores = Enumerable.Range(0, Data.Teams.Count).Select(Score).ToArray();
+        int best = scores.Max();
+        if (scores.Count(score => score == best) == 1) {
+            MatchWon(Array.IndexOf(scores, best));
+        } else {
+            AbandonMatch();
+        }
+    }
+
     /// Seconds of the wait left, for the bar's clock.
     private static int WaitSecondsLeft => Mathf.Max(0, Mathf.CeilToInt(PeekSeek.Config.LobbyTimeoutSeconds - (Time.realtimeSinceStartup - MatchReady)));
 
@@ -563,7 +584,7 @@ internal abstract class PSManager {
             return;
         }
 
-        if (player.quests.groupID != GetPlayerTeamGroupID(player)) AssignPlayerGroup(player);
+        Regroup(player);
 
         SendWelcome(player.channel.owner);
         Running?.OnPlayerJoined(player);
@@ -717,6 +738,13 @@ internal abstract class PSManager {
         }
 
         player.life.serverModifyHealth(100);
+    }
+
+    /// Put a player on the roster back in their team's group if they are not in it.
+    /// A group is handed out on arrival, but a player can leave it, and a gamemode
+    /// that places people by group would then have nowhere to put them.
+    internal static void Regroup(Player player) {
+        if (player.quests.groupID != GetPlayerTeamGroupID(player)) AssignPlayerGroup(player);
     }
 
     private static void AssignPlayerGroup(Player player) {
@@ -1405,6 +1433,8 @@ internal abstract class PSManager {
         if (Data == null) return;
 
         TickWait(now);
+        if (Data == null) return;
+        TickOverlong(now);
         if (Data == null) return;
 
         Running?.Tick();
