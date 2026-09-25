@@ -93,7 +93,7 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
         { "striker_too_close", "Not on your own base. The smoke has to land <color=white>{0} m</color> out." },
         { "wall_breach", "That wall seals the flag in. At most <color=white>{0}</color> charges to reach it." },
         { "flag_leashed", "<color=white>Stay on your base.</color> The attackers are on their way." },
-        { "flag_where", "The flag goes on one of the <color=white>starting floors</color>, and not next to a door." },
+        { "flag_where", "The flag goes on one of the <color=white>starting floors</color>, not in the middle, where your team spawns, and not next to a door." },
 
         // The boards' headlines: which round, which base, and what the board wants.
         { "board_defend", "Round {0}  You defend {1}" },

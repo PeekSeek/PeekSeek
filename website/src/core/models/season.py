@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, desc, text
+from sqlalchemy import Column, DateTime, desc, text
 from sqlmodel import Field, SQLModel
 
 from src.core.settings import settings

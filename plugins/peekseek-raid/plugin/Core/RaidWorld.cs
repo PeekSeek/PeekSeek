@@ -192,10 +192,11 @@ internal static class RaidWorld {
         if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.AnchorMarkerItemId) is not ItemBarricadeAsset marker) return;
         if (!anchorTiles.TryGetValue(siteIndex, out List<Vector3> tiles)) return;
 
+        // Never the middle of the bottom storey, which is where the team spawns.
         System.Random random = new();
-        Vector3 chosen = tiles.OrderBy(_ => random.Next())
-            .FirstOrDefault(tile => IsClear(tile) && !NearDoor(tile));
-        if (chosen == default) chosen = site.AnchorPoint;
+        List<Vector3> offSpawn = tiles.Where(tile => !InSpawnColumn(site, tile)).OrderBy(_ => random.Next()).ToList();
+        Vector3 chosen = offSpawn.FirstOrDefault(tile => IsClear(tile) && !NearDoor(tile));
+        if (chosen == default) chosen = offSpawn.Count > 0 ? offSpawn[0] : site.AnchorPoint;
 
         // `offset` on a barricade asset is how far its pivot sits above the ground it
         // stands on, so it is the correction that stops the flag being buried up to
@@ -233,7 +234,7 @@ internal static class RaidWorld {
                 && local.y <= FlagAboveTile;
         });
 
-        return onATile && !NearDoor(point);
+        return onATile && !NearDoor(point) && !InSpawnColumn(site, point);
     }
 
     /// Why the flag may not stand here, or null when it may: at least FlagDoorClearance
@@ -306,24 +307,67 @@ internal static class RaidWorld {
             RayMasks.BARRICADE | RayMasks.STRUCTURE | RayMasks.PLAYER);
     }
 
-    /// Somewhere on a site's starting floors a player fits: the `index`th clear tile,
-    /// counted from the middle outward, so a team is spread over the base rather than
-    /// stacked on one spot. Falls back to the anchor when every tile is built over.
+    /// The middle of a base's bottom storey is where its team spawns, so nothing may
+    /// stand there: anything that does is taken down. A player put inside a wall or a
+    /// pillar glitches, and spreading a team over whichever tiles were clear put people
+    /// somewhere different every time. Only the bottom storey: the column stops below
+    /// the floor above.
     ///
-    /// The anchor alone was wrong for a hexagonal base: its six triangles meet in the
-    /// middle, so a wall on any of their inner edges runs straight through the anchor
-    /// point, and a player put there was put inside it.
-    internal static Vector3 FreeSpot(int siteIndex, RaidSite site, int index) {
-        if (!anchorTiles.TryGetValue(siteIndex, out List<Vector3> tiles) || tiles.Count == 0) return StandingSpot(site);
+    /// Asked on every piece that goes down on a base, so a pillar of the starting frame
+    /// and a wall across a hexagon's middle are caught the same way.
+    internal static void ClearSpawn(RaidSite site) {
+        // A piece that went down this frame is not in the physics scene until it syncs.
+        Physics.SyncTransforms();
+        Vector3 foot = site.AnchorPoint;
+        Collider[] hits = Physics.OverlapCapsule(foot + Vector3.up * SpawnColumnBottom, foot + Vector3.up * SpawnColumnTop,
+            SpawnColumnRadius, RayMasks.BARRICADE | RayMasks.STRUCTURE, QueryTriggerInteraction.Ignore);
 
-        List<Vector3> clear = tiles
-            .OrderBy(tile => (tile - site.AnchorPoint).sqrMagnitude)
-            .Where(IsClear)
-            .ToList();
-        if (clear.Count == 0) return StandingSpot(site);
+        HashSet<Transform> seen = [];
+        foreach (Collider hit in hits) {
+            Transform root = hit.transform.root;
+            if (!seen.Add(root)) continue;
 
-        return clear[Math.Max(0, index) % clear.Count] + Vector3.up * 1.5f;
+            if (StructureManager.FindStructureByRootTransform(root) is { } structure) {
+                if (!IsFloor(structure.asset)) Remove(structure);
+            } else if (BarricadeManager.FindBarricadeByRootTransform(root) is { } barricade) {
+                // The flag is kept off the spot where it is placed instead: taking it
+                // down here would hand the round to the attackers.
+                if (barricade.asset?.id != PeekSeekRaid.Config.AnchorMarkerItemId) RemoveBarricade(barricade);
+            }
+        }
     }
+
+    /// Sites with a piece put down on them since the last tick. The sweep waits a tick
+    /// rather than running inside the game's own spawn callback.
+    private static readonly HashSet<int> spawnsToClear = [];
+
+    internal static void ClearSpawnLater(int siteIndex) {
+        if (siteIndex >= 0) spawnsToClear.Add(siteIndex);
+    }
+
+    internal static void ClearPendingSpawns() {
+        if (spawnsToClear.Count == 0) return;
+
+        foreach (int siteIndex in spawnsToClear) ClearSpawn(PeekSeekRaid.Config.Sites[siteIndex]);
+        spawnsToClear.Clear();
+    }
+
+    /// Whether a point is in a base's spawn column, measured flat, on the bottom storey:
+    /// where the flag may not stand, since the team would spawn inside it.
+    internal static bool InSpawnColumn(RaidSite site, Vector3 point) {
+        Vector3 gap = point - site.AnchorPoint;
+        return gap.x * gap.x + gap.z * gap.z < FlagSpawnClearance * FlagSpawnClearance
+            && gap.y > -0.5f && gap.y < BaseLayout.WallHeight;
+    }
+
+    /// How far, flat, the flag stands from the middle of the bottom storey.
+    private const float FlagSpawnClearance = 1.2f;
+
+    /// The spawn column: a player's width, from just above the anchor floor to just
+    /// under the floor of the storey above.
+    private const float SpawnColumnBottom = 0.7f;
+    private const float SpawnColumnTop = 1.9f;
+    private const float SpawnColumnRadius = 0.45f;
 
     /// A site's flag, wherever on the plot it stands, or null.
     internal static BarricadeDrop Marker(RaidSite site) {
@@ -362,9 +406,8 @@ internal static class RaidWorld {
     /// rather than at its middle.
     private const float AnchorFloorClearance = 0.25f;
 
-    /// Somewhere to stand on a site: on top of the anchor floor, facing the way the
-    /// site faces. Used for build-phase spawns, the leash, and defender spawns, all of
-    /// which want the same answer.
+    /// Somewhere to stand on a site: the exact middle, on top of the anchor floor. Every
+    /// spawn on a team's own base is here, and ClearSpawn keeps it empty.
     internal static Vector3 StandingSpot(RaidSite site) {
         return site.AnchorPoint + Vector3.up * 1.5f;
     }
@@ -458,9 +501,11 @@ internal static class RaidWorld {
     /// A piece a builder put down is one off the pile: spent here, once it exists,
     /// rather than at the request, so a placement the game then refuses costs nothing.
     private static void OnStructureSpawned(StructureRegion region, StructureDrop drop) {
-        if (placingOurselves || raid == null || raid.Phase != RaidPhase.Building) return;
+        if (raid == null || raid.Phase != RaidPhase.Building) return;
 
         StructureData data = drop.GetServersideData();
+        ClearSpawnLater(SiteAt(data.point));
+        if (placingOurselves) return;
         if (data.owner == 0 || SiteAt(data.point) != raid.SideOf(data.owner)) return;
 
         raid.Placed(data.owner, drop.asset.id);
@@ -532,6 +577,7 @@ internal static class RaidWorld {
         if (raid == null || drop.asset == null) return;
 
         BarricadeData data = drop.GetServersideData();
+        if (raid.Phase == RaidPhase.Building) ClearSpawnLater(SiteAt(data.point));
         if (!placingOurselves && raid.Phase == RaidPhase.Building && data.owner != 0
             && SiteAt(data.point) == raid.SideOf(data.owner)) {
             raid.Placed(data.owner, drop.asset.id);
