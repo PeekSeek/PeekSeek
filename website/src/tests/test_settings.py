@@ -29,7 +29,9 @@ def test_derived_values():
     ]
     assert hidden == []
     for gamemode in settings.visible_mmconfig["gamemodes"]:
-        assert settings.mmconfig["gamemodes"][gamemode["bit"]]["name"] == gamemode["name"]
+        assert (
+            settings.mmconfig["gamemodes"][gamemode["bit"]]["name"] == gamemode["name"]
+        )
 
 
 def test_gamemodes_are_only_ever_added_at_the_end():
