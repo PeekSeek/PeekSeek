@@ -298,6 +298,8 @@ def matchResult(matchId: int, payload: JsonBody):
         played       false when the match was never actually played (nobody turned up).
                      A false here scores nothing and just releases the match.
         winningTeam  the `name` of the winning team, or null.
+        draw         true when the match ended level. Nobody wins or loses it, and
+                     Elo moves on kills and deaths alone.
         players      every player on the roster — including ones who never joined and
                      ones who left. A player the server omits is a player whose Elo
                      never moves, which is why leaving used to be free.
@@ -344,7 +346,7 @@ def _score(match: data.Match, payload: dict) -> None:
         return
 
     gamemode = mmconfig["gamemodes"][match.gamemode]
-    result, avgElo = matchmaking.matchResults(gamemode, *players)
+    result, avgElo = matchmaking.matchResults(gamemode, *players, draw=bool(payload.get("draw")))
     # Taken off the live snapshot here because recording the result is what clears it.
     data.MatchResult.recordFinalResults(match.id, result, _roundScore(match))
 
