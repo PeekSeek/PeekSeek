@@ -600,6 +600,12 @@ internal class Raid : IGamemode {
     private void StartRound(int number) {
         // A side that has gone home between rounds has forfeited; a wipe a second
         // into every round until the score says so would be the same result, slower.
+        // Nobody left at all is not a side that stayed: the match is released, rather
+        // than played out round after round to an empty server.
+        if (!Host.Players().Any()) {
+            Host.Abandon();
+            return;
+        }
         int alone = Host.TeamLeftAlone();
         if (alone >= 0) {
             Host.Forfeit(alone);

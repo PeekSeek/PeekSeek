@@ -138,16 +138,9 @@ internal class ArenaSpawnPatch {
             Logger.LogError("PeekSeekArena has no Spawns configured, so nobody can be put anywhere. Write them into PeekSeekArena.configuration.xml.");
             return false;
         }
-        Dictionary<CSteamID, SerializableVector3> assignedGroupSpawns = [];
-
         Host.BeginRound();
         int roundNumber = Host.RoundsPlayed + 1;
         Logger.Log("[alive-check] Round starting, everyone marked alive again.");
-
-        for (int team = 0; team < Host.Match.Teams.Count; team++) {
-            int spawnIndex = (roundNumber - 1 + team) % spawns.Count;
-            assignedGroupSpawns[new CSteamID(Host.Match.Teams[team].GroupId)] = spawns[spawnIndex];
-        }
 
         List<SteamPlayer> list = [.. Provider.clients];
         list.RemoveAll(client => Host.IsSpectator(client.playerID.steamID.m_SteamID));
@@ -163,14 +156,34 @@ internal class ArenaSpawnPatch {
             list.RemoveAtFast(index);
             if (steamPlayer == null || steamPlayer.player == null || steamPlayer.player.life.isDead) continue;
 
-            if (!assignedGroupSpawns.TryGetValue(steamPlayer.player.quests.groupID, out var spawn)) {
-                Logger.LogWarning($"Player {steamPlayer.playerID.steamID} is not assigned to a group!");
+            // The spawn comes from the roster, not the player's group. Placing by group
+            // skipped anyone who had left theirs: never moved, never in the round, and
+            // still counted as a side, so the round could not end and the match ran on
+            // for an hour and a half. They are put back in their group as well, or they
+            // would count as a side of their own.
+            int team = Host.Match.TeamIndexOf(steamPlayer.playerID.steamID.m_SteamID);
+            if (team < 0) {
+                Logger.LogWarning($"Player {steamPlayer.playerID.steamID} is on this server but not on the match roster.");
                 continue;
             }
+            Host.Regroup(steamPlayer.player);
+            SerializableVector3 spawn = spawns[(roundNumber - 1 + team) % spawns.Count];
 
             steamPlayer.player.life.sendRevive();
             steamPlayer.player.teleportToLocationUnsafe(spawn.ToVector3(), steamPlayer.player.look.yaw);
             LevelManager.arenaPlayers.Add(new ArenaPlayer(steamPlayer));
+        }
+
+        // The sides still in are counted off who is actually in the round. The lobby's
+        // count took everyone standing on the server, and a player it counted who never
+        // made it into the round is never taken off again, because only a death in the
+        // round takes anybody off.
+        LevelManager.nonGroups = 0;
+        LevelManager.arenaGroups.Clear();
+        foreach (ArenaPlayer inRound in LevelManager.arenaPlayers) {
+            PlayerQuests quests = inRound.steamPlayer.player.quests;
+            if (!quests.isMemberOfAGroup) LevelManager.nonGroups++;
+            else if (!LevelManager.arenaGroups.Contains(quests.groupID)) LevelManager.arenaGroups.Add(quests.groupID);
         }
 
         LevelManager.arenaState = EArenaState.PLAY;

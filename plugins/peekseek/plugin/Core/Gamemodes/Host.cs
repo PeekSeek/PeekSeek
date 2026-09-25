@@ -92,6 +92,9 @@ public static class Host {
     /// Nobody is left at all. The match is released unplayed.
     public static void Abandon() => PSManager.AbandonMatch();
 
+    /// Put a player on the roster back in their team's group, if they have left it.
+    public static void Regroup(Player player) => PSManager.Regroup(player);
+
     /// Strip a player and dress them in the kit the match holds for them, at full
     /// health.
     public static void Kit(Player player) => PSManager.AssignPlayerKit(player);

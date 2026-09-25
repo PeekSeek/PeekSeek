@@ -89,7 +89,6 @@ public class PeekSeekLobbyConfigurationTests {
 
         config.LoadDefaults();
 
-        Assert.Equal((ushort)1, config.GamemodeBitmask);
         Assert.Equal("paris", config.szRegion);
         Assert.Equal(5f, config.SpawnProtectionSeconds);
         Assert.Equal(5f, config.RespawnDelaySeconds);

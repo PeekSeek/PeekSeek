@@ -85,11 +85,16 @@ class Settings:
 
     @property
     def visible_mmconfig(self) -> dict:
-        """mmconfig with event-only gamemodes (hideFromMM) filtered out."""
+        """mmconfig with event-only gamemodes (hideFromMM) filtered out.
+
+        Each one keeps its `bit`, its index in the whole list, because that is what the
+        queue bitmask means. Its position in this shorter list is not: counting from it
+        put anyone picking a mode after a hidden one into the wrong gamemode.
+        """
         return self.mmconfig | {
             "gamemodes": [
-                gamemode
-                for gamemode in self.mmconfig["gamemodes"]
+                gamemode | {"bit": bit}
+                for bit, gamemode in enumerate(self.mmconfig["gamemodes"])
                 if not gamemode.get("hideFromMM")
             ]
         }

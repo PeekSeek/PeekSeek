@@ -85,6 +85,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
         { "queue_headline", "Find a match" },
         { "queue_go", "FIND MATCH" },
         { "queue_no", "Not now" },
+        { "queue_leave", "Leave queue" },
         { "queue_unavailable", "Matchmaking is not reachable from here right now." },
         { "queue_high_ping", "Your ping is {0} ms. A match cuts your damage from {1} ms, so a closer region will play better." },
 

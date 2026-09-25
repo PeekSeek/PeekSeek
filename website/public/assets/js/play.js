@@ -16,6 +16,13 @@ function fitsParty(option) {
     return !perTeam || perTeam >= (window.partySize || 1);
 }
 
+/* A gamemode tile carries its place in the site's whole gamemode list, which is what
+   the queue bitmask means; hidden modes leave gaps that the tile order does not.
+   Event teammate tiles have no bit and are counted by position. */
+function bitOf(option, i) {
+    return 2 ** (option.dataset.bit === undefined ? i : parseInt(option.dataset.bit));
+}
+
 function bindQgridClicks() {
     for (let i = 0; i < options.length; i++) {
         options.item(i).addEventListener("click", () => {
@@ -23,13 +30,14 @@ function bindQgridClicks() {
             if (!fitsParty(options.item(i))) return;
 
             const eventId = document.getElementById("game").value;
-            if (selected & 2 ** i) {
-                selected &= ~(2 ** i);
+            const bit = bitOf(options.item(i), i);
+            if (selected & bit) {
+                selected &= ~bit;
             } else {
                 if (eventId !== "matchmaking" && maxTeammates[eventId] - 1 <= countOnes(selected)) {
                     return setError(`You can only have ${maxTeammates[eventId]} players in your team.`);
                 }
-                selected |= 2 ** i;
+                selected |= bit;
             }
             updateOptions();
         });
@@ -40,14 +48,15 @@ function updateOptions() {
     for (let i = 0; i < options.length; i++) {
         const option = options.item(i);
         const tooBig = !fitsParty(option);
+        const bit = bitOf(option, i);
 
         // Dropped rather than just dimmed: a mode left selected under a party that
         // outgrew it would be silently stripped by the server anyway, and the
         // cookie below would hand it back on the next visit.
-        if (tooBig) selected &= ~(2 ** i);
+        if (tooBig) selected &= ~bit;
 
         option.classList.toggle("partyTooBig", tooBig);
-        option.classList.toggle("isSelected", (selected & 2 ** i) === 2 ** i);
+        option.classList.toggle("isSelected", (selected & bit) === bit);
     }
     if (document.getElementById("game").value === "matchmaking") setCookie("mmoptions", selected);
 }

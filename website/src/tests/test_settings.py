@@ -28,3 +28,29 @@ def test_derived_values():
         gm for gm in settings.visible_mmconfig["gamemodes"] if gm.get("hideFromMM")
     ]
     assert hidden == []
+    for gamemode in settings.visible_mmconfig["gamemodes"]:
+        assert (
+            settings.mmconfig["gamemodes"][gamemode["bit"]]["name"] == gamemode["name"]
+        )
+
+
+def test_gamemodes_are_only_ever_added_at_the_end():
+    """A gamemode is its position in mmconfig: the queue bitmask, every stored
+    Match.gamemode and the bits a running lobby fetched on load all count from it.
+    Inserting one above the rest moved every mode over by one, and a lobby still
+    holding the old bits queued players for 1v1 into a 2v2 that never filled."""
+    shapes = [
+        (gm["name"], gm["teams"], gm["playersPerTeam"])
+        for gm in settings.mmconfig["gamemodes"]
+    ]
+    assert shapes[:9] == [
+        ("Competitive", 2, 1),
+        ("Drums", 2, 1),
+        ("Ranged", 2, 1),
+        ("Casual Duo", 2, 2),
+        ("Casual", 4, 1),
+        ("Rush", 2, 1),
+        ("Augewehr", 2, 1),
+        ("Raid", 2, 1),
+        ("Competitive", 2, 2),
+    ]
