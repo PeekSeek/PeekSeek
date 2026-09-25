@@ -7,62 +7,6 @@
             "name": "Competitive",
             "kitsAllowed": ["meta", "sniper"],
             "teams": 2,
-            "playersPerTeam": 2,
-            "usesElo": true,
-
-            "optionBanningEnabled": true,
-            "map": ["Alpha Valley"],
-            "movement": [true, false],
-            "ballistics": [true, false],
-
-            "defaultItems": [
-                [395, 1, ""],
-                [1103, 1, ""]
-            ],
-
-            "powerups": [
-                {
-                    "name": "Movement",
-                    "items": [
-                        [1838, 3, ""],
-                        [346, 1, "146,0,0,0,0,0,0,0,185,4,1,1,1,100,100,100,100,100"],
-                        [1209, 1, ""]
-                    ]
-                }, {
-                    "name": "Ammo",
-                    "items": [
-                        [17, 1, ""],
-                        [125, 1, ""],
-                        [1838, 1, ""]
-                    ]
-                },{
-                    "name": "Boom",
-                    "items": [
-                        [519, 1, "146,0,151,0,8,0,0,0,8,2,1,1,1,100,100,100,100,100"],
-                        [1838, 2, ""]
-                    ]
-                },{
-                    "name": "Doctor",
-                    "items": [
-                        [95, 2, ""],
-                        [1838, 1, ""],
-                        [488, 1, "146,0,151,0,8,0,7,0,233,1,7,1,1,100,100,100,100,100"]
-                    ]
-                },{
-                    "name": "Trapper",
-                    "items": [
-                        [1101, 2, ""],
-                        [1102, 1, ""],
-                        [254, 1, ""],
-                        [1408, 1, ""],
-                        [1838, 2, ""]
-                    ]
-                }
-            ]
-        }, {
-            "name": "Competitive",
-            "kitsAllowed": ["meta", "sniper"],
-            "teams": 2,
             "playersPerTeam": 1,
             "usesElo": true,
 
@@ -378,6 +322,62 @@
             "defaultItems": [],
             "powerups": [],
             "hideFromMM": true
+        }, {
+            "name": "Competitive",
+            "kitsAllowed": ["meta", "sniper"],
+            "teams": 2,
+            "playersPerTeam": 2,
+            "usesElo": true,
+
+            "optionBanningEnabled": true,
+            "map": ["Alpha Valley"],
+            "movement": [true, false],
+            "ballistics": [true, false],
+
+            "defaultItems": [
+                [395, 1, ""],
+                [1103, 1, ""]
+            ],
+
+            "powerups": [
+                {
+                    "name": "Movement",
+                    "items": [
+                        [1838, 3, ""],
+                        [346, 1, "146,0,0,0,0,0,0,0,185,4,1,1,1,100,100,100,100,100"],
+                        [1209, 1, ""]
+                    ]
+                }, {
+                    "name": "Ammo",
+                    "items": [
+                        [17, 1, ""],
+                        [125, 1, ""],
+                        [1838, 1, ""]
+                    ]
+                },{
+                    "name": "Boom",
+                    "items": [
+                        [519, 1, "146,0,151,0,8,0,0,0,8,2,1,1,1,100,100,100,100,100"],
+                        [1838, 2, ""]
+                    ]
+                },{
+                    "name": "Doctor",
+                    "items": [
+                        [95, 2, ""],
+                        [1838, 1, ""],
+                        [488, 1, "146,0,151,0,8,0,7,0,233,1,7,1,1,100,100,100,100,100"]
+                    ]
+                },{
+                    "name": "Trapper",
+                    "items": [
+                        [1101, 2, ""],
+                        [1102, 1, ""],
+                        [254, 1, ""],
+                        [1408, 1, ""],
+                        [1838, 2, ""]
+                    ]
+                }
+            ]
         }
     ],
 
