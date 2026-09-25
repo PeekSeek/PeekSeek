@@ -160,6 +160,7 @@ internal class Raid : IGamemode {
     public void Tick() {
         if (phase == RaidPhase.Idle || phase == RaidPhase.Over) return;
 
+        RaidWorld.ClearPendingSpawns();
         if (pendingWinner >= 0 && Time.realtimeSinceStartup >= pendingAt) {
             AfterRound();
             return;
@@ -367,6 +368,7 @@ internal class Raid : IGamemode {
             BaseSnapshot.Clear(site.AnchorPoint, site.BuildRadius, []);
             RaidWorld.PlaceAnchor(team, site, shapes[team]);
             RaidWorld.PlacePillars(site, GroupOf(team), shapes[team]);
+            RaidWorld.ClearSpawnLater(team);
         }
 
         foreach (Player player in Players()) Place(player);
@@ -590,6 +592,8 @@ internal class Raid : IGamemode {
     /// changed material during the build, and a round has to put back what was there.
     private BaseSnapshot Snapshot(int team) {
         RaidSite site = sites[team];
+        // What the rounds restore is what is captured, so the spawn is cleared first.
+        RaidWorld.ClearSpawn(site);
         BaseSnapshot taken = BaseSnapshot.Capture(site.AnchorPoint, site.BuildRadius, []);
         Logger.Log($"Captured {taken.Count} piece(s) for {site.Name}.");
         return taken;
@@ -822,7 +826,7 @@ internal class Raid : IGamemode {
             ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
             if (player.life.isDead || !IsDefending(steam64) || site.Contains(player.transform.position)) continue;
 
-            player.teleportToLocationUnsafe(RaidWorld.FreeSpot(DefendedSite, site, IndexInTeam(steam64)), site.Yaw);
+            player.teleportToLocationUnsafe(RaidWorld.StandingSpot(site), site.Yaw);
             Host.Whisper(player.channel.owner, PeekSeekRaid.Instance.Translate("flag_leashed"));
         }
     }
@@ -1042,7 +1046,7 @@ internal class Raid : IGamemode {
             RaidSite site = sites[SideOf(player.channel.owner.playerID.steamID.m_SteamID)];
             if (site.Contains(player.transform.position)) continue;
 
-            player.teleportToLocationUnsafe(RaidWorld.FreeSpot(SideOf(player.channel.owner.playerID.steamID.m_SteamID), site, 0), site.Yaw);
+            player.teleportToLocationUnsafe(RaidWorld.StandingSpot(site), site.Yaw);
             Host.Whisper(player.channel.owner, PeekSeekRaid.Instance.Translate("leashed"));
         }
     }
@@ -1083,7 +1087,7 @@ internal class Raid : IGamemode {
                 return;
 
             case RaidPhase.Building:
-                player.teleportToLocationUnsafe(RaidWorld.FreeSpot(side, own, IndexInTeam(steam64)), own.Yaw);
+                player.teleportToLocationUnsafe(RaidWorld.StandingSpot(own), own.Yaw);
                 RaidWorld.DressForBuilding(player);
                 RaidWorld.Freeze(player, false);
                 BudgetFor(steam64).Watch(player);
@@ -1136,7 +1140,7 @@ internal class Raid : IGamemode {
         RaidSite defended = sites[DefendedSite];
 
         if (IsDefending(steam64)) {
-            player.teleportToLocationUnsafe(RaidWorld.FreeSpot(DefendedSite, defended, IndexInTeam(steam64)), defended.Yaw);
+            player.teleportToLocationUnsafe(RaidWorld.StandingSpot(defended), defended.Yaw);
             return;
         }
 
@@ -1158,7 +1162,7 @@ internal class Raid : IGamemode {
         }
 
         RaidSite own = sites[side];
-        player.teleportToLocationUnsafe(RaidWorld.FreeSpot(side, own, 0), own.Yaw);
+        player.teleportToLocationUnsafe(RaidWorld.StandingSpot(own), own.Yaw);
     }
 
     private static void AllowRespawn(Player player) {

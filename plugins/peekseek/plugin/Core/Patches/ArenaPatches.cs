@@ -11,8 +11,10 @@ namespace PeekSeek.Core.Patches;
 ///
 /// So the native loop is switched off here, unconditionally. A gamemode that wants
 /// it, which is PeekSeek ARENA, patches the same methods from its own plugin with what
-/// it wants them to do instead; Harmony runs every prefix and skips the original if
-/// any of them says so, so the two patches on one method never fight.
+/// it wants them to do instead, and must run its prefixes first
+/// (`[HarmonyPriority(Priority.First)]`): Harmony skips every prefix after one that
+/// returns false, so a prefix ordered after these never runs at all. That is what kept
+/// every arena match from starting until ARENA 1.1.3.
 [HarmonyPatch(typeof(LevelManager), "arenaLobby")]
 [UsedImplicitly]
 internal class ArenaLobbyPatch {

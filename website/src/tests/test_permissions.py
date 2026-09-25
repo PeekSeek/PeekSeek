@@ -1,6 +1,3 @@
-from src.core import models as data
-
-
 def test_default_user_has_no_permissions(user_factory):
     user = user_factory()
     assert user.getPermission("premium") is False

@@ -1,8 +1,6 @@
 """The Elo ladder: the configured tiers, the badge an Elo earns, and the bar a
 finished match draws on it."""
 
-from pathlib import Path
-
 import pytest
 
 from src.core.models.rank import Rank
