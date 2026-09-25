@@ -48,30 +48,43 @@ internal class QueueBoard {
     private const int Tiles = 6;
     private const int Regions = 4;
 
+    /// What each player queues with. Kept after the screen closes, because it is what
+    /// they are queued with and what /q opens on the next time.
     private readonly Dictionary<ulong, QueueChoice> choices = [];
+
+    /// Who has the screen up, and what its button last said to them.
+    private readonly Dictionary<ulong, string> open = [];
     private EffectAsset effect;
 
-    internal bool IsUp(ulong steam64) => choices.ContainsKey(steam64);
+    internal bool IsUp(ulong steam64) => open.ContainsKey(steam64);
 
+    /// This player's choice, or the one the screen opens on for somebody who has not
+    /// made one. Only remembered once the site has listed the gamemodes, or a choice
+    /// made before then would stay empty for the rest of their session.
     internal QueueChoice ChoiceOf(ulong steam64) {
-        return choices.TryGetValue(steam64, out QueueChoice choice) ? choice : null;
+        if (choices.TryGetValue(steam64, out QueueChoice choice)) return choice;
+
+        choice = Started();
+        if (LobbyManager.Gamemodes != null) choices[steam64] = choice;
+        return choice;
     }
 
-    /// Put the screen up. `line` is what to say about their ping, or null when it
-    /// costs them nothing here.
-    internal void Open(SteamPlayer viewer, string line) {
+    /// Put the screen up on what they are already queued with. `line` is what to say
+    /// about their ping, or null when it costs them nothing here; `waited` is their
+    /// queue clock, or null when they are not queueing.
+    internal void Open(SteamPlayer viewer, string line, string waited) {
         EffectAsset asset = Effect();
         if (asset == null) return;
 
         ulong steam64 = viewer.playerID.steamID.m_SteamID;
-        QueueChoice choice = Started();
-        choices[steam64] = choice;
+        QueueChoice choice = ChoiceOf(steam64);
+        open.Remove(steam64);
 
         short key = PeekSeekLobby.Config.QueueKey;
         EffectManager.SendUIEffect(asset, key, viewer.transportConnection, true);
         Send(viewer, "Queue_Headline", PeekSeekLobby.Instance.Translate("queue_headline"));
-        Send(viewer, "Queue_Go", PeekSeekLobby.Instance.Translate("queue_go"));
-        Send(viewer, "Queue_No", PeekSeekLobby.Instance.Translate("queue_no"));
+        Visible(viewer, "Queue_Hint", false);
+        ShowWait(viewer, waited);
 
         Visible(viewer, "Queue_Line", line != null);
         if (line != null) Send(viewer, "Queue_Line", line);
@@ -102,8 +115,22 @@ internal class QueueBoard {
         viewer.player.setPluginWidgetFlag(EPluginWidgetFlags.Modal, true);
     }
 
-    /// What the screen opens on: the server's own region, and every gamemode its
-    /// bitmask already names. A player who just wants a match can press go.
+    /// The button, while the screen is up: FIND MATCH, or the time they have queued
+    /// in fixed-width digits, the way the site's button counts. Sent only when it
+    /// changes, because it is asked for twice a second.
+    internal void ShowWait(SteamPlayer viewer, string waited) {
+        ulong steam64 = viewer.playerID.steamID.m_SteamID;
+        if (open.TryGetValue(steam64, out string drawn) && drawn == waited) return;
+        open[steam64] = waited;
+
+        Send(viewer, "Queue_Go", waited == null
+            ? PeekSeekLobby.Instance.Translate("queue_go")
+            : $"<mspace=0.6em>{waited}</mspace>");
+        Send(viewer, "Queue_No", PeekSeekLobby.Instance.Translate(waited == null ? "queue_no" : "queue_leave"));
+    }
+
+    /// What the screen opens on: the server's own region, and every Competitive mode.
+    /// A player who just wants a match can press go.
     private static QueueChoice Started() {
         QueueChoice choice = new();
         List<QueueRegion> regions = PeekSeekLobby.Config.QueueRegions ?? [];
@@ -112,7 +139,7 @@ internal class QueueBoard {
 
         List<QueueGamemode> modes = LobbyManager.Gamemodes ?? [];
         for (int i = 0; i < modes.Count; i++) {
-            if ((PeekSeekLobby.Config.GamemodeBitmask & (1 << modes[i].Bit)) != 0) choice.Modes.Add(i);
+            if (modes[i].Name?.StartsWith("Competitive", System.StringComparison.OrdinalIgnoreCase) == true) choice.Modes.Add(i);
         }
         return choice;
     }
@@ -128,7 +155,8 @@ internal class QueueBoard {
     /// a tile, which only changes what is lit.
     internal bool? Answer(SteamPlayer viewer, string button) {
         ulong steam64 = viewer.playerID.steamID.m_SteamID;
-        if (button == null || !choices.TryGetValue(steam64, out QueueChoice choice)) return null;
+        if (button == null || !IsUp(steam64)) return null;
+        QueueChoice choice = ChoiceOf(steam64);
 
         if (button == "BoardQueue") {
             // Nothing lit is not a queue. The site would take a zero bitmask and never
@@ -156,11 +184,15 @@ internal class QueueBoard {
     /// The screen goes; the choice stays, because it is what they are queued with.
     internal void Close(SteamPlayer viewer) {
         EffectAsset asset = Effect();
+        open.Remove(viewer.playerID.steamID.m_SteamID);
         if (asset != null) EffectManager.askEffectClearByID(asset.id, viewer.transportConnection);
         viewer.player.setPluginWidgetFlag(EPluginWidgetFlags.Modal, false);
     }
 
-    internal void Forget(ulong steam64) => choices.Remove(steam64);
+    internal void Forget(ulong steam64) {
+        choices.Remove(steam64);
+        open.Remove(steam64);
+    }
 
     private static void Send(SteamPlayer viewer, string child, string text) {
         EffectManager.sendUIEffectText(PeekSeekLobby.Config.QueueKey, viewer.transportConnection, true, child, text ?? "");

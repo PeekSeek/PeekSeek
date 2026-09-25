@@ -21,7 +21,6 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// the message content rather than the embed, because a mention inside an embed
     /// renders as one but never notifies anybody.
     public string szStaffRole;
-    public ushort GamemodeBitmask;
     public float HeartbeatIntervalSeconds;
     public float SpawnProtectionSeconds;
 
@@ -208,12 +207,9 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         szAPIURL = "https://api.peekseek.com";
         szHexDefaultChatColor = "#FFFFFF";
         szChatIconURL = "https://domain.org/image.png";
-        // Bitmask selecting mmconfig gamemode 0 (Competitive) — matches the site's
-        // /queue/heartbeat bit convention, not a literal gamemode array index.
         szRegion = "paris";
         szReportChannel = "";
         szStaffRole = "";
-        GamemodeBitmask = 1;
         HeartbeatIntervalSeconds = 5f;
         SpawnProtectionSeconds = 5f;
         RespawnDelaySeconds = 5f;

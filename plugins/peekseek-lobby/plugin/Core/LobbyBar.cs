@@ -16,14 +16,15 @@ internal class LobbyFace {
 }
 
 /// What the bar says at one moment: the faces in the order they go round the block,
-/// and the block's two cells. A null cell is off, and the row closes up round it.
+/// and the block's two cells. A missing or null cell is off, and the row closes up
+/// round it.
 internal class LobbyView {
     internal List<LobbyFace> Faces = [];
 
-    /// The queue cell: its word and its clock. QUEUE with the time waited, MATCH
-    /// FOUND with the seconds until the pull, AFK with nothing.
-    internal string State;
-    internal string StateTimer;
+    /// Each viewer's own queue cell, its word and its clock: QUEUE with the time they
+    /// have waited, MATCH FOUND with the seconds until their pull. Nobody sees anybody
+    /// else's.
+    internal Dictionary<ulong, (string State, string Timer)> Cells = [];
 
     /// The arena cell's clock: the time until the reset, or null while the arena is
     /// not counting.
@@ -45,7 +46,7 @@ internal class LobbyBar {
 
     private readonly Dictionary<ulong, string> avatars = [];
     private string drawnFaces;
-    private string drawnBlock;
+    private readonly Dictionary<ulong, string> drawnBlocks = [];
 
     private EffectAsset effect;
 
@@ -60,28 +61,34 @@ internal class LobbyBar {
 
     internal void Left(ulong steam64) {
         avatars.Remove(steam64);
+        drawnBlocks.Remove(steam64);
         drawnFaces = null;
     }
 
-    /// Draw what has changed since the last call: the whole bar when a face has, the
-    /// block's cells when only they have.
+    /// Draw what has changed since the last call: the whole bar when a face has, and
+    /// otherwise each viewer's block when theirs has.
     internal void Show(LobbyView view) {
         EffectAsset asset = Effect();
         if (asset == null) return;
 
         string faces = string.Join(";", view.Faces.Select(face => $"{face.Steam64}:{face.Playing}:{face.Away}:{face.Kills}"));
-        string block = $"{view.State}|{view.StateTimer}|{view.ArenaTimer}";
+        bool redrawAll = faces != drawnFaces;
+        drawnFaces = faces;
 
-        if (faces != drawnFaces) {
-            foreach (SteamPlayer viewer in Provider.clients.ToList()) Draw(viewer, asset, view);
-            drawnFaces = faces;
-            drawnBlock = block;
-            return;
+        foreach (SteamPlayer viewer in Provider.clients.ToList()) {
+            ulong steam64 = viewer.playerID.steamID.m_SteamID;
+            view.Cells.TryGetValue(steam64, out (string State, string Timer) cell);
+            string block = $"{cell.State}|{cell.Timer}|{view.ArenaTimer}";
+
+            if (redrawAll) {
+                Draw(viewer, asset, view);
+            } else if (drawnBlocks.TryGetValue(steam64, out string drawn) && drawn == block) {
+                continue;
+            } else {
+                DrawBlock(viewer, view);
+            }
+            drawnBlocks[steam64] = block;
         }
-
-        if (block == drawnBlock) return;
-        drawnBlock = block;
-        foreach (SteamPlayer viewer in Provider.clients.ToList()) DrawBlock(viewer, view);
     }
 
     /// Everybody gets the whole bar again, for a viewer who has just arrived.
@@ -90,6 +97,7 @@ internal class LobbyBar {
     internal void Hide() {
         EffectAsset asset = Effect();
         drawnFaces = null;
+        drawnBlocks.Clear();
         if (asset == null) return;
 
         foreach (SteamPlayer viewer in Provider.clients.ToList()) {
@@ -127,15 +135,16 @@ internal class LobbyBar {
     }
 
     private static void DrawBlock(SteamPlayer viewer, LobbyView view) {
-        bool state = view.State != null;
+        view.Cells.TryGetValue(viewer.playerID.steamID.m_SteamID, out (string State, string Timer) cell);
+        bool state = cell.State != null;
         bool arena = view.ArenaTimer != null;
         Visible(viewer, "State", state);
-        Visible(viewer, "State_Timer", state && view.StateTimer != null);
+        Visible(viewer, "State_Timer", state && cell.Timer != null);
         Visible(viewer, "Gap", state && arena);
         Visible(viewer, "Arena", arena);
         Visible(viewer, "Arena_Timer", arena);
-        if (state) Send(viewer, "State", view.State);
-        if (state && view.StateTimer != null) Send(viewer, "State_Timer", view.StateTimer);
+        if (state) Send(viewer, "State", cell.State);
+        if (state && cell.Timer != null) Send(viewer, "State_Timer", cell.Timer);
         if (arena) Send(viewer, "Arena_Timer", view.ArenaTimer);
     }
 

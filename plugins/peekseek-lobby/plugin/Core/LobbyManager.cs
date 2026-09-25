@@ -891,11 +891,13 @@ internal abstract class LobbyManager {
             // stop a match landing on somebody who has not finished arriving, and
             // somebody typing the command has plainly arrived.
             state.QueueFrom = 0;
+            // The clock starts on the click rather than on the next heartbeat, and a
+            // change of gamemodes while queued does not start it over.
+            if (state.QueueingSince == 0) state.QueueingSince = Time.realtimeSinceStartup;
             QueueChoice choice = Queue.ChoiceOf(steamID.m_SteamID);
-            RemoteAPI.RefreshQueued(steamID.m_SteamID,
-                choice?.Bitmask ?? PeekSeekLobby.Config.GamemodeBitmask,
-                choice?.RegionCode ?? PeekSeekLobby.Config.szRegion);
+            RemoteAPI.RefreshQueued(steamID.m_SteamID, choice.Bitmask, choice.RegionCode);
         } else {
+            state.QueueingSince = 0;
             RemoteAPI.LeaveQueue(steamID.m_SteamID);
         }
         return state.Queueing;
@@ -1448,9 +1450,7 @@ internal abstract class LobbyManager {
                 wanting++;
                 if (entry.Value.QueueingSince == 0) entry.Value.QueueingSince = now;
                 QueueChoice choice = Queue.ChoiceOf(entry.Key);
-                RemoteAPI.RefreshQueued(entry.Key,
-                    choice?.Bitmask ?? PeekSeekLobby.Config.GamemodeBitmask,
-                    choice?.RegionCode ?? PeekSeekLobby.Config.szRegion);
+                RemoteAPI.RefreshQueued(entry.Key, choice.Bitmask, choice.RegionCode);
                 continue;
             }
 
@@ -1466,42 +1466,46 @@ internal abstract class LobbyManager {
     private const float BarIntervalSeconds = 0.5f;
     private static float LastBarUpdate;
 
-    /// The bar as it stands: faces by kills, the queue cell for the viewer's own
-    /// state, which is the same for everybody since the block is one block, and the
+    /// The bar as it stands: faces by kills, each viewer's own queue cell, and the
     /// arena's clock while it counts.
     ///
-    /// The block is shared, so the queue cell shows the state most worth showing:
-    /// a match found for anybody counts down for everybody to see, else the queue
-    /// with the longest wait on it, else nothing.
+    /// The queue cell is the viewer's and nobody else's: their match counting down,
+    /// else how long they have queued, else nothing. It used to show whoever in the
+    /// lobby had waited longest, to everybody, so a player who had just left the queue
+    /// watched a stranger's clock tick and took it for their own.
     private static LobbyView View(float now) {
         LobbyView view = new();
 
         foreach (SteamPlayer client in Provider.clients) {
-            if (client.player == null || !Players.TryGetValue(client.playerID.steamID.m_SteamID, out PlayerState state)) continue;
+            ulong steam64 = client.playerID.steamID.m_SteamID;
+            if (client.player == null || !Players.TryGetValue(steam64, out PlayerState state)) continue;
             view.Faces.Add(new LobbyFace {
-                Steam64 = client.playerID.steamID.m_SteamID,
+                Steam64 = steam64,
                 Playing = !state.Afk && !client.player.life.isDead && !client.player.movement.isSafe,
                 Away = state.Afk,
                 Kills = state.Kills
             });
+
+            if (state.PullAt > 0) {
+                view.Cells[steam64] = ("MATCH FOUND", Mathf.CeilToInt(state.PullAt - now).ToString());
+            } else if (Waited(state, now) is string waited) {
+                view.Cells[steam64] = ("QUEUE", waited);
+            }
+
+            // The queue screen's button is the same clock, so it moves with the bar.
+            if (Queue.IsUp(steam64)) Queue.ShowWait(client, Waited(state, now));
         }
         view.Faces = view.Faces.OrderByDescending(face => face.Kills).ToList();
-
-        PlayerState pulled = Players.Values.Where(state => state.PullAt > 0).OrderBy(state => state.PullAt).FirstOrDefault();
-        PlayerState queued = Players.Values.Where(state => state.WantsAMatch(now) && state.QueueingSince > 0)
-            .OrderBy(state => state.QueueingSince).FirstOrDefault();
-        if (pulled != null) {
-            view.State = "MATCH FOUND";
-            view.StateTimer = Mathf.CeilToInt(pulled.PullAt - now).ToString();
-        } else if (queued != null) {
-            view.State = "QUEUE";
-            view.StateTimer = LobbyBar.Clock(now - queued.QueueingSince);
-        }
 
         if (ArenaCountingSince > 0) {
             view.ArenaTimer = LobbyBar.Clock(PeekSeekLobby.Config.ResetIntervalSeconds - (now - ArenaCountingSince));
         }
         return view;
+    }
+
+    /// How long this player has been queueing, as a clock, or null when they are not.
+    private static string Waited(PlayerState state, float now) {
+        return state.WantsAMatch(now) && state.QueueingSince > 0 ? LobbyBar.Clock(now - state.QueueingSince) : null;
     }
 
     /// The arena counts towards a reset from the moment there are two people in it,
@@ -1540,7 +1544,7 @@ internal abstract class LobbyManager {
         string line = ping >= PeekSeekLobby.Config.HighPingMs
             ? PeekSeekLobby.Instance.Translate("queue_high_ping", ping, PeekSeekLobby.Config.HighPingMs)
             : null;
-        Queue.Open(player.channel.owner, line);
+        Queue.Open(player.channel.owner, line, Waited(state, Time.realtimeSinceStartup));
     }
 
     /// `/q` opens the same screen rather than toggling silently: what they are
