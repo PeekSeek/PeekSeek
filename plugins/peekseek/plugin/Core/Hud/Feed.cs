@@ -69,6 +69,9 @@ public class Feed {
     /// A life is over: the next kill starts from one.
     public void EndLife(ulong steam64) => streaks.Remove(steam64);
 
+    /// A round is over: everybody starts the next one from one, survivors included.
+    public void EndRound() => streaks.Clear();
+
     /// Drop rows older than the lifetime. True when anything went.
     public bool Expire(float now) {
         int before = kills.Count;

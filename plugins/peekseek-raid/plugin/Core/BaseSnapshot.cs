@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PeekSeekRaid.Core.Models;
 using SDG.Unturned;
 using UnityEngine;
 
@@ -98,8 +99,11 @@ internal class BaseSnapshot {
             }
 
             if (asset is ItemBarricadeAsset barricadeAsset) {
+                // A door's lock is in its state, not its owner: the team that holds it
+                // this round opens it.
+                byte[] state = RaidWorld.IsDoor(barricadeAsset) ? DoorLock.State(0, group) : piece.State;
                 BarricadeManager.dropNonPlantedBarricade(
-                    new Barricade(barricadeAsset, barricadeAsset.health, piece.State),
+                    new Barricade(barricadeAsset, barricadeAsset.health, state),
                     point,
                     piece.Rotation,
                     0,

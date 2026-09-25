@@ -21,8 +21,9 @@ internal class HudSeat {
     /// and a dead face already says it.
     internal int Health = 100;
 
-    /// Their ping and what it is costing them, drawn under their own face only:
-    /// 0 for nothing, 1 for some of their damage, 2 for half or more.
+    /// Their ping and what it is costing them, drawn under the faces of the viewer's
+    /// own team while HudState.Pings is on: 0 for nothing, 1 for some of their damage,
+    /// 2 for half or more.
     internal int PingMs;
     internal int PingLevel;
 }
@@ -52,6 +53,10 @@ internal class HudState {
 
     /// Who may see everybody's health rather than only their own team's.
     internal HashSet<ulong> Spectators = [];
+
+    /// Whether the viewer's team's pings are on the bar: during a pick or a build, when
+    /// a team is deciding who plays what, and never during a fight.
+    internal bool Pings;
 }
 
 /// The bar along the top of the screen during a match: score and clock on one block
@@ -90,7 +95,7 @@ internal class MatchHud {
 
     private sealed class Drawn {
         internal string Clock;
-        internal string Ping;
+        internal readonly Dictionary<string, string> Ping = [];
         internal readonly Dictionary<string, (int Steps, bool Low)> Health = [];
     }
 
@@ -129,10 +134,9 @@ internal class MatchHud {
                     DrawHealth(viewer, slot, health);
                 }
 
-                if (seat.Steam64 != me) return;
-                string ping = PingText(seat);
-                if (record.Ping == ping) return;
-                record.Ping = ping;
+                string ping = PingFor(seen, slot, seat);
+                if (record.Ping.TryGetValue(slot, out string last2) && last2 == ping) return;
+                record.Ping[slot] = ping;
                 DrawPing(viewer, slot, ping);
             });
         }
@@ -184,9 +188,9 @@ internal class MatchHud {
                 record.Health[$"{side}{i}"] = health;
                 DrawSeat(viewer, $"{side}{i}", seat, health, MaySee(seat, seen, me));
 
-                bool mine = seat.Steam64 == me;
-                if (mine) record.Ping = PingText(seat);
-                DrawPing(viewer, $"{side}{i}", mine ? record.Ping : null);
+                string ping = PingFor(seen, $"{side}{i}", seat);
+                record.Ping[$"{side}{i}"] = ping;
+                DrawPing(viewer, $"{side}{i}", ping);
             }
         }
     }
@@ -242,7 +246,13 @@ internal class MatchHud {
         }
     }
 
-    /// The viewer's own ping under their own face, or nothing under anybody else's.
+    /// What goes under a face: its ping, for a face on the viewer's own side (always
+    /// the left) while pings are on, and nothing otherwise.
+    private static string PingFor(HudState seen, string slot, HudSeat seat) {
+        return seen.Pings && slot.StartsWith("L") && seat.Online ? PingText(seat) : null;
+    }
+
+    /// A ping under a face, or nothing.
     private static void DrawPing(SteamPlayer viewer, string slot, string ping) {
         Visible(viewer, $"{slot}_Ping", ping != null);
         if (ping != null) Send(viewer, $"{slot}_Ping", ping);
@@ -298,7 +308,8 @@ internal class MatchHud {
             Teams = onSecond ? [state.Teams[1], state.Teams[0]] : [state.Teams[0], state.Teams[1]],
             SecondsLeft = state.SecondsLeft,
             Phase = state.Phase,
-            Spectators = state.Spectators
+            Spectators = state.Spectators,
+            Pings = state.Pings
         };
     }
 

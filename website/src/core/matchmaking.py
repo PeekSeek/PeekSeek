@@ -486,9 +486,13 @@ def normalizePlayerResult(player: dict) -> dict:
     }
 
 
-def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
+def matchResults(
+    gamemodeInfo: dict, *users: dict, draw: bool = False
+) -> tuple[dict, int]:
     """Record every player's kills/deaths/win and, for ranked modes, their Elo
     change. Returns the per-player summary and the match's average Elo.
+
+    A draw is nobody's win and nobody's loss: Elo moves on kills and deaths alone.
 
     Every player the server lists is scored, including ones who never fired a shot or
     who disconnected — the server reports its whole roster, so leaving a match is a
@@ -507,7 +511,7 @@ def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
     results: dict = {}
 
     for player in players:
-        won = player["won"]
+        won = player["won"] and not draw
         summary = {
             "Kills": player["kills"],
             "Deaths": player["deaths"],
@@ -518,12 +522,14 @@ def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
             "Taken": player["damageTaken"],
             "Won": won,
         }
+        if draw:
+            summary["Draw"] = True
 
         eloDelta = 0
         if gamemodeInfo["usesElo"]:
             currentElo = data.Stat.getElo(player["steam64"])
             eloDelta = _eloDelta(
-                currentElo, avgElo, player["kills"], player["deaths"], won
+                currentElo, avgElo, player["kills"], player["deaths"], won, draw
             )
             summary = {"Elo Change": eloDelta, "Current Elo": currentElo} | summary
 
@@ -534,7 +540,7 @@ def matchResults(gamemodeInfo: dict, *users: dict) -> tuple[dict, int]:
             kills=player["kills"],
             deaths=player["deaths"],
             wins=int(won),
-            losses=int(not won),
+            losses=int(not won and not draw),
             elo=eloDelta,
             headshots=player["headshotKills"],
             hits=player["hits"],
@@ -566,10 +572,19 @@ def _syncRankRoles(steam64s: list) -> None:
 
 
 def _eloDelta(
-    currentElo: int, avgElo: float, kills: int, deaths: int, won: bool
+    currentElo: int,
+    avgElo: float,
+    kills: int,
+    deaths: int,
+    won: bool,
+    draw: bool = False,
 ) -> int:
     """The ranked Elo rule: tiny losses for underdogs, tiny gains for smurfs,
-    otherwise performance-scaled — and never below the floor of 100."""
+    otherwise performance-scaled — and never below the floor of 100. A draw is
+    performance alone, with neither the win's gain nor the loss's cost."""
+    if draw:
+        performance = int(3.5 * kills) - int(2.5 * deaths)
+        return max(int(performance * min(avgElo / currentElo, 2.5)), 100 - currentElo)
     if currentElo + 150 < avgElo and not won:
         delta = -2
     elif currentElo - 150 > avgElo and won:

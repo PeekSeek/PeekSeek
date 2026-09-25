@@ -188,6 +188,11 @@ def bottom_left(name, x, y, w, h, **kw):
     return Node(name, anchor_min=(0, 0), anchor_max=(0, 0), pivot=(0, 0), position=(x, y), size=(w, h), **kw)
 
 
+def bottom_right(name, x, y, w, h, **kw):
+    """`x` and `y` in from the bottom-right corner."""
+    return Node(name, anchor_min=(1, 0), anchor_max=(1, 0), pivot=(1, 0), position=(-x, y), size=(w, h), **kw)
+
+
 def centered(name, x, y, w, h, **kw):
     return Node(name, anchor_min=(0.5, 0.5), anchor_max=(0.5, 0.5), position=(x, y), size=(w, h), **kw)
 

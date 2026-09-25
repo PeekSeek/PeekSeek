@@ -16,6 +16,30 @@ public class RaidItem {
     [XmlAttribute]
     public string State = "";
 
+    /// A gun's attachments and loaded magazine, by item id, for a gun whose state is
+    /// easier to say than to spell in bytes. Any of them set and the state is built by
+    /// the game's own ItemGunAsset.getState when the item is handed out, with Ammo as
+    /// the rounds loaded (0 for a full magazine).
+    [XmlAttribute]
+    public ushort Sight;
+
+    [XmlAttribute]
+    public ushort Tactical;
+
+    [XmlAttribute]
+    public ushort Grip;
+
+    [XmlAttribute]
+    public ushort Barrel;
+
+    [XmlAttribute]
+    public ushort Magazine;
+
+    [XmlAttribute]
+    public byte Ammo;
+
+    public bool HasAttachments => Sight != 0 || Tactical != 0 || Grip != 0 || Barrel != 0 || Magazine != 0;
+
     public RaidItem() { }
 
     public RaidItem(ushort itemId, byte amount) {
@@ -34,6 +58,12 @@ public class RaidItem {
             byte.TryParse(parts[i].Trim(), out bytes[i]);
         }
         return bytes;
+    }
+
+    /// The same item at `by` times the amount, rounded down, with a hair of slack so 10
+    /// at 0.7 is 7 and not 6.99 to 6.
+    public RaidItem Scaled(double by) {
+        return new RaidItem(ItemId, (byte)System.Math.Min(byte.MaxValue, System.Math.Floor(Amount * by + 1e-4)));
     }
 
     public GamemodeItem ToGamemodeItem() {

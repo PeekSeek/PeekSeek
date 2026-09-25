@@ -28,8 +28,9 @@ from pathlib import Path
 from PIL import Image
 
 import footprints
+import raidboard
 import sitemap
-from unityyaml import (CAPLINE, CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, button, canvas, column,
+from unityyaml import (CAPLINE, CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, bottom_right, button, canvas, column,
                        castle_alpha, centered, disc_alpha, fit_height, fit_width, ignore_layout, image, layout_size, mask, prefab,
                        ring_alpha, rounded_alpha, row, silhouette, skull_alpha, sprite, sprite_file, stretch, swords_alpha,
                        text, top_center, top_left, top_right, top_stretch)
@@ -108,6 +109,9 @@ def write_sprites():
         "swords": sprite(SPRITES, "Swords", "d9b8e0f1a2c3d4e5f6a7b8c9d0e1f2a3", 24, 24, swords_alpha(24), 0),
         "skull": sprite(SPRITES, "Skull", "c6e5a7b8d9f0a1b2c3d4e5f6a7b8c9d0", 40, 40, skull_alpha(40), 0),
         # Drawn at twice the size they are shown at, so they stay sharp at UI scale 2.
+        # The six RAID class glyphs, from the powerups sheet, at twice the size shown.
+        **{f"glyph{g}": sprite_file(SPRITES, f"Glyph{raidboard.GLYPHS[g][0]}", raidboard.GLYPH_GUIDS[g],
+                                    raidboard.glyph_png(g, 4 * GLYPH_SIZE)) for g in range(6)},
         "square": sprite_file(SPRITES, "FootprintSquare", "e0c9f1a2b3d4e5f6a7b8c9d0e1f2a3b4",
                               footprints.picture("Square", 2 * FIGURE_W, 2 * FIGURE_H, FIGURE_METRES)),
         "hexagonal": sprite_file(SPRITES, "FootprintHexagonal", "f1d0a2b3c4e5f6a7b8c9d0e1f2a3b4c5",
@@ -227,6 +231,80 @@ def powerup_tile(parent, face, i, x, y, w=POWERUP_W, h=POWERUP_H):
     return node
 
 
+# ---- RAID's boards (raidboard.py says what the plugin addresses) ------------------------
+#
+# Every powerup a side has, five by two. A tile is its class glyph and name on one line,
+# its items, and one line of what it does. The viewer's own pick is lit; a powerup a
+# teammate has taken is greyed out with their face in the corner, and nobody else can
+# take it.
+
+RAID_TILE_W, RAID_TILE_H = 200, 150
+RAID_COLS, RAID_ROWS = 5, 2
+GLYPHS = 6
+GLYPH_SIZE = 15
+CLAIMER = 30
+GRID_W = RAID_COLS * RAID_TILE_W + (RAID_COLS - 1) * GAP
+
+
+def grid_h(tile_h):
+    return RAID_ROWS * tile_h + (RAID_ROWS - 1) * GAP
+
+
+def glyphs(parent, prefix, x, y, size):
+    """Every class glyph at one spot, all hidden; the plugin shows the one it means."""
+    for g in range(GLYPHS):
+        image(parent.add(top_left(f"{prefix}{g}", x, y, size, size, active=False)), TEXT, sprite=SPR[f"glyph{g}"], sliced=False)
+
+
+def raid_tile(parent, face, i, x, y, w=RAID_TILE_W, h=RAID_TILE_H):
+    node = parent.add(top_left(f"Board{face}{i}", x, y, w, h))
+    button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
+
+    taken = node.add(stretch(f"{face}{i}_Taken", active=False))
+    image(taken, SELECTED, sprite=SPR["round8"])
+
+    glyphs(node, f"{face}{i}_Glyph", 12, 12, GLYPH_SIZE)
+    text(node.add(top_left(f"{face}{i}_Name", 12 + GLYPH_SIZE + 7, 9, w - 60, 20)), "DEMOLITION",
+         size=13, colour=TEXT, bold=True, uppercase=True, spacing=8)
+
+    # The items in a row across the middle, with nothing behind them.
+    items_y = 38
+    items_h = h - items_y - 44
+    for k in range(ITEMS):
+        item = node.add(top_left(f"{face}{i}_Item{k}", 12 + k * 46, items_y, 42, items_h, active=False))
+        image(item.add(stretch(f"{face}{i}_Item{k}_Icon")), "#ffffff", enabled=False, preserve_aspect=True)
+        text(item.add(bottom_right(f"{face}{i}_Item{k}_Count", -4, -3, 26, 14)), "2x", size=10, colour=TEXT, halign=RIGHT, bold=True)
+    text(node.add(bottom_left(f"{face}{i}_Blurb", 12, 8, w - 24, 32)), "", size=11, colour=SECONDARY, valign=TOP, wrap=True)
+
+    # Somebody else's: the tile greyed under a dark veil, their face in the corner.
+    claimed = node.add(stretch(f"{face}{i}_Claimed", active=False))
+    image(claimed, PAGE, 0.62, sprite=SPR["round8"], raycast=True)
+    frame = claimed.add(top_right(f"{face}{i}_ClaimerFrame", 10, 10, CLAIMER, CLAIMER))
+    image(frame, "#ffffff", sprite=SPR["round6"])
+    mask(frame)
+    image(frame.add(stretch(f"{face}{i}_Claimer")), "#ffffff", enabled=False)
+    return node
+
+
+def tiles_grid(parent, face, x, y, tile_w=RAID_TILE_W, tile_h=RAID_TILE_H):
+    for i in range(RAID_COLS * RAID_ROWS):
+        r, c = divmod(i, RAID_COLS)
+        raid_tile(parent, face, i, x + c * (tile_w + GAP), y + r * (tile_h + GAP), tile_w, tile_h)
+
+
+def raid_panel(face):
+    """The defender's board: a headline, the clock, and every powerup."""
+    board_w = PANEL_PAD * 2 + GRID_W
+    tiles_y = PANEL_PAD + HEADLINE_H + 16
+    board = centered(face, 0, 40, board_w, tiles_y + grid_h(RAID_TILE_H) + PANEL_PAD, active=False)
+    image(board, PAGE, 0.94, sprite=SPR["round8"])
+    text(board.add(top_left(f"{face}_Headline", PANEL_PAD, PANEL_PAD, board_w - PANEL_PAD * 2 - 130, HEADLINE_H)),
+         "DEFEND  North", size=20, colour=TEXT, bold=True)
+    text(board.add(top_right(f"{face}_Timer", PANEL_PAD, 16, 120, 36)), "20", size=28, colour=TEXT, halign=RIGHT, bold=True)
+    tiles_grid(board, face, PANEL_PAD, tiles_y)
+    return board
+
+
 def option_tile(parent, face, i, x, y, w, h):
     return tile(parent, face, i, x, y, w, h, pick_tile)
 
@@ -267,6 +345,7 @@ def boards():
     root.add(panel("Shape", SHAPES, 300, 340, "Footprint. The first pick on the team counts.", shape_board_tile))
     root.add(panel("Swap", SWAPS, 200, 220, "Metal Wall", option_tile))
 
+    root.add(raid_panel("Raid"))
     root.add(attack_screen())
     return root
 
@@ -300,15 +379,9 @@ def boards():
 
 MAP_PX = 640            # the map at most; the sprite is twice this
 MAP_METRES = 260        # of ground across it: the furthest spawn is 108 m out
-MAP_Y = 136             # below the HUD's line of faces
-HEADLINE_Y = 74         # the two lines between the HUD and the map
-MAP_BOTTOM = 30         # under the tiles
-DOT = 40
-FACE = 24               # a teammate on a dot, the site's .userProfile.small chip
+DOT = 28
+FACE = 22               # a teammate on a dot
 FACES = 5
-KEEP = 56               # the disc under the keep
-CHIP_H = 44             # the timer chip
-BOARD_W = PICKS * POWERUP_W + (PICKS - 1) * GAP
 
 SITES = (
     # name, anchor (x, z), the spawns in dot order; all from PeekSeekRaidConfiguration.cs
@@ -318,51 +391,42 @@ SITES = (
 MAP_GUIDS = ("e2f1a3b4c5d6e7f8a9b0c1d2e3f4a5b6", "f3a2b4c5d6e7f8a9b0c1d2e3f4a5b6c7")
 
 
+ATTACK_MAP = 410        # the map on the attacker's board; the sprite is far larger
+ATTACK_TILE_W = 196
+ATTACK_TILE_H = (ATTACK_MAP - GAP) // 2
+
+
 def attack_screen():
-    screen = stretch("Attack", active=False)
-    image(screen, PAGE)
+    """The attacker's board: the base under attack large on the left, a dot on each
+    spawn with the faces of whoever chose it, and every raid powerup beside it, each
+    tile as tall as half the map. Fixed in size and centred."""
+    grid_w = RAID_COLS * ATTACK_TILE_W + (RAID_COLS - 1) * GAP
+    board_w = PANEL_PAD * 2 + ATTACK_MAP + 14 + grid_w
+    top_y = PANEL_PAD + HEADLINE_H + 16
+    board_h = top_y + ATTACK_MAP + PANEL_PAD
+    screen = centered("Attack", 0, 40, board_w, board_h, active=False)
+    image(screen, PAGE, 0.94, sprite=SPR["round8"])
 
-    # A column down the middle, from under the HUD to just off the bottom edge.
-    text(screen.add(top_center("Attack_Headline", 0, HEADLINE_Y, 700, 26)), "Round 4  You attack North",
-         size=20, colour=TEXT, halign=CENTER, bold=True)
-    text(screen.add(top_center("Attack_Line", 0, HEADLINE_Y + 28, 700, 20)), "Where you come in, then what you bring",
-         size=13, colour=SECONDARY, halign=CENTER)
+    text(screen.add(top_left("Attack_Headline", PANEL_PAD, PANEL_PAD, board_w - PANEL_PAD * 2 - 130, HEADLINE_H)),
+         "ATTACK  North", size=20, colour=TEXT, bold=True)
+    text(screen.add(top_left("Attack_Line", PANEL_PAD + 260, PANEL_PAD + 4, 400, 20, active=False)), "", size=13, colour=SECONDARY)
+    text(screen.add(top_right("Attack_Timer", PANEL_PAD, 16, 120, 36)), "20", size=28, colour=TEXT, halign=RIGHT, bold=True)
 
-    column = screen.add(Node("Attack_Column", anchor_min=(0.5, 0), anchor_max=(0.5, 1),
-                             position=(0, (MAP_BOTTOM - MAP_Y) / 2), size=(BOARD_W, -(MAP_Y + MAP_BOTTOM))))
-
-    board = column.add(bottom_center("Attack_Board", 0, 0, BOARD_W, POWERUP_H))
-    for i in range(PICKS):
-        powerup_tile(board, "Attack", i, i * (POWERUP_W + GAP), 0)
-
-    # What is left above the tiles, and the map the largest square in it, at most
-    # the size the picture was drawn for.
-    area = column.add(Node("Attack_MapArea", anchor_min=(0.5, 0), anchor_max=(0.5, 1),
-                           position=(0, (POWERUP_H + 20) / 2), size=(MAP_PX, -(POWERUP_H + 20))))
-    frame = area.add(centered("Attack_Map", 0, 0, MAP_PX, MAP_PX))
-    aspect_fit(frame)
-    # The frame clips the picture to the site's corners, the way a face is.
+    frame = screen.add(top_left("Attack_Map", PANEL_PAD, top_y, ATTACK_MAP, ATTACK_MAP))
     image(frame, "#ffffff", sprite=SPR["round8"])
     mask(frame)
-
     for site, (name, anchor, spawns) in enumerate(SITES):
         ground = frame.add(stretch(f"Attack_Map{site}", active=False))
         image(ground, "#ffffff", sprite=SPR[f"map{site}"], sliced=False)
-
         for i, spawn in enumerate(spawns):
             dot(ground, site, i, *on_map(anchor, spawn))
 
-    keep = frame.add(centered("Keep", 0, 0, KEEP, KEEP))
+    keep = frame.add(centered("Keep", 0, 0, 40, 40))
     image(keep, PAGE, 0.9, sprite=SPR["disc"], sliced=False)
-    image(keep.add(centered("KeepFigure", 0, 0, 32, 32)), TEXT, sprite=SPR["keep"], sliced=False)
+    image(keep.add(centered("KeepFigure", 0, 0, 24, 24)), TEXT, sprite=SPR["keep"], sliced=False)
+    text(frame.add(top_left("Attack_Site", 10, 6, 200, 20)), "North", size=14, colour=TEXT, bold=True)
 
-    text(frame.add(top_left("North", 12, 8, 20, 20)), "N", size=12, colour=TEXT, bold=True)
-    text(frame.add(top_left("Attack_Site", 34, 8, 200, 20)), "North", size=14, colour=TEXT, bold=True)
-
-    chip = frame.add(top_right("Clock", 10, 10, 80, CHIP_H))
-    image(chip, PAGE, 0.9, sprite=SPR["round8"])
-    text(chip.add(stretch("Attack_Timer")), "20", size=28, colour=TEXT, halign=CENTER, bold=True)
-
+    tiles_grid(screen, "Attack", PANEL_PAD + ATTACK_MAP + 14, top_y, ATTACK_TILE_W, ATTACK_TILE_H)
     return screen
 
 
@@ -379,16 +443,16 @@ def dot(ground, site, i, fx, fy):
     `Spawn{site}{i}_Face{k}` are the teammates coming in there, in a row beside it."""
     node = ground.add(Node(f"BoardSpawn{site}{i}", anchor_min=(fx, fy), anchor_max=(fx, fy), size=(DOT, DOT)))
     button(node, image(node, "#ffffff", sprite=SPR["disc"], sliced=False, raycast=True), PAGE, SUB_HOVER, SELECTED)
-    text(node.add(stretch(f"Spawn{site}{i}_Number")), str(i + 1), size=16, colour=TEXT, halign=CENTER, bold=True)
+    text(node.add(stretch(f"Spawn{site}{i}_Number")), str(i + 1), size=12, colour=TEXT, halign=CENTER, bold=True)
 
     on = node.add(stretch(f"Spawn{site}{i}_On", active=False))
     image(on, "#ffffff", sprite=SPR["disc"], sliced=False)
-    text(on.add(stretch("Number")), str(i + 1), size=16, colour=PAGE, halign=CENTER, bold=True)
+    text(on.add(stretch("Number")), str(i + 1), size=12, colour=PAGE, halign=CENTER, bold=True)
 
     # Which way and how far, under the dot; the plugin sends it, from the spawn's own
     # numbers, so a dot is something a team can name to each other.
     text(node.add(Node(f"Spawn{site}{i}_Label", anchor_min=(0.5, 0), anchor_max=(0.5, 0), pivot=(0.5, 1),
-                       position=(0, -2), size=(160, 18))), "NE  106 m", size=12, colour=TEXT, halign=CENTER, bold=True)
+                       position=(0, -2), size=(120, 16))), "NE  106 m", size=10, colour=TEXT, halign=CENTER, bold=True)
 
     for k in range(FACES):
         face = node.add(top_left(f"Spawn{site}{i}_Face{k}_Frame", DOT + 6 + k * (FACE + 3), (DOT - FACE) / 2, FACE, FACE))

@@ -6,12 +6,14 @@
     <RootNamespace>PeekSeekRaid</RootNamespace>
     <AssemblyName>PeekSeekRaid</AssemblyName>
     <Product>PeekSeekRaid</Product>
-    <Version>0.3.1</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="RestoreMonarchy.RocketRedist" Version="3.*" ExcludeAssets="runtime" />
     <PackageReference Include="Krafs.Publicizer" Version="2.3.0" PrivateAssets="all" />
+    <!-- Match ships 0Harmony to the server; this only compiles against it. -->
+    <PackageReference Include="Lib.Harmony" Version="2.*" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>

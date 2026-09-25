@@ -29,6 +29,8 @@ internal static class RaidWorld {
     internal static void Hook(Raid running) {
         raid = running;
         TuneExplosives();
+        Damage.Hook(running);
+        Powerups.Hook(running);
 
         StructureManager.onDeployStructureRequested += OnDeployStructure;
         BarricadeManager.onDeployBarricadeRequested += OnDeployBarricade;
@@ -52,35 +54,30 @@ internal static class RaidWorld {
         StructureManager.onDamageStructureRequested -= OnDamageStructure;
         BarricadeManager.onDamageBarricadeRequested -= OnDamageBarricade;
 
+        Powerups.Unhook();
+        Damage.Unhook();
         anchorTiles.Clear();
         raid = null;
     }
 
-    /// What a charge and a rocket do to a building, set on the game's own assets so
-    /// every explosion the server works out uses these numbers. Explosions are the
-    /// server's to compute, so a client's copy of the asset never matters.
-    ///
-    /// The point is the arithmetic a raider does at the wall: a charge is two to a
-    /// metal wall and one to wood; a rocket is three to metal and two to wood, and
-    /// its blast is tightened so a rocket is a hole in one wall rather than a room.
-    /// Set every match rather than once, because the numbers are config. The range is
-    /// read-only on the asset, so its backing field is written; the publicizer opens
-    /// it up.
+    /// The rocket's blast radius, set on the launcher. The vanilla rocket has no
+    /// projectile of its own, so UseableGun takes the rocket's damage and blast from the
+    /// gun that fired it, not the magazine; what a rocket does to the base and to
+    /// players is the hits table's and Damage's, so the radius is all that is left.
+    /// Set every match rather than once, because the number is config.
     private static void TuneExplosives() {
-        if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.ChargeItemId) is ItemChargeAsset charge) {
-            charge.structureDamage = PeekSeekRaid.Config.ChargeStructureDamage;
+        if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.LauncherItemId) is ItemGunAsset launcher) {
+            launcher.range = PeekSeekRaid.Config.RocketBlastRadius;
         }
 
-        if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.RocketItemId) is ItemMagazineAsset rocket) {
-            rocket.structureDamage = PeekSeekRaid.Config.RocketStructureDamage;
-            rocketRange ??= rocket.range;
-            rocket._range = rocketRange.Value * PeekSeekRaid.Config.RocketRangeMultiplier;
+        // A melee tool only touches a structure the game calls vulnerable, unless the
+        // tool is marked as going through anything (UseableMelee). Walls are not
+        // vulnerable, so a chainsaw on the table would never reach it; the table
+        // decides what it does to which piece instead.
+        foreach (BreakRule rule in PeekSeekRaid.Config.BreakRules) {
+            if (Assets.find(EAssetType.ITEM, rule.ItemId) is ItemMeleeAsset melee) melee.isInvulnerable = true;
         }
     }
-
-    /// The rocket's blast radius as the game shipped it, kept so the multiplier is
-    /// applied to the original every time and not to the last result.
-    private static float? rocketRange;
 
     // ---- the anchor -----------------------------------------------------------
 
@@ -140,6 +137,41 @@ internal static class RaidWorld {
     }
 
     private const int PillarStoreys = 2;
+
+    /// A base for a team nobody is playing, in a local test match: a maple wall on every
+    /// outside edge of the footprint, one storey high, with one edge left open as the
+    /// way in. An edge two floors share is inside the base and gets nothing.
+    internal static void BuildPhantomBase(int siteIndex, RaidSite site, BaseShape shape, ulong teamGroup) {
+        if (Assets.find(EAssetType.ITEM, (ushort)33) is not ItemStructureAsset wall) return;
+
+        Dictionary<(int, int), (float X, float Z, float Yaw, int Count)> edges = [];
+        foreach (FloorPiece piece in BaseLayout.Floors(shape)) {
+            List<(float X, float Z)> corners = BaseLayout.Corners(piece).ToList();
+            for (int i = 0; i < corners.Count; i++) {
+                (float ax, float az) = corners[i];
+                (float bx, float bz) = corners[(i + 1) % corners.Count];
+                float mx = (ax + bx) / 2f, mz = (az + bz) / 2f;
+                (int, int) key = (Mathf.RoundToInt(mx * 10f), Mathf.RoundToInt(mz * 10f));
+                float yaw = Mathf.Atan2(-(bz - az), bx - ax) * Mathf.Rad2Deg;
+                edges[key] = edges.TryGetValue(key, out var seen) ? (mx, mz, yaw, seen.Count + 1) : (mx, mz, yaw, 1);
+            }
+        }
+
+        bool doorLeft = false;
+        foreach ((float x, float z, float yaw, int count) in edges.Values) {
+            if (count > 1) continue;
+            if (!doorLeft) {
+                doorLeft = true;
+                continue;
+            }
+
+            StructureManager.dropReplicatedStructure(new Structure(wall, wall.health),
+                OnSite(site, x, BaseLayout.HalfWallHeight, z), Facing(site, yaw), 0, teamGroup);
+        }
+    }
+
+    /// A site's starting tiles, or none before its anchor goes down.
+    internal static List<Vector3> AnchorTiles(int siteIndex) => anchorTiles.TryGetValue(siteIndex, out List<Vector3> tiles) ? tiles : [];
 
     /// Whether a floor stands on one of a site's starting spots.
     internal static bool IsAnchorTile(int siteIndex, StructureDrop drop) {
@@ -202,6 +234,36 @@ internal static class RaidWorld {
         });
 
         return onATile && !NearDoor(point);
+    }
+
+    /// Why the flag may not stand here, or null when it may: at least FlagDoorClearance
+    /// from any door, so it cannot be stood where a door swings and then shut inside it,
+    /// and never where it costs more than BreachLimit charges to reach. Asked after
+    /// MayStandFlag, which is about the tile.
+    internal static string FlagRefusal(Vector3 point) {
+        if (NearAnyDoor(point, PeekSeekRaid.Config.FlagDoorClearance)) {
+            return PeekSeekRaid.Instance.Translate("flag_door", PeekSeekRaid.Config.FlagDoorClearance);
+        }
+
+        float cost = BreachCheck.Cost(point);
+        return cost > PeekSeekRaid.Config.BreachLimit
+            ? PeekSeekRaid.Instance.Translate("flag_breach", cost, PeekSeekRaid.Config.BreachLimit)
+            : null;
+    }
+
+    private static bool NearAnyDoor(Vector3 point, float radius) {
+        List<RegionCoordinate> around = [];
+        Regions.getRegionsInRadius(point, radius + 1f, around);
+
+        foreach (RegionCoordinate coordinate in around) {
+            foreach (BarricadeDrop drop in BarricadeManager.regions[coordinate.x, coordinate.y].drops) {
+                if (drop.asset == null || !IsDoor(drop.asset)) continue;
+                Vector3 gap = drop.GetServersideData().point - point;
+                if (gap.x * gap.x + gap.z * gap.z <= radius * radius && Mathf.Abs(gap.y) <= BaseLayout.WallHeight) return true;
+            }
+        }
+
+        return false;
     }
 
     /// How far past a tile's edge still counts as the tile, for the flag's own footing
@@ -370,13 +432,20 @@ internal static class RaidWorld {
         // Asked of the gamemode rather than worked out from the round number, so that
         // solo, which has one base and fights every round over it, opens the same plot
         // the round is actually being played on.
-        return raid.Phase == RaidPhase.Playing && site == raid.DefendedSite;
+        return raid.Phase is RaidPhase.Picking or RaidPhase.Playing && site == raid.DefendedSite;
     }
 
     private static void OnDeployStructure(
         Structure structure, ItemStructureAsset asset, ref Vector3 point,
         ref float angleX, ref float angleY, ref float angleZ,
         ref ulong owner, ref ulong group, ref bool shouldAllow) {
+        // Mid-round the only structures are an attacker's scaffold and a Welder's walls.
+        if (raid != null && raid.Phase is RaidPhase.Picking or RaidPhase.Playing) {
+            shouldAllow = Powerups.AttackerMayPlace(owner, asset.id, point)
+                          || (MayBuildAt(point, owner) && Powerups.DefenderMayBuild(owner, asset.id));
+            return;
+        }
+
         if (!MayBuildAt(point, owner)) shouldAllow = false;
         else if (IsFloor(asset) && !TouchesAFloor(point)) shouldAllow = false;
         else if (raid.Phase == RaidPhase.Building && !raid.BudgetFor(owner).Counts.Has(asset.id)) shouldAllow = false;
@@ -395,6 +464,10 @@ internal static class RaidWorld {
         if (data.owner == 0 || SiteAt(data.point) != raid.SideOf(data.owner)) return;
 
         raid.Placed(data.owner, drop.asset.id);
+        if (Materials.Split(drop.asset.itemName)?.Kind != "Doorway") return;
+
+        PlaceDoor(drop, data.owner, data.group);
+        raid.DoorsChanged(data.owner, 1);
     }
 
     internal static bool IsFloor(ItemStructureAsset asset) {
@@ -431,17 +504,20 @@ internal static class RaidWorld {
         ref ulong owner, ref ulong group, ref bool shouldAllow) {
         if (asset.id == PeekSeekRaid.Config.AnchorMarkerItemId) {
             shouldAllow = raid != null
-                && raid.Phase == RaidPhase.Picking
-                && owner == raid.FlagBearer
+                && raid.Phase == RaidPhase.Picking && owner == raid.FlagBearer
                 && SiteAt(point) == raid.DefendedSite
                 && MayStandFlag(raid.DefendedSite, PeekSeekRaid.Config.Sites[raid.DefendedSite], point);
+            string why = shouldAllow ? FlagRefusal(point) : PeekSeekRaid.Instance.Translate("flag_where");
+            if (why != null) shouldAllow = false;
 
             // The bearer is the one person this rule bites, so they are told why.
-            if (!shouldAllow && raid != null && owner == raid.FlagBearer && PlayerTool.getSteamPlayer(new CSteamID(owner)) is { } bearer) {
-                Host.Whisper(bearer, PeekSeekRaid.Instance.Translate("flag_where"));
+            if (!shouldAllow && raid != null && PlayerTool.getSteamPlayer(new CSteamID(owner)) is { } bearer) {
+                Host.Whisper(bearer, why);
             }
             return;
         }
+
+        if (Powerups.AttackerMayPlace(owner, asset.id, point)) return;
 
         if (!MayBuildAt(point, owner)) shouldAllow = false;
         else if (raid.Phase == RaidPhase.Building && raid.BudgetFor(owner).Counts.Ids.Contains(asset.id)
@@ -488,24 +564,93 @@ internal static class RaidWorld {
     /// will not let a stranger salvage an unowned piece. This is the second lock,
     /// because the cost of being wrong is a team that can relocate its own site
     /// mid-match, and the cost of the check is one comparison.
+    ///
+    /// Past that, the game's own salvage never happens while Raid runs: nobody is handed
+    /// a piece. While building, the gamemode decides what the salvage means. In a round
+    /// the game has already checked the defender owns the piece, which only a wood one
+    /// ever is, and the piece is gone for good, or changed by what is in their hands.
     private static void OnSalvageStructure(StructureDrop drop, SteamPlayer instigator, ref bool shouldAllow) {
         int site = SiteAt(drop.GetServersideData().point);
         if (site >= 0 && IsAnchorTile(site, drop)) {
             shouldAllow = false;
-            if (raid != null && raid.Phase == RaidPhase.Building) raid.OfferSwap(instigator, drop, site);
             return;
         }
 
-        // During the build a salvage is a question, not an action: the piece stays
-        // and a board asks what it should be instead, take it down being one answer.
-        // Holding a key on a wall is the one gesture every player already knows.
-        if (raid != null && raid.Phase == RaidPhase.Building && site == raid.SideOf(instigator.playerID.steamID.m_SteamID)) {
+        if (raid == null) return;
+
+        if (raid.Phase == RaidPhase.Building && site == raid.SideOf(instigator.playerID.steamID.m_SteamID)) {
             shouldAllow = false;
-            raid.OfferSwap(instigator, drop, site);
+            raid.Salvage(instigator, drop, site);
             return;
         }
 
-        Salvaged(instigator, drop.asset, site);
+        if (raid.Phase is RaidPhase.Picking or RaidPhase.Playing && site == raid.DefendedSite) {
+            shouldAllow = false;
+            SalvageInRound(instigator.player, drop);
+        }
+    }
+
+    /// A defender salvaged a wood piece of their own base mid-round. A wall salvaged with
+    /// a metal wall in hand becomes that metal wall, and with a pane of glass in hand
+    /// becomes a window with the pane in it; anything else comes down and is lost.
+    private static void SalvageInRound(Player player, StructureDrop drop) {
+        if (!Raid.IsSoftPiece(drop.asset)) return;
+
+        if (IsWoodWall(drop.asset.id) && HeldMetalWall(player) is { } metal) {
+            player.equipment.use();
+            Swap(drop, metal);
+            return;
+        }
+
+        if (IsWoodWall(drop.asset.id) && player.equipment.asset is ItemBarricadeAsset { build: EBuild.GLASS } glass) {
+            Glaze(player, drop, glass);
+            return;
+        }
+
+        Remove(drop);
+    }
+
+    /// Whether a piece is one of the walls that can be a window: its family has one.
+    internal static bool IsWoodWall(ushort id) {
+        return PieceFamily.Of(PeekSeekRaid.Config.PieceFamilies, id)?.Forms.Contains(PeekSeekRaid.Config.WindowItemId) == true;
+    }
+
+    /// The metal wall a player is holding, or null.
+    internal static ItemStructureAsset HeldMetalWall(Player player) {
+        return player.equipment.asset is ItemStructureAsset { construct: EConstruct.WALL } wall
+               && Materials.Split(wall.itemName)?.Material == "Metal"
+            ? wall
+            : null;
+    }
+
+    /// Turn a wall into a window with the pane a player is holding in it, facing the way
+    /// they face: the game's own placement rule, so the one-way side is the side they
+    /// salvaged from, exactly as if they had put the pane in by hand. A window that
+    /// already has a pane keeps it and the pane in hand stays in hand.
+    private static void Glaze(Player player, StructureDrop drop, ItemBarricadeAsset glass) {
+        if (drop.asset.id != PeekSeekRaid.Config.WindowItemId) {
+            if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.WindowItemId) is not ItemStructureAsset window) return;
+            drop = Swap(drop, window);
+            if (drop == null) return;
+        }
+
+        Vector3 slot = drop.model.TransformPoint(SlotLocal);
+        if (BarricadeNear(slot) != null) return;
+
+        Quaternion world = drop.model.rotation * SlotLocalRotation;
+        float yaw = SnapYaw(world * Vector3.right, world, player.look.aim.forward);
+        ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+
+        placingOurselves = true;
+        try {
+            BarricadeManager.dropNonPlantedBarricade(
+                new Barricade(glass, glass.health, glass.getState()),
+                slot, BarricadeManager.getRotation(glass, 0f, yaw, 0f), steam64, player.quests.groupID.m_SteamID);
+        } finally {
+            placingOurselves = false;
+        }
+
+        player.equipment.use();
     }
 
     /// How long a salvage takes for this player from now on. The client counts the
@@ -515,13 +660,29 @@ internal static class RaidWorld {
         player.interact.sendSalvageTimeOverride(seconds);
     }
 
+    /// A door belongs to its doorway: while building it only comes out with the frame,
+    /// and in a round a door or a pane a defender takes out is gone, like a wall.
     private static void OnSalvageBarricade(BarricadeDrop drop, SteamPlayer instigator, ref bool shouldAllow) {
         if (drop.asset?.id == PeekSeekRaid.Config.AnchorMarkerItemId) {
             shouldAllow = false;
             return;
         }
 
-        Salvaged(instigator, drop.asset, SiteAt(drop.GetServersideData().point));
+        int site = SiteAt(drop.GetServersideData().point);
+        bool fitted = drop.asset?.id == PeekSeekRaid.Config.DoorItemId || drop.asset?.build == EBuild.GLASS;
+
+        if (raid != null && raid.Phase == RaidPhase.Building && drop.asset?.id == PeekSeekRaid.Config.DoorItemId) {
+            shouldAllow = false;
+            return;
+        }
+
+        if (raid != null && raid.Phase is RaidPhase.Picking or RaidPhase.Playing && site == raid.DefendedSite && fitted) {
+            shouldAllow = false;
+            RemoveBarricade(drop);
+            return;
+        }
+
+        Salvaged(instigator, drop.asset, site);
     }
 
     /// A piece a builder took down during the build phase goes back on the pile. The
@@ -551,15 +712,37 @@ internal static class RaidWorld {
         StructureDrop drop = StructureManager.FindStructureByRootTransform(structure);
         if (drop == null) return;
 
-        int site = SiteAt(drop.GetServersideData().point);
-        if (site >= 0 && IsAnchorTile(site, drop)) shouldAllow = false;
+        StructureData data = drop.GetServersideData();
+        int site = SiteAt(data.point);
+        if (site >= 0 && IsAnchorTile(site, drop)) {
+            shouldAllow = false;
+            return;
+        }
+
+        Damage.Piece(instigator, Damage.KindOf(drop.asset, data.group), drop.asset.health, (int)drop.instanceID,
+            OnDefendedBase(site), origin, ref damage, ref shouldAllow);
     }
+
+    private static bool OnDefendedBase(int site) => raid != null && raid.Phase == RaidPhase.Playing && site == raid.DefendedSite;
 
     private static void OnDamageBarricade(
         CSteamID instigator, Transform barricade, ref ushort damage,
         ref bool shouldAllow, EDamageOrigin origin) {
-        ItemAsset asset = BarricadeManager.FindBarricadeByRootTransform(barricade)?.asset;
-        if (asset?.id == PeekSeekRaid.Config.AnchorMarkerItemId && !MarkerIsDestructible) shouldAllow = false;
+        BarricadeDrop drop = BarricadeManager.FindBarricadeByRootTransform(barricade);
+        if (drop?.asset == null) return;
+
+        if (drop.asset.id == PeekSeekRaid.Config.AnchorMarkerItemId && !MarkerIsDestructible) {
+            shouldAllow = false;
+            return;
+        }
+        // Whoever hits the flag last is who brought it down, for the banner.
+        if (drop.asset.id == PeekSeekRaid.Config.AnchorMarkerItemId) raid?.FlagHit(Damage.Current?.Killer ?? instigator);
+
+        if (drop.asset.build == EBuild.GLASS) Damage.Glass(instigator, drop.asset.id, origin, ref damage, ref shouldAllow);
+        if (!shouldAllow) return;
+
+        Damage.Piece(instigator, Damage.KindOf(drop.asset), drop.asset.health, (int)drop.instanceID,
+            OnDefendedBase(SiteAt(drop.GetServersideData().point)), origin, ref damage, ref shouldAllow);
     }
 
     // ---- swapping a piece --------------------------------------------------------
@@ -572,14 +755,17 @@ internal static class RaidWorld {
         return StructureManager.FindStructureByRootTransform(hit.transform.root);
     }
 
-    /// Put a piece of another material exactly where this one stands, keeping who it
-    /// belongs to. The old one is destroyed rather than salvaged, so nothing is handed
-    /// to anybody: the budget is the only ledger.
-    internal static void Swap(StructureDrop drop, ItemStructureAsset to) {
+    /// Put another piece exactly where this one stands, and return it. The old one is
+    /// destroyed rather than salvaged, so nothing is handed to anybody: the budget is
+    /// the only ledger. A rampart's pivot is lower than a wall's in the same slot, so
+    /// the point moves by the difference. In a round the new piece keeps the old one's
+    /// owners only if it is wood; a metal wall nobody owns is a wall nobody salvages.
+    internal static StructureDrop Swap(StructureDrop drop, ItemStructureAsset to) {
         StructureData data = drop.GetServersideData();
-        Vector3 point = data.point;
+        Vector3 point = data.point + Vector3.up * (PivotDrop(drop.asset) - PivotDrop(to));
         Quaternion rotation = drop.model.rotation;
-        ulong owner = data.owner, group = data.group;
+        bool keepOwners = raid?.Phase != RaidPhase.Playing || Raid.IsSoftPiece(to);
+        ulong owner = keepOwners ? data.owner : 0, group = keepOwners ? data.group : 0;
 
         Remove(drop);
         placingOurselves = true;
@@ -588,13 +774,114 @@ internal static class RaidWorld {
         } finally {
             placingOurselves = false;
         }
+
+        return StructureAt(point);
     }
 
+    /// How far below a wall slot's pivot a piece sits: the housing planner puts a
+    /// rampart 1.225 lower than a wall in the same slot (UseableHousingUtils).
+    private static float PivotDrop(ItemStructureAsset asset) => asset.construct == EConstruct.RAMPART ? 1.225f : 0f;
+
+    /// A square of `floor` pieces, three by three, centred on a point and turned to
+    /// `yaw`: something to stand a helicopter on in mid-air. Owned by nobody.
+    internal static List<Transform> Platform(Vector3 centre, float yaw, ushort floor) {
+        List<Transform> laid = [];
+        if (Assets.find(EAssetType.ITEM, floor) is not ItemStructureAsset asset) return laid;
+
+        Quaternion turn = Quaternion.Euler(0f, yaw, 0f);
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                Vector3 point = centre + turn * new Vector3(x * BaseLayout.Edge, 0f, z * BaseLayout.Edge);
+                StructureManager.dropReplicatedStructure(new Structure(asset, asset.health), point, Quaternion.Euler(-90f, yaw, 0f), 0, 0);
+                if (StructureAt(point) is { } drop) laid.Add(drop.model);
+            }
+        }
+        return laid;
+    }
+
+    /// Take a piece down, and the door or pane standing in it, which the game would
+    /// otherwise leave hanging in the air.
     internal static void Remove(StructureDrop drop) {
+        string kind = Materials.Split(drop.asset.itemName)?.Kind;
+        if (kind == "Doorway" && raid?.Phase == RaidPhase.Building && drop.GetServersideData().owner != 0) {
+            raid.DoorsChanged(drop.GetServersideData().owner, -1);
+        }
+        Vector3? snap = kind == "Doorway" ? drop.model.TransformPoint(DoorLocal)
+            : kind == "Window" ? drop.model.TransformPoint(SlotLocal)
+            : null;
+        if (snap != null && BarricadeNear(snap.Value) is { } fitted) RemoveBarricade(fitted);
+
         if (!StructureManager.tryGetRegion(drop.model, out byte x, out byte y, out StructureRegion _)) return;
 
         StructureManager.destroyStructure(drop, x, y, Vector3.zero);
     }
+
+    internal static void RemoveBarricade(BarricadeDrop drop) {
+        if (!BarricadeManager.tryGetRegion(drop.model, out byte x, out byte y, out ushort _, out BarricadeRegion _)) return;
+
+        BarricadeManager.destroyBarricade(drop, x, y, ushort.MaxValue);
+    }
+
+    /// Put a door in a doorway that has just gone down, facing the way its builder
+    /// looks, owned by them and their team.
+    private static void PlaceDoor(StructureDrop doorway, ulong owner, ulong group) {
+        if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.DoorItemId) is not ItemBarricadeAsset door) return;
+
+        Quaternion world = doorway.model.rotation * DoorLocalRotation;
+        Vector3 look = PlayerTool.getPlayer(new CSteamID(owner))?.look.aim.forward ?? doorway.model.forward;
+        float yaw = SnapYaw(world * Vector3.up, world, look);
+
+        placingOurselves = true;
+        try {
+            BarricadeManager.dropNonPlantedBarricade(
+                new Barricade(door, door.health, DoorLock.State(owner, group)),
+                doorway.model.TransformPoint(DoorLocal), BarricadeManager.getRotation(door, 0f, yaw, 0f), owner, group);
+        } finally {
+            placingOurselves = false;
+        }
+    }
+
+    internal static bool IsDoor(ItemBarricadeAsset asset) => asset.build is EBuild.DOOR or EBuild.HATCH or EBuild.GATE;
+
+    /// Where a door and a pane go in a structure, read out of core.masterbundle: the
+    /// "Door" child of both doorways and the "Slot" child of the maple window, which the
+    /// client placer snaps to. The dedicated server strips those children from the
+    /// prefab (ItemStructureAsset.RemoveClientComponents), so they are kept here.
+    private static readonly Vector3 DoorLocal = new(0f, 0f, -0.6763f);
+    private static readonly Quaternion DoorLocalRotation = new(-0.7071f, 0f, 0f, 0.7071f);
+    private static readonly Vector3 SlotLocal = new(0f, 0f, 0.015f);
+    private static readonly Quaternion SlotLocalRotation = new(-0.5f, -0.5f, -0.5f, 0.5f);
+
+    /// The yaw the game's own placer gives a door or pane in a snap point, for somebody
+    /// looking along `look` (UseableBarricade.checkSpace). `upright` is the axis it tests:
+    /// the snap's up for a door, its right for a pane.
+    private static float SnapYaw(Vector3 upright, Quaternion snap, Vector3 look) {
+        Vector3 forward = snap * Vector3.forward, up = snap * Vector3.up;
+
+        if (Mathf.Abs(Vector3.Dot(upright, Vector3.up)) > 0.5f) {
+            float yaw = Quaternion.LookRotation(forward).eulerAngles.y;
+            return Vector3.Dot(look, forward) < 0f ? yaw + 180f : yaw;
+        }
+
+        float across = Quaternion.LookRotation(up).eulerAngles.y;
+        return Vector3.Dot(look, up) > 0f ? across + 180f : across;
+    }
+
+    /// A door or pane standing on a snap point, or null.
+    private static BarricadeDrop BarricadeNear(Vector3 point) {
+        List<RegionCoordinate> around = [];
+        Regions.getRegionsInRadius(point, 1f, around);
+
+        foreach (RegionCoordinate coordinate in around) {
+            foreach (BarricadeDrop drop in BarricadeManager.regions[coordinate.x, coordinate.y].drops) {
+                if ((drop.GetServersideData().point - point).sqrMagnitude < SnapTolerance * SnapTolerance) return drop;
+            }
+        }
+
+        return null;
+    }
+
+    private const float SnapTolerance = 0.3f;
 
     /// The piece standing at exactly this point, or null.
     internal static StructureDrop StructureAt(Vector3 point) {
@@ -608,20 +895,6 @@ internal static class RaidWorld {
         }
 
         return null;
-    }
-
-    /// Every piece of the same kind as this one in another material: the swap board.
-    /// A pillar has none: the frame is maple and stays maple.
-    internal static List<ItemStructureAsset> Variants(ItemStructureAsset of) {
-        if (of.construct == EConstruct.PILLAR || of.construct == EConstruct.POST) return [];
-
-        List<ItemAsset> all = [];
-        Assets.find(all);
-
-        return all.OfType<ItemStructureAsset>()
-            .Where(asset => asset.id != of.id && Materials.SameKind(asset.itemName, of.itemName))
-            .OrderBy(asset => Array.IndexOf(Materials.Names, Materials.Split(asset.itemName)?.Material))
-            .ToList();
     }
 
     // ---- the player -----------------------------------------------------------------
@@ -717,9 +990,26 @@ internal static class RaidWorld {
     }
 
     /// The flag, and nothing else, in the hands of the defender who places it.
+    /// The flag, on top of whatever the defender who places it carries, and in their
+    /// hands, so the first thing they can do is put it down.
     internal static void HandFlag(Player player) {
-        DressPlain(player);
-        player.inventory.forceAddItemAuto(new Item(PeekSeekRaid.Config.AnchorMarkerItemId, true), false, true, false);
+        if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.AnchorMarkerItemId) is not ItemAsset flag) return;
+
+        TakeFlag(player);
+        player.inventory.forceAddItemAuto(new Item(flag.id, true), false, true, false);
+        if (player.inventory.FindFirstItemByAsset(flag, out var found)) {
+            player.equipment.ServerEquip(found.Page, found.Jar.x, found.Jar.y);
+        }
+    }
+
+    /// Every flag out of a player's hands and bags.
+    internal static void TakeFlag(Player player) {
+        for (byte page = 0; page < PlayerInventory.PAGES - 1; page++) {
+            Items items = player.inventory.items[page];
+            for (int i = (items?.getItemCount() ?? 0) - 1; i >= 0; i--) {
+                if (items.getItem((byte)i)?.item?.id == PeekSeekRaid.Config.AnchorMarkerItemId) player.inventory.removeItem(page, (byte)i);
+            }
+        }
     }
 
     /// Dress a player in their own loadout and nothing else.
@@ -760,10 +1050,13 @@ internal static class RaidWorld {
 
     /// Everything a player carries into a round: their saved kit, the gamemode's
     /// default items, and the one option they picked off the board.
-    internal static void Kit(Player player, RaidOption option) {
+    /// Everything a player carries into a round: their saved kit, the gamemode's
+    /// default items, their side's baseline, and the powerup they picked.
+    internal static void Kit(Player player, RaidOption option, IEnumerable<RaidItem> baseline) {
         Outfit(player);
 
         Give(player, PeekSeekRaid.Config.DefaultItems);
+        Give(player, baseline);
         if (option != null) Give(player, option.Items);
     }
 
@@ -857,7 +1150,17 @@ internal static class RaidWorld {
     }
 
     private static void Give(Player player, RaidItem item) {
-        Give(player, item.ItemId, item.Amount, item.StateBytes());
+        Give(player, item.ItemId, item.Amount, StateOf(item));
+    }
+
+    /// A kit item's state: the gun built from its attachments by the game itself when it
+    /// names any, else the bytes written out in config.
+    internal static byte[] StateOf(RaidItem item) {
+        if (!item.HasAttachments || Assets.find(EAssetType.ITEM, item.ItemId) is not ItemGunAsset gun) return item.StateBytes();
+
+        byte ammo = item.Ammo;
+        if (ammo == 0 && Assets.find(EAssetType.ITEM, item.Magazine) is ItemMagazineAsset magazine) ammo = magazine.amount;
+        return gun.getState(item.Sight, item.Tactical, item.Grip, item.Barrel, item.Magazine, ammo);
     }
 
     private static void Give(Player player, ushort itemId, byte amount, byte[] state) {

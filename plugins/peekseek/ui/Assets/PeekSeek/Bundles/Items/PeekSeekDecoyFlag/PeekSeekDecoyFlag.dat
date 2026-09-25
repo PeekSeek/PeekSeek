@@ -1,0 +1,23 @@
+GUID f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2
+Type Barricade
+Rarity Legendary
+Useable Barricade
+Build Barricade
+ID 43133
+
+// RAID's Faker decoy: the PeekSeek Flag exactly as it looks, but it is not the
+// objective, so breaking it wins nothing. Attackers cannot tell until they try.
+Master_Bundle_Override core.masterbundle
+Bundle_Override_Path /Items/Barricades/Claim
+
+Size_X 2
+Size_Y 2
+Size_Z 0.7
+
+Health 600
+Range 4
+Radius 0.5
+Offset 1.12
+
+Explosion 36
+Vulnerable

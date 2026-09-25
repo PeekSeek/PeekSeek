@@ -863,8 +863,37 @@ internal abstract class PSManager {
         return info != null ? info.TeamName : "NONE_TEAM_NULL";
     }
 
+    /// A new round: stats and streaks start again for everybody.
+    internal static void NewRound() {
+        StatService.BeginRound();
+        Feed?.NewRound();
+    }
+
+    /// Whether the gamemode is in a phase where the team's pings belong on the bar:
+    /// a pick or a build, not a fight. Set through Host.ShowPings.
+    internal static bool GamemodeShowsPings;
+
     private static bool IsOnline(ulong steam64) {
-        return Provider.clients.Any(client => client.playerID.steamID.m_SteamID == steam64);
+        return Phantoms.Contains(steam64) || Provider.clients.Any(client => client.playerID.steamID.m_SteamID == steam64);
+    }
+
+    /// Roster players a tester has declared present (`/ssolo`): they count as online
+    /// and alive for the rest of the match, so one person can play a real match whose
+    /// other players are never going to connect.
+    internal static readonly HashSet<ulong> Phantoms = [];
+
+    /// Start the match this server holds now, with whoever is here, and count everybody
+    /// on its roster who is not as present. The match is the site's, reported as usual.
+    internal static string PlaySolo() {
+        if (Data == null || Status != EPSStatus.IN_PROGRESS) return "No match is held here. Queue one on the site first.";
+
+        foreach (ulong steam64 in Data.Teams.SelectMany(team => team.Players)) {
+            if (!Provider.clients.Any(client => client.playerID.steamID.m_SteamID == steam64)) Phantoms.Add(steam64);
+        }
+
+        if (Waiting) Begin();
+        Logger.Log($"Match {Data.Id} played solo; standing in for {Phantoms.Count} player(s) who are not here.");
+        return null;
     }
 
     internal static bool HaveAllPlayersJoined() {
@@ -990,6 +1019,27 @@ internal abstract class PSManager {
         Task.Run(() => DelayEnd(PeekSeek.Config.DelayKickAfterWin, winner.Name));
     }
 
+    /// The match ends level: the gamemode has run out of rounds to decide it. Everybody
+    /// stands where they are and looks at the numbers, then the result goes to the site
+    /// as a draw, which moves nobody's wins or losses.
+    internal static void MatchDrawn() {
+        if (Status != EPSStatus.IN_PROGRESS || Data == null) return;
+
+        UpdateStatus(EPSStatus.DELAY);
+        Banner.Show($"DRAW {ScoreLine()}", "Nobody wins", MvpLine());
+        RecordEvent("matchDrawn", null);
+        SendUpdateState();
+        RoundLog.Clear();
+        RefreshHud();
+
+        foreach (SteamPlayer client in Provider.clients.ToList()) {
+            if (client.player != null) Freeze(client.player, true);
+        }
+        ScoresLocked = true;
+        Scores.ShowAll(Sheet());
+        Task.Run(() => DelayEnd(PeekSeek.Config.DelayKickAfterWin, null));
+    }
+
     /// Root a player to the spot, or let them go. Speed and jump both, because a
     /// standing jump is a way to move.
     internal static void Freeze(Player player, bool frozen) {
@@ -1079,7 +1129,11 @@ internal abstract class PSManager {
         PSPlayerStat mvp = Mvp();
         foreach (PSTeam team in Data.Teams) {
             sheet.Rows.Add(ScoreRow.Head($"{team.Name.ToUpperInvariant()}    {Score(team)}"));
-            foreach (ulong steam64 in team.Players) {
+            // Most kills first, then fewest deaths, so the board reads top down.
+            IEnumerable<ulong> ranked = team.Players
+                .OrderByDescending(steam64 => StatService.GetStatKills(new CSteamID(steam64)))
+                .ThenBy(steam64 => StatService.GetStatDeaths(new CSteamID(steam64)));
+            foreach (ulong steam64 in ranked) {
                 CSteamID id = new(steam64);
                 byte kills = StatService.GetStatKills(id);
                 int hs = kills > 0 ? StatService.GetStatHeadshots(id) * 100 / kills : 0;
@@ -1094,9 +1148,8 @@ internal abstract class PSManager {
                         hs.ToString(),
                         Mathf.RoundToInt(StatService.GetStatDamageDealt(id)).ToString()
                     ],
-                    // Ping is only worth reading while players are still choosing; once a
-                    // round is on, the board is about the fight.
-                    Ping = Status == EPSStatus.WAITING ? PingOf(id) : null
+                    // Always there: the board is where anybody goes to check a ping.
+                    Ping = PingOf(id)
                 });
             }
         }
@@ -1249,14 +1302,18 @@ internal abstract class PSManager {
         GroupManager.knownGroups.Clear();
         Data = null;
         Match = null;
+        Phantoms.Clear();
+        GamemodeShowsPings = false;
     }
 
     /// Reports every player on the roster, not only the ones who turned up: a player the
     /// server leaves out is a player whose Elo never moves, which is what used to make
     /// walking out of a losing match free.
+    /// A null winning team on a played match is a draw.
     internal static void SendResults(string winningTeam, bool isPlayed = true) {
         var payload = new {
             played = isPlayed,
+            draw = isPlayed && winningTeam == null,
             winningTeam,
             players = isPlayed ? RosterResults(winningTeam) : []
         };
@@ -1529,6 +1586,7 @@ internal abstract class PSManager {
         HudState state = new() {
             SecondsLeft = Running?.SecondsLeft ?? (Waiting ? WaitSecondsLeft : -1),
             Phase = Running?.PhaseLabel,
+            Pings = Status == EPSStatus.WAITING || GamemodeShowsPings,
             Spectators = [.. Data.Spectators ?? []]
         };
 
