@@ -21,17 +21,17 @@ good to defend is a bad base.
 | --- | --- |
 | Footprint | 20 seconds, rooted. Each team picks square or hexagonal; first answer counts. |
 | Build | 5 minutes. Both teams build, each locked to their own plot. |
-| Pick | Up to 20 seconds. Attackers get the map: where they come in, and their powerup. Defenders get five powerups, and one of them, once picked, the flag to stand. Everybody but the flag bearer waits rooted in the map's lobby. Over the moment the last person has picked and the flag is up. |
-| Ready | 3 seconds, everybody in position and rooted, flag up. |
+| Pick | 20 seconds. Defenders are on their base from the first second: they pick, are kitted at once, and set up; one of them has the flag in hand to stand. Attackers choose where they come in and their powerup in the map's lobby, and only come in when the round goes live. |
 | Round | 3 minutes. Attackers bring the flag down, defenders keep it up. |
 
 Rounds 1-3 team North defends, rounds 4-6 team South does. The match ends the moment the
 rest of the block cannot change who is ahead: 4-0 after four rounds is over, 4-1 after
-five is over. Level at 3-3 goes to overtime, two rounds each, over and over, decided the
-same way. Never earlier, because half a block is not a fair swap.
+five is over. Level at 3-3 goes to overtime, two rounds each, decided the same way, at
+most twice: level after the second overtime is a draw, which the site records as nobody's
+win or loss. Never earlier, because half a block is not a fair swap.
 
-Nobody moves until the round is live, except the one defender walking the flag, who
-cannot leave the base. The bar says BUILD over its clock for the build and nothing over
+Defenders stay on their base through the pick. A round that is decided (the flag down, a
+side gone) ends 2.5 seconds later, not on the same frame. The bar says BUILD over its clock for the build and nothing over
 it otherwise; a round's end, the swap of sides and overtime are banners. A defender who
 dies is put in the map's lobby for the rest of the round, with the bar and the feed
 still in front of them, rather than left on a death screen. Everybody else spends the pick in the map's own lobby, the
@@ -55,17 +55,20 @@ exceptions:
 
 - *Metal doors and hatches* are handed to the team every round, because an unowned door
   is a door nobody can open.
-- *Birch walls* are handed to the team too. These are the soft walls: build a wall in
-  birch and you can pull it down mid-round to open an angle that was not there before.
-  Metal walls, every floor and every pillar stay unowned, so a base cannot be dismantled
-  into a better base while a round is running.
+- *Wood* is handed to the team too, every wall, doorway and roof but no floor or pillar.
+  Pull one mid-round to open an angle that was not there before, but it is gone: nothing
+  comes back into your hands. Salvage a wood wall holding a metal wall and it becomes
+  that metal wall; holding a pane of glass, it becomes a window with the pane in it,
+  facing the way you face, so one-way glass sees out from where you stood. A door or a
+  pane taken out is gone too. Metal, every floor and every pillar stay unowned, so a
+  base cannot be dismantled into a better base while a round is running.
 
 **One base per site.** Before the build phase each team picks a footprint: square (nine
 metal floors, three by three) or hexagonal (six triangles round the middle with a square
 on every side), from a board that draws the whole starting base on each tile. The
 gamemode drops it with a maple pillar on every corner of every floor, on Unturned's own
 housing grid to the centimetre, so everything a team attaches links. The starting floors
-are the site: they can be swapped to another material but never salvaged, damaged or
+are the site: never salvaged, damaged or
 moved, whatever they are made of. The pillars belong to the team, so a plan that wants a
 corner clear can pull one. Teams do get floors, but a floor only goes down beside or
 above one that is already standing, so the base grows out of the anchor. Nobody ends up
@@ -109,50 +112,81 @@ planner lists what can still go down, the panel beside the screen says how many,
 placing a piece takes one off the pile and puts the next one in your hands. There is no
 gun and nothing to top up.
 
-Any piece already standing can be made of something else: salvage it. During the build
-the salvage is refused and a board offers the same piece in every other material with
-what is left of each, plus taking it down, which puts it back on the pile. Swap a
-starting metal floor for birch and the metal floor goes on the pile for use elsewhere.
-That is the whole upgrade system, it works on the starting floors too, and holding the
-salvage key on a wall is the one gesture nobody has to be taught. The hold is half a
-second while building and three in a round, set per player by the server; the game's
-own eight is for a world where a wall is worth something.
+The kit is a few doorways and a lot of wall: three metal and three maple doorways, ten
+metal walls, sixty-four maple walls, twelve maple floors, thirty-two maple roofs, six
+metal roofs, eight maple ramps and forty-eight maple pillars. Every doorway comes with a metal door already in it.
+
+Salvaging while building never hands you anything. A maple wall opens a board to turn it
+into a rampart or a window, a maple roof into a hole, free, or take it down. Anything else,
+metal included, just comes down and goes back on the pile: there is no metal window or
+rampart. A hexagonal base gets 0.7 of all of that and, as triangle floors and
+roofs, 0.9 of the maple floors and roofs, rounded down. The kit also grows with the
+team that will raid it: every raider past the first adds all of the metal again and half
+of the wood, and no doorways. Salvage a wood wall holding a metal wall and it becomes metal, one metal wall off
+the pile and the wood one not back on it. The hold is half a second while building and
+three in a round, set per player by the server.
 
 Plus the leash: both sites are on one map, and during the build phase you cannot leave
 your own plot. Walk too far and you are put back. That is what keeps the first round worth
 playing.
 
-## The kits
+## The powerups
 
-The arithmetic a raider does at the wall, and the plugin writes onto the game's own
-items when a match starts (`ChargeStructureDamage`, `RocketStructureDamage`,
-`RocketRangeMultiplier`): a maple wall is 400 health, birch 350, metal 1100, the flag
-600. A charge does 1000, so one takes a wood wall and two take metal. A rocket does
-380, so two take wood and three take metal, and its blast is four fifths of the game's,
-a hole in a wall rather than a room. There is no brick: a brick wall is four charges,
-and that is not this game. Pillars are maple only, so the frame is the frame and a
-wall is what a team chooses to make metal.
+Every player takes one powerup a round, and a powerup has one taker a team: whoever
+takes it first. The board shows every powerup a side has, each tile its class glyph in
+front of its name, its items, and a line where the pictures do not say it all. Your own
+pick is lit; a teammate's is greyed out with their face on it. Whoever has not picked
+when the clock runs out gets one nobody on their team has. Attackers always carry a
+detonator and 4 charges, and every attacker still alive gets 5 more at half time;
+defenders carry nothing extra. Once the round is live, attackers may build anything
+anywhere; it all comes down when the round ends.
 
-**Attack.** Every kit has a way through a wall; what changes is how many walls, from
-how far, and what is left for the people inside. The more of it comes from range, the
-less of it there is. A base that is metal all the way round is four walls deep at most.
-
-| Kit | What you carry | In metal walls |
+| Attack | Class | What it is |
 | --- | --- | --- |
-| Demolition | twelve charges, the detonator | six, at the wall |
-| Rockets | the launcher, nine rockets | three, from anywhere |
-| Breacher | three rockets, five charges | one from range, then two and a half up close |
-| Grenadier | twelve stickies, four impacts, two frags | one, or three wood, and the room behind it |
-| Sapper | four charges, six frags | two, then clear what is behind them without going in |
+| Demolition | Destruction | 8 charges and the detonator |
+| Breacher | Destruction | a chainsaw (birch in 1 s, maple in 3 s, nothing on metal) and 2 impact grenades that each break any door in one throw |
+| Elevator | Initializer | 4 bounce charges and 2 ladders; no fall damage for 3 s after a bounce |
+| Scaffold | Initializer | a housing planner, 6 pillars, 3 maple walls and 3 maple stairs |
+| RPG | Support | the launcher and 3 rockets: 90 on a direct hit, 60 at most from splash, a 4 m blast |
+| Suppressor | Support | the meta Dragonfang and a spare drum: 9 a hit to players, double to glass |
+| Insertion | Support | a Forest Transport Heli on a platform 50 m up and 100 m further out than the pilot's spawn, facing away from the base; the pilot starts at the controls and the team in the seats; the engine dies after 60 s |
+| Stun | Support | a flashbang: 25 damage, and nobody it blinds can fire a gun for 5 s |
+| Second Life | Support | a bedroll (the PeekSeek Bedroll: an Arena map refuses real beds); for 30 s one teammate who dies comes back there, once, on 50 health |
 
-**Defence.** A sentry, a hostile one that goes down with a Bluntforce in it, loaded, that
-nobody can take out (salvage it and put it back and it is armed again; which gun is
-`SentryFirearm`). A welder: a blowtorch to mend what they crack and two metal walls to
-close a hole. A trapper: three landmines and four coils of wire. Reinforce: six metal
-walls, a door and two pillars. A watchtower: a scope and three grenades. The sentry is
-the PeekSeek Sentry, item 43131 in the UI workshop item: the Hostile Sentry with
-`Requires_Power false`, because a vanilla sentry only runs within reach of a fuelled
-generator, and both the server and every client decide that for themselves.
+| Defence | Class | What it is |
+| --- | --- | --- |
+| Nomad | Special | vitamins, 20 s outside with no off-base damage, and a slip plate |
+| Faker | Special | a stereo that fakes gunfire and footsteps, a decoy flag that looks exactly like the real one and wins nothing, and 2 claymores only attackers set off |
+| Striker | Special | red smoke: a plane flies over, trees within 16 m fall, and 9 rockets land within 16 m a ragged moment apart, never on your own base |
+| Mirror | Armorer | 2 one-way panes, bulletproof from outside, a metal wall to explosives |
+| Welder | Armorer | a blowtorch and 3 metal walls you may place mid-round |
+| Supplier | Warden | a crate that makes a blood bag every 30 s |
+| Sentry | Warden | 2 PeekSeek Sentries, armed the moment they go down, 3 snares that root an attacker for 3 s, and 4 coils of wire |
+
+**Hits to break.** Whatever the game worked out, a tool on the table takes a piece down
+in exactly its number of hits, and only the nearest piece takes a blast. Floors and
+pillars keep the game's own damage; the starting floors take none.
+
+| Tool | Metal door | Birch wall | Maple wall | Metal wall | Anything else |
+| --- | --- | --- | --- | --- | --- |
+| Demolition charge | 1 | 1 | 1.5 | 3 | 3 |
+| Impact grenade | 1 | none | none | none | none |
+| Rocket | 2 | 2 | 2 | 4 | 4 |
+| Chainsaw | none | 1 s | 3 s | none | none |
+
+**Attackers can always get in.** While building, a `BREACH n / 6` tag says how many
+charges it takes to reach the dearest starting tile from outside, along the cheapest way
+in. At the end of the build any tile over 6 has the outermost metal on its cheapest way
+in turned to maple, and the team is told what changed. The flag goes at least 3 m from
+any door, so it cannot be shut inside one, and never where it would cost more than 6; a
+Welder's wall that would seal it in comes back into their hands. Every doorway comes
+with a metal door.
+
+**A round's end.** The banner goes up the moment the round is decided, and says how:
+who destroyed the flag, which team wiped out the other, or who aced a team of three or
+more. The round resets 2.5 seconds later. Between rounds the whole map is reset as the
+game resets an arena: items, smoke, trees and objects. There is no death screen; a dead
+player is straight back in the lobby for the rest of the round.
 
 ## The map
 
@@ -167,23 +201,29 @@ every gamemode, and `Items.Spawn_Chance` in the server config sets the loot to n
 
 A match comes from the site: the `Raid` gamemode in `website/src/mmconfig.json`, queued
 for like any other, handed to a match server by `/server/v1/session`, and run by this
-plugin because the match names it. There is no other way to start one.
+plugin because the match names it. To test one alone, queue it on dev with a second
+player and run `/ssolo` on the match server once it is held.
 
 ```
+/ssolo               play the match this server holds now: everybody on its roster who
+                     is not here counts as present and alive, gets a random powerup, and
+                     a team with nobody here gets a plain walled base
+/nextphase, /np      end the current phase; a round goes to the defenders while the flag
+                     stands and to the attackers once it is down
+/raidtime <seconds>  set the clock of the current phase
+/raidwin <atk|def>   give the round to one side
+/raidend             end the match with no winner
 /raid                where the match is
-/raid skip           end the current phase (a round goes to the defenders, as the clock would)
-/raid skip atk       end the round, give it to the attackers
 /raid find <text>    look an item up by name
 ```
 
-`/raid skip` is what makes a bug in round four findable in under a minute instead of
-half an hour.
+All of them need `peekseek.raid.start`.
 
 ## The screens
 
 Every screen Raid uses is Match's, in the PeekSeek UI workshop item built from
 `plugins/peekseek/ui`: the bar along the top, the footprint board, the swap board, the
-defenders' powerup board, the attackers' map, and the build panel. The same item carries
+defenders' powerup board, the attackers' map beside theirs, and the build panel. The same item carries
 the flag and the sentry as items. Raid asks for a board through `Host.Board` and tells
 the bar what it needs to know through `IGamemode`: which team holds and which attacks
 this round, what each player picked, and the clock. See `../peekseek/ui/README.md`.

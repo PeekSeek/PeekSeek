@@ -109,4 +109,14 @@ public class RoundOrderTests {
         Assert.Equal(0, RoundOrder.Winner(10, 6, 4));
         Assert.Equal(1, RoundOrder.Winner(14, 6, 8));
     }
+
+    /// Level after the second overtime is a draw; level before it is not.
+    [Fact]
+    public void LevelAfterDoubleOvertimeIsADraw() {
+        Assert.Equal(14, RoundOrder.LastRound);
+        Assert.True(RoundOrder.IsDraw(14, 7, 7));
+        Assert.False(RoundOrder.IsDraw(10, 5, 5));
+        Assert.False(RoundOrder.IsDraw(14, 8, 6));
+        Assert.Equal(-1, RoundOrder.Winner(14, 7, 7));
+    }
 }

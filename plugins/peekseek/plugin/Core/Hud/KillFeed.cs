@@ -70,6 +70,9 @@ public class KillFeed {
         Provider.onServerDisconnected -= OnLeft;
     }
 
+    /// A new round: every streak starts again.
+    public void NewRound() => feed.EndRound();
+
     /// Once a second, let old rows go.
     public void Tick() {
         if (Time.realtimeSinceStartup < nextExpiry) return;

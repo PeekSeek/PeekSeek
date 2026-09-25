@@ -20,6 +20,14 @@ public class BoardOption {
     public List<GamemodeItem> Items = [];
 
     public ushort IconItemId => Icon != 0 ? Icon : Items.Count > 0 ? Items[0].ItemId : (ushort)0;
+
+    /// Which of the prefab's class glyphs the tile carries in its corner, or -1 for none.
+    /// RAID's boards only; the glyphs are baked, so this picks one rather than sending it.
+    public int Glyph = -1;
+
+    /// A picture for a tile whose powerup is not an item, like a vehicle: the name of a
+    /// file beside the item pictures on the site, shown where the first item would be.
+    public string Picture;
 }
 
 /// Which of the prefab's panels a board is drawn on. `Pick` is the five-tile board a
@@ -27,14 +35,16 @@ public class BoardOption {
 /// board a base's footprint is chosen on, with the whole starting base drawn on each
 /// tile and baked into the bundle; `Swap` is the six-tile board a piece's material is
 /// changed on; `Attack` is the attacker's screen, the map of the site under attack
-/// with a dot on each spawn and the five raid tiles under it. The name is the prefix
+/// with a dot on each spawn and every raid powerup under it; `Raid` is the defender's
+/// board, every defence powerup with the team's faces over it. The name is the prefix
 /// of every child the plugin addresses on that panel (`Pick_Timer`, `Shape0_Taken`)
 /// and of its buttons (`BoardPick2`, `BoardSwap0`), so one class draws all of them.
 public enum BoardFace {
     Pick,
     Shape,
     Swap,
-    Attack
+    Attack,
+    Raid
 }
 
 /// The boards a player answers.
@@ -77,6 +87,12 @@ public class PickBoard {
         /// board that is up; the answer itself is kept until the next Reset, because the
         /// round hands the kit out after the board has gone.
         internal bool Up = true;
+
+        /// A board a team picks on together stays up after it is answered, so a
+        /// player can watch the rest of the team and change their mind, until it is
+        /// closed. Its tiles are claimed: one taker each, drawn with their face.
+        internal bool StaysUp;
+        internal readonly Dictionary<int, ulong> Claimed = [];
     }
 
     /// How many tiles each panel has. Tiles past the options offered are hidden, so a
@@ -85,11 +101,15 @@ public class PickBoard {
     private static int Tiles(BoardFace face) => face switch {
         BoardFace.Shape => 2,
         BoardFace.Swap => 6,
+        BoardFace.Raid or BoardFace.Attack => 10,
         _ => 5
     };
 
     /// How many faces fit beside a dot on the map: a full team.
     private const int FacesPerSpawn = 5;
+
+    /// How many class glyphs a RAID tile carries.
+    private const int Glyphs = 6;
 
     /// How many item rows a powerup tile has.
     private const int ItemRows = 4;
@@ -153,9 +173,9 @@ public class PickBoard {
     /// dots on it, and the raid options. `headline` says which round and which base,
     /// `line` what the board wants, `spawnLabels` which way and how far for each dot.
     public void OpenAttack(SteamPlayer viewer, List<BoardOption> choices, int site, int spawns,
-                           string headline, string line, string siteName, string[] spawnLabels) {
+                           string headline, string line, string siteName, string[] spawnLabels, Action<BoardOption> onAnswer = null) {
         Seat seat = new() {
-            Options = choices, Face = BoardFace.Attack, Site = site, Spawns = spawns,
+            Options = choices, Face = BoardFace.Attack, Site = site, Spawns = spawns, OnAnswer = onAnswer, StaysUp = true,
             Headline = headline, Line = line, SiteName = siteName, SpawnLabels = spawnLabels ?? []
         };
         seats[viewer.playerID.steamID.m_SteamID] = seat;
@@ -196,6 +216,8 @@ public class PickBoard {
     public BoardOption Answer(SteamPlayer player, int oneBased) {
         if (!seats.TryGetValue(player.playerID.steamID.m_SteamID, out Seat seat) || !seat.Up) return null;
         if (oneBased < 1 || oneBased > seat.Options.Count) return null;
+        ulong me = player.playerID.steamID.m_SteamID;
+        if (seat.Claimed.TryGetValue(oneBased - 1, out ulong taker) && taker != me) return null;
 
         // A tile lit for an earlier answer goes dark: a board that stays up between its
         // answers lets a player change their mind.
@@ -281,6 +303,24 @@ public class PickBoard {
         }
     }
 
+    /// Mark a tile on one player's board as another player's: greyed, their face in the
+    /// corner, and nobody else can take it. `taker` 0 frees it. The viewer's own pick is
+    /// Taken, not claimed, so a player never sees their own face as a lock.
+    public void Claim(ulong viewer, int index, ulong taker) {
+        if (!seats.TryGetValue(viewer, out Seat seat) || index < 0 || index >= seat.Options.Count) return;
+
+        bool other = taker != 0 && taker != viewer;
+        if (other) seat.Claimed[index] = taker;
+        else seat.Claimed.Remove(index);
+
+        SteamPlayer player = PlayerTool.getSteamPlayer(new CSteamID(viewer));
+        if (player == null || !seat.Up || Effect() == null) return;
+
+        Visible(player, $"{seat.Face}{index}_Claimed", other);
+        if (!other) return;
+        Picture(player, $"{seat.Face}{index}_Claimer", RemoteAPI.AvatarFor(taker));
+    }
+
     private void Draw(SteamPlayer viewer, Seat seat, int marked) {
         EffectAsset asset = Effect();
         if (asset == null) return;
@@ -307,7 +347,11 @@ public class PickBoard {
             // under it, a row each with its count; the footprint tiles carry their own
             // picture; the swap tiles one picture.
             Send(viewer, $"{face}{i}_Blurb", option.Blurb);
-            if (seat.Face is BoardFace.Pick or BoardFace.Attack) {
+            if (seat.Face is BoardFace.Raid or BoardFace.Attack) {
+                for (int g = 0; g < Glyphs; g++) Visible(viewer, $"{face}{i}_Glyph{g}", g == option.Glyph);
+                Visible(viewer, $"{face}{i}_Claimed", seat.Claimed.ContainsKey(i));
+            }
+            if (seat.Face is BoardFace.Pick or BoardFace.Attack or BoardFace.Raid) {
                 DrawItems(viewer, $"{face}{i}", option);
                 continue;
             }
@@ -326,6 +370,13 @@ public class PickBoard {
     }
 
     private static void DrawItems(SteamPlayer viewer, string tile, BoardOption option) {
+        if (option.Items.Count == 0 && !string.IsNullOrEmpty(option.Picture)) {
+            for (int k = 0; k < ItemRows; k++) Visible(viewer, $"{tile}_Item{k}", k == 0);
+            Send(viewer, $"{tile}_Item0_Count", "");
+            Picture(viewer, $"{tile}_Item0_Icon", string.Format(PeekSeek.Config.ItemIconURL, option.Picture));
+            return;
+        }
+
         for (int k = 0; k < ItemRows; k++) {
             GamemodeItem item = option.Items.ElementAtOrDefault(k);
             Visible(viewer, $"{tile}_Item{k}", item != null);
@@ -380,7 +431,7 @@ public class PickBoard {
 
         if (taken != null) Visible(player, taken, true);
 
-        if (!seat.Answered) return;
+        if (!seat.Answered || seat.StaysUp) return;
         seat.Up = false;
 
         EffectManager.askEffectClearByID(asset.id, player.transportConnection);

@@ -75,9 +75,6 @@ internal class Raid : IGamemode {
     /// The defender placing this round's flag, or 0 when nobody is.
     internal ulong FlagBearer { get; private set; }
 
-    /// Whether the bearer has been given the flag yet. They get it the moment they
-    /// have picked their powerup, so the board is answered before the walk starts.
-    private bool flagHanded;
 
     /// The piece each builder had a swap board open for, by where it stands, so an
     /// answer can find it again even if it has changed hands in the meantime.
@@ -93,6 +90,27 @@ internal class Raid : IGamemode {
     private readonly Dictionary<ulong, float> offBaseSince = [];
 
     private float nextTick;
+
+    /// What each player took into this round, settled when the pick ends: their own
+    /// answer, or a powerup nobody on their team had, at random.
+    private readonly Dictionary<ulong, RaidOption> chosen = [];
+
+    /// A round that has been decided but not yet ended: the flag is down or a side is
+    /// gone, and the round ends RoundEndDelay later rather than on the same frame, so
+    /// nobody is teleported out of the moment they won or lost it.
+    private int pendingWinner = -1;
+    private float pendingAt;
+
+    /// Kills each player made this round, for the ace line.
+    private readonly Dictionary<ulong, int> roundKills = [];
+
+    /// Who last hit the flag, which is who brought it down when it goes.
+    private ulong flagBreaker;
+
+    /// Whether this round's attackers have had their half-time charges.
+    private bool halfTimeGiven;
+
+    private readonly System.Random random = new();
 
     /// The site being attacked this round, which is the site its owners are defending:
     /// a team defends its own base for three rounds and then goes and attacks the
@@ -142,11 +160,22 @@ internal class Raid : IGamemode {
     public void Tick() {
         if (phase == RaidPhase.Idle || phase == RaidPhase.Over) return;
 
+        if (pendingWinner >= 0 && Time.realtimeSinceStartup >= pendingAt) {
+            AfterRound();
+            return;
+        }
+
         // Everything below is per-second bookkeeping, not per-frame work: clocks,
         // the off-base check and the flag check all read the same once a second as
         // they would sixty times, and the raycast in particular is not free.
         if (Time.realtimeSinceStartup < nextTick) return;
         nextTick = Time.realtimeSinceStartup + 1f;
+
+        if (phase is RaidPhase.Picking or RaidPhase.Playing) Powerups.Tick();
+
+        // Teammates' pings on the bar while a team is choosing or building, never in a
+        // fight.
+        Host.ShowPings(phase is RaidPhase.Shaping or RaidPhase.Building or RaidPhase.Picking);
 
         switch (phase) {
             case RaidPhase.Shaping:
@@ -157,10 +186,6 @@ internal class Raid : IGamemode {
                 break;
             case RaidPhase.Picking:
                 TickPicking();
-                break;
-            case RaidPhase.Starting:
-                Host.Countdown(SecondsLeft);
-                if (SecondsLeft <= 0) StartPlaying();
                 break;
             case RaidPhase.Playing:
                 TickPlaying();
@@ -188,6 +213,9 @@ internal class Raid : IGamemode {
 
         Host.Tag.Hide(player.channel.owner);
         if (phase != RaidPhase.Playing) return;
+        if (killer.m_SteamID != 0 && killer.m_SteamID != steam64 && SideOf(killer.m_SteamID) != SideOf(steam64)) {
+            roundKills[killer.m_SteamID] = roundKills.TryGetValue(killer.m_SteamID, out int kills) ? kills + 1 : 1;
+        }
 
         // Dead is dead until the round is over: Match remembers, whatever the game
         // does with the body. So the body comes straight back and Place puts it in
@@ -224,16 +252,11 @@ internal class Raid : IGamemode {
     /// one defender walking the flag carries a flag there until they have picked, so
     /// the team knows who it is before anybody says.
     public ushort PickOf(ulong steam64) {
-        bool picked = phase == RaidPhase.Playing
-            || (phase >= RaidPhase.Picking && phase <= RaidPhase.Starting && Board.HasAnswered(steam64));
-        if (picked) return Board.Chosen(steam64)?.IconItemId ?? 0;
-
-        return phase == RaidPhase.Picking && steam64 == FlagBearer ? FlagPicture : (ushort)0;
+        if (phase == RaidPhase.Picking) return Board.HasAnswered(steam64) ? Board.Chosen(steam64)?.IconItemId ?? 0 : (ushort)0;
+        if (phase == RaidPhase.Playing) return ChosenOption(steam64)?.IconItemId ?? 0;
+        return 0;
     }
 
-    /// The vanilla claim flag, whose model the PeekSeek Flag wears and whose picture
-    /// the site has.
-    private const ushort FlagPicture = 1158;
 
     /// The build is the one phase that needs its name over the clock: the clock alone
     /// reads as a round.
@@ -335,7 +358,7 @@ internal class Raid : IGamemode {
 
         for (int team = 0; team < 2; team++) {
             int captured = team;
-            budgets[team] = new BuildBudget(SuppliesFor(ShapeAt(team)));
+            budgets[team] = new BuildBudget(TeamSize.ForEnemies(SuppliesFor(ShapeAt(team)), PlayersOn(1 - team), ExtraPerEnemy));
             budgets[team].Changed += () => ShowPanel(captured);
         }
 
@@ -348,26 +371,84 @@ internal class Raid : IGamemode {
 
         foreach (Player player in Players()) Place(player);
 
-        Host.Banner("BUILD", Wording.Duration(PeekSeekRaid.Config.BuildSeconds), "Salvage a piece to change what it is made of");
+        Host.Banner("BUILD", Wording.Duration(PeekSeekRaid.Config.BuildSeconds), "Salvage a wall or roof to change its shape");
         Host.RefreshHud();
     }
 
-    /// The team's whole kit: the pieces every base gets, and the triangles a
-    /// hexagonal one needs on top.
+    /// The team's whole kit: the square kit, or the smaller hexagonal one with its
+    /// triangles.
     private static IEnumerable<RaidItem> SuppliesFor(BaseShape shape) {
-        IEnumerable<RaidItem> supplies = PeekSeekRaid.Config.BuildSupplies;
-        return shape == BaseShape.Square ? supplies : supplies.Concat(PeekSeekRaid.Config.TriangleSupplies);
+        PeekSeekRaidConfiguration config = PeekSeekRaid.Config;
+        return shape == BaseShape.Square
+            ? config.BuildSupplies
+            : TrianglePiece.HexagonalKit(config.BuildSupplies, config.TriangleSupplies, config.HexagonSquareShare, config.HexagonTriangleShare);
     }
+
+    /// How much of a piece every raider past the first is worth, off the config: metal,
+    /// wood, or a doorway of either.
+    private static double ExtraPerEnemy(ushort id) {
+        (string Material, string Kind)? piece = Materials.Split((Assets.find(EAssetType.ITEM, id) as ItemAsset)?.itemName);
+        if (piece == null) return 0;
+        if (piece.Value.Kind == "Doorway") return PeekSeekRaid.Config.DoorwayPerEnemy;
+
+        return piece.Value.Material == "Metal" ? PeekSeekRaid.Config.MetalPerEnemy : PeekSeekRaid.Config.WoodPerEnemy;
+    }
+
+    private int PlayersOn(int team) => match.Teams.Count > team ? match.Teams[team].Players.Count : 1;
 
     private void TickBuilding() {
         Leash();
+        ShowBreach();
 
         if (SecondsLeft > 0) return;
         FinishBuilding();
     }
 
-    /// Freeze what has been built and move on.
+    /// What it costs to reach the flag from outside, for each team's builders, at the
+    /// dearest of their starting tiles, since the flag can go on any of them.
+    private void ShowBreach() {
+        float limit = PeekSeekRaid.Config.BreachLimit;
+        for (int team = 0; team < 2; team++) {
+            float cost = BreachCheck.WorstTile(RaidWorld.AnchorTiles(team));
+            string line = $"{cost:0} / {limit:0}";
+            foreach (ulong steam64 in Roster(team)) {
+                if (PlayerTool.getSteamPlayer(new CSteamID(steam64)) is { } builder) Host.Tag.Show(builder, "BREACH", -1, line);
+            }
+        }
+    }
+
+    /// A metal door went up or came down: WallsPerDoor metal walls come with it, and go
+    /// with it as far as the pile still has them.
+    internal void DoorsChanged(ulong steam64, int doors) {
+        if (phase != RaidPhase.Building) return;
+
+        BuildBudget budget = BudgetFor(steam64);
+        ushort wall = PeekSeekRaid.Config.DoorWallItemId;
+        for (int i = 0; i < Math.Abs(doors) * PeekSeekRaid.Config.WallsPerDoor; i++) {
+            if (doors > 0) budget.Refund(wall);
+            else budget.Spend(wall);
+        }
+    }
+
+    /// Freeze what has been built and move on. First every base is brought to the
+    /// breach limit, so the attackers can always get in, and its team told what changed.
     internal void FinishBuilding() {
+        // A phantom team built nothing, so it gets a plain walled base to be raided.
+        for (int team = 0; team < 2; team++) {
+            if (IsPhantomTeam(team)) RaidWorld.BuildPhantomBase(team, sites[team], shapes[team], GroupOf(team));
+        }
+
+        for (int team = 0; team < 2; team++) {
+            List<string> changed = BreachCheck.Enforce(RaidWorld.AnchorTiles(team));
+            if (changed.Count == 0) continue;
+
+            string line = PeekSeekRaid.Instance.Translate("breach_downgraded", string.Join(", ", changed));
+            foreach (ulong steam64 in Roster(team)) {
+                if (PlayerTool.getSteamPlayer(new CSteamID(steam64)) is { } player) Host.Whisper(player, line);
+            }
+        }
+
+        foreach (Player player in Players()) Host.Tag.Hide(player.channel.owner);
         foreach (int team in BuiltSites()) bases[team] = Snapshot(team);
 
         StopBuilding();
@@ -405,38 +486,54 @@ internal class Raid : IGamemode {
         }
     }
 
-    /// A builder salvaged one of their team's pieces: the salvage was refused, and
-    /// this is the board in its place, the same piece in every other material and a
-    /// way to take it down.
-    internal void OfferSwap(SteamPlayer viewer, StructureDrop drop, int site) {
+    /// A builder salvaged one of their team's pieces; the game's own salvage was
+    /// refused and this is what it means instead. With a metal wall in hand, a wood wall
+    /// becomes metal, one metal wall off the pile and the wood wall not back on it. A
+    /// piece with other forms opens a board of them, free, plus taking it down. Anything
+    /// else just comes down and goes back on the pile.
+    internal void Salvage(SteamPlayer viewer, StructureDrop drop, int site) {
         if (phase != RaidPhase.Building) return;
 
-        ulong steam64 = viewer.playerID.steamID.m_SteamID;
         BuildBudget budget = budgets[site];
-        ItemStructureAsset current = drop.asset;
+        ushort was = drop.asset.id;
 
-        List<BoardOption> options = RaidWorld.Variants(current).Select(variant => new BoardOption {
-            Name = variant.itemName,
-            Blurb = PeekSeekRaid.Instance.Translate(
-                budget.Counts.Has(variant.id) ? "swap_left" : "swap_none", budget.Counts.Left(variant.id), variant.health),
-            Icon = variant.id
-        }).ToList();
-
-        // A starting floor can change material but never go: the site is the floors.
-        if (!RaidWorld.IsAnchorTile(site, drop)) {
-            options.Add(new BoardOption {
-                Name = PeekSeekRaid.Instance.Translate("swap_remove"),
-                Blurb = PeekSeekRaid.Instance.Translate("swap_remove_blurb")
-            });
+        if (RaidWorld.IsWoodWall(was) && RaidWorld.HeldMetalWall(viewer.player) is { } metal) {
+            if (!budget.Spend(metal.id)) {
+                Host.Whisper(viewer, PeekSeekRaid.Instance.Translate("swap_none_left", metal.itemName));
+                return;
+            }
+            RaidWorld.Swap(drop, metal);
+            return;
         }
 
-        swapping[steam64] = drop.GetServersideData().point;
-        Board.Open(viewer, options, current.itemName, BoardFace.Swap, taken => Swap(viewer, taken));
+        PieceFamily family = PieceFamily.Of(PeekSeekRaid.Config.PieceFamilies, was);
+        if (family == null || family.Forms.Count < 2) {
+            TakeDown(drop, budget);
+            return;
+        }
+
+        List<BoardOption> options = family.Forms
+            .Where(form => form != was)
+            .Select(form => Assets.find(EAssetType.ITEM, form) as ItemStructureAsset)
+            .Where(form => form != null)
+            .Select(form => new BoardOption {
+                Name = form.itemName,
+                Blurb = PeekSeekRaid.Instance.Translate("swap_form", form.health),
+                Icon = form.id
+            }).ToList();
+
+        options.Add(new BoardOption {
+            Name = PeekSeekRaid.Instance.Translate("swap_remove"),
+            Blurb = PeekSeekRaid.Instance.Translate("swap_remove_blurb")
+        });
+
+        swapping[viewer.playerID.steamID.m_SteamID] = drop.GetServersideData().point;
+        Board.Open(viewer, options, drop.asset.itemName, BoardFace.Swap, taken => Swap(viewer, taken));
     }
 
-    /// Carry a swap out. The piece is found again by where it stands, because the
-    /// board may have been up for a while and a teammate may have salvaged it
-    /// meanwhile; a piece that is no longer there is nothing to swap.
+    /// Carry a choice off the board out. The piece is found again by where it stands,
+    /// because the board may have been up for a while and a teammate may have taken it
+    /// down meanwhile; a piece that is no longer there is nothing to change.
     private void Swap(SteamPlayer viewer, BoardOption taken) {
         ulong steam64 = viewer.playerID.steamID.m_SteamID;
         if (phase != RaidPhase.Building || !swapping.TryGetValue(steam64, out Vector3 at)) return;
@@ -445,23 +542,24 @@ internal class Raid : IGamemode {
         StructureDrop drop = RaidWorld.StructureAt(at);
         if (drop == null) return;
 
-        BuildBudget budget = BudgetFor(steam64);
-        ushort was = drop.asset.id;
-
         if (taken.Icon == 0) {
-            RaidWorld.Remove(drop);
-            budget.Refund(was);
+            TakeDown(drop, BudgetFor(steam64));
             return;
         }
 
+        PieceFamily family = PieceFamily.Of(PeekSeekRaid.Config.PieceFamilies, drop.asset.id);
+        if (family == null || !family.Forms.Contains(taken.Icon)) return;
         if (Assets.find(EAssetType.ITEM, taken.Icon) is not ItemStructureAsset to) return;
-        if (!budget.Spend(to.id)) {
-            Host.Whisper(viewer, PeekSeekRaid.Instance.Translate("swap_none_left", to.itemName));
-            return;
-        }
 
         RaidWorld.Swap(drop, to);
-        budget.Refund(was);
+    }
+
+    /// Take a piece down while building: what it counts as goes back on the pile, if the
+    /// pile has it at all. The pillars the site stands are nobody's budget.
+    private static void TakeDown(StructureDrop drop, BuildBudget budget) {
+        ushort refund = PieceFamily.RefundFor(PeekSeekRaid.Config.PieceFamilies, drop.asset.id);
+        RaidWorld.Remove(drop);
+        if (budget.Counts.Ids.Contains(refund)) budget.Refund(refund);
     }
 
     /// Every team builds its own base, on its own site.
@@ -476,6 +574,12 @@ internal class Raid : IGamemode {
     private BaseShape ShapeAt(int team) {
         return shapes[team];
     }
+
+    /// The group attacking this round, whose scaffolds are fair game to defenders.
+    internal ulong AttackingGroup => GroupOf(1 - DefendedSite);
+
+    /// The group holding the base this round.
+    internal ulong DefendingGroup => GroupOf(DefendedSite);
 
     /// The Unturned group a site's team is in, or 0 before the roster has one.
     private ulong GroupOf(int team) {
@@ -503,7 +607,11 @@ internal class Raid : IGamemode {
         }
 
         round = number;
-        flagHanded = false;
+        chosen.Clear();
+        pendingWinner = -1;
+        roundKills.Clear();
+        flagBreaker = 0;
+        halfTimeGiven = false;
         Host.BeginRound();
 
         // The only two moments the shape of the match changes. Said once each.
@@ -513,11 +621,16 @@ internal class Raid : IGamemode {
             Host.Banner("OVERTIME", "Two rounds each");
         }
 
+        Powerups.RoundOver();
         RestoreBases();
 
-        // Everything a round left on the ground: the loot a death dropped, the wall
-        // somebody never placed. Raid has no world loot, so there is nothing to keep.
+        // The whole map back as it was, the way the game resets an arena between rounds
+        // (LevelManager.arenaClear): the loot a death dropped, a smoke still hanging,
+        // every tree and object shot down. The bases are re-laid just above.
         ItemManager.askClearAllItems();
+        EffectManager.askEffectClearAll();
+        ObjectManager.askClearAllObjects();
+        ResourceManager.askClearAllResources();
 
         phase = RaidPhase.Picking;
         phaseEndsAt = Time.realtimeSinceStartup + PeekSeekRaid.Config.PickSeconds;
@@ -529,16 +642,11 @@ internal class Raid : IGamemode {
         FlagBearer = ChooseFlagBearer();
         foreach (Player player in Players()) {
             if (player.life.isDead) {
-                AllowRespawn(player);
                 player.life.ServerRespawn(false);
                 continue;
             }
             Place(player);
         }
-
-        // With nobody to walk it, the flag goes on a free tile now rather than at the
-        // end of a pick nobody is spending on it.
-        if (FlagBearer == 0) StandFlag();
 
         OpenBoard(DefendedSite);
         Host.RefreshHud();
@@ -561,15 +669,13 @@ internal class Raid : IGamemode {
     /// Who owns a piece of a restored base, which in Unturned is the same question as
     /// who may take it down and who may open it.
     ///
-    /// Unowned is the default and it is the important one: a wall nobody owns cannot be
-    /// salvaged by anybody, so the only way through it is to break it. The two
-    /// exceptions are the ones a team needs to be able to work with. Doors and hatches
-    /// are how a team moves through its own building, and an unowned door is a door
-    /// nobody can open. Birch walls are the soft walls: a team that deliberately built
-    /// in birch gets to pull one down mid-round and open an angle that was not there
-    /// before, which is the closest thing this has to Rainbow Six's soft breaching.
-    /// Everything else, metal walls, every floor, every pillar, stays unowned, so a
-    /// base cannot be dismantled into a better base while a round is running.
+    /// Unowned is the default and it is the important one: a piece nobody owns cannot be
+    /// salvaged by anybody, so the only way through it is to break it. Doors and hatches
+    /// go to the team because an unowned door is a door nobody can open. Wood goes to
+    /// the team too: a defender can pull a wood wall, roof or doorway mid-round to open
+    /// an angle that was not there, but it is gone once pulled. Metal, every floor and
+    /// every pillar stay unowned, so a base cannot be dismantled into a better base while
+    /// a round is running.
     internal static ulong OwnerGroupFor(ItemAsset asset, ulong teamGroup) {
         if (asset is ItemBarricadeAsset barricade) {
             return barricade.build == EBuild.DOOR || barricade.build == EBuild.HATCH
@@ -577,87 +683,142 @@ internal class Raid : IGamemode {
                 : 0;
         }
 
-        if (asset is ItemStructureAsset structure) {
-            return IsSoftWall(structure) ? teamGroup : 0;
-        }
-
-        return 0;
+        return asset is ItemStructureAsset structure && IsSoftPiece(structure) ? teamGroup : 0;
     }
 
-    /// A soft wall is a birch wall, and only a wall. Birch floors and pillars hold the
+    /// A soft piece is wood, and not a floor or a pillar. Floors and pillars hold the
     /// building up, so letting a team salvage those would let them drop their own roof
-    /// on an attacker, or worse, delete the floor an attacker is about to stand on.
-    internal static bool IsSoftWall(ItemStructureAsset asset) {
-        if (asset.construct != EConstruct.WALL && asset.construct != EConstruct.RAMPART) return false;
+    /// on an attacker, or delete the floor an attacker is about to stand on.
+    internal static bool IsSoftPiece(ItemStructureAsset asset) {
+        if (asset.construct is EConstruct.FLOOR or EConstruct.FLOOR_POLY or EConstruct.PILLAR or EConstruct.POST) return false;
 
-        return asset.name.IndexOf("Birch", StringComparison.OrdinalIgnoreCase) >= 0;
+        return Materials.Split(asset.itemName)?.Material is "Birch" or "Pine" or "Maple";
     }
 
+    /// Every powerup a side has, one board each, since the two sides choose from
+    /// different lists at the same moment. A powerup has one taker a team: whoever takes
+    /// it first, and it is theirs until they take another. A tile a teammate holds is
+    /// greyed with their face on it, so a team splits its picks without a word.
     private void OpenBoard(int defender) {
-        List<BoardOption> defence = PeekSeekRaid.Config.DefenceOptions.Select(option => option.ToBoard()).ToList();
-        List<BoardOption> raid = PeekSeekRaid.Config.RaidOptions.Select(option => option.ToBoard()).ToList();
+        List<BoardOption> defence = Tiles(PeekSeekRaid.Config.DefenceOptions);
+        List<BoardOption> raid = Tiles(PeekSeekRaid.Config.RaidOptions);
         RaidSite attacked = sites[defender];
 
         Board.Reset();
 
-        // One board each, because the two sides are choosing from different lists at the
-        // same moment. Both say which round and which base, and the attackers' says
-        // which way and how far each way in is.
         string[] labels = attacked.AttackerSpawns.Select(spawn => attacked.Bearing(spawn)).ToArray();
         foreach (Player player in Players()) {
             SteamPlayer viewer = player.channel.owner;
-            if (IsDefending(viewer.playerID.steamID.m_SteamID)) {
-                Board.Open(viewer, defence, PeekSeekRaid.Instance.Translate("board_defend", round, attacked.Name));
+            int side = SideOf(viewer.playerID.steamID.m_SteamID);
+            if (side == defender) {
+                Board.Open(viewer, defence, PeekSeekRaid.Instance.Translate("board_defend", round, attacked.Name), BoardFace.Raid,
+                           _ => {
+                               ShowPicks(side);
+                               KitDefender(player);
+                           });
             } else {
                 Board.OpenAttack(viewer, raid, defender, attacked.AttackerSpawns.Count,
                     PeekSeekRaid.Instance.Translate("board_attack", round, attacked.Name),
-                    PeekSeekRaid.Instance.Translate("board_attack_line"), attacked.Name, labels);
+                    PeekSeekRaid.Instance.Translate("board_attack_line"), attacked.Name, labels, _ => ShowPicks(side));
+            }
+        }
+
+        ShowPicks(0);
+        ShowPicks(1);
+    }
+
+    private static List<BoardOption> Tiles(List<RaidOption> pool) {
+        return pool.Select(option => {
+            BoardOption tile = option.ToBoard();
+            tile.Glyph = (int)option.Category;
+            tile.Picture = option.Picture;
+            return tile;
+        }).ToList();
+    }
+
+    /// Redraw one team's boards: every tile a teammate holds is greyed with their face.
+    private void ShowPicks(int team) {
+        List<ulong> roster = Roster(team).Where(steam64 => PlayerTool.getPlayer(new CSteamID(steam64)) != null).ToList();
+        int tiles = (team == DefendedSite ? PeekSeekRaid.Config.DefenceOptions : PeekSeekRaid.Config.RaidOptions).Count;
+
+        foreach (ulong viewer in roster) {
+            for (int i = 0; i < tiles; i++) {
+                Board.Claim(viewer, i, roster.FirstOrDefault(mate => mate != viewer && Board.PickIndex(mate) == i));
             }
         }
     }
 
-    /// The pick phase ends when the last person has picked and the flag is up, not
-    /// when the clock says. When the clock says, whatever is unanswered is answered
-    /// for them, and a flag still in somebody's hands goes on a free tile.
+    /// The pick runs its whole clock, because it is also the defenders' time to set up:
+    /// their traps and the flag go down while the attackers are still choosing.
     private void TickPicking() {
         Board.Countdown(SecondsLeft);
-        WalkTheFlag();
+        HoldDefenders();
+        if (SecondsLeft > 0) return;
 
-        bool everyoneAnswered = Players().All(p => Board.HasAnswered(p.channel.owner.playerID.steamID.m_SteamID));
-        bool flagUp = RaidWorld.MarkerStands(sites[DefendedSite]);
-        if (SecondsLeft > 0 && !(everyoneAnswered && flagUp)) return;
-
-        if (!flagUp) StandFlag();
-        StartCountdown();
+        EndPick();
     }
 
-    /// The bearer's part of the pick. Once they have answered their board they are
-    /// handed the flag and let go, and from then on they are kept on the base: step
-    /// off it and they are back on the anchor. The other team is rooted in the lobby,
-    /// so the leash is not about peeking; it is that a bearer who wanders off with the
-    /// flag has taken the round's objective for a walk.
-    private void WalkTheFlag() {
-        if (FlagBearer == 0) return;
+    /// Whoever has not picked gets a powerup nobody on their team has, a flag still in
+    /// somebody's hands goes on a free tile, and the round goes live.
+    private void EndPick() {
+        Board.Close();
+        SettlePicks();
 
-        Player bearer = PlayerTool.getPlayer(new CSteamID(FlagBearer));
-        if (bearer == null || bearer.life.isDead) return;
-
-        if (!flagHanded) {
-            if (!Board.HasAnswered(FlagBearer)) return;
-
-            flagHanded = true;
-            RaidWorld.HandFlag(bearer);
-            RaidWorld.Freeze(bearer, false);
-            Host.Whisper(bearer.channel.owner, PeekSeekRaid.Instance.Translate("flag_bearer", SecondsLeft));
-            Host.RefreshHud();
-            return;
+        foreach (Player player in Players()) {
+            ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+            if (IsDefending(steam64) && !Board.HasAnswered(steam64)) KitDefender(player);
         }
 
-        RaidSite site = sites[DefendedSite];
-        if (site.Contains(bearer.transform.position)) return;
+        if (!RaidWorld.MarkerStands(sites[DefendedSite])) {
+            if (PlayerTool.getPlayer(new CSteamID(FlagBearer)) is { } bearer) RaidWorld.TakeFlag(bearer);
+            StandFlag();
+        }
 
-        bearer.teleportToLocationUnsafe(RaidWorld.FreeSpot(DefendedSite, site, 0), site.Yaw);
-        Host.Whisper(bearer.channel.owner, PeekSeekRaid.Instance.Translate("flag_leashed"));
+        StartPlaying();
+    }
+
+    /// A defender's kit, as soon as they have picked: their loadout, their side's
+    /// baseline and the powerup, and the flag in hand for the one who places it.
+    private void KitDefender(Player player) {
+        ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+        if (phase != RaidPhase.Picking || !IsDefending(steam64) || player.life.isDead) return;
+
+        int index = Board.PickIndex(steam64);
+        List<RaidOption> pool = PeekSeekRaid.Config.DefenceOptions;
+        if (index >= 0 && index < pool.Count) chosen[steam64] = pool[index];
+
+        RaidWorld.Kit(player, ChosenOption(steam64), BaselineFor(steam64));
+        if (steam64 == FlagBearer && !RaidWorld.MarkerStands(sites[DefendedSite])) RaidWorld.HandFlag(player);
+    }
+
+    private void SettlePicks() {
+        for (int team = 0; team < 2; team++) {
+            List<RaidOption> pool = team == DefendedSite ? PeekSeekRaid.Config.DefenceOptions : PeekSeekRaid.Config.RaidOptions;
+            List<ulong> roster = Roster(team);
+            HashSet<int> taken = [..roster.Select(Board.PickIndex).Where(index => index >= 0)];
+
+            foreach (ulong steam64 in roster) {
+                int index = Board.PickIndex(steam64);
+                if (index < 0) {
+                    index = PickDraw.Fallback(pool.Count, taken, random);
+                    if (index >= 0) taken.Add(index);
+                }
+                chosen[steam64] = index >= 0 && index < pool.Count ? pool[index] : null;
+            }
+        }
+    }
+
+    /// Defenders stay on their base while they set up.
+    private void HoldDefenders() {
+        RaidSite site = sites[DefendedSite];
+
+        foreach (Player player in Players()) {
+            ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+            if (player.life.isDead || !IsDefending(steam64) || site.Contains(player.transform.position)) continue;
+
+            player.teleportToLocationUnsafe(RaidWorld.FreeSpot(DefendedSite, site, IndexInTeam(steam64)), site.Yaw);
+            Host.Whisper(player.channel.owner, PeekSeekRaid.Instance.Translate("flag_leashed"));
+        }
     }
 
     /// One of the defenders present, at random. Random rather than in turn because a
@@ -683,86 +844,133 @@ internal class Raid : IGamemode {
         RaidWorld.PlaceFlag(defender, sites[defender], ShapeAt(defender), GroupOf(defender), TeamName(defender));
     }
 
-    /// Three seconds with the flag up and everybody rooted in position, so the round
-    /// starts on a count rather than on whoever noticed first. This is the moment the
-    /// lobby empties: defenders onto their building, attackers onto the spawn they
-    /// chose, facing it.
-    private void StartCountdown() {
-        Board.Close();
-        phase = RaidPhase.Starting;
-        phaseEndsAt = Time.realtimeSinceStartup + PeekSeekRaid.Config.StartSeconds;
-        FlagBearer = 0;
-        flagHanded = false;
-
-        foreach (Player player in Players()) Place(player);
-
-        Host.RefreshHud();
-    }
-
+    /// The round goes live: attackers come in at the spawn they chose with what they
+    /// picked; defenders are already set up and keep what they carry.
     private void StartPlaying() {
         phase = RaidPhase.Playing;
         phaseEndsAt = Time.realtimeSinceStartup + PeekSeekRaid.Config.RoundSeconds;
         offBaseSince.Clear();
+        FlagBearer = 0;
 
+        RaidSite target = sites[DefendedSite];
         foreach (Player player in Players()) {
-            RaidWorld.Kit(player, ChosenOption(player.channel.owner.playerID.steamID.m_SteamID));
-            RaidWorld.Freeze(player, false);
+            ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+            if (IsDefending(steam64)) {
+                RaidWorld.Mark(player, RaidWorld.FlagPoint(target) ?? target.AnchorPoint, "Flag");
+                RaidWorld.Freeze(player, false);
+                continue;
+            }
+            Place(player);
         }
+        Powerups.RoundLive();
 
         Host.RefreshHud();
     }
 
-    /// The option a player took into this round, from the list their side was shown.
-    /// The board defaults an unanswered player to the first tile, so this does too.
-    private RaidOption ChosenOption(ulong steam64) {
-        List<RaidOption> offered = IsDefending(steam64) ? PeekSeekRaid.Config.DefenceOptions : PeekSeekRaid.Config.RaidOptions;
-        if (offered.Count == 0) return null;
+    /// The powerup a player took into this round, or null before the pick settles.
+    internal RaidOption ChosenOption(ulong steam64) => chosen.TryGetValue(steam64, out RaidOption option) ? option : null;
 
-        return offered[Math.Min(Math.Max(0, Board.PickIndex(steam64)), offered.Count - 1)];
+    /// What everybody on a side carries whatever they picked.
+    private List<RaidItem> BaselineFor(ulong steam64) {
+        return IsDefending(steam64) ? PeekSeekRaid.Config.DefenceBaseline : PeekSeekRaid.Config.AttackBaseline;
     }
 
     private void TickPlaying() {
         PunishOffBase();
+        if (pendingWinner >= 0) return;
 
         int defender = DefendedSite;
+        GiveHalfTimeCharges();
 
         // The flag is the objective. Attackers win by bringing it down; defenders win by
         // still having it up when the clock runs out.
         if (!RaidWorld.MarkerStands(sites[defender])) {
-            EndRound(1 - defender, "round_won_flag");
+            string breaker = flagBreaker != 0 ? NameOf(flagBreaker) : null;
+            Conclude(1 - defender, PeekSeekRaid.Instance.Translate("round_won_flag", breaker ?? TeamName(1 - defender)));
             return;
         }
 
         if (SecondsLeft <= 0) {
-            EndRound(defender, "round_won_clock");
+            Conclude(defender, PeekSeekRaid.Instance.Translate("round_won_clock"));
             return;
         }
 
         if (Living(defender) == 0) {
-            EndRound(1 - defender, "round_won_wipe");
+            Conclude(1 - defender, WipeLine(1 - defender));
             return;
         }
         if (Living(1 - defender) == 0) {
-            EndRound(defender, "round_won_wipe");
+            Conclude(defender, WipeLine(defender));
         }
     }
 
-    /// Award the round and either start the next one or call the match. The score is
-    /// Match's; the block arithmetic that says when the match is over is this
-    /// gamemode's, because a Raid match is not first to N.
+    /// Half way through the round, every attacker still alive gets HalfTimeCharges
+    /// more demolition charges, and everybody is told.
+    private void GiveHalfTimeCharges() {
+        if (halfTimeGiven || SecondsLeft > PeekSeekRaid.Config.RoundSeconds / 2) return;
+        halfTimeGiven = true;
+
+        int charges = PeekSeekRaid.Config.HalfTimeCharges;
+        if (charges <= 0) return;
+
+        foreach (Player player in Players()) {
+            ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+            if (IsDefending(steam64) || player.life.isDead || !Host.IsAlive(steam64)) continue;
+            RaidWorld.Give(player, [new RaidItem(PeekSeekRaid.Config.ChargeItemId, (byte)charges)]);
+        }
+        Host.Banner("HALF TIME", PeekSeekRaid.Instance.Translate("half_time", charges));
+    }
+
+    /// How a side was wiped out: by one player alone against more than two, an ace, or
+    /// by the team.
+    private string WipeLine(int winner) {
+        int enemies = Roster(1 - winner).Count;
+        ulong ace = Roster(winner).FirstOrDefault(steam64 => roundKills.TryGetValue(steam64, out int kills) && kills >= enemies);
+        if (enemies > 2 && ace != 0) return PeekSeekRaid.Instance.Translate("round_won_ace", NameOf(ace), TeamName(1 - winner));
+
+        return PeekSeekRaid.Instance.Translate("round_won_wipe", TeamName(winner), TeamName(1 - winner));
+    }
+
+    private static string NameOf(ulong steam64) {
+        return PlayerTool.getPlayer(new CSteamID(steam64))?.channel.owner.playerID.characterName ?? "";
+    }
+
+    /// The flag took a hit from `instigator`.
+    internal void FlagHit(CSteamID instigator) {
+        if (phase == RaidPhase.Playing && instigator.m_SteamID != 0) flagBreaker = instigator.m_SteamID;
+    }
+
+    /// Award a round from the console: the banner at once, the rest a moment later.
     internal void EndRound(int winner, string reasonKey) {
-        if (phase < RaidPhase.Picking || phase > RaidPhase.Playing) return;
+        Conclude(winner, PeekSeekRaid.Instance.Translate(reasonKey));
+    }
 
+    /// The round is decided: the score and the banner now, so everybody sees who won
+    /// the moment they did, and the reset RoundEndDelay later.
+    private void Conclude(int winner, string line) {
+        if (phase != RaidPhase.Playing || pendingWinner >= 0) return;
+
+        pendingWinner = winner;
+        pendingAt = Time.realtimeSinceStartup + PeekSeekRaid.Config.RoundEndDelay;
+        Host.RoundWon(winner, line);
+    }
+
+    /// After the pause: either the next round, or the end of the match, won or level.
+    /// The score is Match's; the block arithmetic that says when the match is over is
+    /// this gamemode's, because a Raid match is not first to N.
+    private void AfterRound() {
+        pendingWinner = -1;
         foreach (Player player in Players()) RaidWorld.Mark(player, null, null);
-
-        Host.RoundWon(winner, PeekSeekRaid.Instance.Translate(reasonKey));
+        Powerups.RoundOver();
 
         int matchWinner = RoundOrder.Winner(round, Host.Score(0), Host.Score(1));
-        if (matchWinner >= 0) {
+        bool drawn = matchWinner < 0 && RoundOrder.IsDraw(round, Host.Score(0), Host.Score(1));
+        if (matchWinner >= 0 || drawn) {
             phase = RaidPhase.Over;
             Board.Close();
             foreach (Player player in Players()) RaidWorld.Freeze(player, false);
-            Host.MatchWon(matchWinner);
+            if (drawn) Host.MatchDrawn();
+            else Host.MatchWon(matchWinner);
             return;
         }
 
@@ -783,8 +991,12 @@ internal class Raid : IGamemode {
         foreach (Player player in Players()) {
             ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
             if (!IsDefending(steam64) || player.life.isDead || !Host.IsAlive(steam64)) continue;
+            if (Powerups.HasTag(steam64)) {
+                offBaseSince.Remove(steam64);
+                continue;
+            }
 
-            if (RaidWorld.IsStandingOnBuilt(player)) {
+            if (RaidWorld.IsStandingOnBuilt(player) || Powerups.OffBaseImmune(steam64)) {
                 if (offBaseSince.Remove(steam64)) Host.Tag.Hide(player.channel.owner);
                 continue;
             }
@@ -833,6 +1045,11 @@ internal class Raid : IGamemode {
     /// root them if the phase is one nobody moves in.
     private void Place(Player player) {
         ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+        Powerups.Watch(player);
+
+        // No death screen: a death is straight back to wherever the round says, as in
+        // ARENA.
+        player.setPluginWidgetFlag(EPluginWidgetFlags.ShowDeathMenu, false);
         int side = SideOf(steam64);
         RaidSite own = sites[side];
 
@@ -847,7 +1064,7 @@ internal class Raid : IGamemode {
         // until it is over. The rest of the team was in the lobby while the bearer
         // stood it, so they arrive knowing where it is the same way the attackers
         // know where the base is.
-        bool inRound = phase is RaidPhase.Starting or RaidPhase.Playing && Host.IsAlive(steam64);
+        bool inRound = phase is RaidPhase.Picking or RaidPhase.Playing && Host.IsAlive(steam64);
         RaidSite target = sites[DefendedSite];
         Vector3? mark = !inRound ? null : IsDefending(steam64) ? RaidWorld.FlagPoint(target) ?? target.AnchorPoint : target.AnchorPoint;
         RaidWorld.Mark(player, mark, IsDefending(steam64) ? "Flag" : target.Name);
@@ -867,25 +1084,21 @@ internal class Raid : IGamemode {
                 Host.Panel.Show(player.channel.owner, BudgetFor(steam64).Counts.Rows, 0);
                 return;
 
-            // The bearer waits on the base for their flag; everybody else waits in the
-            // map's lobby, where there is nothing to see and nowhere to be early.
+            // The pick is the defenders' setup: they are on their base from its first
+            // second, kitted the moment they pick, and one of them holds the flag.
+            // Attackers wait it out in the map's lobby, where there is nothing to see and
+            // nowhere to be early, and only come in when they can do something.
             case RaidPhase.Picking:
-                if (steam64 == FlagBearer) {
-                    RaidSite defended = sites[DefendedSite];
-                    player.teleportToLocationUnsafe(RaidWorld.FreeSpot(DefendedSite, defended, 0), defended.Yaw);
-                    if (flagHanded) RaidWorld.HandFlag(player);
+                if (IsDefending(steam64)) {
+                    Spawn(player, steam64, side);
+                    if (Board.HasAnswered(steam64)) KitDefender(player);
                     else RaidWorld.DressPlain(player);
-                    RaidWorld.Freeze(player, !flagHanded);
+                    if (steam64 == FlagBearer && !RaidWorld.MarkerStands(sites[DefendedSite])) RaidWorld.HandFlag(player);
+                    RaidWorld.Freeze(player, false);
                     return;
                 }
 
                 Wait(player, side);
-                RaidWorld.DressPlain(player);
-                RaidWorld.Freeze(player, true);
-                return;
-
-            case RaidPhase.Starting:
-                Spawn(player, steam64, side);
                 RaidWorld.DressPlain(player);
                 RaidWorld.Freeze(player, true);
                 return;
@@ -901,7 +1114,7 @@ internal class Raid : IGamemode {
                 }
 
                 Spawn(player, steam64, side);
-                RaidWorld.Kit(player, ChosenOption(steam64));
+                RaidWorld.Kit(player, ChosenOption(steam64), BaselineFor(steam64));
                 RaidWorld.Freeze(player, false);
                 return;
 
@@ -971,10 +1184,52 @@ internal class Raid : IGamemode {
     private int Living(int team) {
         if (match.Teams.Count <= team) return 0;
 
+        // A phantom in a local test match is alive until the tester moves the round on.
         return match.Teams[team].Players.Count(steam64 => {
+            if (Host.IsPhantom(steam64)) return true;
             Player player = PlayerTool.getPlayer(new CSteamID(steam64));
             return player != null && !player.life.isDead && Host.IsAlive(steam64);
         });
+    }
+
+    // ---- the test console ---------------------------------------------------------
+
+    /// Move the match on one phase, whatever it is doing: the footprint board, the
+    /// build, the pick and the setup end early; a round ends the way its clock would, to
+    /// the defenders while the flag stands and to the attackers once it is down.
+    internal void NextPhase() {
+        switch (phase) {
+            case RaidPhase.Shaping:
+                FinishShaping();
+                return;
+            case RaidPhase.Building:
+                FinishBuilding();
+                return;
+            case RaidPhase.Picking:
+                EndPick();
+                return;
+            case RaidPhase.Playing:
+                if (pendingWinner >= 0) {
+                    AfterRound();
+                    return;
+                }
+                bool standing = RaidWorld.MarkerStands(sites[DefendedSite]);
+                Conclude(standing ? DefendedSite : 1 - DefendedSite, PeekSeekRaid.Instance.Translate(
+                    standing ? "round_won_clock" : "round_won_flag", TeamName(1 - DefendedSite)));
+                return;
+        }
+    }
+
+    /// Set the clock of whatever phase is running.
+    internal void SetSecondsLeft(int seconds) {
+        if (phase is RaidPhase.Idle or RaidPhase.Over) return;
+        phaseEndsAt = Time.realtimeSinceStartup + Mathf.Max(0, seconds);
+        nextTick = 0f;
+    }
+
+    /// Whether every player on a team is a phantom, which is a team nobody builds for.
+    private bool IsPhantomTeam(int team) {
+        return match.Teams.Count > team && match.Teams[team].Players.Count > 0 && match.Teams[team].Players.All(Host.IsPhantom);
     }
 
     private static IEnumerable<Player> Players() => Host.Players();

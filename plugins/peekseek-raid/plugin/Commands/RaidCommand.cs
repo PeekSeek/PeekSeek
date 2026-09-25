@@ -10,7 +10,7 @@ namespace PeekSeekRaid.Commands;
 
 /// `/raid`, the tester's console: where the match is, and how to move it along.
 ///
-/// The match itself is started with Match's `/start raid` or `/start raid solo`.
+/// A match comes from the site, or from `/ssolo` for testing alone.
 ///
 /// None of this survives contact with a real match — a live gamemode does not let
 /// anybody skip a phase or change sides. It exists because a five-minute build phase

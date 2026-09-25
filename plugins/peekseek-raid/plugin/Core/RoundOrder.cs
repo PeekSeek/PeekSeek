@@ -7,7 +7,8 @@ namespace PeekSeekRaid.Core;
 /// The shape is Rainbow Six's: a block of rounds on one side, then the same block on
 /// the other, so a team that built a base always gets to both defend it and attack
 /// the base it has just been defending against. Regulation is 3 and 3, and level at
-/// 3-3 goes to overtime, 2 and 2, over and over. A match ends the moment the rest of
+/// 3-3 goes to overtime, 2 and 2, at most twice: level after the second overtime is a
+/// draw. A match ends the moment the rest of
 /// the block cannot change who is ahead: 4-0 after four rounds is over, 4-1 after
 /// five is over, and two rounds that change nothing are two rounds nobody wants to
 /// play. Never before that, because half a block is not a fair swap.
@@ -21,6 +22,16 @@ internal static class RoundOrder {
 
     private const int Regulation = RegulationHalf * 2;
     private const int OvertimeBlock = OvertimeHalf * 2;
+    internal const int OvertimeBlocks = 2;
+
+    /// The last round a match can have.
+    internal const int LastRound = Regulation + OvertimeBlocks * OvertimeBlock;
+
+    /// Whether the match ends level once round `round` has been scored: the last
+    /// overtime is over and nobody is ahead.
+    internal static bool IsDraw(int round, int teamZeroScore, int teamOneScore) {
+        return round >= LastRound && teamZeroScore == teamOneScore;
+    }
 
     /// Which team defends round `round` (1-based). Team 0 defends first.
     internal static int Defender(int round) {

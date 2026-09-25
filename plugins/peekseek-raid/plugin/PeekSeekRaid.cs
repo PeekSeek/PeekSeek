@@ -1,3 +1,4 @@
+using HarmonyLib;
 using PeekSeek.Gamemodes;
 using PeekSeekRaid.Core;
 using Rocket.API.Collections;
@@ -17,6 +18,9 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
     /// The gamemode, for the test console. Its Match is null between matches.
     internal static Raid Raid { get; private set; }
 
+    /// Raid's own patches: the explosion record in Damage and the throwables in Powerups.
+    private Harmony harmony;
+
     /// Rocket loads every DLL under Plugins/, subfolders included, so a stale copy left
     /// beside the current one comes up as a second plugin sharing this one's statics.
     /// Whoever loads first owns the server.
@@ -30,6 +34,8 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
 
         Instance = this;
         Raid = new Raid();
+        harmony = new Harmony("peekseek.raid");
+        harmony.PatchAll(Assembly);
         Gamemodes.Register(Raid);
         Logger.Log($"PeekSeekRaid {Assembly.GetName().Version} is now loaded.");
     }
@@ -38,6 +44,7 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
         if (Instance != this) return;
 
         Gamemodes.Unregister(Raid);
+        harmony?.UnpatchAll("peekseek.raid");
         Raid = null;
         Instance = null;
     }
@@ -62,25 +69,30 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
         { "shape_hexagonal", "Hexagonal" },
         { "shape_hexagonal_blurb", "Six triangles round the middle, a square on every side. Triangle pieces in the kit." },
 
-        // The swap board, while building: the piece you salvaged in every other
-        // material, and a way to take it down. {0} is what is left of that material,
-        // {1} the piece's health.
-        { "swap_left", "{0} left. {1} health." },
-        { "swap_none", "None left. {1} health." },
+        // The swap board, while building: the other shapes the piece you salvaged can
+        // take, free, and a way to take it down. {0} is the shape's health.
+        { "swap_form", "Same piece, another shape. {0} health." },
         { "swap_none_left", "No <color=white>{0}</color> left." },
         { "swap_remove", "Remove" },
         { "swap_remove_blurb", "Take it down. It goes back on the pile." },
 
         // The banner's line under the winner's name: how the round was won.
-        { "round_won_wipe", "Nobody left" },
+        { "round_won_wipe", "{0} wiped out {1}" },
+        { "round_won_ace", "{0} aced {1}" },
         { "round_won_clock", "The flag is still up" },
-        { "round_won_flag", "The flag is down" },
+        { "round_won_flag", "{0} destroyed the flag" },
+        { "half_time", "Attackers get {0} more charges" },
         { "round_won_skipped", "Given by the console" },
 
         // Said to the one defender handed the flag, because nothing on screen says it
         // is them, and again if they carry it off the base.
         { "flag_bearer", "<color=white>You have the flag.</color> Stand it anywhere on your base. {0} seconds, or it goes on a free tile." },
-        { "flag_leashed", "<color=white>Stay on your base</color> until the flag is down." },
+        { "flag_door", "The flag goes at least <color=white>{0} m</color> from any door." },
+        { "flag_breach", "Too sealed in: <color=white>{0}</color> charges to reach it here. At most <color=white>{1}</color>." },
+        { "breach_downgraded", "Too hard to get in. Turned to maple: <color=white>{0}</color>." },
+        { "striker_too_close", "Not on your own base. The smoke has to land <color=white>{0} m</color> out." },
+        { "wall_breach", "That wall seals the flag in. At most <color=white>{0}</color> charges to reach it." },
+        { "flag_leashed", "<color=white>Stay on your base.</color> The attackers are on their way." },
         { "flag_where", "The flag goes on one of the <color=white>starting floors</color>, and not next to a door." },
 
         // The boards' headlines: which round, which base, and what the board wants.
@@ -93,6 +105,8 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
         { "leashed", "That is far enough. The other team is building where you were about to look." },
 
         { "raid_nothing_running", "No Raid match is running." },
+        { "solo_started", "Playing solo: everybody not here counts as present. <color=white>/nextphase</color> moves it on." },
+        { "raidtime_usage", "<color=white>/raidtime <seconds></color> sets the clock of the current phase." },
 
         { "raid_state", "Phase <color=white>{0}</color>, round <color=white>{1}</color>, <color=white>{2}s</color> left. <color=white>{3}</color> defends." },
 

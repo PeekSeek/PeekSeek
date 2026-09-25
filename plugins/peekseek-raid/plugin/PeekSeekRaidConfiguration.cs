@@ -17,13 +17,11 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
     public int BuildSeconds;
 
     /// How long the boards stay up before they pick for you. Attackers choose where they
-    /// come in and what they bring; defenders choose what they hold with, and one of
-    /// them stands the flag in the same time.
+    /// come in and what they bring; defenders choose what they hold with.
     public int PickSeconds;
 
     /// The round clock. Running it out with the flag still standing is a defender win,
-    /// which is what makes attacking a race rather than a raid. Short while the
-    /// gamemode is being tested end to end; a real match wants 180.
+    /// which is what makes attacking a race rather than a raid.
     public int RoundSeconds;
 
     /// The pieces this gamemode places itself. A site starts as the metal floors of the
@@ -48,9 +46,20 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
     public ushort AnchorPillarItemId;
     public ushort AnchorMarkerItemId;
 
-    /// Handed out on top of BuildSupplies to a team that chose a shape with triangles
-    /// in it, because a triangular floor needs triangular pieces to build on.
-    public List<RaidItem> TriangleSupplies;
+    /// What a team that chose the hexagon builds with instead of BuildSupplies: every
+    /// square piece at HexagonSquareShare of its count, and each triangle piece at
+    /// HexagonTriangleShare of the square piece it stands in for, rounded down.
+    public List<TrianglePiece> TriangleSupplies;
+    public float HexagonSquareShare;
+    public float HexagonTriangleShare;
+
+    /// How much more of a piece a team gets for every player past the first on the
+    /// team that will raid it, rounded down: metal walls and roofs by MetalPerEnemy, the
+    /// wood by WoodPerEnemy, and doorways, metal or maple, by DoorwayPerEnemy. A 2v2 is
+    /// 2x metal, 1.5x wood and the same doorways.
+    public float MetalPerEnemy;
+    public float WoodPerEnemy;
+    public float DoorwayPerEnemy;
 
     /// A team's pieces for the whole build phase: one budget, shared by the team. A
     /// builder never carries the kit; they carry one of each piece the team still has,
@@ -61,9 +70,20 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
     ///
     /// Floors are in the kit, and any floor placed has to touch a floor that is already
     /// standing (RaidWorld refuses the rest), so the base grows out from the anchor
-    /// rather than being laid beside it. A piece already standing can be swapped for
-    /// the same piece in another material, which refunds the old one here.
+    /// rather than being laid beside it.
     public List<RaidItem> BuildSupplies;
+
+    /// What a standing piece can be turned into by salvaging it while building, without
+    /// spending anything: a maple wall is a wall, a rampart or a window, a maple roof is
+    /// a roof or a hole. Every other piece is only itself, so salvaging it takes it
+    /// down and puts it back on the pile, and there is no metal window or rampart.
+    public List<PieceFamily> PieceFamilies;
+
+    /// The door every doorway is given the moment it goes down, so a door is never a
+    /// piece anybody lays, and the frame glass goes into when a wall is salvaged with
+    /// a pane in hand.
+    public ushort DoorItemId;
+    public ushort WindowItemId;
 
     /// What a builder is handed on top of their clothes: the housing planner, which is
     /// force-equipped, and nothing else. `/raid find <text>` looks an id up in game.
@@ -107,27 +127,137 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
     /// attackers choose on is baked from the same numbers.
     public List<RaidSite> Sites;
 
-    /// What a defender may take into a round, and what an attacker may. Five each,
-    /// because the board is built for five and a sixth would not fit on screen.
+    /// Every powerup a defender or an attacker may take. The board shows all of them,
+    /// five by two, and a powerup has one taker a team: the only rule.
     public List<RaidOption> DefenceOptions;
     public List<RaidOption> RaidOptions;
 
-    /// How long everybody stays rooted, in position and with the flag up, before the
-    /// round goes live. The flag itself is stood during the pick: the defender chosen
-    /// for it picks their powerup and then has the rest of the pick to walk the base.
-    public int StartSeconds;
+    /// What every attacker and every defender carries whatever they picked: the floor
+    /// under "attackers can always get in". Attackers get a way through a wall each;
+    /// defenders get nothing extra.
+    public List<RaidItem> AttackBaseline;
+    public List<RaidItem> DefenceBaseline;
 
-    /// What the explosives do to a building, written onto the game's own assets when a
-    /// match starts. Structure damage is health taken off a wall: a maple wall is 400,
-    /// birch 350, metal 1100, so 1000 on a charge is one wood wall and two metal, and
-    /// 380 on a rocket is two wood and three metal. The rocket's blast radius is the
-    /// game's own times the multiplier, so a rocket is a hole in a wall rather than a
-    /// room.
+    /// How long a decided round stays on screen before it ends: the flag down, or a
+    /// side gone, and a moment to see it before everybody is moved.
+    public float RoundEndDelay;
+
+    /// Half way through a round, every attacker still alive gets this many more
+    /// demolition charges.
+    public int HalfTimeCharges;
+
+    /// The hits table: how many of each tool break each kind of piece, whatever the game
+    /// worked out. 0 is nothing. The chainsaw's row is seconds of cutting, and a cut
+    /// that stops for longer than CutGapSeconds starts again.
+    public List<BreakRule> BreakRules;
+    public float CutGapSeconds;
+
+    /// The breach cost: charges (ChargeItemId's row) from outside to the flag along the cheapest of
+    /// BreachRays horizontal rays and one straight up. Never more than BreachLimit, and
+    /// a flag stands at least FlagDoorClearance from any door. Every metal door put up in
+    /// the build brings WallsPerDoor more metal walls into the budget.
     public ushort ChargeItemId;
-    public float ChargeStructureDamage;
-    public ushort RocketItemId;
-    public float RocketStructureDamage;
-    public float RocketRangeMultiplier;
+    public float BreachLimit;
+    public int BreachRays;
+    public float BreachReach;
+    public float FlagDoorClearance;
+    public int WallsPerDoor;
+    public ushort DoorWallItemId;
+
+    /// The rocket, tuned on the launcher: a launcher without a projectile of its own
+    /// takes the damage and blast from the gun, not the rocket (UseableGun). A player
+    /// within RocketDirectRadius of the blast takes RocketDirectDamage, anybody else at
+    /// most RocketSplashDamage.
+    public ushort LauncherItemId;
+    public float RocketBlastRadius;
+    public float RocketDirectRadius;
+    public float RocketDirectDamage;
+    public float RocketSplashDamage;
+
+    /// The Keyhole grenade: a door a throw, nothing to walls or players.
+    public ushort KeyholeItemId;
+
+    /// The Suppressor: the gun whose player damage is cut, and whose damage to glass is
+    /// multiplied.
+    public ushort SuppressorGunId;
+    public float SuppressorPlayerDamage;
+    public float SuppressorGlassMultiplier;
+
+    /// The Stun flashbang: damage to everyone within StunDamageRadius, and how long
+    /// anybody it blinds cannot fire a gun.
+    public ushort FlashbangItemId;
+    public float StunDamage;
+    public float StunDamageRadius;
+    public float StunSeconds;
+
+    /// Elevator: whoever a bounce charge launches takes no fall damage for
+    /// ElevatorFallSeconds. Attackers may build anything anywhere once the round is live,
+    /// and what they put down comes down when it ends.
+    public ushort BounceChargeItemId;
+    public float ElevatorFallSeconds;
+
+    /// Insertion: one transport helicopter per attacking team, fuelled for about
+    /// InsertionSeconds, on a platform of InsertionPlatformItemId floors
+    /// InsertionHeight up and InsertionDistance further from the base than the pilot's
+    /// spawn, with the team already inside it.
+    public ushort InsertionVehicleId;
+    public float InsertionSeconds;
+    public float InsertionHeight;
+    public float InsertionDistance;
+    public ushort InsertionPlatformItemId;
+
+    /// Second Life: a bedroll that lasts SecondLifeSeconds and brings a teammate back
+    /// once on SecondLifeHealth. It is the PeekSeek Bedroll from the UI workshop item, a
+    /// barricade that looks like the red bedroll: an Arena map refuses every real bed.
+    public ushort BedrollItemId;
+    public float SecondLifeSeconds;
+    public byte SecondLifeHealth;
+    public ushort MedkitItemId;
+
+    /// Nomad: eat the vitamins and off-base damage is off for NomadSeconds.
+    public ushort NomadItemId;
+    public float NomadSeconds;
+
+    /// Faker: the stereo's fake fight. Every FakerMinSeconds to FakerMaxSeconds it plays
+    /// a burst of FakerEffects, a random one each time, from where it stands. Claymores
+    /// only go off for attackers.
+    public ushort StereoItemId;
+    public List<ushort> FakerEffects;
+    public float FakerMinSeconds;
+    public float FakerMaxSeconds;
+    public ushort ClaymoreItemId;
+
+    /// Striker: a plane flies over the red smoke StrikerDelay after it lands, at
+    /// StrikerPlaneHeight above it and StrikerPlaneSpeed, and StrikerRockets rockets fall
+    /// StrikerSpacing apart within StrikerRadius of it, never within StrikerSafeRadius of
+    /// the defenders' own base. The plane is the game's airdrop plane with no drop.
+    public ushort RedSmokeItemId;
+    public ushort SirenEffect;
+    public float StrikerDelay;
+    public int StrikerRockets;
+    public float StrikerSpacing;
+    public float StrikerSafeRadius;
+    public float StrikerHeight;
+    public float StrikerRadius;
+    public float StrikerPlaneSpeed;
+    public float StrikerPlaneHeight;
+
+    /// Mirror: the one-way glass bullets from outside the base cannot touch.
+    public ushort MirrorItemId;
+
+    /// Supplier: the crate that fills every SupplierSeconds with a medkit and a magazine
+    /// for each defender's gun, up to SupplierCap of each.
+    public ushort SupplierItemId;
+    public float SupplierSeconds;
+    public int SupplierCap;
+    public ushort SupplyItemId;
+
+    /// Pitfall: a slip plate placeable on the base floor and never salvaged by an
+    /// attacker, and a snare that also roots the attacker it catches.
+    public ushort SlipPlateItemId;
+
+    public ushort SnareItemId;
+    public float SnareRootSeconds;
 
     /// The gun every sentry goes down with, put in the moment it is placed and never
     /// coming out. One item, with whatever state it needs: the id, and the same
@@ -143,11 +273,10 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
             new RaidItem(1103, 1)
         ];
 
-        // Short on purpose while the gamemode is being tested end to end; a real match
-        // wants 300.
-        BuildSeconds = 30;
+        // Five minutes to build, twenty seconds to pick, thirty to set up, three to raid.
+        BuildSeconds = 300;
         PickSeconds = 20;
-        RoundSeconds = 30;
+        RoundSeconds = 180;
 
         AnchorFloorItemId = 369;
         AnchorTriangleItemId = 1265;
@@ -156,39 +285,45 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
 
         // Ids are read off the game's own Bundles/Items rather than guessed. Maple is
         // the standard piece (400 health a wall): 31 floor, 32 doorway, 33 wall, 34
-        // window, 35 roof, 36 pillar, 316 stairs, 319 hole, 322 ramp, 442 rampart.
-        // Birch is the soft wall a team can pull down mid-round (350): 57 wall, 49
-        // doorway, 51 floor. Metal holds two charges (1100): 369 floor, 370 doorway, 371
-        // wall, 373 roof, 376 hole. There is no brick, and the only pillar is maple:
-        // the frame is the frame, and a wall is what a team chooses to make metal.
-        // Doors are metal only, 378, as the brief asked.
+        // window, 35 roof, 319 hole, 322 ramp, 442 rampart. Metal holds two charges
+        // (1100): 370 doorway, 371 wall, 373 roof, and 36 the maple pillar. A few doorways and a lot of wall:
+        // where the way in is matters more than how many there are. Pillars on top of the
+        // ones the site stands, and no doors: every doorway comes with a metal one.
         BuildSupplies = [
-            new RaidItem(36, 80),
-            new RaidItem(33, 40),
-            new RaidItem(35, 24),
-            new RaidItem(31, 16),
-            new RaidItem(32, 8),
-            new RaidItem(34, 8),
-            new RaidItem(319, 4),
-            new RaidItem(316, 4),
-            new RaidItem(322, 4),
-            new RaidItem(442, 8),
-            new RaidItem(57, 12),
-            new RaidItem(49, 4),
-            new RaidItem(51, 4),
-            new RaidItem(371, 8),
-            new RaidItem(370, 4),
-            new RaidItem(369, 4),
-            new RaidItem(373, 4),
-            new RaidItem(376, 2),
-            new RaidItem(378, 6)
+            new RaidItem(370, 3),
+            new RaidItem(32, 3),
+            new RaidItem(371, 10),
+            new RaidItem(33, 64),
+            new RaidItem(31, 12),
+            new RaidItem(35, 32),
+            new RaidItem(373, 6),
+            new RaidItem(322, 8),
+            new RaidItem(36, 48)
         ];
 
-        // 1262 maple triangle floor, 1266 maple triangle roof.
-        TriangleSupplies = [
-            new RaidItem(1262, 12),
-            new RaidItem(1266, 12)
+        PieceFamilies = [
+            new PieceFamily(33, 33, 442, 34),
+            new PieceFamily(35, 35, 319)
         ];
+
+        DoorItemId = 378;
+        WindowItemId = 34;
+
+        // 1262 maple triangle floor off the maple floor, 1266 maple triangle roof off
+        // the maple roof.
+        TriangleSupplies = [
+            new TrianglePiece(1262, 31),
+            new TrianglePiece(1266, 35)
+        ];
+        HexagonSquareShare = 0.7f;
+        HexagonTriangleShare = 0.9f;
+
+        // Metal is what a charge is counted in, so it keeps pace with the raiders; wood
+        // is layout, and a doubled defence is already bringing its own powerups.
+        MetalPerEnemy = 1f;
+        WoodPerEnemy = 0.5f;
+        // More ways in never made a base harder to take.
+        DoorwayPerEnemy = 0f;
 
         // 1764 is the housing planner: the one tool that says "builder" and makes the
         // placing itself less of a fight. A kitless player gets a bag or their supplies
@@ -232,101 +367,165 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
             }
         ];
 
-        // Every number below is off the game's own item files, or set on them by
-        // RaidWorld.TuneExplosives from the fields above: a charge is two to a metal
-        // wall and one to wood, a rocket three and two.
-        //
-        // Defence. 43131 is the PeekSeek Sentry, the hostile sentry from the UI workshop
-        // item with Requires_Power off, armed by SentryFirearm the moment it goes down
-        // and shooting anybody not in its group; its picture is the vanilla sentry's,
-        // which is the one the site has. 76 is the blowtorch, which repairs anything
-        // built. 386 barbed wire (40 to a player who walks it), 1101 landmine (91 to a
-        // player, 75 to a structure).
+        // Ten a side, as the powerups sheet has them (raid-powerups.png). Every id is off
+        // the game's own item files.
+
         DefenceOptions = [
-            new RaidOption {
-                Name = "Sentry",
-                Blurb = "A hostile sentry with a shotgun in it. Put it where they have to come through.",
-                Icon = 1373,
-                Items = [new RaidItem(43131, 1)]
-            },
-            new RaidOption {
-                Name = "Welder",
-                Blurb = "A blowtorch to mend what they crack, and two metal walls to close a hole.",
-                Icon = 76,
-                Items = [new RaidItem(76, 1), new RaidItem(371, 2)]
-            },
-            new RaidOption {
-                Name = "Trapper",
-                Blurb = "Three landmines and four coils of wire. The doorways are yours.",
-                Icon = 1101,
-                Items = [new RaidItem(1101, 3), new RaidItem(386, 4)]
-            },
-            new RaidOption {
-                Name = "Reinforce",
-                Blurb = "Six metal walls, a door and two pillars. Rebuild the base they are about to meet.",
-                Icon = 371,
-                Items = [new RaidItem(371, 6), new RaidItem(378, 1), new RaidItem(36, 2)]
-            },
-            new RaidOption {
-                Name = "Watchtower",
-                Blurb = "A scope and three grenades. See them coming, and greet them.",
-                Icon = 1408,
-                Items = [new RaidItem(1408, 1), new RaidItem(254, 3)]
-            }
+            // Special: a trick for one situation.
+            Option("Nomad", PowerupClass.Special, "Lets you fight outside for 20 s", 391,
+                   [new RaidItem(391, 1), new RaidItem(1239, 1)]),
+            Option("Faker", PowerupClass.Special, "Fake gunfire and footsteps, and a decoy flag", 1466,
+                   [new RaidItem(1466, 1), new RaidItem(43133, 1), new RaidItem(1102, 2)]),
+            Option("Striker", PowerupClass.Special, "Drops 9 rockets on your smoke", 266,
+                   [new RaidItem(266, 1)]),
+
+            // Armorer: makes the base itself harder to break.
+            Option("Mirror", PowerupClass.Armorer, "", 1299,
+                   [new RaidItem(1299, 2)]),
+            Option("Welder", PowerupClass.Armorer, "", 76,
+                   [new RaidItem(76, 1), new RaidItem(371, 3)], Twist.Welder),
+
+            // Warden: heals, sentries and traps. 43131 is the PeekSeek Sentry, the hostile
+            // sentry from the UI workshop item with Requires_Power off, armed by
+            // SentryFirearm the moment it goes down; its picture is the vanilla sentry's.
+            Option("Supplier", PowerupClass.Warden, "Makes a blood bag every 30 s", 1374,
+                   [new RaidItem(1374, 1)]),
+            Option("Sentry", PowerupClass.Warden, "Two sentries, stun snares and wire", 1373,
+                   [new RaidItem(43131, 2), new RaidItem(1113, 3), new RaidItem(386, 4)])
         ];
 
-        // Attack. Every kit has a way through a wall; what changes is how many walls,
-        // from how far, and what is left over for the people inside. In metal walls: a
-        // charge (1241, set off with the 1240 detonator) is half of one, a rocket (520,
-        // from the 519 launcher) a third, a sticky (1100) a twelfth. The more of it
-        // comes from range, the less of it there is: twelve charges are six walls at
-        // the wall, nine rockets are three from across the field. A base that is metal
-        // all the way round is four walls deep at most, and the flag is somewhere
-        // inside it. Every kit has its own picture on the bar: Demolition is the
-        // detonator and Breacher the charge, because two kits with one picture are
-        // one kit to a teammate glancing up.
         RaidOptions = [
+            // Destruction: breaks the base.
+            Option("Demolition", PowerupClass.Destruction, "", 1241,
+                   [new RaidItem(1240, 1), new RaidItem(1241, 8)]),
+            Option("Breacher", PowerupClass.Destruction, "Cuts through wood walls, breaks any door in one throw", 490,
+                   [new RaidItem(490, 1), new RaidItem(1520, 2)]),
+
+            // Initializer: gets the team in high. The housing planner is what lays a
+            // scaffold's pieces.
+            Option("Elevator", PowerupClass.Initializer, "", 1691,
+                   [new RaidItem(1691, 4), new RaidItem(325, 2)]),
+            Option("Scaffold", PowerupClass.Initializer, "", 316,
+                   [new RaidItem(1764, 1), new RaidItem(36, 6), new RaidItem(33, 3), new RaidItem(316, 3)]),
+
+            // Support: suppression, a way in, a second life. The Suppressor is the meta
+            // kit's Dragonfang (website/src/kits.json): red chevron, tactical laser,
+            // vertical grip, military muzzle and a full drum.
+            Option("RPG", PowerupClass.Support, "", 519,
+                   [new RaidItem(519, 1), new RaidItem(520, 3)]),
+            Option("Suppressor", PowerupClass.Support, "", 132,
+                   [new RaidItem(132, 1) { Sight = 148, Tactical = 151, Grip = 8, Barrel = 150, Magazine = 133 }, new RaidItem(133, 1)]),
             new RaidOption {
-                Name = "Demolition",
-                Blurb = "Twelve charges and the detonator. Six metal walls, if you can reach them.",
-                Icon = 1240,
-                Items = [new RaidItem(1240, 1), new RaidItem(1241, 12)]
+                Name = "Insertion", Category = PowerupClass.Support, Blurb = "The team starts in a transport heli",
+                Picture = "vehicle-93", Twist = Twist.Insertion
             },
-            new RaidOption {
-                Name = "Rockets",
-                Blurb = "Nine rockets. Three metal walls, from wherever you are standing.",
-                Icon = 519,
-                Items = [new RaidItem(519, 1), new RaidItem(520, 9)]
-            },
-            new RaidOption {
-                Name = "Breacher",
-                Blurb = "Three rockets to open it from range, five charges to finish the job up close.",
-                Icon = 1241,
-                Items = [new RaidItem(519, 1), new RaidItem(520, 3), new RaidItem(1240, 1), new RaidItem(1241, 5)]
-            },
-            new RaidOption {
-                Name = "Grenadier",
-                Blurb = "Twelve stickies, four impacts, two frags. A metal wall, or three wood, and the room behind it.",
-                Icon = 1100,
-                Items = [new RaidItem(1100, 12), new RaidItem(1520, 4), new RaidItem(254, 2)]
-            },
-            new RaidOption {
-                Name = "Sapper",
-                Blurb = "Four charges, six frags. Two metal walls, then clear what is behind them without going in.",
-                Icon = 254,
-                Items = [new RaidItem(1240, 1), new RaidItem(1241, 4), new RaidItem(254, 6)]
-            }
+            Option("Stun", PowerupClass.Support, "Stops anyone caught shooting for 5 s", 1346,
+                   [new RaidItem(1346, 1)]),
+            Option("Second Life", PowerupClass.Support, "For 30 seconds one teammate can respawn here once placed", 293,
+                   [new RaidItem(43132, 1)])
         ];
 
-        StartSeconds = 3;
+        AttackBaseline = [new RaidItem(1240, 1), new RaidItem(1241, 4)];
+        DefenceBaseline = [];
+
+        RoundEndDelay = 2.5f;
+        HalfTimeCharges = 5;
+
+        // Charge, Keyhole, rocket (keyed by the launcher) and chainsaw (seconds).
+        BreakRules = [
+            new BreakRule("Demolition Charge", 1241, 1, 1, 1.5f, 3, 3),
+            new BreakRule("Keyhole", 1520, 1, 0, 0, 0, 0),
+            new BreakRule("Rocket", 519, 2, 2, 2, 4, 4),
+            new BreakRule("Chainsaw", 490, 0, 1, 3, 0, 0)
+        ];
+        CutGapSeconds = 0.6f;
 
         ChargeItemId = 1241;
-        ChargeStructureDamage = 1000f;
-        RocketItemId = 520;
-        RocketStructureDamage = 380f;
-        RocketRangeMultiplier = 0.8f;
+        BreachLimit = 6f;
+        BreachRays = 16;
+        BreachReach = 40f;
+        FlagDoorClearance = 3f;
+        // Off: extra walls turning up in the middle of a build read as a bug, not a reward.
+        WallsPerDoor = 0;
+        DoorWallItemId = 371;
+
+        LauncherItemId = 519;
+        RocketBlastRadius = 4f;
+        RocketDirectRadius = 0.5f;
+        RocketDirectDamage = 90f;
+        RocketSplashDamage = 60f;
+
+        KeyholeItemId = 1520;
+
+        SuppressorGunId = 132;
+        SuppressorPlayerDamage = 9f;
+        SuppressorGlassMultiplier = 2f;
+
+        FlashbangItemId = 1346;
+        StunDamage = 25f;
+        StunDamageRadius = 4f;
+        StunSeconds = 5f;
+
+        BounceChargeItemId = 1691;
+        ElevatorFallSeconds = 3f;
+
+
+        // 93 is the Forest Transport Heli: seats for a team.
+        InsertionVehicleId = 93;
+        InsertionSeconds = 60f;
+        InsertionHeight = 50f;
+        InsertionDistance = 100f;
+        InsertionPlatformItemId = 369;
+
+        BedrollItemId = 43132;
+        SecondLifeSeconds = 30f;
+        SecondLifeHealth = 50;
+        MedkitItemId = 15;
+
+        NomadItemId = 391;
+        NomadSeconds = 20f;
+
+        // Vanilla impact effects with their own audio: concrete, metal, wood, gravel and
+        // flesh. PeekSeek's sound bundle has no footsteps or doors yet; their effect ids
+        // go on this list when it does.
+        StereoItemId = 1466;
+        FakerEffects = [38, 18, 17, 44, 5];
+        FakerMinSeconds = 2f;
+        FakerMaxSeconds = 6f;
+        ClaymoreItemId = 1102;
+
+        // No vanilla effect is a siren; 0 plays nothing until the bundle has one.
+        RedSmokeItemId = 266;
+        SirenEffect = 0;
+        StrikerDelay = 1.2f;
+        StrikerRockets = 9;
+        StrikerSpacing = 0.15f;
+        StrikerRadius = 16f;
+        StrikerPlaneSpeed = 180f;
+        StrikerPlaneHeight = 70f;
+        StrikerSafeRadius = 20f;
+        StrikerHeight = 40f;
+
+        // No vanilla effect is a flare over a head either; 0 until the bundle has one.
+
+        MirrorItemId = 1299;
+
+        SupplierItemId = 1374;
+        SupplierSeconds = 30f;
+        SupplierCap = 3;
+        SupplyItemId = 395;
+
+        SlipPlateItemId = 1239;
+
+        SnareItemId = 1113;
+        SnareRootSeconds = 3f;
 
         // 112 is the Bluntforce; the state is left to the game, which loads it.
         SentryFirearm = new RaidItem(112, 1);
+    }
+
+    private static RaidOption Option(string name, PowerupClass kind, string blurb, ushort icon, List<RaidItem> items,
+                                     Twist twist = Twist.None) {
+        return new RaidOption { Name = name, Category = kind, Blurb = blurb, Icon = icon, Items = items, Twist = twist };
     }
 }

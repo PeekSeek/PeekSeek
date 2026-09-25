@@ -33,19 +33,19 @@ public class RaidItemTests {
 }
 
 public class ConfigurationTests {
-    /// The board is drawn for five tiles. A config with a sixth would silently not show
-    /// it, so the shipped defaults have to be exactly five each.
+    /// The board is drawn for ten tiles, five by two. A config with an eleventh would
+    /// silently not show it, so the shipped defaults fit in ten each.
     [Fact]
-    public void BothOptionListsHaveFive() {
+    public void BothOptionListsFitTheBoard() {
         PeekSeekRaidConfiguration config = new();
         config.LoadDefaults();
 
-        Assert.Equal(5, config.DefenceOptions.Count);
-        Assert.Equal(5, config.RaidOptions.Count);
+        Assert.InRange(config.DefenceOptions.Count, 1, 10);
+        Assert.InRange(config.RaidOptions.Count, 1, 10);
     }
 
-    /// Every option needs a name and a blurb, because both are drawn on the tile and an
-    /// empty one reads as a broken UI rather than as a missing option.
+    /// Every option needs a name, which is what the tile is called. The line under it is
+    /// optional: the powerups sheet only gives one where the pictures do not say it all.
     [Fact]
     public void EveryOptionIsLabelled() {
         PeekSeekRaidConfiguration config = new();
@@ -53,8 +53,10 @@ public class ConfigurationTests {
 
         foreach (RaidOption option in config.DefenceOptions.Concat(config.RaidOptions)) {
             Assert.False(string.IsNullOrWhiteSpace(option.Name));
-            Assert.False(string.IsNullOrWhiteSpace(option.Blurb));
-            Assert.NotEmpty(option.Items);
+            Assert.NotNull(option.Blurb);
+            // The Insertion heli is a vehicle, not an item; every other powerup hands
+            // out something.
+            if (option.Twist != Twist.Insertion) Assert.NotEmpty(option.Items);
         }
     }
 
@@ -70,7 +72,8 @@ public class ConfigurationTests {
         string icons = Path.Combine(RepoRoot(), "website", "public", "unturned");
         Assert.True(Directory.Exists(icons), $"Expected the site's icon folder at {icons}");
 
-        foreach (RaidOption option in config.DefenceOptions.Concat(config.RaidOptions)) {
+        // The Insertion heli is a vehicle, which has no item picture on the site.
+        foreach (RaidOption option in config.DefenceOptions.Concat(config.RaidOptions).Where(option => option.Twist != Twist.Insertion)) {
             Assert.NotEqual(0, option.IconItemId);
             Assert.True(
                 File.Exists(Path.Combine(icons, option.IconItemId + ".png")),
@@ -105,7 +108,7 @@ public class ConfigurationTests {
         PeekSeekRaidConfiguration config = new();
         config.LoadDefaults();
 
-        int kinds = config.BuildSupplies.Concat(config.TriangleSupplies).Select(item => item.ItemId).Distinct().Count();
+        int kinds = config.BuildSupplies.Select(item => item.ItemId).Concat(config.TriangleSupplies.Select(piece => piece.ItemId)).Distinct().Count();
         Assert.True(kinds * 4 <= config.HandsWidth * config.HandsHeight,
             $"{kinds} kinds of piece for {config.HandsWidth * config.HandsHeight} cells of hands.");
     }
@@ -118,10 +121,10 @@ public class ConfigurationTests {
         config.LoadDefaults();
 
         string icons = Path.Combine(RepoRoot(), "website", "public", "unturned");
-        foreach (RaidItem item in config.BuildSupplies.Concat(config.TriangleSupplies)) {
+        foreach (ushort id in config.BuildSupplies.Select(item => item.ItemId).Concat(config.TriangleSupplies.Select(piece => piece.ItemId))) {
             Assert.True(
-                File.Exists(Path.Combine(icons, item.ItemId + ".png")),
-                $"Budget piece {item.ItemId} has no icon on the site.");
+                File.Exists(Path.Combine(icons, id + ".png")),
+                $"Budget piece {id} has no icon on the site.");
         }
     }
 

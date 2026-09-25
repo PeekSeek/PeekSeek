@@ -31,7 +31,25 @@ public static class Host {
     public static bool IsAlive(ulong steam64) => StatService.IsAliveThisRound(new CSteamID(steam64));
 
     /// Everybody is back in play. A gamemode says so as a round starts.
-    public static void BeginRound() => StatService.BeginRound();
+    public static void BeginRound() => PSManager.NewRound();
+
+    /// Put each player's teammates' pings on the bar, or take them off: on while a
+    /// gamemode's players are picking or building, off while they fight.
+    public static void ShowPings(bool shown) {
+        if (PSManager.GamemodeShowsPings == shown) return;
+        PSManager.GamemodeShowsPings = shown;
+        PSManager.RefreshHud();
+    }
+
+    /// Start the held match now and count every roster player who is not here as
+    /// present and alive, for testing a real match alone. Null on success, else why not.
+    public static string PlaySolo() => PSManager.PlaySolo();
+
+    /// Whether a roster player is one `/ssolo` stands in for.
+    public static bool IsPhantom(ulong steam64) => PSManager.Phantoms.Contains(steam64);
+
+    /// End the running match with no winner, as if nobody had turned up.
+    public static void EndMatch() => PSManager.AbandonMatch();
 
     /// Seconds until the fight, once a second from 5 down to 0 for GO; anything else is
     /// ignored and a repeat of the same second plays once.
@@ -53,6 +71,9 @@ public static class Host {
     /// The gamemode calls the match. The result goes to the site and everybody goes
     /// home after a moment with the score.
     public static void MatchWon(int team) => PSManager.MatchWon(team);
+
+    /// The match ends level, for a gamemode that caps its overtime.
+    public static void MatchDrawn() => PSManager.MatchDrawn();
 
     /// The only team still on the server takes the match, or null when that is not
     /// the situation. A gamemode asks between rounds, where an empty side is a
