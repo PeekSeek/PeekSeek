@@ -32,7 +32,7 @@
       <div class="qgrid">
 
         {% for x in mmconfig["gamemodes"] %}
-          <div class="qgridoption" data-per-team="{{x['playersPerTeam']}}">
+          <div class="qgridoption" data-bit="{{x['bit']}}" data-per-team="{{x['playersPerTeam']}}">
             <h1>{% if x["usesElo"] %}<b>Ranked</b>{% endif %}{{x["name"]}}</h1>
             <span>{{(", ".join(x["kitsAllowed"])).upper()}}</span>
             <span>{{("{}v".format(x["playersPerTeam"]) * x["teams"]).rstrip("v")}}</span>
