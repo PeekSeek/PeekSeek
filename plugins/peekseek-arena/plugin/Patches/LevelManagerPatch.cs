@@ -185,6 +185,7 @@ internal class ArenaSpawnPatch {
             if (!quests.isMemberOfAGroup) LevelManager.nonGroups++;
             else if (!LevelManager.arenaGroups.Contains(quests.groupID)) LevelManager.arenaGroups.Add(quests.groupID);
         }
+        StandIns.CountTheirSides();
 
         LevelManager.arenaState = EArenaState.PLAY;
         LevelManager.SendLevelNumber.InvokeAndLoopback(ENetReliability.Reliable,
@@ -213,6 +214,22 @@ public class FindGroupsPatch {
             else if (!LevelManager.arenaGroups.Contains(client.player.quests.groupID))
                 LevelManager.arenaGroups.Add(client.player.quests.groupID);
         }
+        StandIns.CountTheirSides();
         return false;
+    }
+}
+
+/// The players `/ssolo` stands in for are never on the server, so the game never counts
+/// their side. Alone, a tester was one side short of the two a round needs: the warmup
+/// counted, fell back to the lobby, and counted again, forever. A team with a stand-in on
+/// it is counted as a side still in, for as long as the stand-in is.
+internal static class StandIns {
+    internal static void CountTheirSides() {
+        foreach (GamemodeTeam team in Host.Match?.Teams ?? []) {
+            if (team.GroupId == 0 || !team.Players.Any(Host.IsPhantom)) continue;
+
+            CSteamID group = new(team.GroupId);
+            if (!LevelManager.arenaGroups.Contains(group)) LevelManager.arenaGroups.Add(group);
+        }
     }
 }
