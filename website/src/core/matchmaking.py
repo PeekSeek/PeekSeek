@@ -486,7 +486,9 @@ def normalizePlayerResult(player: dict) -> dict:
     }
 
 
-def matchResults(gamemodeInfo: dict, *users: dict, draw: bool = False) -> tuple[dict, int]:
+def matchResults(
+    gamemodeInfo: dict, *users: dict, draw: bool = False
+) -> tuple[dict, int]:
     """Record every player's kills/deaths/win and, for ranked modes, their Elo
     change. Returns the per-player summary and the match's average Elo.
 
@@ -570,7 +572,12 @@ def _syncRankRoles(steam64s: list) -> None:
 
 
 def _eloDelta(
-    currentElo: int, avgElo: float, kills: int, deaths: int, won: bool, draw: bool = False
+    currentElo: int,
+    avgElo: float,
+    kills: int,
+    deaths: int,
+    won: bool,
+    draw: bool = False,
 ) -> int:
     """The ranked Elo rule: tiny losses for underdogs, tiny gains for smurfs,
     otherwise performance-scaled — and never below the floor of 100. A draw is
