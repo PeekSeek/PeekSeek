@@ -352,26 +352,24 @@ def _postResultPublicly(match: data.Match, result: dict, avgElo: int) -> None:
     )
 
 
-def _player(steam64: int) -> dict:
+def _player(steam64: int, matchId: int | None, ban) -> dict:
     """One player as every player-facing route here reports them: their rank, their ban,
     and where they should be. `matchId` without a `relayTo` means "matched, still
     choosing", and `choose` is what they are still choosing between."""
-    matchId = data.Match.currentFor(steam64)
     match = None
     if matchId:
         with opendb() as db:
             match = db.query(data.Match).where(data.Match.id == matchId).first()
 
-    with opendb() as db:
-        ban = data.UserBan.barring([steam64], db).get(steam64)
     profile = data.User.getSteamData(steam64)
+    elo = data.Stat.getElo(steam64)
 
     return {
         "steam64": str(steam64),
         "name": profile.name,
         "avatar": profile.avatar,
-        "elo": data.Stat.getElo(steam64),
-        "rankIcon": data.Stat.rankFor(steam64).icon,
+        "elo": elo,
+        "rankIcon": data.Rank.forElo(elo, data.Stat.ladderPosition(steam64)).icon,
         "matchId": matchId or None,
         "relayTo": match.connectCode() if match else None,
         "choose": _choices(match, steam64) if match else None,
@@ -520,7 +518,9 @@ def _optionalCount(payload: dict, field: str) -> int | None:
 @router.get("/players/{steam64}")
 def player(steam64: int):
     """Everything a server needs to know about one player. Asking does not queue them."""
-    return _player(steam64)
+    with opendb() as db:
+        ban = data.UserBan.barring([steam64], db).get(steam64)
+    return _player(steam64, data.Match.currentFor(steam64), ban)
 
 
 @router.get("/players/{steam64}/kits")
@@ -551,9 +551,13 @@ def joinQueue(
         with opendb() as db:
             data.UserIP.remember(db, steam64, ip)
 
-    if not data.Match.currentFor(steam64):
-        data.User.addToQueue(steam64, gamemodes, region=region)
-    return _player(steam64)
+    matchId = data.Match.currentFor(steam64)
+    if matchId:
+        with opendb() as db:
+            ban = data.UserBan.barring([steam64], db).get(steam64)
+    else:
+        ban = data.User.addToQueue(steam64, gamemodes, region=region)
+    return _player(steam64, matchId, ban)
 
 
 @router.delete("/players/{steam64}/queue")
