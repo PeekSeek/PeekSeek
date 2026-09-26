@@ -35,6 +35,17 @@ def lobby(request: Request):
     )
 
 
+def connectUrl(serverCode: str) -> str | None:
+    """The steam:// launch for a server code, or None if that is not a code.
+
+    Shared with the esports event page's ?join=, so both spell the launch the same way
+    and agree on which codes are worth handing to Steam.
+    """
+    if not serverCode.isalnum() or len(serverCode) > 32:
+        return None
+    return f"steam://run/{UNTURNED_APP_ID}//+connect {serverCode}"
+
+
 def _joinPage(
     request: Request,
     serverCode: str,
@@ -47,7 +58,7 @@ def _joinPage(
         name="pages/lobby.html",
         context={
             "connectCode": serverCode,
-            "connectUrl": f"steam://run/{UNTURNED_APP_ID}//+connect {serverCode}",
+            "connectUrl": connectUrl(serverCode),
             "heading": heading,
             "embedTitle": embedTitle,
             "embedDescription": embedDescription,
@@ -59,7 +70,7 @@ def _joinPage(
 def join(request: Request, serverCode: str):
     """Open any server by its code. The code comes from the URL and is reflected into
     the page's script, so only the shape Unturned accepts gets through."""
-    if not serverCode.isalnum() or len(serverCode) > 32:
+    if connectUrl(serverCode) is None:
         raise HTTPException(status_code=404, detail="Not a server code.")
 
     return _joinPage(
