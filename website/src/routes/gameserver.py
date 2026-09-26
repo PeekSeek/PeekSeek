@@ -1,21 +1,15 @@
 """The game-server API: `/server/v1/*`.
 
-Everything a game server needs to run PeekSeek matches, and nothing else. It is
-deliberately not Unturned-specific — a server for a different game implements the same
-calls and speaks the same JSON.
-
-Conventions, all of which hold for every route here:
+Conventions for every route here:
 
 - Auth is the caller's source IP, allow-listed in `AuthorizedServers`.
 - Field names are camelCase.
-- Steam64s are **strings**. They are 64-bit and JSON numbers are not, so anything
-  parsing them as a number loses the bottom digits.
-- Every response is a JSON object, never a bare string or array, so a field can be
-  added later without changing the shape.
+- Steam64s are strings, because JSON numbers lose their bottom digits.
+- Every response is a JSON object, so a field can be added without changing the shape.
 - Durations are seconds; timestamps are Unix seconds.
 - Writes that can be retried are idempotent, and say which of the two happened.
 
-The whole lifecycle runs through one call, `GET /session`. See its docstring.
+The whole lifecycle runs through one call, `GET /session`.
 """
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -37,13 +31,8 @@ mmconfig = settings.mmconfig
 
 
 def _items(rawItems: list) -> list[dict]:
-    """Kit items as self-describing objects rather than positional tuples.
-
-    Stored as `[itemId, amount, "1,2,3"]` because that is what the site's own kit
-    editor writes; sent as `{"itemId": …, "amount": …, "state": [1, 2, 3]}` because a
-    server implementing this API should not have to know that index 2 is a
-    comma-separated byte string.
-    """
+    """Kit items as `{"itemId", "amount", "state"}` objects rather than the stored
+    `[itemId, amount, "1,2,3"]` tuples."""
     return [
         {
             "itemId": int(item[0]),
@@ -90,31 +79,20 @@ def _match(match: data.Match) -> dict:
 def session(server: GameServer, serverCode: str = "0", matchId: int = 0):
     """The one call a game server makes on a loop. Answers what it should be doing.
 
-    `matchId` is whatever match the server currently considers itself responsible for —
-    including one it has finished playing but not yet successfully reported. `0` means
-    it is free, and a free server is what makes a match: matchmaking runs *here*, so a
-    match is only ever created for a server that is standing by to host it.
+    `matchId` is the match the server holds, including one it has finished but not yet
+    reported; `0` means it is free. Matchmaking runs here, so a match is only ever made
+    for a server standing by to host it.
 
-    Exactly one of four answers comes back, and `action` is the only field to switch on:
+    `action` is one of:
 
-    - `{"action": "idle"}` — nothing to do. Ask again shortly.
-    - `{"action": "wait", "matchId": n, "waitingOn": [...], "selectionEndsAt": ts}` —
-      this match is yours, but its players are still choosing. Hold it, keep sending
-      this `matchId`, and do not let anyone in yet.
-    - `{"action": "host", "match": {…}}` — start it. Sent exactly once per match: ask
-      again while hosting and the answer is `idle`, so a slow poll cannot restart a
-      round that is already being played.
-    - `{"action": "abort", "matchId": n, "reason": "…"}` — drop it. It is not a match
-      any more, and nobody is coming.
+    - `idle`: nothing to do. Ask again shortly.
+    - `wait`: the match is yours but its players are still choosing. Keep sending its id.
+    - `host`: start it. Sent once per match; asking again while hosting answers `idle`.
+    - `abort`: drop it. Nobody is coming.
 
-    A server that still names a match is never told that match was abandoned, which is
-    what makes the result report safe to retry indefinitely: for as long as the server
-    keeps saying "I am still holding match 42", the site will not decide match 42 was
-    dropped.
+    A match a server still names is never written off, which is what makes the result
+    report safe to retry indefinitely.
     """
-    # Both housekeeping sweeps only ever touch matches this call is not about — one
-    # closes matches held by a server that has just said it holds none, the other
-    # cancels matches no server holds at all — so neither can disturb a live match.
     if matchId:
         answer = _answerAboutHeldMatch(matchId, serverCode)
         data.Match.cancelStranded()
@@ -123,13 +101,9 @@ def session(server: GameServer, serverCode: str = "0", matchId: int = 0):
     data.Match.releaseAbandoned(serverCode)
     data.Match.resolveExpiredPicks()
 
-    # A match this server already holds but was never told about comes back to it before
-    # any new one is built. Matchmaking runs inside this call, so a poll whose answer
-    # got lost still created a match — and without this the next poll built a second one
-    # for the same players rather than finishing the delivery of the first.
-    #
-    # Assign before cancelling, or a match could be scrapped in the same breath as the
-    # server that was about to take it reported itself free.
+    # A match this server holds but was never told about is handed back before a new
+    # one is built, so a lost answer cannot turn into a second match for the same
+    # players.
     match = data.Match.undeliveredFor(serverCode) or matchmaking.matchForServer(
         server.region, serverCode
     )
@@ -140,13 +114,8 @@ def session(server: GameServer, serverCode: str = "0", matchId: int = 0):
 
 
 def _stamped(answer: dict, server: data.AuthorizedServer) -> dict:
-    """Every answer carries the region this server is registered in, and how many
-    players are queued there.
-
-    A server only ever gets matches from its own region, and that region is set in the
-    database rather than by the server itself — so a mismatch is invisible from the
-    server's side and looks exactly like "nobody is queueing". Saying both here turns a
-    silent no-op into something an operator can read straight off the console.
+    """Every answer names this server's registered region and how many are queued there,
+    so a region mismatch reads off the console instead of looking like an empty queue.
     """
     return answer | {
         "region": server.region,
@@ -181,9 +150,7 @@ def _answerAboutHeldMatch(matchId: int, serverCode: str) -> dict:
 
 
 def _roster(match: data.Match) -> dict:
-    """The match as a server holding it during selection needs to see it: who is on it,
-    so they can be let in and put in their groups, and nothing that is still being
-    decided."""
+    """Who is on a match that is still choosing, so the server can let them in."""
     gamemode = mmconfig["gamemodes"][match.gamemode]
     return {
         "id": match.id,
@@ -197,9 +164,8 @@ def _roster(match: data.Match) -> dict:
 
 
 def _options(match: data.Match) -> dict:
-    """What there is to choose on this match, for a server to draw a board with: the
-    kit categories and the powerups with their items, or empty lists where the
-    gamemode leaves no choice, the same rule `_choices` applies per player."""
+    """The kits and powerups there are to choose between, or empty lists where the
+    gamemode leaves no choice."""
     gm = mmconfig["gamemodes"][match.gamemode]
     kits = list(gm["kitsAllowed"]) if len(gm["kitsAllowed"]) > 1 else []
     powerups = (
@@ -213,11 +179,8 @@ def _options(match: data.Match) -> dict:
 def _hostOrWait(match: data.Match) -> dict:
     """Hand over a match whose selection is done, or say what it is still waiting on.
 
-    The wait carries the roster and the options, because the players are already on
-    their way: a match has a connect code from the moment a server holds it, so the
-    lobby relays them at once and the server puts the board in front of whoever has
-    not picked. Every pick made there comes back through `decidePlayer`, the same
-    door the site's own match page uses.
+    The wait carries the roster and the options, because the players are relayed to
+    the server as soon as it holds the match and pick there.
     """
     if not match.readyToHost():
         return {
@@ -233,23 +196,17 @@ def _hostOrWait(match: data.Match) -> dict:
             },
         }
 
+    # Built before it is marked hosted: a hosted match is never handed out again, so a
+    # payload that failed to build here would leave a match nobody runs.
     payload = _match(match)
-    # Stamped only once the payload has been built without raising: a match marked as
-    # hosted is never handed out again, so a serialiser that failed here would leave a
-    # match nobody was ever told to run.
     match.markHosting()
     return {"action": "host", "match": payload}
 
 
 @router.get("/matches/{matchId}")
 def match(matchId: int):
-    """A match's current state, for anything waiting on it.
-
-    `relayTo` is the whole point: it is the server code to send a waiting player to, and
-    it stays null until the match is actually being hosted. Anything holding players —
-    the lobby server, in particular — can send them the moment it is not null and be
-    sure they will be let in.
-    """
+    """A match's state. `relayTo` is the server code to send its players to, and stays
+    null until there is a server to send them to."""
     with opendb() as db:
         current = db.query(data.Match).where(data.Match.id == matchId).first()
     if current is None:
@@ -263,22 +220,22 @@ def match(matchId: int):
     }
 
 
-@router.post("/matches/{matchId}/state")
-def matchState(matchId: int, payload: JsonBody):
-    """The live snapshot the stream overlay renders — scoreboard, health, positions.
+@router.post("/matches/{matchId}/rounds")
+def matchRounds(matchId: int, payload: JsonBody):
+    """Rounds won per team, sent each time a round is decided.
 
-    Sent on a timer during play. Lossy on purpose: each one replaces the last, so a
-    dropped snapshot costs nothing and no server should retry one.
+    Body: `{"wins": {"<team name>": <rounds won>, ...}}`. Each report replaces the last,
+    so a lost one is covered by the next.
     """
-    data.Match.setLiveData(matchId, payload)
-    return {"status": "ok"}
+    wins = payload.get("wins")
+    if not isinstance(wins, dict) or not all(
+        isinstance(count, int) and count >= 0 for count in wins.values()
+    ):
+        raise HTTPException(
+            status_code=400, detail="`wins` must map team names to rounds won."
+        )
 
-
-@router.post("/matches/{matchId}/kills")
-def matchKill(matchId: int, payload: JsonBody):
-    """One kill, reported as it happens rather than batched at the end, so a server
-    that dies mid-match does not take the whole match's kill log with it."""
-    data.MatchResult.appendKill(matchId, payload)
+    data.Match.recordRoundWins(matchId, {str(name): n for name, n in wins.items()})
     return {"status": "ok"}
 
 
@@ -286,23 +243,15 @@ def matchKill(matchId: int, payload: JsonBody):
 def matchResult(matchId: int, payload: JsonBody):
     """The match's final per-player line. This is what moves Elo, and what ends a match.
 
-    Safe to retry, and meant to be: a server keeps sending this until it gets a reply,
-    because this call is the only thing that scores a match. Repeats are answered with
-    `alreadyRecorded` and change nothing, so a reply lost on the way back costs a
-    duplicate request rather than a doubled Elo swing.
-
-    Accepted even for a match already marked finished, because being marked finished is
-    exactly what happens to a match whose result was slow to arrive.
+    Safe to retry: a repeat is answered `alreadyRecorded` and changes nothing. Accepted
+    for a match already marked finished, since that is what happens to one whose result
+    was slow to arrive.
 
     Body:
-        played       false when the match was never actually played (nobody turned up).
-                     A false here scores nothing and just releases the match.
+        played       false when nobody turned up. Scores nothing, releases the match.
         winningTeam  the `name` of the winning team, or null.
-        draw         true when the match ended level. Nobody wins or loses it, and
-                     Elo moves on kills and deaths alone.
-        players      every player on the roster — including ones who never joined and
-                     ones who left. A player the server omits is a player whose Elo
-                     never moves, which is why leaving used to be free.
+        draw         true when the match ended level. Elo moves on kills and deaths.
+        players      every player on the roster, including no-shows and leavers.
     """
     with opendb() as db:
         current = db.query(data.Match).where(data.Match.id == matchId).first()
@@ -323,7 +272,7 @@ def matchResult(matchId: int, payload: JsonBody):
 
     with opendb() as db:
         db.query(data.Match).where(data.Match.id == matchId).update(
-            {"finished": True, "livedata": {}, "spectators": []}
+            {"finished": True, "spectators": []}
         )
     return {"status": "recorded", "matchId": matchId}
 
@@ -349,8 +298,7 @@ def _score(match: data.Match, payload: dict) -> None:
     result, avgElo = matchmaking.matchResults(
         gamemode, *players, draw=bool(payload.get("draw"))
     )
-    # Taken off the live snapshot here because recording the result is what clears it.
-    data.MatchResult.recordFinalResults(match.id, result, _roundScore(match))
+    data.MatchResult.recordFinalResults(match.id, result)
 
     lines = "\n\n".join(
         f"{data.User.getSteamData(s).name} ({s})\n"
@@ -366,13 +314,7 @@ def _score(match: data.Match, payload: dict) -> None:
 
 
 def _postResultPublicly(match: data.Match, result: dict, avgElo: int) -> None:
-    """The same result again, in the channel players actually read.
-
-    Separate from the Webhook call above rather than replacing it: that one goes to
-    the ops log and carries whatever an on-call reader needs, this one is a scoreboard
-    for people deciding whether anything is happening here. Twenty of these on a
-    Friday evening is the cheapest proof the game is alive that we have.
-    """
+    """The result again, as a scoreboard in the channel players read."""
     winners = [steam64 for steam64, stats in result.items() if stats.get("Won")]
     names = {steam64: data.User.getSteamData(steam64).name for steam64 in result}
     scoreline = " vs ".join(
@@ -407,41 +349,17 @@ def _postResultPublicly(match: data.Match, result: dict, avgElo: int) -> None:
     )
 
 
-def _roundScore(match: data.Match) -> list:
-    """The rounds each team won, read off the match's last live snapshot.
-
-    The snapshot is the only place the round tally exists — the result report says who
-    won, not by how much — and it is cleared the moment the result is recorded, so this
-    is the last instant it can be kept.
-    """
-    return [
-        {
-            "name": team.get("teamName"),
-            "wins": team.get("wins", 0),
-            "losses": team.get("losses", 0),
-        }
-        for team in (match.livedata or {}).get("teams", [])
-    ]
-
-
 def _player(steam64: int) -> dict:
-    """One player as every player-facing route here reports them: their rank, and where
-    they should be. `matchId` without a `relayTo` means "matched, still choosing", and
-    `choose` is what they are still choosing between."""
+    """One player as every player-facing route here reports them: their rank, their ban,
+    and where they should be. `matchId` without a `relayTo` means "matched, still
+    choosing", and `choose` is what they are still choosing between."""
     matchId = data.User.getCurrentMatchId(steam64)
     match = None
     if matchId:
         with opendb() as db:
             match = db.query(data.Match).where(data.Match.id == matchId).first()
 
-    # Reported on every player read, not just on the queue call, so a lobby learns
-    # about a ban that lands while somebody is already standing in the arena rather
-    # than only when it next tries to queue them.
     ban = data.UserBan.activeFor(steam64)
-
-    # The Steam persona and picture, so a server can draw a scoreboard with the same
-    # faces the site shows. Served from the same five-minute cache every page uses;
-    # a server that asks first pays one Steam call, and never a raised one.
     profile = data.User.getSteamData(steam64)
 
     return {
@@ -449,8 +367,6 @@ def _player(steam64: int) -> dict:
         "name": profile.name,
         "avatar": profile.avatar,
         "elo": data.Stat.getElo(steam64),
-        # The badge, not the tier's name: a server draws it on the player's face the
-        # way the site draws it beside their name, from /static/ranks/<icon>.png.
         "rankIcon": data.Stat.rankFor(steam64).icon,
         "matchId": matchId or None,
         "relayTo": match.connectCode() if match else None,
@@ -469,12 +385,8 @@ def _player(steam64: int) -> dict:
 
 def _choices(match: "data.Match", steam64: int) -> dict | None:
     """What this player still gets to decide about their match, and what they have
-    decided so far. Null when there is nothing for them to decide.
-
-    A list with one entry in it is not a choice — `Kit.getItems` resolves those itself
-    — so it comes back empty rather than as a menu with one item on it. That is what
-    lets a caller treat "empty" as "do not prompt" without knowing the gamemode.
-    """
+    decided so far. Null when there is nothing for them to decide; a list with one
+    entry is not a choice and comes back empty."""
     userData = match.meta["userData"].get(str(steam64))
     if userData is None:
         return None
@@ -497,23 +409,11 @@ def _choices(match: "data.Match", steam64: int) -> dict | None:
 def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = None):
     """Lock this player's kit and/or powerup for the match they are on.
 
-    The in-game half of the pick screen. Until this existed the only place a pick could
-    be made was the match page on the site, so a player standing in a lobby had no way
-    to make one at all — and `readyToHost` waits on every pick being made or
-    `selectKitsTime` running out, which is the whole of the delay between "you have a
-    match" and being teleported into it.
+    Both fields are optional and checked against the gamemode. Once every player has
+    locked both, the outstanding map/ballistics/movement picks are decided at once,
+    since nobody picking in game is at a browser to make them.
 
-    Both fields are optional and independent, so a caller can lock a kit the moment it
-    knows one and leave the powerup for the player to choose. Values are checked
-    against the gamemode rather than trusted: an unknown kit category reaches
-    `Kit.getItems` as a missing key, and an unknown powerup equips nothing at all.
-
-    Once every player has locked both, the outstanding map/ballistics/movement picks
-    are collapsed rather than waited on. Nobody who locked from in-game is at a browser
-    to make them, so what is left of that phase is dead time.
-
-    Answers with the same `choose` block `GET /players/{steam64}` returns, so a caller
-    can prompt again off the reply without a second call.
+    Answers with the same `choose` block `GET /players/{steam64}` returns.
     """
     matchId = data.User.getCurrentMatchId(steam64)
     if not matchId:
@@ -559,12 +459,8 @@ def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = Non
 def gamemodes():
     """What a player can queue for, for a server that asks in game.
 
-    The `bit` is the position in the queue bitmask, which is this gamemode's index in
-    the whole mmconfig list, not in this answer: an event-only gamemode is left out of
-    the list but must not shift everything after it onto the wrong bit.
-
-    The blurb is the same three things the play page's tile says, in the same order, so
-    a player choosing in game and a player choosing on the site are reading one thing.
+    `bit` is the gamemode's index in the whole mmconfig list, so a hidden gamemode
+    does not shift the ones after it onto the wrong bit.
     """
     modes = []
     for bit, gamemode in enumerate(mmconfig["gamemodes"]):
@@ -591,24 +487,15 @@ def gamemodes():
 
 @router.post("/lobby/population")
 def lobbyPopulation(server: GameServer, payload: JsonBody):
-    """What this lobby's arena looks like right now.
-
-    Sent once per heartbeat for the whole server rather than per player, because every
-    number here is one fact about the server and not a fact about anybody in it. Nothing
-    reads the reply — this exists so the site can say how alive the game is somewhere the
-    Unturned browser cannot reach, which today means the Discord counter, the arena
-    history, and the announcement when an arena that has been dead for hours wakes up.
+    """How many are in this lobby right now, once per heartbeat.
 
     Body:
-        players   how many are connected to the lobby and not already on a match.
+        players   connected to the lobby and not on a match.
         queueing  how many of those want a match. Optional.
-        held      how many of those the lobby is keeping out of the queue to protect
-                  its own browser listing. Optional.
+        held      how many the lobby is keeping out of the queue. Optional.
 
-    `queueing` and `held` are optional because a lobby build that predates them reports
-    neither, and a lobby that does no holding of its own has nothing to say about either.
-    They are stored as absent rather than as zero, so "this build does not report it"
-    never reads as "nobody wanted a match".
+    Optional counts are stored as absent rather than zero, so an older lobby that does
+    not report them never reads as nobody wanting a match.
     """
     players = int(payload.get("players", 0))
     data.LobbyPopulation.report(server.address, players)
@@ -628,23 +515,14 @@ def _optionalCount(payload: dict, field: str) -> int | None:
 
 @router.get("/players/{steam64}")
 def player(steam64: int):
-    """Everything a server needs to know about one player, in one call.
-
-    Deliberately side-effect free — asking does not put anyone in a queue. That is what
-    makes it safe to poll for players who have opted out of matchmaking but could still
-    be pulled into a match made elsewhere (on the site, or by their party).
-    """
+    """Everything a server needs to know about one player. Asking does not queue them."""
     return _player(steam64)
 
 
 @router.get("/players/{steam64}/kits")
 def playerKits(steam64: int):
-    """Every kit this player has saved, resolved into ready-to-equip items.
-
-    One entry per category (`meta`, `sniper`, …). `magazine` is broken out from `items`
-    rather than being one of them so a caller can keep the spare topped up without
-    having to work out which item in the list was the magazine.
-    """
+    """Every kit this player has saved, resolved into ready-to-equip items, with the
+    magazine broken out so a caller can keep the spare topped up."""
     return {
         category: {
             "items": _items(kit["items"]),
@@ -658,20 +536,10 @@ def playerKits(steam64: int):
 def joinQueue(steam64: int, gamemodes: int = 1, region: str = "paris"):
     """Put this player in the matchmaking queue, or keep them in it.
 
-    Called on a timer for everyone standing in a server-side lobby, so it is both "join"
-    and "still here". `gamemodes` is a bitmask of the gamemodes the player will accept.
-    Answers with the same shape as `GET /players/{steam64}`, so one call both queues
-    them and says whether they now have somewhere to be.
-
-    Queueing never creates a match. Matches are made by free game servers asking for
-    work — see `GET /session` — so a player who queues when every server is busy waits
-    in the queue rather than in a match that has nowhere to be played.
-
-    No party support, on purpose: a lobby server knows who is connected to it, not who
-    is grouped with whom on the site.
+    Called on a timer for everyone in a lobby, so it is both "join" and "still here".
+    `gamemodes` is a bitmask. Answers like `GET /players/{steam64}`. A banned player is
+    refused, and the ban comes back on the `ban` field.
     """
-    # addToQueue refuses a banned player and says so; the ban reaches the lobby on the
-    # `ban` field of the reply either way, so there is nothing extra to do with it here.
     if not data.User.getCurrentMatchId(steam64):
         data.User.addToQueue(steam64, gamemodes, region=region)
     return _player(steam64)
@@ -698,16 +566,10 @@ async def submitReport(
     headshotHits: int = Form(0),
     screenshot: UploadFile | None = File(None),
 ):
-    """An in-game /report, with the reported player's spy screenshot attached.
+    """An in-game /report, multipart so the reported player's screenshot arrives with it.
 
-    Multipart rather than JSON because the screenshot is the point: it is captured by
-    asking the reported player's own client (`Player.sendScreenshot`), which only the
-    game server can do, and it has to arrive with the report rather than as a second
-    call that could fail on its own and leave a report with no evidence.
-
-    The counters are sent rather than derived here. A lobby server and a match server
-    count "this round" differently, one resetting on an arena wipe and the other on a
-    round, and only they know which of the two they are.
+    The counters are the server's own, since a lobby and a match server reset them at
+    different times.
     """
     image = await screenshot.read() if screenshot is not None else None
 
@@ -724,12 +586,10 @@ async def submitReport(
         serverCode=serverCode,
         where=where,
         screenshot=image,
-        # A server may route its own reports elsewhere; empty means the site's.
         channel=channel or None,
         staffRole=staffRole or None,
     )
-    # 200 either way: the report reached the site, and a game server has nothing it
-    # could usefully do about Discord being down. It is logged on this side instead.
+    # 200 even when Discord is down: there is nothing the server could do about it.
     return {"status": "ok", "delivered": sent}
 
 

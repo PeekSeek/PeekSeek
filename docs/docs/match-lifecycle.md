@@ -67,8 +67,7 @@ indefinitely, which matters because it is the only call that scores anything.
 
 | Route | Retry | Why |
 |---|---|---|
-| `POST /matches/{id}/state` | No | Overlay snapshot. Each replaces the last, so a dropped one costs nothing. |
-| `POST /matches/{id}/kills` | No | One kill as it happens. Batching to the end loses the log with the server. |
+| `POST /matches/{id}/rounds` | No | Rounds won per team. Each replaces the last, so a dropped one costs nothing. |
 | `POST /matches/{id}/result` | **Yes, until acknowledged** | The only thing that scores a match. |
 
 The result answers `{"status": "recorded"}` or `{"status": "alreadyRecorded"}`. Repeats

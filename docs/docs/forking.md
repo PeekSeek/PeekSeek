@@ -15,8 +15,8 @@ is.
 > same calls and speaks the same JSON.
 
 That is not aspiration. The website has no import, no branch and no model that reaches
-into Unturned. Matchmaking, Elo, parties, queueing, events, the admin panel, the stream
-overlay and the Discord integration are all game-agnostic already.
+into Unturned. Matchmaking, Elo, parties, queueing, events, the admin panel and the Discord
+integration are all game-agnostic already.
 
 **Your real job is writing one agent for your game that implements the polling loop.**
 Everything below is smaller than that.
@@ -30,7 +30,7 @@ A program that runs on your game server and does this:
 1. Poll `GET /server/v1/session` with `serverCode` and `matchId`.
 2. Switch on `action`: `idle`, `wait`, `host`, `abort`.
 3. On `host`, start a match from the payload: teams, per-player loadouts, settings.
-4. Stream `POST /matches/{id}/kills` and `POST /matches/{id}/state` as things happen.
+4. `POST /matches/{id}/rounds` each time a round is decided.
 5. `POST /matches/{id}/result` at the end, **retrying until acknowledged**.
 
 That is the entire contract. It is HTTP and JSON, so it can be a RocketMod plugin, a
@@ -127,7 +127,6 @@ Worth stating plainly, because it is most of the value:
 - The whole match lifecycle and its retry semantics
 - Events, signups, and tournament pairings
 - The admin panel
-- The stream overlay
 - Discord integration
 - Sessions, permissions, bans, and the IP allow-list
 

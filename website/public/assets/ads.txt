@@ -1,8 +1,0 @@
-# ads.txt file for peekseek.net
-# Declare authorized digital sellers
-
-google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
-appnexus.com, 1001, DIRECT, f5ab79cb980f11d1
-openx.com, 123456789, DIRECT, 6a698e2ec38604c6
-
-# Add more authorized sellers as needed

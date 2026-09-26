@@ -395,26 +395,28 @@ def test_a_malformed_result_is_rejected_rather_than_silently_dropped(
         assert not db.query(data.Match).where(data.Match.id == match.id).one().finished
 
 
-def test_kills_append_to_the_match_result(gameserver, user_factory):
-    killer, victim = user_factory(), user_factory()
-    match = makeMatch(killer, victim, matchSettings=DECIDED)
+def test_round_wins_replace_the_last_report(gameserver, user_factory):
+    first, second = user_factory(), user_factory()
+    match = makeMatch(first, second, matchSettings=DECIDED)
+    url = f"/server/v1/matches/{match.id}/rounds"
 
-    r = gameserver.post(
-        f"/server/v1/matches/{match.id}/kills",
-        json={"killer": str(killer.steam64), "victim": str(victim.steam64)},
-    )
+    gameserver.post(url, json={"wins": {"a": 1, "b": 0}})
+    r = gameserver.post(url, json={"wins": {"a": 1, "b": 1}})
 
     assert r.status_code == 200
     with opendb() as db:
-        stored = (
-            db.query(data.MatchResult).where(data.MatchResult.matchId == match.id).one()
-        )
-    assert len(stored.data["kills"]) == 1
+        stored = db.query(data.Match).where(data.Match.id == match.id).one()
+    assert stored.roundWins == {"a": 1, "b": 1}
+
+
+def test_round_wins_must_be_counts(gameserver):
+    r = gameserver.post("/server/v1/matches/1/rounds", json={"wins": {"a": "two"}})
+    assert r.status_code == 400
 
 
 def test_a_malformed_body_400s_instead_of_crashing(gameserver):
     r = gameserver.post(
-        "/server/v1/matches/1/kills",
+        "/server/v1/matches/1/rounds",
         content=b"not json",
         headers={"Content-Type": "application/json"},
     )

@@ -28,12 +28,10 @@ PAGES_NEVER_REMEMBERED = (
     "/discord",
     "/queue/",
     "/match/current",
-    "/match/overlay",
     "/user/changeuuid",
     "/server/",
     "/ping",
     "/build",
-    "/ads",
 )
 
 

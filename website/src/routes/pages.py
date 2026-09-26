@@ -1,6 +1,4 @@
-"""Static-ish pages: rulebooks, GDPR, the Discord redirect, and overlays."""
-
-import json
+"""Static-ish pages: rulebooks, GDPR, the Discord redirect, and join links."""
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -10,27 +8,21 @@ from src.dependencies import templates
 
 router = APIRouter()
 
+UNTURNED_APP_ID = 304930
+
 
 @router.get("/discord")
 def discord():
     return RedirectResponse(settings.discord_invite_url, status_code=302)
 
 
-# Unturned takes the server code on its launch command line; there is no URL scheme
-# that joins by code directly, which is why every join on the site goes through
-# `steam://run` rather than linking the server itself.
-UNTURNED_APP_ID = 304930
-
-
 @router.get("/lobby")
 def lobby(request: Request):
     """Open the DeathMatch lobby in Unturned.
 
-    A link made to be posted, so it does not redirect straight to `steam://`: a browser
-    that refuses to hand a protocol handler a navigation the user did not start would
-    leave nothing but a blank page, and this link's whole job is being pasted somewhere
-    else. The page fires the launch itself and keeps a button and the bare code for
-    when that is refused, or for someone who would rather type it into Connect Directly.
+    A page rather than a redirect to `steam://`, because a browser may refuse a
+    protocol handler it did not see the visitor start, and the page keeps a button and
+    the bare code for that case.
     """
     return _joinPage(
         request,
@@ -65,17 +57,8 @@ def _joinPage(
 
 @router.get("/join/{serverCode}")
 def join(request: Request, serverCode: str):
-    """Open any server by its code. This is what an in-game report links staff to.
-
-    Shares the lobby's page rather than redirecting straight to `steam://`, for the
-    same reason: this link is made to be clicked out of Discord, and a browser that
-    refuses a protocol handler a navigation the visitor did not start would leave
-    them looking at nothing.
-
-    The code is checked against the same shape Unturned accepts before it reaches the
-    page. Unlike the lobby's, this one arrives in the URL, so an unfiltered value would
-    be reflected into an inline script and an onclick attribute.
-    """
+    """Open any server by its code. The code comes from the URL and is reflected into
+    the page's script, so only the shape Unturned accepts gets through."""
     if not serverCode.isalnum() or len(serverCode) > 32:
         raise HTTPException(status_code=404, detail="Not a server code.")
 
@@ -85,22 +68,6 @@ def join(request: Request, serverCode: str):
         heading="Opening the server",
         embedTitle=f"Join PeekSeek server {serverCode}",
         embedDescription="One click into the match.",
-    )
-
-
-@router.get("/overlay")
-def overlay(request: Request, id: str | None = None, createdBy: str | None = None):
-    if id is None and createdBy is None:
-        request.session["lastError"] = "No match ID or createdBy specified for overlay."
-        return RedirectResponse("/", status_code=302)
-    # json.dumps rather than the raw string: a steam64 is ~17 digits, past
-    # Number.MAX_SAFE_INTEGER, so interpolating it unquoted into the page's <script>
-    # turns it into a JS number literal that silently loses precision and never matches
-    # the createdBy stored on the match. Quoting it keeps it a string end to end.
-    return templates.TemplateResponse(
-        request=request,
-        name="pages/overlay.html",
-        context={"matchid": json.dumps(id), "createdBy": json.dumps(createdBy)},
     )
 
 

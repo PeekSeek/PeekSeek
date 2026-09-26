@@ -80,23 +80,6 @@ def match_current(steam64: ApiSteam64, id: int | None = None):
     return current.localJson()
 
 
-@router.get("/match/overlay")
-def match_overlay(id: int | None = None, createdBy: int | None = None):
-    """Public stream-overlay endpoint — no auth. Look up by match id or creator."""
-    matchid = id
-    if createdBy is not None:
-        matchid = data.Match.findLastCreatedBy(createdBy)
-    if not matchid:
-        raise HTTPException(status_code=404, detail="No match found.")
-
-    with opendb() as db:
-        current = db.query(data.Match).where(data.Match.id == matchid).first()
-
-    if not current:
-        raise HTTPException(status_code=404, detail="No match found.")
-    return current.localJson()
-
-
 @router.post("/match/decide")
 def match_decide(
     steam64: ApiSteam64,
@@ -373,7 +356,6 @@ def match_detail(request: Request, matchid: int, user: CurrentUser):
                     for s64, summary in results.items()
                 ],
                 "you": _yourProgress(results, user.steam64 if user else None),
-                "kills": result.data.get("kills", []),
                 "round": round,
                 "max": max,
             },

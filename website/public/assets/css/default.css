@@ -4,10 +4,7 @@
    here; a rule used by one page lives in that page's stylesheet, loaded from its
    {% block addheader %}. When a second page needs a rule, move it here rather than
    copying it -- esports.css and esports2.css were once the same file and drifted
-   four rules apart, which is the failure this rule exists to prevent.
-
-   The stream overlay (css/overlay.css) is a separate design system and deliberately
-   shares nothing with this file. */
+   four rules apart, which is the failure this rule exists to prevent. */
 
 * {
   margin: 0;

@@ -61,30 +61,6 @@ class Kit(SQLModel, table=True):
         )
 
     @staticmethod
-    def gunFor(steam64, currentMatch: "Match") -> int:  # noqa: F821
-        """Just the gun id a player will spawn holding, resolved the way getItems
-        resolves it.
-
-        Split out because the stream overlay names that gun on the intermission screen
-        and polls twice a second for it. Building every player's full loadout, every
-        attachment state resolved through metagun, to read one id off the front of it
-        is work nobody asked for.
-        """
-        from src.core.db import open
-
-        category = Kit.kitCategory(steam64, currentMatch)
-        with open() as db:
-            saved = (
-                db.query(Kit)
-                .where((Kit.steam64 == steam64) & (Kit.category == category))
-                .first()
-            )
-
-        if saved:
-            return int(saved.data["gun"])
-        return int(next(iter(kitsConfig["kits"][category])))
-
-    @staticmethod
     def resolveOutfit(saved: dict) -> dict:
         """The outfit a player actually wears: their pick per slot, or that slot's
         first option wherever they have no pick or the one they saved is no longer

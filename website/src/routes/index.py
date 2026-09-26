@@ -3,7 +3,7 @@
 from time import time
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from src.core.settings import settings
 from src.core.db import open as opendb
@@ -201,9 +201,3 @@ def ping():
 @router.get("/build")
 def build():
     return PlainTextResponse(settings.build)
-
-
-@router.get("/ads")
-@router.get("/ads.txt")
-def ads_txt():
-    return FileResponse(settings.public / "assets" / "ads.txt")

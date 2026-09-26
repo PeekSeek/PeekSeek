@@ -25,7 +25,11 @@ class Match(SQLModel, table=True):
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
     meta: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
-    livedata: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    # Team name to rounds won, as the game server last reported it. Stored in the column
+    # the old live snapshot used, which is NOT NULL with no default.
+    roundWins: dict = Field(
+        default_factory=dict, sa_column=Column("livedata", JSON, nullable=False)
+    )
     finished: bool = False
     created_at: Optional[datetime] = Field(
         default=None,
@@ -98,7 +102,7 @@ class Match(SQLModel, table=True):
         self.gamemode = gamemode
         self.meta = {"userData": {}}
         self.teams = Match._withDistinctNames(teams)
-        self.livedata = {}
+        self.roundWins = {}
         self.finished = False
         self.region = region
 
@@ -518,13 +522,11 @@ class Match(SQLModel, table=True):
                     )
 
     @staticmethod
-    def setLiveData(match_id, livedata: dict) -> None:
+    def recordRoundWins(matchId: int, wins: dict) -> None:
         from src.core.db import open
 
-        if isinstance(match_id, Match):
-            match_id = match_id.id
         with open() as db:
-            db.query(Match).where(Match.id == match_id).update({"livedata": livedata})
+            db.query(Match).where(Match.id == matchId).update({Match.roundWins: wins})
 
     def getReturnedMeta(
         self,
@@ -630,19 +632,10 @@ class Match(SQLModel, table=True):
         return m
 
     def localJson(self) -> dict:
-        """The match as the site's own pages read it — the match screen, the stream
-        overlay, and the spectate and admin lists.
+        """The match as the match page reads it.
 
-        `status` is what tells the match screen which of its three faces to show, and
-        `serverCode` is null until there is genuinely something to connect to. They are
-        separate on purpose: a match has a server from the moment it is made, so "a
-        server exists" stopped being the same question as "the match has started".
-
-        Call this *outside* the session the match was loaded in. It reads Steam for every
-        player, and holding a pooled connection across a call to a third party is what
-        drained the pool: the three routes that build this are the polled ones, so a slow
-        Steam reply took every connection with it and load_user started timing out on
-        every route in the site.
+        Call this outside the session the match was loaded in: it reads Steam for every
+        player, and holding a pooled connection across that call drains the pool.
         """
         return {
             "id": self.id,
@@ -653,7 +646,6 @@ class Match(SQLModel, table=True):
             "params": self.meta,
             "claimed": self.claimed,
             "users": self.getSteamUserData(),
-            "liveData": self.livedata,
             "startsAfter": self.selectionEndsAt(),
             "config": mmconfig["gamemodes"][self.gamemode],
             "joinTimeoutSeconds": mmconfig.get("joinTimeoutSeconds", 120),
@@ -672,46 +664,19 @@ class Match(SQLModel, table=True):
         return self.claimed
 
     def getSteamUserData(self) -> dict:
-        """Everything the site knows about each player in this match that the game
-        server does not: the Steam persona to call them by before they have connected,
-        and the gun they will spawn holding. Both are what the overlay's intermission
-        screen draws while the match is still filling up."""
+        """Each player's Steam name and avatar, keyed by steam64."""
         from src.core import steam
-        from .kit import Kit
 
         return {
-            user: steam.User(user).toDict() | {"gun": Kit.gunFor(user, self)}
+            user: steam.User(user).toDict()
             for team in self.teams
             for user in team["users"]
         }
 
-    @staticmethod
-    def findLastCreatedBy(steam64) -> int | None:
-        """A premium perk: a stable personal overlay link that always resolves to
-        whichever match this steam64 is most recently playing in, matchmade or custom
-        — not literally who administratively created it (the name is kept because it's
-        the public ?createdBy= URL param streamers already have saved). Gated on
-        premium so it stays a paid feature rather than working for anyone's steam64."""
-        from src.core.db import open
-        from .user import User
-
-        if not User.getPermission(steam64, "premium"):
-            return None
-
-        with open() as db:
-            for match in db.query(Match).order_by(desc(Match.id)).all():
-                users = [str(u) for team in match.teams for u in team["users"]]
-                if str(steam64) in users:
-                    return match.id
-        return None
-
 
 class MatchResult(SQLModel, table=True):
-    """The durable per-match record: the map/settings, the kill-by-kill log, and (once the
-    match ends) each player's final line. `data` is JSON on purpose — kills and results are
-    two things this row grows to hold, and neither is a fixed shape the way the frozen
-    /unt/* payloads are, so new fields go straight in rather than needing a migration.
-    """
+    """The durable per-match record: the settings it was played on and, once it ends,
+    each player's final line or the reason it went unscored."""
 
     __tablename__ = "MatchResults"
 
@@ -730,9 +695,7 @@ class MatchResult(SQLModel, table=True):
 
     @staticmethod
     def _row(db, matchId: int) -> "MatchResult":
-        """This match's row, created from the match's own settings if it has none yet.
-        Both the kill log and the final line arrive independently and either can be first,
-        so neither can assume the other already made the row."""
+        """This match's row, created from the match's own settings if it has none yet."""
         result = db.query(MatchResult).where(MatchResult.matchId == matchId).first()
         if result is not None:
             return result
@@ -747,7 +710,6 @@ class MatchResult(SQLModel, table=True):
                 "map": match.meta.get("map") if match else None,
                 "ballistics": match.meta.get("ballistics") if match else None,
                 "movement": match.meta.get("movement") if match else None,
-                "kills": [],
             },
         )
         db.add(result)
@@ -755,26 +717,9 @@ class MatchResult(SQLModel, table=True):
         return result
 
     @staticmethod
-    def appendKill(matchId: int, kill: dict) -> None:
-        """One kill, as it happens. Creates the row on the first kill of a match and
-        appends to it on every one after."""
-        from src.core.db import open
-
-        with open() as db:
-            result = MatchResult._row(db, matchId)
-            db.query(MatchResult).where(MatchResult.id == result.id).update(
-                {"data": result.data | {"kills": [*result.data.get("kills", []), kill]}}
-            )
-
-    @staticmethod
     def hasResults(matchId: int) -> bool:
-        """Whether this match's final per-player line has already been recorded.
-
-        The guard against applying a match's Elo twice. A game server retries its result
-        report until the site acknowledges it, so a reply that gets lost on the way back
-        means the same result arrives again — that retry must not move anyone's Elo a
-        second time.
-        """
+        """Whether this match has been scored. A server retries its result until it is
+        acknowledged, so this is what stops a retry moving Elo twice."""
         from src.core.db import open
 
         with open() as db:
@@ -782,17 +727,8 @@ class MatchResult(SQLModel, table=True):
             return bool(result and result.data.get("results"))
 
     @staticmethod
-    def recordFinalResults(
-        matchId: int, results: dict, score: list | None = None
-    ) -> None:
-        """`results` is matchmaking.matchResults()'s per-player summary, keyed by steam64.
-        A match with no kills (a walkover) still gets a row here, since this is also the
-        only place a player's final per-match line is kept.
-
-        `score` is the round tally, copied off the last live snapshot as it is recorded
-        because scoring a match wipes that snapshot. Without it a finished match knows
-        who won and not by how much, and 3-0 and 3-2 read identically forever after.
-        """
+    def recordFinalResults(matchId: int, results: dict) -> None:
+        """`results` is matchmaking.matchResults()'s per-player summary, keyed by steam64."""
         from src.core.db import open
 
         with open() as db:
@@ -800,7 +736,7 @@ class MatchResult(SQLModel, table=True):
             db.query(MatchResult).where(MatchResult.id == result.id).update(
                 {
                     "endTime": datetime.utcnow(),
-                    "data": result.data | {"results": results, "score": score or []},
+                    "data": result.data | {"results": results},
                 }
             )
 
@@ -818,15 +754,8 @@ class MatchResult(SQLModel, table=True):
 
     @staticmethod
     def recordUnscored(matchId: int, reason: str) -> None:
-        """Close out a match that ends without a score: nobody turned up for it, or its
-        server never reported one.
-
-        No results block is invented. There is no trustworthy winner, so nobody's Elo
-        moves — but the match is recorded rather than simply vanishing, so an unscored
-        match is something an operator can see and count instead of a gap.
-
-        `reason` is `notPlayed` or `abandoned`.
-        """
+        """Close out a match that ends without a score, so it is counted rather than
+        lost. `reason` is `notPlayed`, `abandoned` or `noServer`."""
         from src.core.db import open
 
         with open() as db:

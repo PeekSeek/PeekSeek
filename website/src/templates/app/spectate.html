@@ -40,8 +40,6 @@
             {% endfor %}
 
           </div><div class="matchGridInner">
-            <button type="button" class="settingsButton spectateButton" onclick="navigator.clipboard.writeText('{{config.base_url}}/overlay?id={{match.id}}')"><img src="/static/img/copy.png" alt="" height="20">Copy overlay link</button>
-
             {% if match.connectCode() %}
             <button type="button" class="settingsButton spectateButton" onclick="window.location.href = 'steam://run/304930//+connect {{match.connectCode()}}'"><img src="/static/img/spectate.png" alt="" height="20">Click to spectate</button>
             {% endif %}

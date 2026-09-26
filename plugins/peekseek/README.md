@@ -62,8 +62,8 @@ against the DLL without ever shipping a copy of it: two `PeekSeek.dll`s under
 3. `Begin`: the gamemode gets the match and everybody present. Whoever joins later
    comes through `OnPlayerJoined`.
 4. Rounds are the gamemode's. It calls `Host.RoundWon` when one is over, and
-   `Host.MatchWon` when the match is; Match scores, announces, sends the overlay its
-   snapshot, and after `DelayKickAfterWin` reports the result and sends everybody
+   `Host.MatchWon` when the match is; Match scores, announces, reports the rounds
+   to the site, and after `DelayKickAfterWin` reports the result and sends everybody
    back to the lobby.
 
 ## The screens
@@ -85,10 +85,10 @@ item logs one line per screen and draws nothing; the boards then answer themselv
   ping, orange while it costs them some damage and red from half. A player who has
   left gets a cross on their face.
 - **The banner**, a label over a name and a line, a few seconds after a round or a
-  match, the same words the stream overlay shows. A gamemode says its own through
+  match. A gamemode says its own through
   `Host.Banner`.
 - **The death card**, to the one who died: who, with what, how far, what they had
-  left and what you did to them, from the same record the site's kill log gets.
+  left and what you did to them.
 - **The scoreboard**, held up on the first plugin key (`,` by default) during a match,
   and up for everybody, frozen where they stand, when the match is won.
 - **The boards** a player answers, **the build panel** and **the tag** at the bottom
@@ -171,8 +171,8 @@ plugins/peekseek/
 │       ├── Gamemodes/               # the seam: IGamemode, Host, Gamemodes, GamemodeMatch
 │       ├── Hud/                     # the bar, the boards, the build panel, the kill feed
 │       ├── Patches/                 # the native arena loop switched off
-│       ├── Web/RemoteAPI.cs         # the session, results, kills, kits and pictures
-│       └── ...                      # stats, the overlay snapshot, the fight tracker
+│       ├── Web/RemoteAPI.cs         # the session, rounds, results, kits and pictures
+│       └── ...                      # stats, the round log, pings
 ├── tests/
 └── ui/                              # the Unity project the workshop items are built from
 ```

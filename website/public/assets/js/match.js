@@ -264,4 +264,4 @@ document.addEventListener("DOMContentLoaded", () => {
     updatePowerupClasses();
 });
 
-window.setInterval(update, 500);
+window.setInterval(update, 1000);

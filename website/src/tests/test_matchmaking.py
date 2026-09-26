@@ -350,28 +350,20 @@ def test_match_is_hostable_early_once_every_kit_and_powerup_is_locked(user_facto
         assert loaded.readyToHost() is True
 
 
-def test_append_kill_creates_and_grows_the_match_result(user_factory):
-    killer, victim = user_factory(), user_factory()
+def test_record_final_results_keeps_the_match_settings(user_factory):
+    player = user_factory()
     with core_db.open() as db:
         match = data.Match(
             gamemode=0,
-            teams=[
-                {"name": "one", "users": [str(killer.steam64)]},
-                {"name": "two", "users": [str(victim.steam64)]},
-            ],
+            teams=[{"name": "one", "users": [str(player.steam64)]}],
             matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
         )
         db.add(match)
         db.flush()
         matchId = match.id
 
-    data.MatchResult.appendKill(
-        matchId,
-        {"killer": str(killer.steam64), "victim": str(victim.steam64), "limb": "skull"},
-    )
-    data.MatchResult.appendKill(
-        matchId,
-        {"killer": str(killer.steam64), "victim": str(victim.steam64), "limb": "spine"},
+    data.MatchResult.recordFinalResults(
+        matchId, {str(player.steam64): {"Kills": 1, "Deaths": 0, "Won": True}}
     )
 
     with Session(core_db.engine) as s:
@@ -379,38 +371,7 @@ def test_append_kill_creates_and_grows_the_match_result(user_factory):
             s.query(data.MatchResult).where(data.MatchResult.matchId == matchId).first()
         )
         assert result.data["map"] == "Alpha Valley"
-        assert len(result.data["kills"]) == 2
-        assert result.data["kills"][0]["limb"] == "skull"
-
-
-def test_record_final_results_merges_into_the_same_row_as_kills(user_factory):
-    killer, victim = user_factory(), user_factory()
-    with core_db.open() as db:
-        match = data.Match(
-            gamemode=0,
-            teams=[
-                {"name": "one", "users": [str(killer.steam64)]},
-                {"name": "two", "users": [str(victim.steam64)]},
-            ],
-            matchSettings={"ballistics": True, "map": "Alpha Valley", "movement": True},
-        )
-        db.add(match)
-        db.flush()
-        matchId = match.id
-
-    data.MatchResult.appendKill(
-        matchId, {"killer": str(killer.steam64), "victim": str(victim.steam64)}
-    )
-    data.MatchResult.recordFinalResults(
-        matchId, {str(killer.steam64): {"Kills": 1, "Deaths": 0, "Won": True}}
-    )
-
-    with Session(core_db.engine) as s:
-        result = (
-            s.query(data.MatchResult).where(data.MatchResult.matchId == matchId).first()
-        )
-        assert len(result.data["kills"]) == 1
-        assert result.data["results"][str(killer.steam64)]["Won"] is True
+        assert result.data["results"][str(player.steam64)]["Won"] is True
 
 
 def test_latest_for_finds_matches_a_player_has_a_result_in(user_factory):

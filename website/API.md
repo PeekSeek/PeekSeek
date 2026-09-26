@@ -102,8 +102,7 @@ bytes to stamp onto the item.
 
 | Route | Retry? | Why |
 |---|---|---|
-| `POST /matches/{id}/state` | **No** | The overlay snapshot. Each one replaces the last, so a dropped one costs nothing. |
-| `POST /matches/{id}/kills` | **No** | One kill, sent as it happens. Batching them to the end would lose the whole log with the server. |
+| `POST /matches/{id}/rounds` | **No** | Rounds won per team, `{"wins": {"<team>": n}}`, sent when a round is decided. Each replaces the last. |
 | `POST /matches/{id}/result` | **Yes, until acknowledged** | The only thing that scores a match. |
 
 The result is the one call that must land.
@@ -289,7 +288,6 @@ lives.
 | `live` | Handed over; the server is running it. |
 | `finished` | Scored, abandoned or cancelled — over either way. |
 
-The site's own pages read `status` and `serverCode` from `/match/current` and
-`/match/overlay`. They are separate fields on purpose: a match has a server from the
+The match page reads `status` and `serverCode` from `/match/current`. They are separate fields on purpose: a match has a server from the
 moment it is made, so "a server exists" stopped being the same question as "the match has
 started".
