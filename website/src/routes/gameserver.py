@@ -347,7 +347,10 @@ def _score(match: data.Match, payload: dict) -> None:
 
     gamemode = mmconfig["gamemodes"][match.gamemode]
     result, avgElo = matchmaking.matchResults(
-        gamemode, *players, draw=bool(payload.get("draw"))
+        gamemode,
+        *players,
+        draw=bool(payload.get("draw")),
+        teams=[team["users"] for team in match.teams],
     )
     # Taken off the live snapshot here because recording the result is what clears it.
     data.MatchResult.recordFinalResults(match.id, result, _roundScore(match))
