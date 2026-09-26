@@ -129,8 +129,8 @@ internal class QueueBoard {
         Send(viewer, "Queue_No", PeekSeekLobby.Instance.Translate(waited == null ? "queue_no" : "queue_leave"));
     }
 
-    /// What the screen opens on: the server's own region, and every Competitive mode.
-    /// A player who just wants a match can press go.
+    /// What the screen opens on: the server's own region, and every ranked mode. A
+    /// player who just wants a match can press go.
     private static QueueChoice Started() {
         QueueChoice choice = new();
         List<QueueRegion> regions = PeekSeekLobby.Config.QueueRegions ?? [];
@@ -139,7 +139,7 @@ internal class QueueBoard {
 
         List<QueueGamemode> modes = LobbyManager.Gamemodes ?? [];
         for (int i = 0; i < modes.Count; i++) {
-            if (modes[i].Name?.StartsWith("Competitive", System.StringComparison.OrdinalIgnoreCase) == true) choice.Modes.Add(i);
+            if (modes[i].Ranked) choice.Modes.Add(i);
         }
         return choice;
     }

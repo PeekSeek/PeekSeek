@@ -17,6 +17,9 @@ public class QueueGamemode {
     /// gamemode tile says them.
     [XmlAttribute]
     public string Blurb;
+
+    [XmlAttribute]
+    public bool Ranked;
 }
 
 /// One region tile, and the code the site knows it by.

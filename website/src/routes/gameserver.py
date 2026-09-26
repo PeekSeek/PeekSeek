@@ -459,16 +459,11 @@ def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = Non
 
 @router.get("/gamemodes")
 def gamemodes():
-    """What a player can queue for, for a server that asks in game.
-
-    `bit` is the gamemode's index in the whole mmconfig list, so a hidden gamemode
-    does not shift the ones after it onto the wrong bit.
+    """What a player can queue for, in menu order, for a server that asks in game.
+    `bit` is the gamemode's position in the whole list, which is what a queue mask means.
     """
     modes = []
-    for bit, gamemode in enumerate(mmconfig["gamemodes"]):
-        if gamemode.get("hideFromMM"):
-            continue
-
+    for gamemode in settings.visible_mmconfig["gamemodes"]:
         players = gamemode["playersPerTeam"]
         parts = [
             ", ".join(kit.upper() for kit in gamemode["kitsAllowed"]),
@@ -478,7 +473,7 @@ def gamemodes():
             parts.append("Ranked")
         modes.append(
             {
-                "bit": bit,
+                "bit": gamemode["bit"],
                 "name": gamemode["name"],
                 "blurb": "   ".join(parts),
                 "usesElo": gamemode["usesElo"],

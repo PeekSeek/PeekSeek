@@ -92,7 +92,8 @@ internal static class RemoteAPI {
                     modes.Add(new QueueGamemode {
                         Bit = Number(entry["bit"]) ?? 0,
                         Name = Text(entry["name"]),
-                        Blurb = Text(entry["blurb"])
+                        Blurb = Text(entry["blurb"]),
+                        Ranked = entry["usesElo"]?.Type == JTokenType.Boolean && (bool)entry["usesElo"]
                     });
                 }
 

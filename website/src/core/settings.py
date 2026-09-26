@@ -96,19 +96,18 @@ class Settings:
 
     @property
     def visible_mmconfig(self) -> dict:
-        """mmconfig with event-only gamemodes (hideFromMM) filtered out.
+        """The gamemodes players can queue for, in `menuOrder`.
 
-        Each one keeps its `bit`, its index in the whole list, because that is what the
-        queue bitmask means. Its position in this shorter list is not: counting from it
-        put anyone picking a mode after a hidden one into the wrong gamemode.
+        Each keeps its `bit`, its index in the whole list, because that is what the queue
+        bitmask means. Positions never move, so the menu's order is a field of its own.
         """
-        return self.mmconfig | {
-            "gamemodes": [
-                gamemode | {"bit": bit}
-                for bit, gamemode in enumerate(self.mmconfig["gamemodes"])
-                if not gamemode.get("hideFromMM")
-            ]
-        }
+        visible = [
+            gamemode | {"bit": bit}
+            for bit, gamemode in enumerate(self.mmconfig["gamemodes"])
+            if not gamemode.get("hideFromMM")
+        ]
+        visible.sort(key=lambda gamemode: gamemode.get("menuOrder", gamemode["bit"]))
+        return self.mmconfig | {"gamemodes": visible}
 
     def profile_url(self, steam64) -> str:
         return f"{self.base_url}/u/{steam64}"
