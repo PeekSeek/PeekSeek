@@ -114,12 +114,21 @@ def addMissingColumns() -> None:
             connection.execute(text(statement))
 
 
+def addMissingIndexes() -> None:
+    """Create indexes a model has gained since its table was first created, which
+    `create_all` skips for a table that already exists."""
+    for table in SQLModel.metadata.sorted_tables:
+        for index in table.indexes:
+            index.create(bind=engine, checkfirst=True)
+
+
 from . import models  # noqa: F401, E402 — ensures all tables are registered
 from sqlalchemy.orm import configure_mappers
 
 configure_mappers()
 SQLModel.metadata.create_all(engine)
 addMissingColumns()
+addMissingIndexes()
 models.MatchPlayer.backfill()
 
 if settings.bootstrap_admin:

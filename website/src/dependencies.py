@@ -46,7 +46,7 @@ def _remember_page(request: Request) -> None:
 
 def load_user(request: Request) -> Optional[data.User]:
     """Resolve the requester from the session (or ?uuid=), record the page for
-    post-login redirects, and track their IP.
+    post-login redirects, and record each new IP they come from.
 
     Registered app-wide, so every route (and template) sees request.state.user.
     """
@@ -65,16 +65,10 @@ def load_user(request: Request) -> Optional[data.User]:
             return None
 
         request.session["logged"] = True
-        known_ip = (
-            db.query(data.UserIP)
-            .where(
-                data.UserIP.address == ip,
-                data.UserIP.steam64 == user.steam64,
-            )
-            .first()
-        )
-        if not known_ip and ip:
-            db.add(data.UserIP(steam64=user.steam64, address=ip))
+        # Once per address per session, rather than a lookup on every request.
+        if request.session.get("ip") != ip:
+            data.UserIP.remember(db, user.steam64, ip)
+            request.session["ip"] = ip
 
     request.state.user = user
 

@@ -85,7 +85,7 @@ class Match(SQLModel, table=True):
     ):
         from src.core.db import open
         from src.core.webhook import Webhook
-        from .user import User
+        from .user import User, UserBan
 
         teams = teams or []
         spectators = spectators or []
@@ -107,6 +107,8 @@ class Match(SQLModel, table=True):
 
         admin_bit = 2 ** settings.permissions.index("admin")
         with open() as db:
+            # Every caller keeps barred players out before it gets here.
+            assert not UserBan.barring(all_users, db), "A barred player was matched."
             admins = [
                 str(steam64)
                 for (steam64,) in db.query(User.steam64)

@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import ClassVar, TYPE_CHECKING, Optional
+from typing import ClassVar, Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, JSON, text
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, JSON, text
 from sqlmodel import Field, Relationship, SQLModel
 
 from src.core.settings import settings
-
-if TYPE_CHECKING:
-    pass
 
 
 class User(SQLModel, table=True):
@@ -221,16 +218,10 @@ class User(SQLModel, table=True):
         if isinstance(steam64, User):
             steam64 = steam64.steam64
         with open() as db:
-            # Every route into the queue funnels through here: the lobby server, the
-            # play page, an event signup, and a party leader queueing members who never
-            # asked for themselves. Refusing here rather than at each caller is what
-            # makes a ban actually mean something: the check used to live only in
-            # load_user, which a game server never triggers because it carries no player
-            # session, so a permanently banned player queued from in-game for six weeks.
-            ban = UserBan.activeFor(steam64, db)
+            # Every route into the queue comes through here, so this is the one place
+            # a ban has to be checked for queueing to mean anything.
+            ban = UserBan.barring([steam64], db).get(int(steam64))
             if ban is not None:
-                # A ban landing mid-queue takes effect on their next heartbeat rather
-                # than waiting for the row to age out of the queue on its own.
                 db.query(UserHB).where(UserHB.steam64 == steam64).delete()
                 return ban
 
@@ -260,13 +251,33 @@ class User(SQLModel, table=True):
 
 
 class UserIP(SQLModel, table=True):
+    """Every address an account has been seen on, from the site and from the lobby."""
+
     __tablename__ = "UserIPs"
+    __table_args__ = (
+        Index("ix_UserIPs_steam64_address", "steam64", "address"),
+        Index("ix_UserIPs_address", "address"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     steam64: int = Field(
         sa_column=Column(BigInteger, ForeignKey("Users.steam64"), nullable=False)
     )
     address: str = Field(nullable=False)
+
+    @staticmethod
+    def remember(db, steam64: int, address: str) -> None:
+        """Record this address for this account, once. The account must exist."""
+        if not address:
+            return
+        seen = (
+            db.query(UserIP.id)
+            .where(UserIP.steam64 == int(steam64), UserIP.address == address)
+            .first()
+        )
+        if seen is None:
+            db.add(UserIP(steam64=int(steam64), address=address))
+            db.flush()
 
 
 class UserBan(SQLModel, table=True):
@@ -364,6 +375,59 @@ class UserBan(SQLModel, table=True):
             if ban is not None:
                 session.expunge(ban)
             return ban
+
+    @staticmethod
+    def barring(steam64s, db) -> dict[int, "UserBan"]:
+        """The ban that keeps each of these players out of queues and matches.
+
+        A player is barred by their own active ban, or by an active ban on any account
+        that has been seen on one of their addresses. Players nothing bars are left out.
+        Account-only questions, such as the banner and the admin drawer, use `activeFor`.
+        """
+        from time import time
+
+        ids = {int(s) for s in steam64s}
+        if not ids:
+            return {}
+
+        own = db.query(UserIP.steam64, UserIP.address).where(UserIP.steam64.in_(ids))
+        addressesOf: dict[int, set[str]] = {}
+        for steam64, address in own.all():
+            addressesOf.setdefault(steam64, set()).add(address)
+
+        addresses = set().union(*addressesOf.values()) if addressesOf else set()
+        accountsOn: dict[str, set[int]] = {}
+        if addresses:
+            shared = db.query(UserIP.steam64, UserIP.address).where(
+                UserIP.address.in_(addresses)
+            )
+            for steam64, address in shared.all():
+                accountsOn.setdefault(address, set()).add(steam64)
+
+        linked = {
+            steam64: {steam64}.union(
+                *(accountsOn.get(a, set()) for a in addressesOf.get(steam64, set()))
+            )
+            for steam64 in ids
+        }
+        accounts = set().union(*linked.values())
+
+        banOf: dict[int, UserBan] = {}
+        for ban in (
+            db.query(UserBan)
+            .where(UserBan.steam64.in_(accounts), UserBan.endTime > int(time()))
+            .all()
+        ):
+            held = banOf.get(ban.steam64)
+            if held is None or ban.endTime > held.endTime:
+                banOf[ban.steam64] = ban
+
+        barred = {}
+        for steam64, group in linked.items():
+            bans = [banOf[a] for a in group if a in banOf]
+            if bans:
+                barred[steam64] = max(bans, key=lambda ban: ban.endTime)
+        return barred
 
     @staticmethod
     def activeAmong(steam64s, db=None) -> set:

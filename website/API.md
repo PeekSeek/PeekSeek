@@ -143,7 +143,7 @@ what happens to a match whose result was slow to arrive.
 | Route | What it does |
 |---|---|
 | `GET /players/{steam64}` | Name, picture, rank and whereabouts. **No side effects.** |
-| `PUT /players/{steam64}/queue` | Queue them, and answer the same thing. |
+| `PUT /players/{steam64}/queue?gamemodes=&region=&ip=` | Queue them, and answer the same thing. `ip` is the address they play from. |
 | `DELETE /players/{steam64}/queue` | Take them out of the queue. |
 | `GET /players/{steam64}/kits` | Every saved kit, resolved into ready-to-equip items. |
 | `POST /players/{steam64}/decide` | Lock their kit and/or powerup for the match they are on. |
@@ -166,7 +166,9 @@ Both reads answer the same shape:
 ```
 
 `ban` is `null` for a player who may play, and otherwise
-`{"reason": "Cheating", "expires": 9999999999, "permanent": true}`. **A caller holding
+`{"reason": "Cheating", "expires": 9999999999, "permanent": true}`. The ban may be
+on another account: any active ban on an account seen on the same IP, on the site or
+through `ip`, bars every account on that IP from queues and matches. **A caller holding
 players must remove anyone it is non-null for.** `PUT .../queue` refuses to queue them,
 so a lobby that ignores it ends up full of people who can never be matched.
 

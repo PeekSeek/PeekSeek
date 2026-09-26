@@ -461,6 +461,9 @@ def _eventTeam(db, heartbeat, event) -> dict | None:
     ]
     if len(teammates) + 1 > event.data["meta"]["maxPlayersPerTeam"]:
         return None
+    # Teammates come off the signup, not the queue, so nothing else has checked them.
+    if data.UserBan.barring([heartbeat.steam64, *teammates], db):
+        return None
 
     return {
         "name": signup.teamname,

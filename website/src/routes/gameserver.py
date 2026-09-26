@@ -362,7 +362,8 @@ def _player(steam64: int) -> dict:
         with opendb() as db:
             match = db.query(data.Match).where(data.Match.id == matchId).first()
 
-    ban = data.UserBan.activeFor(steam64)
+    with opendb() as db:
+        ban = data.UserBan.barring([steam64], db).get(steam64)
     profile = data.User.getSteamData(steam64)
 
     return {
@@ -536,13 +537,21 @@ def playerKits(steam64: int):
 
 
 @router.put("/players/{steam64}/queue")
-def joinQueue(steam64: int, gamemodes: int = 1, region: str = "paris"):
+def joinQueue(
+    steam64: int, gamemodes: int = 1, region: str = "paris", ip: str | None = None
+):
     """Put this player in the matchmaking queue, or keep them in it.
 
     Called on a timer for everyone in a lobby, so it is both "join" and "still here".
-    `gamemodes` is a bitmask. Answers like `GET /players/{steam64}`. A banned player is
-    refused, and the ban comes back on the `ban` field.
+    `gamemodes` is a bitmask and `ip` the address they play from. Answers like
+    `GET /players/{steam64}`. A barred player is refused, and the ban comes back on
+    the `ban` field.
     """
+    if ip:
+        with opendb() as db:
+            data.User.ensure(db, steam64)
+            data.UserIP.remember(db, steam64, ip)
+
     if not data.Match.currentFor(steam64):
         data.User.addToQueue(steam64, gamemodes, region=region)
     return _player(steam64)

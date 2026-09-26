@@ -120,6 +120,16 @@ def custom_create(steam64: ApiSteam64, payload: JsonBody):
     if not teams:
         raise HTTPException(status_code=400, detail="Team data cannot be empty")
 
+    players = [int(u) for team in teams for u in team["users"]]
+    with opendb() as db:
+        barred = data.UserBan.barring(players, db)
+    if barred:
+        raise HTTPException(
+            status_code=400,
+            detail="Banned players cannot be in a match: "
+            + ", ".join(str(steam64) for steam64 in barred),
+        )
+
     with opendb() as db:
         match = data.Match(
             gamemode=int(payload.get("gamemode", 0)),
