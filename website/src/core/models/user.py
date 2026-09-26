@@ -211,7 +211,8 @@ class User(SQLModel, table=True):
         region: str = "paris",
         eventId: int = None,
     ):
-        from src.core.db import open
+        from src.core.db import MATCHMAKER_LOCK, alongside, open
+        from .match import Match, MatchPlayer
         from .party import UserHB
         from time import time
 
@@ -224,6 +225,20 @@ class User(SQLModel, table=True):
             if ban is not None:
                 db.query(UserHB).where(UserHB.steam64 == steam64).delete()
                 return ban
+
+            # Never between a match being built and being written: a heartbeat that
+            # checked just before would queue somebody already on their way to a match,
+            # and they would be matched again the moment it ended.
+            alongside(db, MATCHMAKER_LOCK)
+            onAMatch = (
+                db.query(MatchPlayer.matchId)
+                .join(Match, Match.id == MatchPlayer.matchId)
+                .where(MatchPlayer.steam64 == int(steam64), Match.finished.is_(False))
+                .first()
+            )
+            if onAMatch is not None:
+                db.query(UserHB).where(UserHB.steam64 == steam64).delete()
+                return None
 
             User.ensure(db, steam64)
             db.query(UserHB).where(UserHB.steam64 == steam64).delete()

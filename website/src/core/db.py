@@ -77,6 +77,15 @@ def exclusively(key: int):
         ).scalar()
 
 
+def alongside(db, key: int) -> None:
+    """Hold `key` shared for the rest of this session's transaction, waiting for
+    whoever holds it exclusively. Many can share it; `exclusively` cannot get it
+    while anyone does. A no-op on SQLite, whose tests run in one process."""
+    assert key in _localLocks, "Unknown lock key."
+    if engine.dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock_shared(:key)"), {"key": key})
+
+
 class open:
     """Context manager that yields a SQLModel Session with auto-commit/rollback."""
 

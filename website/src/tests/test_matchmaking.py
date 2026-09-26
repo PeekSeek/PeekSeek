@@ -850,3 +850,24 @@ def test_players_requeued_while_their_match_is_written_are_not_matched_twice(
     assert matchmaking.matchForServer("paris", "another server") is None
     with Session(core_db.engine) as s:
         assert s.query(data.Match).count() == 1
+
+
+def test_a_player_already_on_a_match_is_not_queued_again(user_factory):
+    """A lobby heartbeat that checked just before the match was written must not leave
+    them queued, or they are matched again the moment it ends."""
+    first, second = user_factory(), user_factory()
+    with core_db.open() as db:
+        db.add(
+            data.Match(
+                gamemode=0,
+                teams=[
+                    {"name": "a", "users": [str(first.steam64)]},
+                    {"name": "b", "users": [str(second.steam64)]},
+                ],
+            )
+        )
+
+    data.User.addToQueue(first.steam64, 1)
+
+    with core_db.open() as db:
+        assert db.query(data.UserHB).count() == 0
