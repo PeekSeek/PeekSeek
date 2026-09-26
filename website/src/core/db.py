@@ -1,4 +1,6 @@
+import threading
 import traceback
+from contextlib import contextmanager
 
 from sqlalchemy import inspect, text
 from sqlalchemy.pool import StaticPool
@@ -43,6 +45,36 @@ if settings.db_url.startswith("sqlite"):
         cursor = connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+
+# Advisory lock keys. Any numbers work, so long as no two jobs share one.
+MATCHMAKER_LOCK = 0x5045454B
+COUNTER_LOCK = 0x50454B43
+
+_localLocks = {MATCHMAKER_LOCK: threading.Lock(), COUNTER_LOCK: threading.Lock()}
+
+
+@contextmanager
+def exclusively(key: int):
+    """Yields whether this call holds `key` across every copy of the site. Never waits.
+
+    A Postgres advisory lock, released with the transaction. SQLite is only ever the
+    tests, which run in one process, so a thread lock stands in for it there.
+    """
+    assert key in _localLocks, "Unknown lock key."
+    if engine.dialect.name != "postgresql":
+        held = _localLocks[key].acquire(blocking=False)
+        try:
+            yield held
+        finally:
+            if held:
+                _localLocks[key].release()
+        return
+
+    with engine.connect() as connection, connection.begin():
+        yield connection.execute(
+            text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": key}
+        ).scalar()
 
 
 class open:

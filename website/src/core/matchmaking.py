@@ -14,14 +14,13 @@ nowhere to be played.
 import logging
 import math
 import threading
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from itertools import combinations
 from time import time
 
-from sqlalchemy import false, func, or_, text
+from sqlalchemy import false, func, or_
 
-from .db import engine, open
+from .db import MATCHMAKER_LOCK, exclusively, open
 from .settings import settings
 from . import models as data
 from . import notify
@@ -53,48 +52,18 @@ def matchForServer(region: str, serverCode: str) -> "data.Match | None":
     return _asTheMatchmaker(lambda: _matchFromQueue(region, serverCode))
 
 
-# Any number works, so long as nothing else takes an advisory lock on the same one.
-MATCHMAKER_LOCK = 0x5045454B
-
-_testLock = threading.Lock()
-
-
 def _asTheMatchmaker(makeMatch):
-    """Run makeMatch as the only matchmaker on the whole site, or not at all.
+    """Run makeMatch as the only matchmaker across every copy of the site, or not at all.
 
-    Every server polls every second and any copy of the site can answer, so without this
-    two polls scan the queue at once. The first takes its players out of the queue, the
-    lobby puts them straight back in before the first has written their match, and the
-    second finds them queued and free and builds the same match again.
-
-    The lock is held in Postgres rather than in this process so it covers every copy of
-    the site, and it is only let go once the match is written. Nobody makes another
-    until `match_cooldown` after the newest one, so the next scan always sees who the
-    last one took. A poll that loses either way is told to idle and asks again.
+    Two polls scanning the queue at once would both find the same players free and
+    build the same match twice. The lock is let go only once the match is written, and
+    nobody makes another until `match_cooldown` after the newest one, so the next scan
+    always sees who the last one took. A poll that loses is told to idle.
     """
-    with _matchmakerLock() as held:
+    with exclusively(MATCHMAKER_LOCK) as held:
         if not held or _madeOneRecently():
             return None
         return makeMatch()
-
-
-@contextmanager
-def _matchmakerLock():
-    """Yields whether this call holds the lock. Never waits for it."""
-    if engine.dialect.name != "postgresql":
-        # SQLite is only ever the tests, which run in one process.
-        held = _testLock.acquire(blocking=False)
-        try:
-            yield held
-        finally:
-            if held:
-                _testLock.release()
-        return
-
-    with engine.connect() as connection, connection.begin():
-        yield connection.execute(
-            text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": MATCHMAKER_LOCK}
-        ).scalar()
 
 
 def _madeOneRecently() -> bool:

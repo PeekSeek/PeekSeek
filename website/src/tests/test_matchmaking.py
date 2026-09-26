@@ -816,7 +816,7 @@ def test_a_second_matchmaker_stands_down_while_the_first_is_working(user_factory
     for player in (user_factory(), user_factory()):
         data.User.addToQueue(player.steam64, GAMEMODE_BIT, region="paris")
 
-    with matchmaking._matchmakerLock() as held:
+    with matchmaking.exclusively(matchmaking.MATCHMAKER_LOCK) as held:
         assert held
         assert matchmaking.matchForServer("paris", SERVER_CODE) is None
 
