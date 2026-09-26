@@ -22,6 +22,7 @@ from itsdangerous import TimestampSigner  # noqa: E402
 
 from src.core import db as core_db  # noqa: E402
 from src.core import models as data  # noqa: E402
+from src.core import steam  # noqa: E402
 from src.core.settings import settings  # noqa: E402
 from sqlmodel import SQLModel, Session  # noqa: E402
 
@@ -40,9 +41,16 @@ def _no_match_cooldown(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_steam(monkeypatch):
+    """No test talks to Steam. A test that needs a profile patches its own in."""
+    monkeypatch.setattr(steam, "get_steam_user_data", lambda steam64: None)
+
+
+@pytest.fixture(autouse=True)
 def _clean_tables():
-    """Wipe tables between tests so each one starts fresh."""
+    """Wipe tables and the Steam profile cache between tests so each starts fresh."""
     yield
+    steam._profile_cache.clear()
     with Session(core_db.engine) as s:
         for table in reversed(SQLModel.metadata.sorted_tables):
             s.execute(table.delete())

@@ -549,7 +549,6 @@ def joinQueue(
     """
     if ip:
         with opendb() as db:
-            data.User.ensure(db, steam64)
             data.UserIP.remember(db, steam64, ip)
 
     if not data.Match.currentFor(steam64):

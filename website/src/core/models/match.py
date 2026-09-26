@@ -4,7 +4,18 @@ from datetime import datetime
 from time import time
 from typing import ClassVar, Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, JSON, asc, desc, event, or_, text
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    JSON,
+    String,
+    asc,
+    cast,
+    desc,
+    event,
+    text,
+)
 from sqlmodel import Field, SQLModel
 
 from src.core.settings import settings
@@ -680,7 +691,7 @@ class MatchResult(SQLModel, table=True):
     __tablename__ = "MatchResults"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    matchId: Optional[int] = Field(default=None, foreign_key="Matches.id")
+    matchId: Optional[int] = Field(default=None, foreign_key="Matches.id", index=True)
     region: str
     gamemode: int
     startTime: datetime = Field(
@@ -772,32 +783,38 @@ class MatchResult(SQLModel, table=True):
     def scoredFor(db, steam64, limit: int, newestFirst: bool = True) -> list:
         """Up to `limit` matches this player has a final line in.
 
-        The player's own matches are found through the MatchPlayers index. The results
+        Their matches come off the MatchPlayers index. Rows older than the matchId
+        column link to no match, so Postgres narrows those by text first. The results
         key is checked in Python because a JSON path operator is not portable between
         Postgres and SQLite.
         """
         assert limit > 0
         key = str(steam64)
         order = desc(MatchResult.endTime) if newestFirst else asc(MatchResult.endTime)
-        # Rows older than the matchId column link to no match, so they are read too.
-        rows = (
+        linked = (
             db.query(MatchResult)
-            .outerjoin(MatchPlayer, MatchPlayer.matchId == MatchResult.matchId)
+            .join(MatchPlayer, MatchPlayer.matchId == MatchResult.matchId)
+            .where(MatchPlayer.steam64 == int(steam64))
+            .order_by(order)
+        )
+        legacy = (
+            db.query(MatchResult)
             .where(
-                or_(
-                    MatchPlayer.steam64 == int(steam64),
-                    MatchResult.matchId.is_(None),
-                )
+                MatchResult.matchId.is_(None),
+                cast(MatchResult.data, String).like(f'%"{key}"%'),
             )
             .order_by(order)
-            .yield_per(100)
         )
+        # Every legacy row is older than every linked one.
+        sources = (linked, legacy) if newestFirst else (legacy, linked)
+
         scored = []
-        for row in rows:
-            if key in (row.data.get("results") or {}):
-                scored.append(row)
-            if len(scored) == limit:
-                break
+        for source in sources:
+            for row in source.yield_per(100):
+                if key in (row.data.get("results") or {}):
+                    scored.append(row)
+                if len(scored) == limit:
+                    return scored
         return scored
 
     @staticmethod

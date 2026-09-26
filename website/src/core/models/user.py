@@ -267,7 +267,8 @@ class UserIP(SQLModel, table=True):
 
     @staticmethod
     def remember(db, steam64: int, address: str) -> None:
-        """Record this address for this account, once. The account must exist."""
+        """Record this address for this account, once, creating the account if the
+        site has never seen it."""
         if not address:
             return
         seen = (
@@ -276,6 +277,7 @@ class UserIP(SQLModel, table=True):
             .first()
         )
         if seen is None:
+            User.ensure(db, int(steam64))
             db.add(UserIP(steam64=int(steam64), address=address))
             db.flush()
 

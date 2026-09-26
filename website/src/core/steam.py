@@ -11,8 +11,9 @@ DEFAULT_AVATAR = (
     "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg"
 )
 
-# Every page names the signed-in user, so this is how often a page waits on Steam.
-_user_cache: TTLCache = TTLCache(maxsize=512, ttl=300)
+# Every page names the signed-in user, so this is how often a page waits on Steam, or
+# on the database when Steam will not answer.
+_profile_cache: TTLCache = TTLCache(maxsize=4096, ttl=300)
 
 STEAM_TIMEOUT = 5
 
@@ -38,13 +39,8 @@ def _persist_steam_data(steam64: int, raw: dict) -> None:
         pass
 
 
-@cached(_user_cache, key=lambda steam64: hashkey(steam64))
 def get_steam_user_data(steam64: int) -> dict | None:
-    """What Steam says about a player, or None if it will not say.
-
-    A failure returns None instead of raising so that it is cached too; otherwise a
-    slow Steam costs every page render the full timeout.
-    """
+    """What Steam says about a player, or None if it will not say."""
     try:
         r = requests.get(
             f"{STEAM_API}/ISteamUser/GetPlayerSummaries/v2",
@@ -73,24 +69,25 @@ def _get_stored_steam_data(steam64: int) -> dict | None:
         return None
 
 
+@cached(_profile_cache, key=lambda steam64: hashkey(int(steam64)))
+def _profile(steam64) -> dict:
+    """A player's name and avatar: Steam's, else the last copy stored, else defaults.
+    Cached either way, so a Steam outage costs one lookup per player, not one per page.
+    """
+    try:
+        fresh = get_steam_user_data(steam64)
+    except Exception:
+        fresh = None
+    if fresh:
+        return {"name": fresh.get("personaname"), "avatar": fresh.get("avatarfull")}
+    return _get_stored_steam_data(steam64) or {}
+
+
 class User:
     def __init__(self, steam64: int):
-        try:
-            d = get_steam_user_data(steam64)
-        except Exception:
-            d = None
-
-        if d:
-            self.name = d.get("personaname", "Nameless")
-            self.avatar = d.get("avatarfull", DEFAULT_AVATAR)
-        else:
-            stored = _get_stored_steam_data(steam64)
-            if stored:
-                self.name = stored.get("name", "Nameless")
-                self.avatar = stored.get("avatar", DEFAULT_AVATAR)
-            else:
-                self.name = "Nameless"
-                self.avatar = DEFAULT_AVATAR
+        profile = _profile(steam64)
+        self.name = profile.get("name") or "Nameless"
+        self.avatar = profile.get("avatar") or DEFAULT_AVATAR
         self.steam64 = steam64
 
     def toDict(self) -> dict:

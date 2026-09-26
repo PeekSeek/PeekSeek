@@ -4,7 +4,16 @@ from datetime import datetime, timezone
 from time import time
 from typing import Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, String, desc, text
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    ForeignKey,
+    String,
+    desc,
+    func,
+    text,
+)
 from sqlmodel import Field, SQLModel
 
 from src.core.settings import settings
@@ -122,27 +131,23 @@ class LobbyPopulation(SQLModel, table=True):
                 )
                 region["players"] += row.players
 
-            for result in (
-                db.query(MatchResult)
+            lastEnded = (
+                db.query(MatchResult.region, func.max(MatchResult.endTime))
                 .where(MatchResult.matchId.isnot(None))
-                .order_by(desc(MatchResult.endTime))
-                .limit(200)
+                .group_by(MatchResult.region)
                 .all()
-            ):
-                region = activity.setdefault(
-                    result.region, {"players": 0, "lastMatchMinutes": None}
-                )
-                if region["lastMatchMinutes"] is not None:
-                    continue
-                # endTime is written as a naive UTC datetime and read back naive on
-                # SQLite and aware on Postgres. A naive one is read as *local* time by
-                # .timestamp(), which on a UTC+2 box aged every match by two hours and
-                # pushed it past the half hour the page is willing to mention.
-                ended = result.endTime
-                if ended.tzinfo is None:
-                    ended = ended.replace(tzinfo=timezone.utc)
-                since = (datetime.now(timezone.utc) - ended).total_seconds()
-                region["lastMatchMinutes"] = max(0, int(since // 60))
+            )
+
+        for regionName, ended in lastEnded:
+            region = activity.setdefault(
+                regionName, {"players": 0, "lastMatchMinutes": None}
+            )
+            # Written naive UTC; SQLite reads it back naive, which .timestamp() would
+            # take for local time.
+            if ended.tzinfo is None:
+                ended = ended.replace(tzinfo=timezone.utc)
+            since = (datetime.now(timezone.utc) - ended).total_seconds()
+            region["lastMatchMinutes"] = max(0, int(since // 60))
         return activity
 
     @staticmethod
