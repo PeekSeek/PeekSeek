@@ -9,6 +9,7 @@ from markdown_it import MarkdownIt
 
 from src.core.db import open as opendb
 from src.core import models as data
+from src.routes.pages import connectUrl
 from src.dependencies import ApiSteam64, CurrentUser, RequestValues, templates
 
 router = APIRouter(prefix="/esports")
@@ -139,9 +140,13 @@ def signup(steam64: ApiSteam64, values: RequestValues):
 
 
 @router.get("/{event}")
-def event(request: Request, event: str, user: CurrentUser):
+def event(request: Request, event: str, user: CurrentUser, join: str | None = None):
     signup = None
     ownsTeam = False
+    # ?join=<server code> launches Unturned on arrival, so an event announcement can
+    # point at one link that both explains the event and puts people on the server.
+    # A code that is not one is ignored rather than refused: the page is the point.
+    launch = connectUrl(join) if join else None
 
     with opendb() as db:
         ev = db.query(data.Event).where(data.Event.name == event).first()
@@ -197,6 +202,7 @@ def event(request: Request, event: str, user: CurrentUser):
                 "ownsTeam": ownsTeam,
                 "rendermd": MarkdownIt().render,
                 "users": users,
+                "launch": launch,
             },
         )
 

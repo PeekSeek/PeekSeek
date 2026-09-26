@@ -18,6 +18,14 @@
 <script>
   const eventId = "{{event.id}}";
 </script>
+
+{% if launch %}
+<script>
+  /* ?join= sends Steam the launch and leaves the page alone: a protocol handler is not
+     a navigation, so the event stays on screen behind Unturned's prompt. */
+  window.location.href = {{ launch | tojson }};
+</script>
+{% endif %}
 {% endblock %}
 
 {% block content %}
