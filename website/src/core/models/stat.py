@@ -4,7 +4,7 @@ from time import time
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import BigInteger, Column, ForeignKey, Integer, desc
+from sqlalchemy import BigInteger, Column, ForeignKey, Index, Integer, desc
 from sqlmodel import Field, Relationship, SQLModel
 
 from src.core.settings import settings
@@ -47,6 +47,7 @@ def _entries(rows: list) -> list[_Entry]:
 
 class Stat(SQLModel, table=True):
     __tablename__ = "Stats"
+    __table_args__ = (Index("ix_Stats_season_elo", "season", "elo"),)
 
     steam64: int = Field(
         sa_column=Column(BigInteger, ForeignKey("Users.steam64"), primary_key=True),
@@ -328,6 +329,23 @@ class Stat(SQLModel, table=True):
 
         with open() as db:
             r = db.query(Stat).where(Stat.steam64 == steam64, Stat.game == game).first()
+        return Stat._skillOf(r)
+
+    @staticmethod
+    def skillsOf(steam64s, game: str = "unt") -> dict[int, float]:
+        """Each player's skill as `getSkill` reads it, in one query."""
+        from src.core.db import open
+
+        ids = [int(s) for s in steam64s]
+        with open() as db:
+            rows = {
+                r.steam64: r
+                for r in db.query(Stat).where(Stat.steam64.in_(ids), Stat.game == game)
+            }
+        return {s: Stat._skillOf(rows.get(s))[0] for s in ids}
+
+    @staticmethod
+    def _skillOf(r: "Stat | None") -> tuple[float, float]:
         if not r:
             return 300.0, float(settings.new_deviation)
         if r.skill is None:

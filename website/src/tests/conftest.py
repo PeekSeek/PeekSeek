@@ -23,6 +23,7 @@ from itsdangerous import TimestampSigner  # noqa: E402
 from src.core import db as core_db  # noqa: E402
 from src.core import models as data  # noqa: E402
 from src.core import steam  # noqa: E402
+from src.core.models import season  # noqa: E402
 from src.core.settings import settings  # noqa: E402
 from sqlmodel import SQLModel, Session  # noqa: E402
 
@@ -51,6 +52,7 @@ def _clean_tables():
     """Wipe tables and the Steam profile cache between tests so each starts fresh."""
     yield
     steam._profile_cache.clear()
+    season._current.clear()
     with Session(core_db.engine) as s:
         for table in reversed(SQLModel.metadata.sorted_tables):
             s.execute(table.delete())

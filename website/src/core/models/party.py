@@ -115,13 +115,7 @@ class UserHB(SQLModel, table=True):
         from src.core.db import open
 
         with open() as db:
-            return len(
-                [
-                    heartbeat
-                    for heartbeat in UserHB.freshInQueue(db)
-                    if heartbeat.region == region
-                ]
-            )
+            return UserHB._fresh(db).where(UserHB.region == region).count()
 
     @staticmethod
     def countAllFresh() -> int:
@@ -134,7 +128,16 @@ class UserHB(SQLModel, table=True):
         from src.core.db import open
 
         with open() as db:
-            return len(UserHB.freshInQueue(db))
+            return UserHB._fresh(db).count()
+
+    @staticmethod
+    def _fresh(db):
+        """Matchmaking heartbeats young enough to count. A read only: `freshInQueue`
+        is what sweeps out the stale and the barred."""
+        return db.query(UserHB).where(
+            UserHB.eventId.is_(None),
+            UserHB.time >= time() - settings.queue_timeout,
+        )
 
     @staticmethod
     def claim(steam64s) -> bool:

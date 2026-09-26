@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import time
 from typing import Optional
 
@@ -131,9 +131,11 @@ class LobbyPopulation(SQLModel, table=True):
                 )
                 region["players"] += row.players
 
+            # The page only mentions a match from the last half hour.
+            recent = datetime.now(timezone.utc) - timedelta(minutes=31)
             lastEnded = (
                 db.query(MatchResult.region, func.max(MatchResult.endTime))
-                .where(MatchResult.matchId.isnot(None))
+                .where(MatchResult.endTime >= recent)
                 .group_by(MatchResult.region)
                 .all()
             )

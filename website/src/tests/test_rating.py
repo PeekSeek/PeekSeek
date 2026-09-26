@@ -173,4 +173,5 @@ def test_matchmaking_balances_on_skill_not_the_ladder(user_factory):
     data.Stat.append(player.steam64, "unt", elo=0)
     data.Stat.setSkill(player.steam64, 1234.0, 80.0)
 
-    assert matchmaking._teamElo([player.steam64]) == 1234.0
+    skill = data.Stat.skillsOf([player.steam64])
+    assert matchmaking._teamSkill([player.steam64], skill) == 1234.0

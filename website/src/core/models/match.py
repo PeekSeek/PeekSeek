@@ -30,7 +30,7 @@ class Match(SQLModel, table=True):
     claimed: Optional[str] = None
     region: str
     gamemode: int
-    time: int = Field(sa_column=Column(BigInteger, nullable=False))
+    time: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
     teams: list = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     spectators: list = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
@@ -41,7 +41,8 @@ class Match(SQLModel, table=True):
     roundWins: dict = Field(
         default_factory=dict, sa_column=Column("livedata", JSON, nullable=False)
     )
-    finished: bool = False
+    # Indexed because every game server's poll looks for the few unfinished matches.
+    finished: bool = Field(default=False, index=True)
     created_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(
@@ -699,7 +700,7 @@ class MatchResult(SQLModel, table=True):
     )
     endTime: datetime = Field(
         default_factory=datetime.utcnow,
-        sa_column=Column(DateTime(timezone=True), nullable=False),
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
     )
     data: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
 

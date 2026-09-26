@@ -92,9 +92,10 @@ def _matchFromQueue(region: str, serverCode: str) -> "data.Match | None":
             if heartbeat.region == region and str(heartbeat.steam64) not in inAMatch
         ]
 
+    skill = data.Stat.skillsOf(hb.steam64 for hb in queued)
     for gamemodeId, gamemode in enumerate(mmconfig["gamemodes"]):
         candidates = [hb for hb in queued if hb.gamemode & (2**gamemodeId)]
-        players = _playersForMatch(candidates, gamemode)
+        players = _playersForMatch(candidates, gamemode, skill)
         if players:
             return _createMatch(gamemodeId, players, region, serverCode)
     return None
@@ -138,7 +139,7 @@ def _partyGroups(heartbeats: list) -> list[list[int]]:
 CANDIDATE_GROUPS = 8
 
 
-def _playersForMatch(queueList: list, mode: dict) -> list[int] | None:
+def _playersForMatch(queueList: list, mode: dict, skill: dict) -> list[int] | None:
     """The best full roster this queue can currently produce, or None.
 
     "Best" is the first roster, taken longest-waiting-players first, that clears both
@@ -151,14 +152,16 @@ def _playersForMatch(queueList: list, mode: dict) -> list[int] | None:
     """
     perTeam = mode["playersPerTeam"]
     needed = perTeam * mode["teams"]
+    if len(queueList) < needed:
+        return None
     groups = [g for g in _partyGroups(queueList) if len(g) <= perTeam]
     recentOpponents = _recentOpponentPairs()
 
     for roster in _rosters(groups[:CANDIDATE_GROUPS], needed):
-        teams = _balancedTeams(roster, mode)
+        teams = _balancedTeams(roster, mode, skill)
         if teams is None:
             continue
-        if _eloGap(teams) > settings.max_team_elo_gap:
+        if _skillGap(teams, skill) > settings.max_team_elo_gap:
             continue
         if _wouldRepeatAFixture(teams, recentOpponents):
             continue
@@ -184,7 +187,9 @@ def _rosters(groups: list[list[int]], needed: int) -> list[list[list[int]]]:
     return [[group for _, group in roster] for roster in matching]
 
 
-def _balancedTeams(groups: list[list[int]], mode: dict) -> list[list[int]] | None:
+def _balancedTeams(
+    groups: list[list[int]], mode: dict, skill: dict
+) -> list[list[int]] | None:
     """Split these party groups across the mode's teams as evenly by Elo as they go.
 
     Biggest groups first onto whichever team is currently weakest and still has room —
@@ -194,30 +199,29 @@ def _balancedTeams(groups: list[list[int]], mode: dict) -> list[list[int]] | Non
     perTeam = mode["playersPerTeam"]
     teams: list[list[int]] = [[] for _ in range(mode["teams"])]
 
-    for group in sorted(groups, key=lambda g: (-len(g), -_groupElo(g))):
+    for group in sorted(groups, key=lambda g: (-len(g), -_groupSkill(g, skill))):
         room = [team for team in teams if len(team) + len(group) <= perTeam]
         if not room:
             return None
-        min(room, key=_teamElo).extend(group)
+        min(room, key=lambda team: _teamSkill(team, skill)).extend(group)
 
     return teams if all(len(team) == perTeam for team in teams) else None
 
 
-def _groupElo(group: list[int]) -> float:
+def _groupSkill(group: list[int], skill: dict) -> float:
     """A group's summed skill. Skill rather than the ladder, because the ladder is a
     grind and a freshly reset season would otherwise pair a veteran with a novice."""
-    return sum(data.Stat.getSkill(steam64)[0] for steam64 in group)
+    return sum(skill[int(steam64)] for steam64 in group)
 
 
-def _teamElo(team: list[int]) -> float:
-    """A team's strength: the average skill of the players on it. An average rather than
-    a total so the comparison still means something in a mode where a team can be short a
-    player."""
-    return _groupElo(team) / len(team) if team else 0
+def _teamSkill(team: list[int], skill: dict) -> float:
+    """A team's strength: the average skill of the players on it, so the comparison
+    still means something when a team is short a player."""
+    return _groupSkill(team, skill) / len(team) if team else 0
 
 
-def _eloGap(teams: list[list[int]]) -> float:
-    strengths = [_teamElo(team) for team in teams]
+def _skillGap(teams: list[list[int]], skill: dict) -> float:
+    strengths = [_teamSkill(team, skill) for team in teams]
     return max(strengths) - min(strengths)
 
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, JSON, text
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, JSON, text
 from sqlmodel import Field, Relationship, SQLModel
 
 from src.core.settings import settings
@@ -14,6 +14,7 @@ mmconfig = settings.mmconfig
 
 class Kit(SQLModel, table=True):
     __tablename__ = "Kits"
+    __table_args__ = (Index("ix_Kits_steam64_category", "steam64", "category"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     steam64: int = Field(

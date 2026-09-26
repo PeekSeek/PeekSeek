@@ -235,8 +235,11 @@ def profile(
         stat = data.Stat.forSeason(steam64, viewing.id)
         # A match carries no season of its own, so a season's matches are the ones
         # played while it was the one being played.
+        window = viewing.window()
         matches = [
-            m for m in data.MatchResult.latestFor(steam64) if viewing.covers(m.endTime)
+            m
+            for m in data.MatchResult.latestFor(steam64)
+            if data.Season.within(window, m.endTime)
         ]
         rank = data.Stat.rankFor(steam64)
         return templates.TemplateResponse(

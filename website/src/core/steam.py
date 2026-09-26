@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 from cachetools import TTLCache, cached
@@ -16,6 +16,9 @@ DEFAULT_AVATAR = (
 _profile_cache: TTLCache = TTLCache(maxsize=4096, ttl=300)
 
 STEAM_TIMEOUT = 5
+
+# How old a stored name and avatar may be before Steam is asked again.
+PROFILE_MAX_AGE = timedelta(days=1)
 
 
 def _persist_steam_data(steam64: int, raw: dict) -> None:
@@ -56,31 +59,42 @@ def get_steam_user_data(steam64: int) -> dict | None:
     return data
 
 
-def _get_stored_steam_data(steam64: int) -> dict | None:
-    """Fall back to the last DB-persisted Steam data."""
-    try:
-        from src.core.db import open
-        from src.core.models.user import User
+def _stored(steam64: int) -> tuple[dict | None, datetime | None]:
+    """The last Steam profile written to the Users table, and when it was fetched."""
+    from src.core.db import open
+    from src.core.models.user import User
 
-        with open() as db:
-            user = db.query(User).where(User.steam64 == steam64).first()
-            return user.steam_data if user and user.steam_data else None
-    except Exception:
-        return None
+    with open() as db:
+        row = (
+            db.query(User.steam_data, User.steam_fetched_at)
+            .where(User.steam64 == int(steam64))
+            .first()
+        )
+    return (row[0], row[1]) if row else (None, None)
 
 
 @cached(_profile_cache, key=lambda steam64: hashkey(int(steam64)))
 def _profile(steam64) -> dict:
-    """A player's name and avatar: Steam's, else the last copy stored, else defaults.
-    Cached either way, so a Steam outage costs one lookup per player, not one per page.
-    """
+    """A player's name and avatar: the stored copy while it is under a day old, else
+    Steam's, else whatever copy there is. Cached, so a page never waits on Steam for a
+    player it has already named in the last five minutes."""
+    stored, fetchedAt = _stored(steam64)
+    if fetchedAt is not None and fetchedAt.tzinfo is None:
+        fetchedAt = fetchedAt.replace(tzinfo=timezone.utc)
+    if (
+        stored
+        and fetchedAt
+        and datetime.now(timezone.utc) - fetchedAt < PROFILE_MAX_AGE
+    ):
+        return stored
+
     try:
         fresh = get_steam_user_data(steam64)
     except Exception:
         fresh = None
     if fresh:
         return {"name": fresh.get("personaname"), "avatar": fresh.get("avatarfull")}
-    return _get_stored_steam_data(steam64) or {}
+    return stored or {}
 
 
 class User:

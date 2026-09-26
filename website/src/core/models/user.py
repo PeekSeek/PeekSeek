@@ -286,7 +286,7 @@ class UserBan(SQLModel, table=True):
     __tablename__ = "UserBans"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    steam64: int = Field(sa_column=Column(BigInteger, nullable=False))
+    steam64: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
     endTime: int = Field(sa_column=Column(BigInteger, nullable=False))
     reason: Optional[str] = None
     moderatorNote: Optional[str] = None
@@ -388,47 +388,33 @@ class UserBan(SQLModel, table=True):
         """
         from time import time
 
+        from sqlalchemy.orm import aliased
+
         ids = {int(s) for s in steam64s}
         if not ids:
             return {}
 
-        own = db.query(UserIP.steam64, UserIP.address).where(UserIP.steam64.in_(ids))
-        addressesOf: dict[int, set[str]] = {}
-        for steam64, address in own.all():
-            addressesOf.setdefault(steam64, set()).add(address)
-
-        addresses = set().union(*addressesOf.values()) if addressesOf else set()
-        accountsOn: dict[str, set[int]] = {}
-        if addresses:
-            shared = db.query(UserIP.steam64, UserIP.address).where(
-                UserIP.address.in_(addresses)
-            )
-            for steam64, address in shared.all():
-                accountsOn.setdefault(address, set()).add(steam64)
-
-        linked = {
-            steam64: {steam64}.union(
-                *(accountsOn.get(a, set()) for a in addressesOf.get(steam64, set()))
-            )
-            for steam64 in ids
-        }
-        accounts = set().union(*linked.values())
-
-        banOf: dict[int, UserBan] = {}
-        for ban in (
-            db.query(UserBan)
-            .where(UserBan.steam64.in_(accounts), UserBan.endTime > int(time()))
+        now = int(time())
+        found = [
+            (ban.steam64, ban)
+            for ban in db.query(UserBan)
+            .where(UserBan.steam64.in_(ids), UserBan.endTime > now)
             .all()
-        ):
-            held = banOf.get(ban.steam64)
-            if held is None or ban.endTime > held.endTime:
-                banOf[ban.steam64] = ban
+        ]
+        mine, shared = aliased(UserIP), aliased(UserIP)
+        found += (
+            db.query(mine.steam64, UserBan)
+            .join(shared, shared.address == mine.address)
+            .join(UserBan, UserBan.steam64 == shared.steam64)
+            .where(mine.steam64.in_(ids), UserBan.endTime > now)
+            .all()
+        )
 
-        barred = {}
-        for steam64, group in linked.items():
-            bans = [banOf[a] for a in group if a in banOf]
-            if bans:
-                barred[steam64] = max(bans, key=lambda ban: ban.endTime)
+        barred: dict[int, UserBan] = {}
+        for steam64, ban in found:
+            held = barred.get(steam64)
+            if held is None or ban.endTime > held.endTime:
+                barred[steam64] = ban
         return barred
 
     @staticmethod
