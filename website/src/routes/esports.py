@@ -102,10 +102,7 @@ def signup(steam64: ApiSteam64, values: RequestValues):
             return _handle_existing(db, existing, steam64, values)
 
         # A ban only blocks signing up if it is still running when the event starts.
-        # Someone banned for a week can enter an event three weeks out: they will be
-        # free to play it by the time it happens, and holding the whole event against
-        # a ban that will have expired punishes them twice.
-        ban = data.UserBan.activeFor(steam64)
+        ban = data.UserBan.barring([steam64], db).get(steam64)
         if ban is not None and ban.endTime >= event.data["meta"]["queueTimes"][0][0]:
             return PlainTextResponse(
                 f'Your "{ban.reason}" ban runs until {ban.expiryLabel}, which is after '

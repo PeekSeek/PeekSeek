@@ -84,7 +84,7 @@
 
 .adminPlayer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   font-size: 13px;
@@ -103,7 +103,4 @@
   white-space: nowrap;
 } .adminPlayerStats {
   white-space: nowrap;
-} .adminPlayerTrailing {
-  white-space: nowrap;
-  text-align: right;
 }

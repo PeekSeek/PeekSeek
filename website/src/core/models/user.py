@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import ClassVar, TYPE_CHECKING, Optional
+from typing import ClassVar, Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, JSON, text
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, JSON, text
 from sqlmodel import Field, Relationship, SQLModel
 
 from src.core.settings import settings
-
-if TYPE_CHECKING:
-    pass
 
 
 class User(SQLModel, table=True):
@@ -62,22 +59,6 @@ class User(SQLModel, table=True):
         if isinstance(steam64, User):
             steam64 = steam64.steam64
         return steam.User(steam64)
-
-    def getCurrentMatchId(self, onlyFirst: bool = True):
-        from src.core.db import open
-        from .match import Match
-
-        steam64 = self.steam64 if isinstance(self, User) else self
-        output: list | int = []
-        with open() as db:
-            for match in db.query(Match).where(Match.finished.is_(False)).all():
-                users = [str(u) for team in match.teams for u in team["users"]]
-                if str(steam64) not in users:
-                    continue
-                if onlyFirst:
-                    return match.id
-                output.append(match.id)
-        return output or None
 
     def getPermission(self, item: str) -> bool:
         from src.core.db import open
@@ -169,21 +150,9 @@ class User(SQLModel, table=True):
 
     @staticmethod
     def ensure(db, steam64) -> None:
-        """A Users row for this steam64, created if the site has never seen them.
-
-        Game servers report players the website has no account for — most people
-        standing in a warm-up lobby have never opened it — and everything hung off
-        Users by foreign key is refused outright by Postgres until the row exists.
-        Stat.append has always done this for match results; the queue did not, so
-        every one of those players 500'd the moment the lobby tried to queue them.
-
-        The account is created with their Steam name and avatar already on it. That
-        has to happen here, before the insert, because steam._persist_steam_data
-        writes with an UPDATE: a lookup made while there is no row to update stores
-        nothing and reports nothing wrong. That is how a player who joined a game
-        server got an account with no name, and then showed up as "Nameless"
-        everywhere the site drew them.
-        """
+        """A Users row for this steam64, created if the site has never seen them, since
+        most players in a lobby have never opened the site. The Steam profile is looked
+        up first, because storing it later is an UPDATE that needs the row."""
         if db.query(User).where(User.steam64 == steam64).first():
             return
 
@@ -204,12 +173,7 @@ class User(SQLModel, table=True):
     @staticmethod
     def _steamProfile(steam64) -> dict | None:
         """This player's name and avatar from Steam, or None if Steam would not say.
-
-        None rather than a placeholder on purpose: storing "Nameless" would make the
-        fallback permanent, since every later read finds stored data and stops asking.
-        Leaving it empty means the next lookup fills it in — and by then there is a
-        row for it to fill.
-        """
+        Never a placeholder, which would be stored and never asked about again."""
         from src.core import steam
 
         try:
@@ -230,25 +194,34 @@ class User(SQLModel, table=True):
         region: str = "paris",
         eventId: int = None,
     ):
-        from src.core.db import open
+        from src.core.db import MATCHMAKER_LOCK, alongside, open
+        from .match import Match, MatchPlayer
         from .party import UserHB
         from time import time
 
         if isinstance(steam64, User):
             steam64 = steam64.steam64
         with open() as db:
-            # Every route into the queue funnels through here: the lobby server, the
-            # play page, an event signup, and a party leader queueing members who never
-            # asked for themselves. Refusing here rather than at each caller is what
-            # makes a ban actually mean something: the check used to live only in
-            # load_user, which a game server never triggers because it carries no player
-            # session, so a permanently banned player queued from in-game for six weeks.
-            ban = UserBan.activeFor(steam64, db)
+            # Every route into the queue comes through here, so this is the one place
+            # a ban has to be checked for queueing to mean anything.
+            ban = UserBan.barring([steam64], db).get(int(steam64))
             if ban is not None:
-                # A ban landing mid-queue takes effect on their next heartbeat rather
-                # than waiting for the row to age out of the queue on its own.
                 db.query(UserHB).where(UserHB.steam64 == steam64).delete()
                 return ban
+
+            # Never between a match being built and being written: a heartbeat that
+            # checked just before would queue somebody already on their way to a match,
+            # and they would be matched again the moment it ended.
+            alongside(db, MATCHMAKER_LOCK)
+            onAMatch = (
+                db.query(MatchPlayer.matchId)
+                .join(Match, Match.id == MatchPlayer.matchId)
+                .where(MatchPlayer.steam64 == int(steam64), Match.finished.is_(False))
+                .first()
+            )
+            if onAMatch is not None:
+                db.query(UserHB).where(UserHB.steam64 == steam64).delete()
+                return None
 
             User.ensure(db, steam64)
             db.query(UserHB).where(UserHB.steam64 == steam64).delete()
@@ -276,7 +249,13 @@ class User(SQLModel, table=True):
 
 
 class UserIP(SQLModel, table=True):
+    """Every address an account has been seen on, from the site and from the lobby."""
+
     __tablename__ = "UserIPs"
+    __table_args__ = (
+        Index("ix_UserIPs_steam64_address", "steam64", "address"),
+        Index("ix_UserIPs_address", "address"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     steam64: int = Field(
@@ -284,12 +263,28 @@ class UserIP(SQLModel, table=True):
     )
     address: str = Field(nullable=False)
 
+    @staticmethod
+    def remember(db, steam64: int, address: str) -> None:
+        """Record this address for this account, once, creating the account if the
+        site has never seen it."""
+        if not address:
+            return
+        seen = (
+            db.query(UserIP.id)
+            .where(UserIP.steam64 == int(steam64), UserIP.address == address)
+            .first()
+        )
+        if seen is None:
+            User.ensure(db, int(steam64))
+            db.add(UserIP(steam64=int(steam64), address=address))
+            db.flush()
+
 
 class UserBan(SQLModel, table=True):
     __tablename__ = "UserBans"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    steam64: int = Field(sa_column=Column(BigInteger, nullable=False))
+    steam64: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
     endTime: int = Field(sa_column=Column(BigInteger, nullable=False))
     reason: Optional[str] = None
     moderatorNote: Optional[str] = None
@@ -380,6 +375,45 @@ class UserBan(SQLModel, table=True):
             if ban is not None:
                 session.expunge(ban)
             return ban
+
+    @staticmethod
+    def barring(steam64s, db) -> dict[int, "UserBan"]:
+        """The ban that keeps each of these players out of queues and matches.
+
+        A player is barred by their own active ban, or by an active ban on any account
+        that has been seen on one of their addresses. Players nothing bars are left out.
+        Account-only questions, such as the banner and the admin drawer, use `activeFor`.
+        """
+        from time import time
+
+        from sqlalchemy.orm import aliased
+
+        ids = {int(s) for s in steam64s}
+        if not ids:
+            return {}
+
+        now = int(time())
+        found = [
+            (ban.steam64, ban)
+            for ban in db.query(UserBan)
+            .where(UserBan.steam64.in_(ids), UserBan.endTime > now)
+            .all()
+        ]
+        mine, shared = aliased(UserIP), aliased(UserIP)
+        found += (
+            db.query(mine.steam64, UserBan)
+            .join(shared, shared.address == mine.address)
+            .join(UserBan, UserBan.steam64 == shared.steam64)
+            .where(mine.steam64.in_(ids), UserBan.endTime > now)
+            .all()
+        )
+
+        barred: dict[int, UserBan] = {}
+        for steam64, ban in found:
+            held = barred.get(steam64)
+            if held is None or ban.endTime > held.endTime:
+                barred[steam64] = ban
+        return barred
 
     @staticmethod
     def activeAmong(steam64s, db=None) -> set:

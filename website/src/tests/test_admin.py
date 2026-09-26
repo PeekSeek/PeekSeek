@@ -7,25 +7,14 @@ from sqlmodel import Session
 
 from src.core import db as core_db
 from src.core import models as data
-from src.core import steam
 
 GAMEMODE = 0
 
 
-@pytest.fixture(autouse=True)
-def _no_steam_server_lookup(monkeypatch):
-    """Steam is not reachable from a test, and a card must render without it anyway."""
-    monkeypatch.setattr(steam.Server, "describe", staticmethod(lambda code: None))
-
-
 @pytest.fixture
 def admin_client(client, login, user_factory):
-    """Logged in as an admin, and allow-listed as a game server.
-
-    Both on the one client because these tests drive a match to its end through the real
-    `/server/v1/*` result call rather than writing the result row by hand: what the card
-    shows for a finished match depends on what that call leaves behind.
-    """
+    """Logged in as an admin, and allow-listed as a game server, so a test can drive a
+    match through the real `/server/v1/*` calls."""
     data.AuthorizedServer.bootstrap({"testclient": "paris"})
 
     user = user_factory()
@@ -64,12 +53,7 @@ def test_the_match_list_is_admin_only(client, login, user_factory):
     assert client.get("/admin/matches").status_code == 401
 
 
-def test_a_live_match_reports_its_roster_from_the_match_not_the_snapshot(
-    admin_client, user_factory
-):
-    """A player who never connected is on the match and in no snapshot. Reading the
-    roster off the snapshot is what used to leave a no-show off the card entirely, which
-    reads as a match that was never made rather than one nobody turned up to."""
+def test_a_live_match_lists_its_whole_roster(admin_client, user_factory):
     first, second = user_factory(), user_factory()
     _match(first, second)
 
@@ -84,81 +68,30 @@ def test_a_live_match_reports_its_roster_from_the_match_not_the_snapshot(
     ]
 
 
-def test_live_numbers_come_off_the_snapshot(admin_client, user_factory):
+def test_a_live_match_shows_its_round_score_and_no_player_stats(
+    admin_client, user_factory
+):
     first, second = user_factory(), user_factory()
     matchId = _match(first, second)
-    data.Match.setLiveData(
-        matchId,
-        {
-            "round": 2,
-            "teams": [
-                {
-                    "teamName": "team_one",
-                    "wins": 1,
-                    "losses": 0,
-                    "users": {
-                        str(first.steam64): {
-                            "name": "Death image",
-                            "kills": 3,
-                            "deaths": 2,
-                            "headshots": 3,
-                            "state": "alive",
-                            "health": 70,
-                        }
-                    },
-                },
-                {
-                    "teamName": "team_two",
-                    "wins": 0,
-                    "losses": 1,
-                    "users": {
-                        str(second.steam64): {
-                            "name": "RioDash",
-                            "kills": 2,
-                            "deaths": 3,
-                            "headshots": 0,
-                            "state": "offline",
-                            "health": 0,
-                        }
-                    },
-                },
-            ],
-        },
+    r = admin_client.post(
+        f"/server/v1/matches/{matchId}/rounds",
+        json={"wins": {"team_one": 1, "team_two": 0}},
     )
+    assert r.status_code == 200, r.text
 
     card = admin_client.get("/admin/matches").json()["matches"][0]
     one, two = card["teams"]
 
-    assert card["round"] == 2
     assert (one["wins"], two["wins"]) == (1, 0)
-    assert one["players"][0] == {
-        **one["players"][0],
-        "name": "Death image",
-        "kills": 3,
-        "deaths": 2,
-        "headshots": 3,
-        "state": "alive",
-        "health": 70,
-        "connected": True,
-    }
-    assert two["players"][0]["connected"] is False
+    assert one["players"][0]["kills"] is None
 
 
 def test_a_scored_match_keeps_its_round_score_and_elo(admin_client, user_factory):
-    """Scoring a match wipes the live snapshot, so the round tally is copied into the
-    result row as it goes. Without that a finished match knows who won and not by how
-    much, and 3-0 and 3-2 read identically forever after."""
     first, second = user_factory(), user_factory()
     matchId = _match(first, second)
-    data.Match.setLiveData(
-        matchId,
-        {
-            "round": 4,
-            "teams": [
-                {"teamName": "team_one", "wins": 3, "losses": 1, "users": {}},
-                {"teamName": "team_two", "wins": 1, "losses": 3, "users": {}},
-            ],
-        },
+    admin_client.post(
+        f"/server/v1/matches/{matchId}/rounds",
+        json={"wins": {"team_one": 3, "team_two": 1}},
     )
 
     r = admin_client.post(
@@ -179,8 +112,7 @@ def test_a_scored_match_keeps_its_round_score_and_elo(admin_client, user_factory
 
     assert card["over"] is True
     assert card["ending"] == "scored"
-    # Not merely present: MatchResult stores UTC with no timezone on it, and reading
-    # that back as local time put every match's end before its own start.
+    # MatchResult stores naive UTC; read back as local time it ended before it began.
     assert card["endedAt"] >= card["startedAt"]
     assert (one["wins"], two["wins"]) == (3, 1)
     assert one["players"][0]["kills"] == 5
@@ -189,8 +121,6 @@ def test_a_scored_match_keeps_its_round_score_and_elo(admin_client, user_factory
 
 
 def test_a_match_nobody_turned_up_to_says_so(admin_client, user_factory):
-    """Every stat is zero either way, so the ending is the only thing that tells a
-    walkover apart from a real result that happened to be goalless."""
     first, second = user_factory(), user_factory()
     matchId = _match(first, second)
 
@@ -214,9 +144,6 @@ def test_finished_matches_older_than_a_day_drop_off(admin_client, user_factory):
 
 
 def test_a_live_match_is_never_dropped_however_old(admin_client, user_factory):
-    """Age is not a reason to stop showing something that is still going. A match stuck
-    open for two days is the single most useful thing this page can put in front of
-    somebody."""
     first, second = user_factory(), user_factory()
     stale = _match(first, second)
     with Session(core_db.engine) as s:

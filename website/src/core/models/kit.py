@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, JSON, text
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, JSON, text
 from sqlmodel import Field, Relationship, SQLModel
 
 from src.core.settings import settings
@@ -14,6 +14,7 @@ mmconfig = settings.mmconfig
 
 class Kit(SQLModel, table=True):
     __tablename__ = "Kits"
+    __table_args__ = (Index("ix_Kits_steam64_category", "steam64", "category"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     steam64: int = Field(
@@ -59,30 +60,6 @@ class Kit(SQLModel, table=True):
             currentMatch.meta["userData"][str(steam64)]["kit"]
             or mmconfig["gamemodes"][currentMatch.gamemode]["kitsAllowed"][0]
         )
-
-    @staticmethod
-    def gunFor(steam64, currentMatch: "Match") -> int:  # noqa: F821
-        """Just the gun id a player will spawn holding, resolved the way getItems
-        resolves it.
-
-        Split out because the stream overlay names that gun on the intermission screen
-        and polls twice a second for it. Building every player's full loadout, every
-        attachment state resolved through metagun, to read one id off the front of it
-        is work nobody asked for.
-        """
-        from src.core.db import open
-
-        category = Kit.kitCategory(steam64, currentMatch)
-        with open() as db:
-            saved = (
-                db.query(Kit)
-                .where((Kit.steam64 == steam64) & (Kit.category == category))
-                .first()
-            )
-
-        if saved:
-            return int(saved.data["gun"])
-        return int(next(iter(kitsConfig["kits"][category])))
 
     @staticmethod
     def resolveOutfit(saved: dict) -> dict:

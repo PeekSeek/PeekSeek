@@ -4,7 +4,7 @@
 {% block title %}Match #{{result.matchId}}{% endblock %}
 {% block titleEmbed %}Match #{{result.matchId}}{% endblock %}
 {% block author %}Team PeekSeek{% endblock %}
-{% block description %}Result and kill log for this match.{% endblock %}
+{% block description %}Result of this match.{% endblock %}
 {% block color %}#ff0000{% endblock %}
 
 {% block content %}
@@ -15,8 +15,6 @@
     <span class="matchWhen">Match #{{result.matchId}} &middot; {{result.endTime.strftime("%d/%m/%Y %H:%M")}}</span>
 
     {% if you %}
-    {# Everything below this is the match. This is the reader, which is the one thing the
-       results table cannot tell them: where the Elo they just won or lost puts them. #}
     <div class="rankCard yourRank" data-rank="{{you.rank.icon}}">
       <img class="rankBadge" src="/static/ranks/{{you.rank.icon}}.svg" alt="" title="{{you.rank.name}}">
       <div class="rankCardBody">
@@ -39,9 +37,6 @@
       <span>No result recorded for this match.</span>
     {% else %}
       <table class="statTable">
-        {# No Rank column: the badge rides on the avatar, which is a column back for a
-           table that has to fit six numbers next to a name. #}
-        {# Damage columns are blank for a match scored before the server reported them. #}
         <tr><th>Player</th><th>Kills</th><th>Deaths</th><th>HS%</th><th>DMG</th><th>Taken</th><th>Elo</th><th></th></tr>
         {% for p in players %}
         <tr>
@@ -53,24 +48,6 @@
           <td>{{p.get("Taken", "")}}</td>
           <td>{% if "Elo Change" in p %}{{ "+" if p.get("Elo Change", 0) >= 0 else "" }}{{p.get("Elo Change")}}{% endif %}</td>
           <td class="{{ 'win' if p.get('Won') else 'loss' }}">{{ "WIN" if p.get("Won") else "LOSS" }}</td>
-        </tr>
-        {% endfor %}
-      </table>
-    {% endif %}
-
-    <h2>Kills</h2>
-    {% if not kills %}
-      <span>No kills recorded for this match.</span>
-    {% else %}
-      <table class="statTable">
-        <tr><th>Round</th><th>Killer</th><th></th><th>Victim</th><th>Limb</th></tr>
-        {% for kill in kills %}
-        <tr>
-          <td>{{kill.get("round", "?")}}</td>
-          <td>{{kill.get("killerName") or "—"}}</td>
-          <td>{% if kill.get("weapon") %}<img src="/static/unturned/{{kill.weapon}}.png" alt="" height="20px">{% endif %}</td>
-          <td>{{kill.get("victimName")}}</td>
-          <td>{{kill.get("limb", "").replace("_", " ")}}</td>
         </tr>
         {% endfor %}
       </table>

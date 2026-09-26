@@ -288,17 +288,9 @@ internal static class RemoteAPI {
         }
     }
 
-    /// Fire-and-forget: each snapshot replaces the last, so a dropped one costs nothing
-    /// and the next one covers for it.
-    internal static void SendState(int matchId, PSUpdateState state) {
-        Post($"{Base}/matches/{matchId}/state", JsonConvert.SerializeObject(state));
-    }
-
-    /// Fire-and-forget too, but for a different reason: kills are sent as they happen
-    /// rather than batched at the end, so a server that dies mid-match only loses the
-    /// one kill in flight rather than the whole log.
-    internal static void SendKill(int matchId, PSKillEvent killEvent) {
-        Post($"{Base}/matches/{matchId}/kills", JsonConvert.SerializeObject(killEvent));
+    /// Fire-and-forget: each report replaces the last, so the next one covers a lost one.
+    internal static void SendRounds(int matchId, Dictionary<string, int> wins) {
+        Post($"{Base}/matches/{matchId}/rounds", JsonConvert.SerializeObject(new { wins }));
     }
 
     /// Lock a pick a player made on the board here, the same door the site's own

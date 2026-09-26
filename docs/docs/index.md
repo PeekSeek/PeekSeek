@@ -24,7 +24,6 @@ These docs are for three kinds of people:
 | **Ranking** | Elo per player, adjusted from reported match results. |
 | **Parties** | Queue together, stay together. |
 | **Events** | Tournament pairings and signups on top of the same match machinery. |
-| **Stream overlays** | A separate flat HUD any broadcaster can point OBS at. |
 | **Discord** | A live player counter, queue logging, and a ping when a dead arena wakes up. |
 
 ---

@@ -27,7 +27,7 @@ mmconfig = settings.mmconfig
 
 @router.get("/match")
 def match(request: Request, steam64: LoggedInSteam64):
-    current_id = data.User.getCurrentMatchId(steam64)
+    current_id = data.Match.currentFor(steam64)
     if not current_id:
         request.session["lastError"] = "You are not in a match."
         return RedirectResponse("/", status_code=302)
@@ -60,7 +60,7 @@ def match(request: Request, steam64: LoggedInSteam64):
 @router.get("/match/current")
 def match_current(steam64: ApiSteam64, id: int | None = None):
     """Polled by the in-match screen — returns the live match state as JSON."""
-    current_id = id or data.User.getCurrentMatchId(steam64)
+    current_id = id or data.Match.currentFor(steam64)
     if not current_id:
         raise HTTPException(status_code=404, detail="No match found.")
 
@@ -80,23 +80,6 @@ def match_current(steam64: ApiSteam64, id: int | None = None):
     return current.localJson()
 
 
-@router.get("/match/overlay")
-def match_overlay(id: int | None = None, createdBy: int | None = None):
-    """Public stream-overlay endpoint — no auth. Look up by match id or creator."""
-    matchid = id
-    if createdBy is not None:
-        matchid = data.Match.findLastCreatedBy(createdBy)
-    if not matchid:
-        raise HTTPException(status_code=404, detail="No match found.")
-
-    with opendb() as db:
-        current = db.query(data.Match).where(data.Match.id == matchid).first()
-
-    if not current:
-        raise HTTPException(status_code=404, detail="No match found.")
-    return current.localJson()
-
-
 @router.post("/match/decide")
 def match_decide(
     steam64: ApiSteam64,
@@ -105,7 +88,7 @@ def match_decide(
     powerup: str | None = None,
 ):
     """Submit a pre-match decision: map/side pick, kit, or powerup."""
-    current_id = data.User.getCurrentMatchId(steam64)
+    current_id = data.Match.currentFor(steam64)
     if not current_id:
         raise HTTPException(status_code=404, detail="No match found.")
 
@@ -136,6 +119,16 @@ def custom_create(steam64: ApiSteam64, payload: JsonBody):
     ]
     if not teams:
         raise HTTPException(status_code=400, detail="Team data cannot be empty")
+
+    players = [int(u) for team in teams for u in team["users"]]
+    with opendb() as db:
+        barred = data.UserBan.barring(players, db)
+    if barred:
+        raise HTTPException(
+            status_code=400,
+            detail="Banned players cannot be in a match: "
+            + ", ".join(str(steam64) for steam64 in barred),
+        )
 
     with opendb() as db:
         match = data.Match(
@@ -242,8 +235,11 @@ def profile(
         stat = data.Stat.forSeason(steam64, viewing.id)
         # A match carries no season of its own, so a season's matches are the ones
         # played while it was the one being played.
+        window = viewing.window()
         matches = [
-            m for m in data.MatchResult.latestFor(steam64) if viewing.covers(m.endTime)
+            m
+            for m in data.MatchResult.latestFor(steam64)
+            if data.Season.within(window, m.endTime)
         ]
         rank = data.Stat.rankFor(steam64)
         return templates.TemplateResponse(
@@ -373,7 +369,6 @@ def match_detail(request: Request, matchid: int, user: CurrentUser):
                     for s64, summary in results.items()
                 ],
                 "you": _yourProgress(results, user.steam64 if user else None),
-                "kills": result.data.get("kills", []),
                 "round": round,
                 "max": max,
             },
@@ -385,8 +380,8 @@ def spectate(request: Request, steam64: LoggedInSteam64):
     with opendb() as db:
         matches = [
             m
-            for m in db.query(data.Match).all()
-            if m.finished is not True and str(steam64) in m.spectators
+            for m in db.query(data.Match).where(data.Match.finished.is_(False)).all()
+            if str(steam64) in m.spectators
         ]
         return templates.TemplateResponse(
             request=request,

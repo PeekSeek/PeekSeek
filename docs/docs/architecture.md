@@ -134,15 +134,6 @@ running container.
 
 ---
 
-## Overlays
-
-The stream overlay is a separate visual system from the site: flat greyscale, built to be
-legible over gameplay in OBS, not to match the site's branding. It is served by the same
-app at `/overlay` and reads the same match data. Treat it as a second product with a
-second design language rather than a themed page.
-
----
-
 ## Next
 
 - [The match lifecycle](match-lifecycle.md), which is where the design shows

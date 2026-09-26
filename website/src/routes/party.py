@@ -24,7 +24,7 @@ def party_status(steam64: ApiSteam64):
         party = data.Party.find(db, steam64)
         invites = data.Party.pendingInvites(db, steam64)
         return {
-            "matchId": data.User.getCurrentMatchId(steam64),
+            "matchId": data.Match.currentFor(steam64),
             "party": (
                 None
                 if not party

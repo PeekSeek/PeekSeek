@@ -47,8 +47,6 @@ lives in that page's stylesheet.** That is the whole rule.
   `esports.css` and `esports2.css` were once the same file, drifted four rules apart,
   and a fix landed on one page and not the other. That is the failure this rule exists
   to prevent.
-- `css/overlay.css` is a separate design system for the OBS stream overlay. It shares
-  nothing with the site and must not start to.
 
 No `<style>` blocks in templates. No `style="..."` attributes. If markup needs a style,
 it needs a class, and the class goes in one of the files above.

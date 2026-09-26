@@ -92,7 +92,8 @@ internal static class RemoteAPI {
                     modes.Add(new QueueGamemode {
                         Bit = Number(entry["bit"]) ?? 0,
                         Name = Text(entry["name"]),
-                        Blurb = Text(entry["blurb"])
+                        Blurb = Text(entry["blurb"]),
+                        Ranked = entry["usesElo"]?.Type == JTokenType.Boolean && (bool)entry["usesElo"]
                     });
                 }
 
@@ -103,10 +104,13 @@ internal static class RemoteAPI {
         });
     }
 
+    /// Queue a player, with the address they play from so the site can hold a ban
+    /// against every account on it. Called on the main thread, where the player is read.
     internal static void RefreshQueued(ulong steam64, ushort gamemodes, string region) {
-        Send(HttpMethod.Put,
-            $"{Base}/players/{steam64}/queue?gamemodes={gamemodes}&region={Uri.EscapeDataString(region)}",
-            steam64);
+        string query = $"gamemodes={gamemodes}&region={Uri.EscapeDataString(region)}";
+        uint ip = SDG.Unturned.PlayerTool.getSteamPlayer(steam64)?.getIPv4AddressOrZero() ?? 0;
+        if (ip != 0) query += $"&ip={SDG.Unturned.Parser.getIPFromUInt32(ip)}";
+        Send(HttpMethod.Put, $"{Base}/players/{steam64}/queue?{query}", steam64);
     }
 
     /// The same read, without queueing them. That side-effect-free version is the whole

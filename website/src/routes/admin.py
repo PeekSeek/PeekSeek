@@ -24,8 +24,6 @@ router = APIRouter(prefix="/admin")
 
 mmconfig = settings.mmconfig
 
-# How far back the match list reaches. A day is the window an admin is actually asking
-# about ("what happened today"), and it is also what keeps the 15-second poll small.
 HISTORY_SECONDS = 24 * 60 * 60
 
 
@@ -38,9 +36,7 @@ def _requireAdmin(steam64: int) -> None:
 
 @router.get("/")
 def admin(request: Request, steam64: LoggedInSteam64):
-    """The shell. Every match on it is drawn by admin.js from `/admin/matches`, so this
-    template renders once and never again, so there is no server-rendered match list to
-    fall out of step with the polled one."""
+    """The shell. admin.js draws every match on it from `/admin/matches`."""
     with opendb() as db:
         user = db.query(data.User).where(data.User.steam64 == steam64).first()
         if not user.getPermission("admin"):
@@ -59,12 +55,7 @@ def admin(request: Request, steam64: LoggedInSteam64):
 
 @router.get("/matches")
 def matches(steam64: LoggedInSteam64):
-    """Every live match, and every one that ended in the last day.
-
-    One call answers the whole page, because the page redraws the whole page: polling
-    per match would multiply by however many matches happen to be on screen, and the
-    cost of a match nobody is looking at is the same as one they are.
-    """
+    """Every live match, and every one that ended in the last day, in one call."""
     _requireAdmin(steam64)
 
     cutoff = time() - HISTORY_SECONDS
@@ -75,8 +66,6 @@ def matches(steam64: LoggedInSteam64):
             .order_by(desc(data.Match.id))
             .all()
         )
-        # One read each for the whole page rather than one per card. Events are a small
-        # table and most pages have none, so they are only read if a match names one.
         results = {
             row.matchId: row
             for row in db.query(data.MatchResult)
@@ -115,14 +104,8 @@ def matches(steam64: LoggedInSteam64):
 
 
 def _profiles(db, rows) -> dict:
-    """Every player on the page, named and avatared, in one query.
-
-    Read off the Users table rather than through `steam.User`, which asks Steam first
-    and does not cache a failure: called once per player per card per poll, that was
-    twenty blocking Steam requests every fifteen seconds, and with Steam refusing the
-    key it made this endpoint take sixteen seconds to answer. The site persists each
-    player's name and avatar on their own row precisely so a page does not have to ask.
-    """
+    """Every player on the page, named and avatared from the Users table in one query,
+    so the poll never waits on Steam."""
     steam64s = {str(u) for match in rows for team in match.teams for u in team["users"]}
     stored = (
         db.query(data.User)
@@ -133,17 +116,11 @@ def _profiles(db, rows) -> dict:
 
 
 def _card(match, result, events, signups, profiles) -> dict:
-    """One match, as the admin page draws it.
-
-    Live numbers come off the match's own snapshot and final ones off its result row,
-    and which of the two is authoritative flips when the match ends. Scoring a match
-    clears the snapshot, so for anything finished the result row is all there is.
-    """
+    """One match, as the admin page draws it: the round score while it runs, and each
+    player's final line once it is scored."""
     gamemode = mmconfig["gamemodes"][match.gamemode]
-    live = match.livedata or {}
     stored = result.data if result else {}
     finalResults = stored.get("results") or {}
-
     event = events.get(match.meta.get("eventId"))
 
     return {
@@ -157,32 +134,30 @@ def _card(match, result, events, signups, profiles) -> dict:
         "ballistics": match.meta.get("ballistics"),
         "movement": match.meta.get("movement"),
         "roundsToWin": match.meta.get("roundsToWin", 3),
-        "round": live.get("round"),
         "startedAt": match.time,
         "endedAt": _endedAt(match, result),
-        # Two different questions. `serverCode` is which server holds the match, true
-        # from the moment it is made; `connectCode` is whether there is yet anything to
-        # connect to, which stays null until the match is actually being played.
         "serverCode": match.claimed,
         "connectCode": match.connectCode(),
-        "server": steam.Server.describe(match.claimed),
         "ending": _ending(match, stored),
         "event": {"id": event.id, "name": event.name} if event else None,
         "teams": [
-            _team(team, live, stored, finalResults, event, signups, profiles)
+            {
+                "name": team["name"],
+                "wins": (match.roundWins or {}).get(team["name"]),
+                "eventScore": _eventScore(team, event, signups),
+                "players": [
+                    _cardPlayer(steam64, finalResults, profiles)
+                    for steam64 in team["users"]
+                ],
+            }
             for team in match.teams
         ],
     }
 
 
 def _endedAt(match, result) -> int | None:
-    """When a finished match's result landed, as a Unix second, or None while it runs.
-
-    MatchResult writes `datetime.utcnow()`, which is UTC carrying no timezone, and
-    `.timestamp()` reads a naive datetime as *local* time. On a machine two hours ahead
-    of UTC that put every match's end two hours before its own start, so the card said a
-    finished match had lasted minus two hours.
-    """
+    """When a finished match's result landed, in Unix seconds. MatchResult stores naive
+    UTC, which `.timestamp()` would otherwise read as local time."""
     if not (result and match.finished and result.endTime):
         return None
 
@@ -193,12 +168,7 @@ def _endedAt(match, result) -> int | None:
 
 
 def _ending(match, stored: dict) -> str | None:
-    """Why a finished match stopped, in one word, or None while it is still going.
-
-    `unscored` is the one that matters: a match nobody turned up for and a match whose
-    server vanished both end with every stat at zero, and until this was on the card
-    they were indistinguishable from a real result that happened to be goalless.
-    """
+    """Why a finished match stopped, in one word, or None while it is still going."""
     if not match.finished:
         return None
     if stored.get("unscored"):
@@ -206,62 +176,22 @@ def _ending(match, stored: dict) -> str | None:
     return "scored" if stored.get("results") else "unrecorded"
 
 
-def _team(
-    team, live: dict, stored: dict, finalResults: dict, event, signups, profiles
-) -> dict:
-    """One side of a match. `match.teams` is the roster of record, so the snapshot and
-    the result row are both looked up against it rather than iterated themselves: a
-    player who never connected appears in neither, and leaving them off the card is
-    what used to make a no-show look like a match that was never made."""
-    liveTeam = next(
-        (t for t in live.get("teams", []) if t.get("teamName") == team["name"]), None
-    )
-    # The snapshot while it exists, the copy taken of it at scoring time afterwards.
-    score = liveTeam or next(
-        (s for s in stored.get("score") or [] if s.get("name") == team["name"]), {}
-    )
+def _eventScore(team, event, signups) -> int | None:
     signup = signups.get((event.id, team["users"][0])) if event else None
-
-    return {
-        "name": team["name"],
-        "wins": score.get("wins"),
-        "losses": score.get("losses"),
-        "eventScore": signup.score if signup else None,
-        "players": [
-            _cardPlayer(
-                steam64, (liveTeam or {}).get("users", {}), finalResults, profiles
-            )
-            for steam64 in team["users"]
-        ],
-    }
+    return signup.score if signup else None
 
 
-def _cardPlayer(
-    steam64: str, liveUsers: dict, finalResults: dict, profiles: dict
-) -> dict:
-    """One player's line. Live stats while the match runs, final ones once it is scored,
-    and a name and face either way so a card is readable before anyone has done anything
-    at all.
-
-    The in-game character name wins over the stored Steam persona when there is one,
-    because that is what an admin watching the server sees people called.
-    """
-    liveUser = liveUsers.get(str(steam64)) or {}
+def _cardPlayer(steam64: str, finalResults: dict, profiles: dict) -> dict:
     final = finalResults.get(str(steam64)) or {}
     profile = profiles.get(str(steam64)) or {}
 
     return {
         "steam64": str(steam64),
-        "name": liveUser.get("name") or profile.get("name") or "Nameless",
+        "name": profile.get("name") or "Nameless",
         "avatar": profile.get("avatar") or steam.DEFAULT_AVATAR,
-        # Only meaningful while the match is live; the snapshot it comes from is gone
-        # afterwards, which is why this is null rather than false on a finished match.
-        "connected": liveUser.get("state") != "offline" if liveUser else None,
-        "state": liveUser.get("state"),
-        "health": liveUser.get("health"),
-        "kills": final.get("Kills", liveUser.get("kills")),
-        "deaths": final.get("Deaths", liveUser.get("deaths")),
-        "headshots": final.get("Headshots", liveUser.get("headshots")),
+        "kills": final.get("Kills"),
+        "deaths": final.get("Deaths"),
+        "headshots": final.get("Headshots"),
         "eloChange": final.get("Elo Change"),
         "elo": final.get("Current Elo"),
         "won": final.get("Won"),
@@ -301,12 +231,8 @@ def _banSummary(ban) -> dict:
 
 @router.get("/player/{target}")
 def player(steam64: LoggedInSteam64, target: int):
-    """Everything the moderation drawer shows about one player.
-
-    Answers in one call, including the dry run, because the drawer needs all of it the
-    moment it opens: the blast radius has to be on screen before an admin can decide,
-    not fetched after they pick a preset.
-    """
+    """Everything the moderation drawer shows about one player, including what a
+    cheating ban would cost everyone else."""
     _requireAdmin(steam64)
 
     with opendb() as db:
@@ -335,8 +261,6 @@ def player(steam64: LoggedInSteam64, target: int):
         ),
         "ban": _banSummary(active) if active else None,
         "history": [_banSummary(b) for b in data.UserBan.historyFor(target)],
-        # What a cheating ban would cost everyone else. Computed for every player the
-        # drawer opens on, so the numbers are already there when the preset is picked.
         "preview": moderation.previewBan(target),
         "presets": {
             key: {
@@ -351,11 +275,8 @@ def player(steam64: LoggedInSteam64, target: int):
 
 @router.post("/ban")
 def ban(steam64: ApiSteam64, values: JsonBody):
-    """Issue a ban from the dashboard.
-
-    Runs the same `moderation.issueBan` the Discord bot does, so a ban means one thing
-    whichever of the two it came from.
-    """
+    """Issue a ban from the dashboard, through the same `moderation.issueBan` the
+    Discord bot uses."""
     _requireAdmin(steam64)
 
     target = values.get("steam64")
@@ -382,11 +303,7 @@ def ban(steam64: ApiSteam64, values: JsonBody):
 
 @router.get("/bans")
 def bans(steam64: LoggedInSteam64, steam64s: str = ""):
-    """Ban state for a list of players, for the chips on the match cards.
-
-    One call for everyone on screen rather than one per player: a dozen cards of four
-    would be fifty requests per poll, for a chip that almost nobody has.
-    """
+    """Ban state for everyone on screen, for the chips on the match cards."""
     _requireAdmin(steam64)
 
     ids = [int(s) for s in steam64s.split(",") if s.strip().isdigit()]
@@ -402,8 +319,7 @@ def bans(steam64: LoggedInSteam64, steam64s: str = ""):
     return {
         str(i): {
             "banned": i in active,
-            # Prior bans only, so a currently banned player is not also labelled with
-            # a count that includes the ban already being shown.
+            # Prior bans only; the running one is already shown.
             "prior": max(counts.get(i, 0) - (1 if i in active else 0), 0),
         }
         for i in ids
