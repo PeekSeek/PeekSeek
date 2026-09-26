@@ -77,7 +77,7 @@ def queue_heartbeat(
     scans this queue and forms one (see `/server/v1/session`), so this only ever adds
     them to it and reports what happened elsewhere.
     """
-    current_match = data.User.getCurrentMatchId(steam64)
+    current_match = data.Match.currentFor(steam64)
     if current_match:
         return {"succes": "true", "matchid": current_match}
 

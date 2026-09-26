@@ -120,6 +120,7 @@ from sqlalchemy.orm import configure_mappers
 configure_mappers()
 SQLModel.metadata.create_all(engine)
 addMissingColumns()
+models.MatchPlayer.backfill()
 
 if settings.bootstrap_admin:
     models.User.bootstrapAdmin(settings.bootstrap_admin)

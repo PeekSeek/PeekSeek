@@ -29,14 +29,10 @@ class Party(SQLModel, table=True):
     @staticmethod
     def find(db, steam64) -> "Party | None":
         """The party this player currently belongs to, if any, disbanding any that
-        has gone quiet. Scans every party rather than indexing membership — the same
-        "small table, filter in Python" approach User.getCurrentMatchId already takes
-        over Matches.
+        has gone quiet. The table only holds live parties, so it is scanned.
 
-        Being looked up *is* the liveness signal. The play page polls /party/ every
-        few seconds and the queue heartbeat looks its own party up, so a party lasts
-        exactly as long as somebody still has it on screen — close every tab and it
-        disbands on its own instead of following its members into next week.
+        Being looked up is the liveness signal: the play page polls /party/ every few
+        seconds, so a party lasts exactly as long as somebody has it on screen.
         """
         steam64 = str(steam64)
         now = int(time())

@@ -4,7 +4,7 @@ from datetime import datetime
 from time import time
 from typing import ClassVar, Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, JSON, desc, text
+from sqlalchemy import BigInteger, Column, DateTime, JSON, asc, desc, event, or_, text
 from sqlmodel import Field, SQLModel
 
 from src.core.settings import settings
@@ -44,23 +44,16 @@ class Match(SQLModel, table=True):
         ),
     )
 
-    # What a team name is cut to. Long enough to recognise, short enough for the
-    # game server to show beside a score.
+    # What a team name is cut to, so the game server can show it beside a score.
     NAME_LIMIT: ClassVar[int] = 15
 
     @staticmethod
     def _withDistinctNames(teams: list) -> list:
         """The same teams, with names guaranteed to differ from one another.
 
-        The game server groups players by team name, so two teams called the same
-        thing are not two teams — everyone lands in one group, nobody can damage
-        anybody, and the match cannot be won or lost. That has happened: a match
-        between two players the Steam lookup had failed for, who both came back as
-        "Nameless", so both sides were built as "team_Nameless".
-
-        Truncation is the other way in. Names are cut to fit, and two different long
-        names that start alike cut to the same string, so the cut has to happen
-        before the comparison rather than after it.
+        The game server groups players by team name, so two teams with one name become
+        one group that cannot win or lose. Names are cut before they are compared,
+        because two long names that start alike cut to the same string.
         """
         seen: set[str] = set()
         distinct = []
@@ -68,8 +61,7 @@ class Match(SQLModel, table=True):
         for index, team in enumerate(teams):
             wanted = (team.get("name") or f"team_{index + 1}")[: Match.NAME_LIMIT]
 
-            # Whoever got there first keeps the readable name; later duplicates take
-            # a suffix. The counter only ever grows, so this always terminates.
+            # The first keeps the readable name. At most len(teams) suffixes are tried.
             name, suffix = wanted, 2
             while name in seen:
                 name = f"{wanted[: Match.NAME_LIMIT - 3]}_{suffix}"
@@ -111,14 +103,15 @@ class Match(SQLModel, table=True):
         if eventId:
             self.meta["eventId"] = eventId
 
-        all_users = [str(user) for team in teams for user in team["users"]]
+        all_users = list(dict.fromkeys(str(u) for team in teams for u in team["users"]))
 
         admin_bit = 2 ** settings.permissions.index("admin")
         with open() as db:
             admins = [
-                str(u.steam64)
-                for u in db.query(User).all()
-                if u.permissions & admin_bit
+                str(steam64)
+                for (steam64,) in db.query(User.steam64)
+                .where(User.permissions.op("&")(admin_bit) != 0)
+                .all()
             ]
             self.spectators = [
                 x
@@ -133,10 +126,7 @@ class Match(SQLModel, table=True):
         else:
             self.meta = self.meta | matchSettings
 
-        # Nothing stops the current picker from just never clicking — without a deadline
-        # that stalls the match forever. Only start the clock when there's actually a
-        # pick left to make (matchSettings can arrive fully pre-decided, e.g. a custom
-        # match or these tests' fixtures).
+        # A picker who never clicks would stall the match, so an open pick has a clock.
         if any(self.meta[o] is None for o in ["ballistics", "map", "movement"]):
             self.meta["pickDeadline"] = time() + mmconfig["pickTimeout"]
 
@@ -397,23 +387,32 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def playersInAMatch() -> set[str]:
-        """Every steam64 that is on a match which has not finished.
-
-        `User.getCurrentMatchId` answers this one player at a time, which is fine for a
-        page about that player and wrong for matchmaking: scanning the queue asked it
-        per heartbeat, and each of those reread every unfinished match. One read of the
-        same table answers it for the whole queue at once, and is what lets the scan
-        drop players who are already in a match before it starts pairing anyone up.
-        """
+        """Every steam64 that is on a match which has not finished."""
         from src.core.db import open
 
         with open() as db:
             return {
-                str(user)
-                for match in db.query(Match).where(Match.finished.is_(False)).all()
-                for team in match.teams
-                for user in team["users"]
+                str(steam64)
+                for (steam64,) in db.query(MatchPlayer.steam64)
+                .join(Match, Match.id == MatchPlayer.matchId)
+                .where(Match.finished.is_(False))
+                .all()
             }
+
+    @staticmethod
+    def currentFor(steam64) -> int | None:
+        """The unfinished match this player is on, or None."""
+        from src.core.db import open
+
+        with open() as db:
+            return (
+                db.query(MatchPlayer.matchId)
+                .join(Match, Match.id == MatchPlayer.matchId)
+                .where(MatchPlayer.steam64 == int(steam64), Match.finished.is_(False))
+                .order_by(Match.id)
+                .limit(1)
+                .scalar()
+            )
 
     @staticmethod
     def releaseAbandoned(serverCode: str) -> None:
@@ -475,9 +474,7 @@ class Match(SQLModel, table=True):
         match, `hostGrace` more seconds is all it gets: game servers poll every few
         seconds, so a match that has gone that long without one has none coming.
 
-        Leaving them alone is how players used to end up locked out of matchmaking by a
-        match that was never going to start; `getCurrentMatchId` counts any unfinished
-        match they are in.
+        Left alone, such a match would keep its players out of matchmaking forever.
         """
         from src.core.db import open
         from src.core.webhook import Webhook
@@ -770,21 +767,83 @@ class MatchResult(SQLModel, table=True):
             )
 
     @staticmethod
-    def latestFor(steam64, limit: int = 10) -> list["MatchResult"]:
-        """Every match this player has a final line in, most recent first.
+    def scoredFor(db, steam64, limit: int, newestFirst: bool = True) -> list:
+        """Up to `limit` matches this player has a final line in.
 
-        Filtered in Python rather than with a JSON path operator in SQL. The `->`/`->>`
-        pair this used to use is not portable enough to rely on: it reads the row on
-        Postgres and on a recent SQLite, and silently matches nothing on an older one,
-        which is exactly what it did on CI — every profile page rendered as though the
-        player had never played a ranked match. A profile only ever wants the last
-        handful of rows, so the scan costs less than a result that depends on which
-        SQLite the host happens to ship.
+        The player's own matches are found through the MatchPlayers index. The results
+        key is checked in Python because a JSON path operator is not portable between
+        Postgres and SQLite.
         """
+        assert limit > 0
+        key = str(steam64)
+        order = desc(MatchResult.endTime) if newestFirst else asc(MatchResult.endTime)
+        # Rows older than the matchId column link to no match, so they are read too.
+        rows = (
+            db.query(MatchResult)
+            .outerjoin(MatchPlayer, MatchPlayer.matchId == MatchResult.matchId)
+            .where(
+                or_(
+                    MatchPlayer.steam64 == int(steam64),
+                    MatchResult.matchId.is_(None),
+                )
+            )
+            .order_by(order)
+            .yield_per(100)
+        )
+        scored = []
+        for row in rows:
+            if key in (row.data.get("results") or {}):
+                scored.append(row)
+            if len(scored) == limit:
+                break
+        return scored
+
+    @staticmethod
+    def latestFor(steam64, limit: int = 10) -> list["MatchResult"]:
+        """This player's most recent scored matches, newest first."""
         from src.core.db import open
 
-        key = str(steam64)
         with open() as db:
-            rows = db.query(MatchResult).order_by(desc(MatchResult.endTime)).all()
+            rows = MatchResult.scoredFor(db, steam64, limit)
+            for row in rows:
+                db.expunge(row)
+            return rows
 
-        return [row for row in rows if key in (row.data.get("results") or {})][:limit]
+
+class MatchPlayer(SQLModel, table=True):
+    """Who is on which match, so a player's matches are one indexed lookup instead of a
+    scan of every match's teams."""
+
+    __tablename__ = "MatchPlayers"
+
+    matchId: int = Field(foreign_key="Matches.id", primary_key=True)
+    steam64: int = Field(sa_column=Column(BigInteger, primary_key=True, index=True))
+
+    @staticmethod
+    def backfill() -> None:
+        """Fill the table from every match's teams, once, when it is first created."""
+        from src.core.db import open
+
+        with open() as db:
+            if db.query(MatchPlayer).first() is not None:
+                return
+            for matchId, teams in db.query(Match.id, Match.teams).all():
+                db.add_all(
+                    MatchPlayer(matchId=matchId, steam64=steam64)
+                    for steam64 in MatchPlayer.onTeams(teams)
+                )
+
+    @staticmethod
+    def onTeams(teams: list) -> set[int]:
+        return {int(u) for team in teams for u in team["users"]}
+
+
+@event.listens_for(Match, "after_insert")
+def _recordPlayers(mapper, connection, match: Match) -> None:
+    """Every new match writes its players, whichever code path created it."""
+    rows = [
+        {"matchId": match.id, "steam64": steam64}
+        for steam64 in MatchPlayer.onTeams(match.teams)
+    ]
+    if rows:
+        connection.execute(MatchPlayer.__table__.insert(), rows)

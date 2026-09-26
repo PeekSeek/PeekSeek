@@ -162,7 +162,7 @@ def page_context(request: Request) -> dict:
         # processor runs after the route's own context and would overwrite those.
         "userRank": data.Stat.rankFor(user.steam64) if user else None,
         "userPlace": data.Stat.ladderPosition(user.steam64) if user else None,
-        "match": user.getCurrentMatchId() if user else None,
+        "match": data.Match.currentFor(user.steam64) if user else None,
         "discord": user.discord if user else None,
         # Six accounts in seven have no Discord linked, so six players in seven cannot
         # be told their match is ready. That is the single thing capping every

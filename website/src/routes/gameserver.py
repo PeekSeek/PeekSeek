@@ -356,7 +356,7 @@ def _player(steam64: int) -> dict:
     """One player as every player-facing route here reports them: their rank, their ban,
     and where they should be. `matchId` without a `relayTo` means "matched, still
     choosing", and `choose` is what they are still choosing between."""
-    matchId = data.User.getCurrentMatchId(steam64)
+    matchId = data.Match.currentFor(steam64)
     match = None
     if matchId:
         with opendb() as db:
@@ -418,7 +418,7 @@ def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = Non
 
     Answers with the same `choose` block `GET /players/{steam64}` returns.
     """
-    matchId = data.User.getCurrentMatchId(steam64)
+    matchId = data.Match.currentFor(steam64)
     if not matchId:
         raise HTTPException(status_code=404, detail="No match found.")
 
@@ -543,7 +543,7 @@ def joinQueue(steam64: int, gamemodes: int = 1, region: str = "paris"):
     `gamemodes` is a bitmask. Answers like `GET /players/{steam64}`. A banned player is
     refused, and the ban comes back on the `ban` field.
     """
-    if not data.User.getCurrentMatchId(steam64):
+    if not data.Match.currentFor(steam64):
         data.User.addToQueue(steam64, gamemodes, region=region)
     return _player(steam64)
 

@@ -27,7 +27,7 @@ mmconfig = settings.mmconfig
 
 @router.get("/match")
 def match(request: Request, steam64: LoggedInSteam64):
-    current_id = data.User.getCurrentMatchId(steam64)
+    current_id = data.Match.currentFor(steam64)
     if not current_id:
         request.session["lastError"] = "You are not in a match."
         return RedirectResponse("/", status_code=302)
@@ -60,7 +60,7 @@ def match(request: Request, steam64: LoggedInSteam64):
 @router.get("/match/current")
 def match_current(steam64: ApiSteam64, id: int | None = None):
     """Polled by the in-match screen — returns the live match state as JSON."""
-    current_id = id or data.User.getCurrentMatchId(steam64)
+    current_id = id or data.Match.currentFor(steam64)
     if not current_id:
         raise HTTPException(status_code=404, detail="No match found.")
 
@@ -88,7 +88,7 @@ def match_decide(
     powerup: str | None = None,
 ):
     """Submit a pre-match decision: map/side pick, kit, or powerup."""
-    current_id = data.User.getCurrentMatchId(steam64)
+    current_id = data.Match.currentFor(steam64)
     if not current_id:
         raise HTTPException(status_code=404, detail="No match found.")
 
@@ -367,8 +367,8 @@ def spectate(request: Request, steam64: LoggedInSteam64):
     with opendb() as db:
         matches = [
             m
-            for m in db.query(data.Match).all()
-            if m.finished is not True and str(steam64) in m.spectators
+            for m in db.query(data.Match).where(data.Match.finished.is_(False)).all()
+            if str(steam64) in m.spectators
         ]
         return templates.TemplateResponse(
             request=request,

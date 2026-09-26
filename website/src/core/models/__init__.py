@@ -6,7 +6,7 @@ from .stat import Stat, SeasonStat, Hlwn25, UnturnedItem
 from .kit import Kit
 from .party import Party, UserHB
 from .event import Event, EventSignup
-from .match import Match, MatchResult
+from .match import Match, MatchPlayer, MatchResult
 from .server import ArenaReading, AuthorizedServer, LobbyPopulation, ServerRequest
 
 __all__ = [
@@ -29,5 +29,6 @@ __all__ = [
     "Event",
     "EventSignup",
     "Match",
+    "MatchPlayer",
     "MatchResult",
 ]

@@ -221,7 +221,7 @@ def test_a_server_that_reports_itself_free_releases_the_match_it_abandoned(
             db.query(data.MatchResult).where(data.MatchResult.matchId == match.id).one()
         )
         assert result.data["unscored"] == "abandoned"
-    assert data.User.getCurrentMatchId(first.steam64) is None
+    assert data.Match.currentFor(first.steam64) is None
 
 
 def test_a_match_nobody_could_host_is_cancelled_once_its_grace_runs_out(
@@ -245,7 +245,7 @@ def test_a_match_nobody_could_host_is_cancelled_once_its_grace_runs_out(
     with opendb() as db:
         stored = db.query(data.Match).where(data.Match.id == match.id).one()
     assert stored.finished is True
-    assert data.User.getCurrentMatchId(first.steam64) is None
+    assert data.Match.currentFor(first.steam64) is None
 
 
 def test_a_stranded_match_is_taken_by_a_server_rather_than_scrapped(

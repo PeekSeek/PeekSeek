@@ -421,7 +421,7 @@ def test_a_serverless_match_is_cancelled_once_its_grace_runs_out(user_factory):
 
     with Session(core_db.engine) as s:
         assert s.query(data.Match).first().finished is True
-    assert data.User.getCurrentMatchId(first.steam64) is None
+    assert data.Match.currentFor(first.steam64) is None
 
 
 def test_a_serverless_match_is_left_alone_inside_its_grace(user_factory):

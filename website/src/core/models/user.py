@@ -63,22 +63,6 @@ class User(SQLModel, table=True):
             steam64 = steam64.steam64
         return steam.User(steam64)
 
-    def getCurrentMatchId(self, onlyFirst: bool = True):
-        from src.core.db import open
-        from .match import Match
-
-        steam64 = self.steam64 if isinstance(self, User) else self
-        output: list | int = []
-        with open() as db:
-            for match in db.query(Match).where(Match.finished.is_(False)).all():
-                users = [str(u) for team in match.teams for u in team["users"]]
-                if str(steam64) not in users:
-                    continue
-                if onlyFirst:
-                    return match.id
-                output.append(match.id)
-        return output or None
-
     def getPermission(self, item: str) -> bool:
         from src.core.db import open
 

@@ -432,7 +432,7 @@ def _eventPairing(teams: list[dict]) -> list[dict] | None:
 
 def _eventTeam(db, heartbeat, event) -> dict | None:
     """The heartbeat owner's team entry, or None if the team can't play now."""
-    if data.User.getCurrentMatchId(heartbeat.steam64):
+    if data.Match.currentFor(heartbeat.steam64):
         return None
 
     # Scoped to this event. Without the event_id a player who had ever signed up for

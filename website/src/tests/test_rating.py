@@ -92,7 +92,10 @@ def test_kills_do_not_move_either_rating(user_factory):
         {"steam64": str(other2.steam64), "won": False},
     )
 
-    assert first[str(quiet.steam64)]["Elo Change"] == second[str(busy.steam64)]["Elo Change"]
+    assert (
+        first[str(quiet.steam64)]["Elo Change"]
+        == second[str(busy.steam64)]["Elo Change"]
+    )
     assert data.Stat.getSkill(quiet.steam64) == data.Stat.getSkill(busy.steam64)
 
 
@@ -135,7 +138,9 @@ def test_a_season_cut_is_won_back_and_no_further():
 def test_there_is_no_cliff_anywhere_in_the_gap():
     """Every Elo of gap changes a result by at most a point, and always the same way."""
     skill = 1000
-    wins = [matchmaking._ladderDelta(elo, skill, won=True) for elo in range(2000, 100, -1)]
+    wins = [
+        matchmaking._ladderDelta(elo, skill, won=True) for elo in range(2000, 100, -1)
+    ]
     losses = [
         matchmaking._ladderDelta(elo, skill, won=False) for elo in range(2000, 100, -1)
     ]
