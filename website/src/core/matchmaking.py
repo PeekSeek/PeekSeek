@@ -12,6 +12,7 @@ nowhere to be played.
 """
 
 import logging
+import math
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -233,13 +234,15 @@ def _balancedTeams(groups: list[list[int]], mode: dict) -> list[list[int]] | Non
     return teams if all(len(team) == perTeam for team in teams) else None
 
 
-def _groupElo(group: list[int]) -> int:
-    return sum(data.Stat.getElo(steam64) for steam64 in group)
+def _groupElo(group: list[int]) -> float:
+    """A group's summed skill. Skill rather than the ladder, because the ladder is a
+    grind and a freshly reset season would otherwise pair a veteran with a novice."""
+    return sum(data.Stat.getSkill(steam64)[0] for steam64 in group)
 
 
 def _teamElo(team: list[int]) -> float:
-    """A team's strength: the average Elo of the players on it. An average rather than a
-    total so the comparison still means something in a mode where a team can be short a
+    """A team's strength: the average skill of the players on it. An average rather than
+    a total so the comparison still means something in a mode where a team can be short a
     player."""
     return _groupElo(team) / len(team) if team else 0
 
@@ -487,12 +490,21 @@ def normalizePlayerResult(player: dict) -> dict:
 
 
 def matchResults(
-    gamemodeInfo: dict, *users: dict, draw: bool = False
+    gamemodeInfo: dict,
+    *users: dict,
+    draw: bool = False,
+    teams: list[list] | None = None,
 ) -> tuple[dict, int]:
-    """Record every player's kills/deaths/win and, for ranked modes, their Elo
-    change. Returns the per-player summary and the match's average Elo.
+    """Record every player's kills/deaths/win and, for ranked modes, move both of their
+    ratings. Returns the per-player summary and the match's average Elo.
 
-    A draw is nobody's win and nobody's loss: Elo moves on kills and deaths alone.
+    Two ratings, because one number cannot be both. Skill is what matchmaking believes
+    and it moves on the result alone; the ladder Elo is what players see, and it is
+    pulled towards skill. "Elo Change" is the ladder's move, since that is the number a
+    player is looking at. A draw moves no ladder, and between equals no skill either.
+
+    `teams` is the match's own rosters, when the caller has them. Without it the sides
+    are read off who won, which is exact for a result and blind to who drew with whom.
 
     Every player the server lists is scored, including ones who never fired a shot or
     who disconnected — the server reports its whole roster, so leaving a match is a
@@ -502,8 +514,12 @@ def matchResults(
 
     # Before anything is read: a player returning after a new season opened plays this
     # match on their carried-over Elo, and it has to be the Elo the match is scored
-    # against as well as the one the result lands on.
+    # against as well as the one the result lands on. Skill is read before that only
+    # because a standing older than skill is seeded from its Elo, and the Elo a player
+    # earned is the honest seed, not the one a season just cut.
+    skills: dict = {}
     if gamemodeInfo["usesElo"]:
+        skills = {p["steam64"]: data.Stat.getSkill(p["steam64"]) for p in players}
         for player in players:
             data.Stat.startSeason(player["steam64"])
 
@@ -528,9 +544,8 @@ def matchResults(
         eloDelta = 0
         if gamemodeInfo["usesElo"]:
             currentElo = data.Stat.getElo(player["steam64"])
-            eloDelta = _eloDelta(
-                currentElo, avgElo, player["kills"], player["deaths"], won, draw
-            )
+            skill = skills[player["steam64"]][0]
+            eloDelta = _ladderDelta(currentElo, skill, won, draw)
             summary = {"Elo Change": eloDelta, "Current Elo": currentElo} | summary
 
         results[player["steam64"]] = summary
@@ -550,9 +565,112 @@ def matchResults(
         )
 
     if gamemodeInfo["usesElo"]:
+        sides = _sides(players, teams)
+        for steam64, (skill, deviation) in _skillUpdates(sides, skills, draw).items():
+            data.Stat.setSkill(steam64, skill, deviation)
         _syncRankRoles([p["steam64"] for p in players])
 
     return results, int(avgElo)
+
+
+def _sides(players: list[dict], teams: list[list] | None) -> list[list[dict]]:
+    """The players grouped by the side they played on, empty sides dropped.
+
+    Off the rosters when there are some, so a draw still knows who drew with whom.
+    Otherwise winners against everybody else, which is every side a result can tell.
+    """
+    if teams:
+        byId = {p["steam64"]: p for p in players}
+        sides = [[byId[str(u)] for u in team if str(u) in byId] for team in teams]
+    else:
+        sides = [
+            [p for p in players if p["won"]],
+            [p for p in players if not p["won"]],
+        ]
+    return [side for side in sides if side]
+
+
+# Glicko's scale: 400/ln(10) is what makes its logistic the same curve as Elo's
+# 10^(gap/400), so skill reads in the same points as the ladder it was seeded from.
+GLICKO_SCALE = 400 / math.log(10)
+
+
+def _skillUpdates(
+    sides: list[list[dict]], skills: dict, draw: bool
+) -> dict[str, tuple[float, float]]:
+    """Every player's new (skill, deviation), Glicko-2 style, for teams.
+
+    A side's rating is its players' mean, and each side plays every other: 1 for a win,
+    0 for a loss, a half for a draw. A player's move is their own Glicko-2 step against
+    that, so an unsure player moves further than a settled one on the same result, and
+    every match makes them surer. The drift is added first, the way Glicko-2's
+    volatility is, so nobody settles so hard that skill stops following them.
+
+    Glicko alone is not zero-sum: two deviations move two players by two amounts. So the
+    gains and the losses are each scaled to meet in the middle, and every point one side
+    takes is one another side gave up. Nothing is minted into the pool, which is what the
+    old kill bonus did.
+    """
+    if len(sides) < 2:
+        return {}
+
+    def rating(side):
+        mean = sum(skills[p["steam64"]][0] for p in side) / len(side)
+        spread = math.sqrt(sum(skills[p["steam64"]][1] ** 2 for p in side) / len(side))
+        return mean / GLICKO_SCALE, spread / GLICKO_SCALE
+
+    ratings = [rating(side) for side in sides]
+    moves: dict[str, float] = {}
+    deviations: dict[str, float] = {}
+
+    for index, side in enumerate(sides):
+        mean = ratings[index][0]
+        information, surprise = 0.0, 0.0
+        for other, (otherMean, otherSpread) in enumerate(ratings):
+            if other == index:
+                continue
+            g = 1 / math.sqrt(1 + 3 * otherSpread**2 / math.pi**2)
+            expected = 1 / (1 + math.exp(-g * (mean - otherMean)))
+            information += g**2 * expected * (1 - expected)
+            surprise += g * (_sideScore(side, sides[other], draw) - expected)
+
+        for player in side:
+            widened = min(
+                math.hypot(skills[player["steam64"]][1], settings.deviation_drift),
+                settings.new_deviation,
+            )
+            phi = 1 / math.sqrt((GLICKO_SCALE / widened) ** 2 + information)
+            moves[player["steam64"]] = phi**2 * surprise * GLICKO_SCALE
+            deviations[player["steam64"]] = max(
+                phi * GLICKO_SCALE, settings.min_deviation
+            )
+
+    gained = sum(move for move in moves.values() if move > 0)
+    lost = -sum(move for move in moves.values() if move < 0)
+    pot = (gained + lost) / 2
+
+    def settled(move):
+        if not gained or not lost:
+            return 0.0
+        if move > 0:
+            return move * pot / gained
+        if move < 0:
+            return move * pot / lost
+        return 0.0
+
+    return {
+        steam64: (skills[steam64][0] + settled(move), deviations[steam64])
+        for steam64, move in moves.items()
+    }
+
+
+def _sideScore(side: list[dict], other: list[dict], draw: bool) -> float:
+    """What `side` scored against `other`: 1 for beating it, 0 for losing to it, and a
+    half for a draw or for two sides that finished level."""
+    if draw:
+        return 0.5
+    won, otherWon = side[0]["won"], other[0]["won"]
+    return 0.5 if won == otherWon else float(won)
 
 
 def _syncRankRoles(steam64s: list) -> None:
@@ -571,27 +689,23 @@ def _syncRankRoles(steam64s: list) -> None:
     threading.Thread(target=run, daemon=True).start()
 
 
-def _eloDelta(
-    currentElo: int,
-    avgElo: float,
-    kills: int,
-    deaths: int,
-    won: bool,
-    draw: bool = False,
-) -> int:
-    """The ranked Elo rule: tiny losses for underdogs, tiny gains for smurfs,
-    otherwise performance-scaled — and never below the floor of 100. A draw is
-    performance alone, with neither the win's gain nor the loss's cost."""
+def _ladderDelta(currentElo: int, skill: float, won: bool, draw: bool = False) -> int:
+    """The ladder's move: flat points for a win or a loss, bent by how far the ladder
+    sits below the player's skill, and never below the floor of 100.
+
+    Below skill a win is worth more and a loss costs less, so a player a season cut or
+    a smurf climbs back quickly; that is the grind. At or above skill it is the same
+    points either way, so a player winning half their games stays where they are rather
+    than drifting. The bend is a straight line clamped at both ends, so there is no Elo
+    at which one point more changes the result by a step. A draw is worth nothing.
+    """
     if draw:
-        performance = int(3.5 * kills) - int(2.5 * deaths)
-        return max(int(performance * min(avgElo / currentElo, 2.5)), 100 - currentElo)
-    if currentElo + 150 < avgElo and not won:
-        delta = -2
-    elif currentElo - 150 > avgElo and won:
-        delta = 5
+        return max(0, 100 - currentElo)
+    below = max((skill - currentElo) / settings.converge_scale, 0)
+    if won:
+        delta = round(settings.win_points * (1 + min(below, settings.max_boost)))
     else:
-        performance = 20 - (0 if won else 40) + int(3.5 * kills) - int(2.5 * deaths)
-        delta = int(performance * min(avgElo / currentElo, 2.5))
+        delta = -round(settings.loss_points * (1 - min(below, settings.max_relief)))
     return max(delta, 100 - currentElo)
 
 

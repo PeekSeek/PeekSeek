@@ -84,6 +84,23 @@ is exactly what happens to a result that was slow to arrive.
     when nobody turned up, and it is not the same as a real result that happened to be
     goalless.
 
+## How a result is rated
+
+A ranked result moves two numbers for every player on the roster.
+
+- **Skill** is hidden, and it is what teams are balanced on. A team's rating is its
+  players' mean, the expected score is logistic, and each player moves by a Glicko-2 step
+  that is bigger the less certain their skill still is. Only the win, loss or draw
+  counts, never kills. What one side gains the other loses, and seasons never touch it.
+- **Elo** is the ladder: the number on the profile, the badge and the Discord role. A win
+  is worth `win_points` and a loss costs `loss_points`. While the ladder sits below skill
+  a win is worth more and a loss costs less, which is how a season's soft reset is won
+  back; at or above skill it is the plain points, so a player winning half their games
+  stays put. A draw is worth nothing, and nobody goes below 100.
+
+`Elo Change` in the result summary is the ladder's move. The tunables are under
+`[ranking]` in [`config.toml`](configuration.md).
+
 ---
 
 ## States
@@ -108,14 +125,14 @@ started".
 Two rules. Failing them is a real outcome: those players stay in the queue rather than
 being handed a bad match.
 
-- Teams must be within **`max_team_elo_gap`** average Elo of each other.
+- Teams must be within **`max_team_elo_gap`** average skill of each other.
 - Two players are not put against each other again within **`rematch_cooldown`**.
 
 One repeated pairing rejects the whole roster, so `(a+b vs c+d)` blocks `(a+b vs c+e)`.
 Swapping one team-mate still leaves `a` and `b` facing `c` a second time.
 
 Parties are never split across teams. Within those constraints, the longest-waiting
-players are matched first and teams are balanced on Elo. Every number here is in
+players are matched first and teams are balanced on skill. Every number here is in
 `[matchmaking]` in [`config.toml`](configuration.md).
 
 ---

@@ -296,7 +296,10 @@ def _score(match: data.Match, payload: dict) -> None:
 
     gamemode = mmconfig["gamemodes"][match.gamemode]
     result, avgElo = matchmaking.matchResults(
-        gamemode, *players, draw=bool(payload.get("draw"))
+        gamemode,
+        *players,
+        draw=bool(payload.get("draw")),
+        teams=[team["users"] for team in match.teams],
     )
     data.MatchResult.recordFinalResults(match.id, result)
 

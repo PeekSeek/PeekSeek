@@ -7,6 +7,8 @@ from uuid import uuid4
 from sqlalchemy import BigInteger, Column, ForeignKey, Integer, desc
 from sqlmodel import Field, Relationship, SQLModel
 
+from src.core.settings import settings
+
 from .rank import Rank
 from .season import Season
 
@@ -54,7 +56,14 @@ class Stat(SQLModel, table=True):
     # who has not come back yet: they keep last season's Elo until their first ranked
     # match carries them across, and until then they are in no season's standings.
     season: Optional[int] = Field(default=None, foreign_key="Seasons.id", nullable=True)
+    # The ladder: the number players see, rank on and grind. Seasons reset it.
     elo: int = Field(default=300, nullable=False)
+    # The hidden estimate matchmaking balances on, and how unsure it still is. Separate
+    # from `elo` so the ladder can be a grind without the matchmaker believing it: skill
+    # moves on wins and losses alone and no season touches it. Empty on a standing that
+    # predates it, which getSkill reads as its Elo.
+    skill: Optional[float] = Field(default=None, nullable=True)
+    skillDeviation: Optional[float] = Field(default=None, nullable=True)
     kills: int = Field(default=0, nullable=False)
     deaths: int = Field(default=0, nullable=False)
     wins: int = Field(default=0, nullable=False)
@@ -306,6 +315,35 @@ class Stat(SQLModel, table=True):
         with open() as db:
             r = db.query(Stat).where(Stat.steam64 == steam64, Stat.game == game).first()
             return r.elo if r else 300
+
+    @staticmethod
+    def getSkill(steam64, game: str = "unt") -> tuple[float, float]:
+        """(skill, deviation) for this player.
+
+        A standing from before skill existed is seeded from its Elo -- the best guess
+        there is -- with a deviation wide enough that its first few matches correct it.
+        Nobody at all gets the new-account seed and the widest deviation.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            r = db.query(Stat).where(Stat.steam64 == steam64, Stat.game == game).first()
+        if not r:
+            return 300.0, float(settings.new_deviation)
+        if r.skill is None:
+            return float(r.elo), float(settings.seed_deviation)
+        return r.skill, r.skillDeviation
+
+    @staticmethod
+    def setSkill(steam64, skill: float, deviation: float) -> None:
+        """Overwrite a player's skill. Set rather than added, unlike everything
+        Stat.append counts, because a deviation is not something that sums."""
+        from src.core.db import open
+
+        with open() as db:
+            db.query(Stat).where(Stat.steam64 == steam64).update(
+                {"skill": skill, "skillDeviation": deviation}
+            )
 
 
 class SeasonStat(SQLModel, table=True):

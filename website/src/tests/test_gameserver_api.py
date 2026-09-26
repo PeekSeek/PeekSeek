@@ -832,17 +832,16 @@ def test_deciding_without_a_match_is_a_404(gameserver, user_factory):
     assert r.status_code == 404
 
 
-def test_a_draw_moves_elo_on_performance_alone():
+def test_a_draw_does_not_move_the_ladder():
     """A gamemode that caps its overtime can end level. A draw is neither the win's
-    gain nor the loss's cost: the same kills and deaths move Elo the same whether the
-    player was on the side that would have won or not."""
+    gain nor the loss's cost, and it is the same whether the player was on the side
+    that would have won or not. Kills no longer move the ladder at all."""
     from src.core import matchmaking
 
-    drawn = matchmaking._eloDelta(1000, 1000, 2, 2, won=True, draw=True)
-    assert drawn == matchmaking._eloDelta(1000, 1000, 2, 2, won=False, draw=True)
-    assert drawn == int(3.5 * 2) - int(2.5 * 2)
+    drawn = matchmaking._ladderDelta(1000, 1000, won=True, draw=True)
+    assert drawn == matchmaking._ladderDelta(1000, 1000, won=False, draw=True) == 0
     assert (
-        matchmaking._eloDelta(1000, 1000, 2, 2, won=True)
+        matchmaking._ladderDelta(1000, 1000, won=True)
         > drawn
-        > matchmaking._eloDelta(1000, 1000, 2, 2, won=False)
+        > matchmaking._ladderDelta(1000, 1000, won=False)
     )

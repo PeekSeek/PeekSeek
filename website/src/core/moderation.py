@@ -160,7 +160,7 @@ def _applyRefunds(db, totals: dict) -> None:
     """Subtract each player's tainted totals from their Stats row.
 
     Clamped so nothing lands somewhere impossible. Elo has a floor of 100 because
-    `_eloDelta` never lets it fall below that, and a counter cannot be negative. In
+    `_ladderDelta` never lets it fall below that, and a counter cannot be negative. In
     practice neither clamp fires on a consistent database; they exist so that one bad
     row cannot write a profile nobody can explain.
     """

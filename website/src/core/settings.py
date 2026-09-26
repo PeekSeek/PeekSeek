@@ -35,6 +35,17 @@ class Settings:
         self.rematch_cooldown: int = toml["matchmaking"]["rematch_cooldown"]
         self.match_cooldown: int = toml["matchmaking"]["match_cooldown"]
 
+        ranking = toml["ranking"]
+        self.win_points: int = ranking["win_points"]
+        self.loss_points: int = ranking["loss_points"]
+        self.converge_scale: int = ranking["converge_scale"]
+        self.max_boost: float = ranking["max_boost"]
+        self.max_relief: float = ranking["max_relief"]
+        self.new_deviation: int = ranking["new_deviation"]
+        self.seed_deviation: int = ranking["seed_deviation"]
+        self.min_deviation: int = ranking["min_deviation"]
+        self.deviation_drift: int = ranking["deviation_drift"]
+
         self.ranks: list[dict] = list(toml["ranks"]["tiers"])
 
         self.season_carry_cap: int = toml["season"]["carry_cap"]
