@@ -43,14 +43,27 @@ def test_gamemodes_are_only_ever_added_at_the_end():
         (gm["name"], gm["teams"], gm["playersPerTeam"])
         for gm in settings.mmconfig["gamemodes"]
     ]
-    assert shapes[:9] == [
-        ("Competitive", 2, 1),
-        ("Drums", 2, 1),
-        ("Ranged", 2, 1),
+    assert shapes[:10] == [
+        ("Arena 1v1", 2, 1),
+        ("Arena Drums 1v1", 2, 1),
+        ("Arena Sniper 1v1", 2, 1),
         ("Casual Duo", 2, 2),
         ("Casual", 4, 1),
         ("Rush", 2, 1),
         ("Augewehr", 2, 1),
-        ("Raid", 2, 1),
-        ("Competitive", 2, 2),
+        ("RAID 1v1", 2, 1),
+        ("Arena 2v2", 2, 2),
+        ("RAID 2v2", 2, 2),
+    ]
+
+
+def test_the_menu_lists_the_queueable_modes_in_menu_order():
+    menu = [(gm["name"], gm["bit"]) for gm in settings.visible_mmconfig["gamemodes"]]
+    assert menu == [
+        ("RAID 2v2", 9),
+        ("RAID 1v1", 7),
+        ("Arena 2v2", 8),
+        ("Arena 1v1", 0),
+        ("Arena Sniper 1v1", 2),
+        ("Arena Drums 1v1", 1),
     ]

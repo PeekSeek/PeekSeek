@@ -102,8 +102,7 @@ bytes to stamp onto the item.
 
 | Route | Retry? | Why |
 |---|---|---|
-| `POST /matches/{id}/state` | **No** | The overlay snapshot. Each one replaces the last, so a dropped one costs nothing. |
-| `POST /matches/{id}/kills` | **No** | One kill, sent as it happens. Batching them to the end would lose the whole log with the server. |
+| `POST /matches/{id}/rounds` | **No** | Rounds won per team, `{"wins": {"<team>": n}}`, sent when a round is decided. Each replaces the last. |
 | `POST /matches/{id}/result` | **Yes, until acknowledged** | The only thing that scores a match. |
 
 The result is the one call that must land.
@@ -126,6 +125,14 @@ POST /server/v1/matches/42/result
   who left. A player the server omits is a player whose Elo never moves, which is what
   used to make walking out of a losing match free.
 
+A ranked result moves two numbers per player. **Skill** is hidden and is what teams are
+balanced on: a Glicko-2 style team rating moved by the win or loss alone, zero-sum within
+the match, and never reset by a season. **Elo** is the ladder players see, rank and
+Discord roles included: a flat `win_points`/`loss_points` per result, with bigger wins and
+smaller losses while it sits below the player's skill. A draw moves no ladder, and kills
+move neither. `Elo Change` in the summary is the ladder's move. Tunables are under
+`[ranking]` in [src/config.toml](src/config.toml).
+
 Answers `{"status": "recorded"}` or `{"status": "alreadyRecorded"}`. Repeats change
 nothing, so a reply lost on the way back costs a duplicate request rather than a doubled
 Elo swing. Accepted even for a match already marked finished, because that is exactly
@@ -136,7 +143,7 @@ what happens to a match whose result was slow to arrive.
 | Route | What it does |
 |---|---|
 | `GET /players/{steam64}` | Name, picture, rank and whereabouts. **No side effects.** |
-| `PUT /players/{steam64}/queue` | Queue them, and answer the same thing. |
+| `PUT /players/{steam64}/queue?gamemodes=&region=&ip=` | Queue them, and answer the same thing. `ip` is the address they play from. |
 | `DELETE /players/{steam64}/queue` | Take them out of the queue. |
 | `GET /players/{steam64}/kits` | Every saved kit, resolved into ready-to-equip items. |
 | `POST /players/{steam64}/decide` | Lock their kit and/or powerup for the match they are on. |
@@ -159,7 +166,9 @@ Both reads answer the same shape:
 ```
 
 `ban` is `null` for a player who may play, and otherwise
-`{"reason": "Cheating", "expires": 9999999999, "permanent": true}`. **A caller holding
+`{"reason": "Cheating", "expires": 9999999999, "permanent": true}`. The ban may be
+on another account: any active ban on an account seen on the same IP, on the site or
+through `ip`, bars every account on that IP from queues and matches. **A caller holding
 players must remove anyone it is non-null for.** `PUT .../queue` refuses to queue them,
 so a lobby that ignores it ends up full of people who can never be matched.
 
@@ -266,13 +275,14 @@ The site knows what you last said; you would only be guessing.
 Two rules decide whether a roster is allowed to become a match. Failing them is a real
 outcome: those players stay in the queue rather than being handed a bad match.
 
-- **Teams must be within `max_team_elo_gap` average Elo of each other** (200).
+- **Teams must be within `max_team_elo_gap` average skill of each other** (200).
 - **Two players are not put against each other again within `rematch_cooldown`** (300s).
   One repeated pairing rejects the whole roster, so `(a+b vs c+d)` blocks `(a+b vs c+e)`
   — swapping one team-mate still leaves a and b facing c for a second time.
 
 Parties are never split across teams. Within those constraints the longest-waiting
-players are matched first, and teams are balanced by Elo.
+players are matched first, and teams are balanced by skill: the hidden rating described
+under the result, not the ladder Elo players see.
 
 All three numbers, plus `host_grace`, live in
 [src/config.toml](src/config.toml) under `[matchmaking]`.
@@ -289,7 +299,6 @@ lives.
 | `live` | Handed over; the server is running it. |
 | `finished` | Scored, abandoned or cancelled — over either way. |
 
-The site's own pages read `status` and `serverCode` from `/match/current` and
-`/match/overlay`. They are separate fields on purpose: a match has a server from the
+The match page reads `status` and `serverCode` from `/match/current`. They are separate fields on purpose: a match has a server from the
 moment it is made, so "a server exists" stopped being the same question as "the match has
 started".

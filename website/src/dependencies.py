@@ -28,12 +28,10 @@ PAGES_NEVER_REMEMBERED = (
     "/discord",
     "/queue/",
     "/match/current",
-    "/match/overlay",
     "/user/changeuuid",
     "/server/",
     "/ping",
     "/build",
-    "/ads",
 )
 
 
@@ -48,7 +46,7 @@ def _remember_page(request: Request) -> None:
 
 def load_user(request: Request) -> Optional[data.User]:
     """Resolve the requester from the session (or ?uuid=), record the page for
-    post-login redirects, and track their IP.
+    post-login redirects, and record each new IP they come from.
 
     Registered app-wide, so every route (and template) sees request.state.user.
     """
@@ -67,16 +65,10 @@ def load_user(request: Request) -> Optional[data.User]:
             return None
 
         request.session["logged"] = True
-        known_ip = (
-            db.query(data.UserIP)
-            .where(
-                data.UserIP.address == ip,
-                data.UserIP.steam64 == user.steam64,
-            )
-            .first()
-        )
-        if not known_ip and ip:
-            db.add(data.UserIP(steam64=user.steam64, address=ip))
+        # Once per address per session, rather than a lookup on every request.
+        if request.session.get("ip") != ip:
+            data.UserIP.remember(db, user.steam64, ip)
+            request.session["ip"] = ip
 
     request.state.user = user
 
@@ -164,7 +156,7 @@ def page_context(request: Request) -> dict:
         # processor runs after the route's own context and would overwrite those.
         "userRank": data.Stat.rankFor(user.steam64) if user else None,
         "userPlace": data.Stat.ladderPosition(user.steam64) if user else None,
-        "match": user.getCurrentMatchId() if user else None,
+        "match": data.Match.currentFor(user.steam64) if user else None,
         "discord": user.discord if user else None,
         # Six accounts in seven have no Discord linked, so six players in seven cannot
         # be told their match is ready. That is the single thing capping every

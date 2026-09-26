@@ -31,7 +31,15 @@ public static class Gamemodes {
     /// The gamemode that runs a match the site calls `name`, or null when nothing
     /// installed can.
     internal static IGamemode For(string name) {
-        return registered.FirstOrDefault(mode => string.Equals(mode.Name, name, StringComparison.OrdinalIgnoreCase))
-            ?? fallback;
+        return registered.FirstOrDefault(mode => Runs(mode.Name, name)) ?? fallback;
+    }
+
+    /// The site names a mode's sizes after the gamemode that runs it ("RAID 2v2" is a
+    /// Raid), so a name runs a mode when it is that mode's name or starts with it and
+    /// a space.
+    internal static bool Runs(string modeName, string siteName) {
+        if (modeName == null || siteName == null) return false;
+        return string.Equals(siteName, modeName, StringComparison.OrdinalIgnoreCase)
+            || siteName.StartsWith(modeName + " ", StringComparison.OrdinalIgnoreCase);
     }
 }

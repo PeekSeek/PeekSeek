@@ -12,15 +12,15 @@ nowhere to be played.
 """
 
 import logging
+import math
 import threading
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from itertools import combinations
 from time import time
 
-from sqlalchemy import false, func, or_, text
+from sqlalchemy import false, func, or_
 
-from .db import engine, open
+from .db import MATCHMAKER_LOCK, exclusively, open
 from .settings import settings
 from . import models as data
 from . import notify
@@ -29,22 +29,11 @@ mmconfig = settings.mmconfig
 
 
 def matchForServer(region: str, serverCode: str) -> "data.Match | None":
-    """Find this free server the best match it can host right now, and give it to it.
-
-    Tried in order:
-
-    1. A match that already exists and has nobody to host it — a custom match, or an
-       event pairing. Those are made by players rather than by matchmaking, so they are
-       the ones actually waiting on a server.
-    2. A fresh match built out of the queue, created already assigned to this server.
-
-    Returns the match this server is now holding, or None when there is nothing to do.
-    """
+    """Give this free server a match: a custom or event match waiting for a server
+    first, else a new one built from the queue. None when there is nothing to do."""
     waiting = data.Match.pendingFor(region)
     if waiting:
-        # None when another server claimed it between the read and the write. Falling
-        # through rather than returning it is the point: this server is still free, and
-        # the queue may well have a match in it for them.
+        # None when another server took it first; this one is still free for the queue.
         taken = waiting.assignTo(serverCode)
         if taken:
             return taken
@@ -52,48 +41,18 @@ def matchForServer(region: str, serverCode: str) -> "data.Match | None":
     return _asTheMatchmaker(lambda: _matchFromQueue(region, serverCode))
 
 
-# Any number works, so long as nothing else takes an advisory lock on the same one.
-MATCHMAKER_LOCK = 0x5045454B
-
-_testLock = threading.Lock()
-
-
 def _asTheMatchmaker(makeMatch):
-    """Run makeMatch as the only matchmaker on the whole site, or not at all.
+    """Run makeMatch as the only matchmaker across every copy of the site, or not at all.
 
-    Every server polls every second and any copy of the site can answer, so without this
-    two polls scan the queue at once. The first takes its players out of the queue, the
-    lobby puts them straight back in before the first has written their match, and the
-    second finds them queued and free and builds the same match again.
-
-    The lock is held in Postgres rather than in this process so it covers every copy of
-    the site, and it is only let go once the match is written. Nobody makes another
-    until `match_cooldown` after the newest one, so the next scan always sees who the
-    last one took. A poll that loses either way is told to idle and asks again.
+    Two polls scanning the queue at once would build the same match twice. The lock is
+    let go only once the match is written, so the next scan sees who it took, and queue
+    writes hold it shared, so nobody is queued while a match is being written. A poll
+    that loses is told to idle.
     """
-    with _matchmakerLock() as held:
+    with exclusively(MATCHMAKER_LOCK) as held:
         if not held or _madeOneRecently():
             return None
         return makeMatch()
-
-
-@contextmanager
-def _matchmakerLock():
-    """Yields whether this call holds the lock. Never waits for it."""
-    if engine.dialect.name != "postgresql":
-        # SQLite is only ever the tests, which run in one process.
-        held = _testLock.acquire(blocking=False)
-        try:
-            yield held
-        finally:
-            if held:
-                _testLock.release()
-        return
-
-    with engine.connect() as connection, connection.begin():
-        yield connection.execute(
-            text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": MATCHMAKER_LOCK}
-        ).scalar()
 
 
 def _madeOneRecently() -> bool:
@@ -103,17 +62,9 @@ def _madeOneRecently() -> bool:
 
 
 def _matchFromQueue(region: str, serverCode: str) -> "data.Match | None":
-    """The first gamemode in this region with a full complement of queued players, made
-    into a match and handed to the calling server.
-
-    One match per call on purpose: one server can only host one match, and a second
-    match made in the same breath would have no server of its own to go to.
-
-    Anyone already on an unfinished match is dropped before the scan starts rather than
-    checked once a roster has been built. A player can be in both places at once: lobby
-    servers re-queue everyone standing in them on a timer, and a player matched a moment
-    ago is still standing there. The queue on its own is not a list of who is free.
-    """
+    """One match from the first gamemode in this region the queue can fill, handed to
+    the calling server. Players already on a match are dropped first, since a lobby
+    keeps re-queueing whoever stands in it."""
     inAMatch = data.Match.playersInAMatch()
     with open() as db:
         queued = [
@@ -122,9 +73,10 @@ def _matchFromQueue(region: str, serverCode: str) -> "data.Match | None":
             if heartbeat.region == region and str(heartbeat.steam64) not in inAMatch
         ]
 
+    skill = data.Stat.skillsOf(hb.steam64 for hb in queued)
     for gamemodeId, gamemode in enumerate(mmconfig["gamemodes"]):
         candidates = [hb for hb in queued if hb.gamemode & (2**gamemodeId)]
-        players = _playersForMatch(candidates, gamemode)
+        players = _playersForMatch(candidates, gamemode, skill)
         if players:
             return _createMatch(gamemodeId, players, region, serverCode)
     return None
@@ -168,7 +120,7 @@ def _partyGroups(heartbeats: list) -> list[list[int]]:
 CANDIDATE_GROUPS = 8
 
 
-def _playersForMatch(queueList: list, mode: dict) -> list[int] | None:
+def _playersForMatch(queueList: list, mode: dict, skill: dict) -> list[int] | None:
     """The best full roster this queue can currently produce, or None.
 
     "Best" is the first roster, taken longest-waiting-players first, that clears both
@@ -181,14 +133,16 @@ def _playersForMatch(queueList: list, mode: dict) -> list[int] | None:
     """
     perTeam = mode["playersPerTeam"]
     needed = perTeam * mode["teams"]
+    if len(queueList) < needed:
+        return None
     groups = [g for g in _partyGroups(queueList) if len(g) <= perTeam]
     recentOpponents = _recentOpponentPairs()
 
     for roster in _rosters(groups[:CANDIDATE_GROUPS], needed):
-        teams = _balancedTeams(roster, mode)
+        teams = _balancedTeams(roster, mode, skill)
         if teams is None:
             continue
-        if _eloGap(teams) > settings.max_team_elo_gap:
+        if _skillGap(teams, skill) > settings.max_team_elo_gap:
             continue
         if _wouldRepeatAFixture(teams, recentOpponents):
             continue
@@ -214,7 +168,9 @@ def _rosters(groups: list[list[int]], needed: int) -> list[list[list[int]]]:
     return [[group for _, group in roster] for roster in matching]
 
 
-def _balancedTeams(groups: list[list[int]], mode: dict) -> list[list[int]] | None:
+def _balancedTeams(
+    groups: list[list[int]], mode: dict, skill: dict
+) -> list[list[int]] | None:
     """Split these party groups across the mode's teams as evenly by Elo as they go.
 
     Biggest groups first onto whichever team is currently weakest and still has room —
@@ -224,28 +180,29 @@ def _balancedTeams(groups: list[list[int]], mode: dict) -> list[list[int]] | Non
     perTeam = mode["playersPerTeam"]
     teams: list[list[int]] = [[] for _ in range(mode["teams"])]
 
-    for group in sorted(groups, key=lambda g: (-len(g), -_groupElo(g))):
+    for group in sorted(groups, key=lambda g: (-len(g), -_groupSkill(g, skill))):
         room = [team for team in teams if len(team) + len(group) <= perTeam]
         if not room:
             return None
-        min(room, key=_teamElo).extend(group)
+        min(room, key=lambda team: _teamSkill(team, skill)).extend(group)
 
     return teams if all(len(team) == perTeam for team in teams) else None
 
 
-def _groupElo(group: list[int]) -> int:
-    return sum(data.Stat.getElo(steam64) for steam64 in group)
+def _groupSkill(group: list[int], skill: dict) -> float:
+    """A group's summed skill. Skill rather than the ladder, because the ladder is a
+    grind and a freshly reset season would otherwise pair a veteran with a novice."""
+    return sum(skill[int(steam64)] for steam64 in group)
 
 
-def _teamElo(team: list[int]) -> float:
-    """A team's strength: the average Elo of the players on it. An average rather than a
-    total so the comparison still means something in a mode where a team can be short a
-    player."""
-    return _groupElo(team) / len(team) if team else 0
+def _teamSkill(team: list[int], skill: dict) -> float:
+    """A team's strength: the average skill of the players on it, so the comparison
+    still means something when a team is short a player."""
+    return _groupSkill(team, skill) / len(team) if team else 0
 
 
-def _eloGap(teams: list[list[int]]) -> float:
-    strengths = [_teamElo(team) for team in teams]
+def _skillGap(teams: list[list[int]], skill: dict) -> float:
+    strengths = [_teamSkill(team, skill) for team in teams]
     return max(strengths) - min(strengths)
 
 
@@ -429,7 +386,7 @@ def _eventPairing(teams: list[dict]) -> list[dict] | None:
 
 def _eventTeam(db, heartbeat, event) -> dict | None:
     """The heartbeat owner's team entry, or None if the team can't play now."""
-    if data.User.getCurrentMatchId(heartbeat.steam64):
+    if data.Match.currentFor(heartbeat.steam64):
         return None
 
     # Scoped to this event. Without the event_id a player who had ever signed up for
@@ -457,6 +414,9 @@ def _eventTeam(db, heartbeat, event) -> dict | None:
         if f"{heartbeat.gamemode:0{len(signup.users)}b}"[i] == "1"
     ]
     if len(teammates) + 1 > event.data["meta"]["maxPlayersPerTeam"]:
+        return None
+    # Teammates come off the signup, not the queue, so nothing else has checked them.
+    if data.UserBan.barring([heartbeat.steam64, *teammates], db):
         return None
 
     return {
@@ -487,12 +447,21 @@ def normalizePlayerResult(player: dict) -> dict:
 
 
 def matchResults(
-    gamemodeInfo: dict, *users: dict, draw: bool = False
+    gamemodeInfo: dict,
+    *users: dict,
+    draw: bool = False,
+    teams: list[list] | None = None,
 ) -> tuple[dict, int]:
-    """Record every player's kills/deaths/win and, for ranked modes, their Elo
-    change. Returns the per-player summary and the match's average Elo.
+    """Record every player's kills/deaths/win and, for ranked modes, move both of their
+    ratings. Returns the per-player summary and the match's average Elo.
 
-    A draw is nobody's win and nobody's loss: Elo moves on kills and deaths alone.
+    Two ratings, because one number cannot be both. Skill is what matchmaking believes
+    and it moves on the result alone; the ladder Elo is what players see, and it is
+    pulled towards skill. "Elo Change" is the ladder's move, since that is the number a
+    player is looking at. A draw moves no ladder, and between equals no skill either.
+
+    `teams` is the match's own rosters, when the caller has them. Without it the sides
+    are read off who won, which is exact for a result and blind to who drew with whom.
 
     Every player the server lists is scored, including ones who never fired a shot or
     who disconnected — the server reports its whole roster, so leaving a match is a
@@ -502,8 +471,12 @@ def matchResults(
 
     # Before anything is read: a player returning after a new season opened plays this
     # match on their carried-over Elo, and it has to be the Elo the match is scored
-    # against as well as the one the result lands on.
+    # against as well as the one the result lands on. Skill is read before that only
+    # because a standing older than skill is seeded from its Elo, and the Elo a player
+    # earned is the honest seed, not the one a season just cut.
+    skills: dict = {}
     if gamemodeInfo["usesElo"]:
+        skills = {p["steam64"]: data.Stat.getSkill(p["steam64"]) for p in players}
         for player in players:
             data.Stat.startSeason(player["steam64"])
 
@@ -528,9 +501,8 @@ def matchResults(
         eloDelta = 0
         if gamemodeInfo["usesElo"]:
             currentElo = data.Stat.getElo(player["steam64"])
-            eloDelta = _eloDelta(
-                currentElo, avgElo, player["kills"], player["deaths"], won, draw
-            )
+            skill = skills[player["steam64"]][0]
+            eloDelta = _ladderDelta(currentElo, skill, won, draw)
             summary = {"Elo Change": eloDelta, "Current Elo": currentElo} | summary
 
         results[player["steam64"]] = summary
@@ -550,9 +522,112 @@ def matchResults(
         )
 
     if gamemodeInfo["usesElo"]:
+        sides = _sides(players, teams)
+        for steam64, (skill, deviation) in _skillUpdates(sides, skills, draw).items():
+            data.Stat.setSkill(steam64, skill, deviation)
         _syncRankRoles([p["steam64"] for p in players])
 
     return results, int(avgElo)
+
+
+def _sides(players: list[dict], teams: list[list] | None) -> list[list[dict]]:
+    """The players grouped by the side they played on, empty sides dropped.
+
+    Off the rosters when there are some, so a draw still knows who drew with whom.
+    Otherwise winners against everybody else, which is every side a result can tell.
+    """
+    if teams:
+        byId = {p["steam64"]: p for p in players}
+        sides = [[byId[str(u)] for u in team if str(u) in byId] for team in teams]
+    else:
+        sides = [
+            [p for p in players if p["won"]],
+            [p for p in players if not p["won"]],
+        ]
+    return [side for side in sides if side]
+
+
+# Glicko's scale: 400/ln(10) is what makes its logistic the same curve as Elo's
+# 10^(gap/400), so skill reads in the same points as the ladder it was seeded from.
+GLICKO_SCALE = 400 / math.log(10)
+
+
+def _skillUpdates(
+    sides: list[list[dict]], skills: dict, draw: bool
+) -> dict[str, tuple[float, float]]:
+    """Every player's new (skill, deviation), Glicko-2 style, for teams.
+
+    A side's rating is its players' mean, and each side plays every other: 1 for a win,
+    0 for a loss, a half for a draw. A player's move is their own Glicko-2 step against
+    that, so an unsure player moves further than a settled one on the same result, and
+    every match makes them surer. The drift is added first, the way Glicko-2's
+    volatility is, so nobody settles so hard that skill stops following them.
+
+    Glicko alone is not zero-sum: two deviations move two players by two amounts. So the
+    gains and the losses are each scaled to meet in the middle, and every point one side
+    takes is one another side gave up. Nothing is minted into the pool, which is what the
+    old kill bonus did.
+    """
+    if len(sides) < 2:
+        return {}
+
+    def rating(side):
+        mean = sum(skills[p["steam64"]][0] for p in side) / len(side)
+        spread = math.sqrt(sum(skills[p["steam64"]][1] ** 2 for p in side) / len(side))
+        return mean / GLICKO_SCALE, spread / GLICKO_SCALE
+
+    ratings = [rating(side) for side in sides]
+    moves: dict[str, float] = {}
+    deviations: dict[str, float] = {}
+
+    for index, side in enumerate(sides):
+        mean = ratings[index][0]
+        information, surprise = 0.0, 0.0
+        for other, (otherMean, otherSpread) in enumerate(ratings):
+            if other == index:
+                continue
+            g = 1 / math.sqrt(1 + 3 * otherSpread**2 / math.pi**2)
+            expected = 1 / (1 + math.exp(-g * (mean - otherMean)))
+            information += g**2 * expected * (1 - expected)
+            surprise += g * (_sideScore(side, sides[other], draw) - expected)
+
+        for player in side:
+            widened = min(
+                math.hypot(skills[player["steam64"]][1], settings.deviation_drift),
+                settings.new_deviation,
+            )
+            phi = 1 / math.sqrt((GLICKO_SCALE / widened) ** 2 + information)
+            moves[player["steam64"]] = phi**2 * surprise * GLICKO_SCALE
+            deviations[player["steam64"]] = max(
+                phi * GLICKO_SCALE, settings.min_deviation
+            )
+
+    gained = sum(move for move in moves.values() if move > 0)
+    lost = -sum(move for move in moves.values() if move < 0)
+    pot = (gained + lost) / 2
+
+    def settled(move):
+        if not gained or not lost:
+            return 0.0
+        if move > 0:
+            return move * pot / gained
+        if move < 0:
+            return move * pot / lost
+        return 0.0
+
+    return {
+        steam64: (skills[steam64][0] + settled(move), deviations[steam64])
+        for steam64, move in moves.items()
+    }
+
+
+def _sideScore(side: list[dict], other: list[dict], draw: bool) -> float:
+    """What `side` scored against `other`: 1 for beating it, 0 for losing to it, and a
+    half for a draw or for two sides that finished level."""
+    if draw:
+        return 0.5
+    won, otherWon = side[0]["won"], other[0]["won"]
+    return 0.5 if won == otherWon else float(won)
 
 
 def _syncRankRoles(steam64s: list) -> None:
@@ -571,27 +646,23 @@ def _syncRankRoles(steam64s: list) -> None:
     threading.Thread(target=run, daemon=True).start()
 
 
-def _eloDelta(
-    currentElo: int,
-    avgElo: float,
-    kills: int,
-    deaths: int,
-    won: bool,
-    draw: bool = False,
-) -> int:
-    """The ranked Elo rule: tiny losses for underdogs, tiny gains for smurfs,
-    otherwise performance-scaled — and never below the floor of 100. A draw is
-    performance alone, with neither the win's gain nor the loss's cost."""
+def _ladderDelta(currentElo: int, skill: float, won: bool, draw: bool = False) -> int:
+    """The ladder's move: flat points for a win or a loss, bent by how far the ladder
+    sits below the player's skill, and never below the floor of 100.
+
+    Below skill a win is worth more and a loss costs less, so a player a season cut or
+    a smurf climbs back quickly; that is the grind. At or above skill it is the same
+    points either way, so a player winning half their games stays where they are rather
+    than drifting. The bend is a straight line clamped at both ends, so there is no Elo
+    at which one point more changes the result by a step. A draw is worth nothing.
+    """
     if draw:
-        performance = int(3.5 * kills) - int(2.5 * deaths)
-        return max(int(performance * min(avgElo / currentElo, 2.5)), 100 - currentElo)
-    if currentElo + 150 < avgElo and not won:
-        delta = -2
-    elif currentElo - 150 > avgElo and won:
-        delta = 5
+        return max(0, 100 - currentElo)
+    below = max((skill - currentElo) / settings.converge_scale, 0)
+    if won:
+        delta = round(settings.win_points * (1 + min(below, settings.max_boost)))
     else:
-        performance = 20 - (0 if won else 40) + int(3.5 * kills) - int(2.5 * deaths)
-        delta = int(performance * min(avgElo / currentElo, 2.5))
+        delta = -round(settings.loss_points * (1 - min(below, settings.max_relief)))
     return max(delta, 100 - currentElo)
 
 

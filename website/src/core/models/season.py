@@ -5,10 +5,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+from cachetools import TTLCache
 from sqlalchemy import Column, DateTime, desc, text
 from sqlmodel import Field, SQLModel
 
 from src.core.settings import settings
+
+# The season being played, asked for several times per page. A season started by the
+# bot, which is another process, reaches this one within the ten seconds.
+_current: TTLCache = TTLCache(maxsize=1, ttl=10)
 
 
 class Season(SQLModel, table=True):
@@ -39,9 +44,14 @@ class Season(SQLModel, table=True):
         from src.core.db import open
         from .stat import Stat
 
+        held = _current.get("season")
+        if held is not None:
+            return held
+
         with open() as db:
             season = db.query(Season).order_by(desc(Season.id)).first()
             if season:
+                _current["season"] = season
                 return season
 
             season = Season(name="Season 1")
@@ -106,6 +116,7 @@ class Season(SQLModel, table=True):
             db.add(season)
             db.flush()
             db.refresh(season)
+            _current.clear()
             return season
 
     def window(self) -> tuple:
@@ -130,9 +141,10 @@ class Season(SQLModel, table=True):
             later.created_at if later else None,
         )
 
-    def covers(self, when) -> bool:
-        """Whether something that happened at `when` happened during this season."""
-        start, end = self.window()
+    @staticmethod
+    def within(window: tuple, when) -> bool:
+        """Whether something that happened at `when` falls inside a season's window."""
+        start, end = window
         if when is None:
             return False
         if start is not None and when < start:

@@ -805,7 +805,7 @@ internal class Raid : IGamemode {
         for (int team = 0; team < 2; team++) {
             List<RaidOption> pool = team == DefendedSite ? PeekSeekRaid.Config.DefenceOptions : PeekSeekRaid.Config.RaidOptions;
             List<ulong> roster = Roster(team);
-            HashSet<int> taken = [..roster.Select(Board.PickIndex).Where(index => index >= 0)];
+            HashSet<int> taken = [.. roster.Select(Board.PickIndex).Where(index => index >= 0)];
 
             foreach (ulong steam64 in roster) {
                 int index = Board.PickIndex(steam64);

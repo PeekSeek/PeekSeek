@@ -29,6 +29,9 @@ COUNTERS = {
 
 DAY = 24 * 60 * 60
 
+# More matches than any one player has played, as a bound on the history scan.
+MAX_TAINTED = 100_000
+
 # What each preset means, in one place, so the dashboard tiles, the bot's choice list
 # and the stored reason cannot disagree about how long a Toxicity ban lasts.
 PRESETS = {
@@ -81,16 +84,8 @@ def noteWithAuthor(note: str | None, byName: str, bySteam64) -> str:
 
 
 def taintedMatches(db, steam64) -> list:
-    """Every match record this player has a final line in, oldest first.
-
-    Filtered in Python rather than with a JSON path operator, for the same reason
-    `MatchResult.latestFor` is: `->`/`->>` reads the row on Postgres and silently
-    matches nothing on an older SQLite, so a test suite would pass while production
-    refunded nobody.
-    """
-    key = str(steam64)
-    rows = db.query(data.MatchResult).order_by(data.MatchResult.endTime.asc()).all()
-    return [row for row in rows if key in (row.data.get("results") or {})]
+    """Every match record this player has a final line in, oldest first."""
+    return data.MatchResult.scoredFor(db, steam64, MAX_TAINTED, newestFirst=False)
 
 
 def _reversals(matches: list, steam64) -> dict:
@@ -160,7 +155,7 @@ def _applyRefunds(db, totals: dict) -> None:
     """Subtract each player's tainted totals from their Stats row.
 
     Clamped so nothing lands somewhere impossible. Elo has a floor of 100 because
-    `_eloDelta` never lets it fall below that, and a counter cannot be negative. In
+    `_ladderDelta` never lets it fall below that, and a counter cannot be negative. In
     practice neither clamp fires on a consistent database; they exist so that one bad
     row cannot write a profile nobody can explain.
     """
@@ -225,7 +220,7 @@ def issueBan(
     # Before the ban lands, because the answer stops being available once they are
     # no longer anybody's problem: a match already in progress has to be ended, and
     # this is the only moment we still know which one it is.
-    live = data.User.getCurrentMatchId(steam64) if voids else None
+    live = data.Match.currentFor(steam64) if voids else None
 
     with opendb() as db:
         # Most people worth banning have never opened the site: they were reported from

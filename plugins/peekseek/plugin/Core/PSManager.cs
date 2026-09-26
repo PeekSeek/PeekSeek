@@ -85,34 +85,12 @@ internal abstract class PSManager {
     /// When it stopped asking the site for work. Zero while it is still asking.
     private static float DrainingSince;
 
-    private const float UpdateIntervalSeconds = 1f;
-    private static float LastUpdateSent;
-
-    private const float VisibilityIntervalSeconds = 0.15f;
-    private static float LastVisibilityCheck;
-
     /// The bar's clock and health move between redraws on this cadence. Short, because
     /// a bar that shows a teammate at half health two seconds after the hit is a bar
     /// nobody trusts.
     private const float HudIntervalSeconds = 0.25f;
     private static float LastStaminaTopUp;
     private static float LastHudTick;
-
-    /// Separate from UpdateIntervalSeconds: this is a console log for debugging alive/dead
-    /// state solo, not the payload sent to the overlay, so it can run on its own slower
-    /// cadence without touching what the overlay actually receives.
-    private const float DebugStateLogIntervalSeconds = 10f;
-    private static float LastDebugStateLogged;
-
-    private static PSUpdateEvent LatestEvent;
-    private static int EventsRecorded;
-
-    private const int FeedLength = 5;
-    private static readonly List<PSUpdateKill> RecentKills = [];
-
-    /// Separate from EventsRecorded: this ids the durable kill log sent to the site,
-    /// not the ephemeral overlay feed, and the two have no reason to share a sequence.
-    private static int KillEventsRecorded;
 
     private static CSteamID RelaySteamID => new(PeekSeek.Config.LobbyServerRelaySGSSteamID);
 
@@ -206,27 +184,14 @@ internal abstract class PSManager {
             parameters.damage *= PingPercentage(ping) / 100f;
         }
 
-        // Recorded after the ping scaling above, so damage stats and the fight history
-        // both reflect what the victim actually took rather than the pre-reduction number.
+        // After the ping scaling, so the stats hold what the victim actually took.
         CSteamID victimID = parameters.player.channel.owner.playerID.steamID;
         StatService.AddDamageTaken(victimID, parameters.damage);
 
-        float? reactionTime = null;
         if (attacker != null) {
             StatService.AddDamageDealt(parameters.killer, parameters.damage);
             StatService.RecordHit(parameters.killer, parameters.limb == ELimb.SKULL);
-            reactionTime = VisibilityTracker.ConsumeReactionTime(parameters.killer);
         }
-
-        FightTracker.RecordHit(
-            victimID,
-            parameters.killer,
-            parameters.damage,
-            parameters.limb,
-            attacker?.transform.position ?? default,
-            parameters.player.transform.position,
-            reactionTime
-        );
 
         RoundLog.RecordDamage(parameters.killer, victimID, parameters.damage);
     }
@@ -242,27 +207,9 @@ internal abstract class PSManager {
         return 100;
     }
 
-    /// Only worth sampling in bullet-drop mode: instant-hit mode has no equivalent
-    /// per-shot event, and Data is null outside a live match, so both are guarded here
-    /// rather than asking every caller to remember the condition. Third-person is also
-    /// excluded — PeekSeek is played first-person, but if a player ever ends up in
-    /// third-person the aim direction no longer matches where their reticle actually was,
-    /// so a spray-offset sample from that shot would be quietly wrong rather than missing.
     private static void OnBulletSpawned(UseableGun gun, BulletInfo bullet) {
-        // Counted before the ballistics guard below, which exists for the shot-trace
-        // telemetry. A shot is a shot whether or not this match records trajectories,
-        // and accuracy is wrong if half of them are not counted.
         if (gun?.player != null)
             StatService.RecordShotFired(gun.player.channel.owner.playerID.steamID);
-
-        if (Data?.Settings?.Ballistics != true) return;
-        if (gun.player.look.perspective != EPlayerPerspective.FIRST) return;
-
-        FightTracker.RecordShot(
-            gun.player.channel.owner.playerID.steamID,
-            bullet.origin,
-            bullet.ApproximatePlayerAimDirection
-        );
     }
 
     private static void OnPostLevelLoaded(int level) {
@@ -422,7 +369,7 @@ internal abstract class PSManager {
 
         Logger.Log($"Hosting match {match.Id} ({match.Gamemode?.Name}, run by {mode.Name}) on {match.Settings.Map}, "
             + $"first to {match.RoundsToWin} rounds. Waiting for {Data.Teams.Sum(team => team.Players.Count)} player(s).");
-        SendUpdateState();
+        SendRounds();
     }
 
     /// Hold a match and make it the gamemode's: the groups, and the match as the mode
@@ -952,8 +899,7 @@ internal abstract class PSManager {
         Banner.Show($"TAKES ROUND {RoundsPlayed}", winner.Name, announcement ?? AceLine(winner));
         // The round that wins the match sounds as the match, which MatchWon plays next.
         if (Score(team) < Data.RoundsToWin) PlayRoundSounds(team);
-        RecordEvent("roundWon", winner.Name);
-        SendUpdateState();
+        SendRounds();
         RoundLog.Clear();
         RefreshHud();
     }
@@ -1004,8 +950,7 @@ internal abstract class PSManager {
         UpdateStatus(EPSStatus.DELAY);
         Banner.Show($"WINS THE MATCH {ScoreLine()}", $"<color=#ff4f4f>{winner.Name}</color>", MvpLine());
         PlayBySide(team, Sound.MatchWin, Sound.MatchLoss);
-        RecordEvent("matchWon", winner.Name);
-        SendUpdateState();
+        SendRounds();
         RoundLog.Clear();
         RefreshHud();
 
@@ -1027,8 +972,7 @@ internal abstract class PSManager {
 
         UpdateStatus(EPSStatus.DELAY);
         Banner.Show($"DRAW {ScoreLine()}", "Nobody wins", MvpLine());
-        RecordEvent("matchDrawn", null);
-        SendUpdateState();
+        SendRounds();
         RoundLog.Clear();
         RefreshHud();
 
@@ -1292,13 +1236,7 @@ internal abstract class PSManager {
         }
 
         StatService.InstanceStats.Clear();
-        LatestEvent = null;
-        EventsRecorded = 0;
-        KillEventsRecorded = 0;
-        RecentKills.Clear();
-        FightTracker.Clear();
         RoundLog.Clear();
-        VisibilityTracker.Clear();
         GroupManager.knownGroups.Clear();
         Data = null;
         Match = null;
@@ -1343,14 +1281,9 @@ internal abstract class PSManager {
 
     // ---- deaths ---------------------------------------------------------------
 
-    /// Ordinary kills say nothing publicly; the kill feed carries them. What the one
-    /// who died gets is the card: who, with what, from how far, what they had left and
-    /// what they did to them, which is the record the site keeps, shown while it still
-    /// matters.
-    ///
-    /// A death to the arena, which is also what a gamemode's own ground damage is, is
-    /// not a death for the stats or the site's kill log, as it never was; it still takes
-    /// the player out of the round and is still the gamemode's to answer.
+    /// The one who died gets the card: who, with what, from how far, and what they had
+    /// left. A death to the arena, which is also a gamemode's own ground damage, does not
+    /// count in the stats but still takes the player out of the round.
     private static void OnPlayerDead(UnturnedPlayer player, EDeathCause cause, ELimb limb, CSteamID murderer) {
         if (Data == null) return;
 
@@ -1360,12 +1293,10 @@ internal abstract class PSManager {
 
         Running?.OnPlayerDied(player.Player, murderer);
         RefreshHud();
-        SendUpdateState();
     }
 
     private static void RecordDeath(UnturnedPlayer player, EDeathCause cause, ELimb limb, CSteamID murderer) {
         StatService.UpdateStatDeaths(player.CSteamID);
-        Logger.Log($"[alive-check] {player.CharacterName} ({player.CSteamID}) died (cause={cause}, limb={limb}) — marked dead this round.");
 
         UnturnedPlayer unturnedInstigator = null;
         if (murderer != CSteamID.Nil && murderer != SteamGameServer.GetSteamID() && murderer != player.CSteamID) {
@@ -1377,8 +1308,6 @@ internal abstract class PSManager {
         }
 
         Card.Show(player.Player.channel.owner, DeathOf(player, cause, limb, unturnedInstigator));
-        RecordKill(player, unturnedInstigator, limb);
-        SendKillEvent(player, unturnedInstigator, cause, limb, murderer);
     }
 
     /// The card for one death. With a killer: who, what they held, whether it was the
@@ -1414,33 +1343,6 @@ internal abstract class PSManager {
             EDeathCause.GRENADE or EDeathCause.LANDMINE or EDeathCause.MISSILE or EDeathCause.CHARGE => "BLOWN UP",
             _ => "DIED"
         };
-    }
-
-    /// Builds the durable kill record for the site from whatever FightTracker buffered,
-    /// separate from RecordKill's ephemeral overlay feed entry.
-    private static void SendKillEvent(UnturnedPlayer victim, UnturnedPlayer killer, EDeathCause cause, ELimb limb, CSteamID murderer) {
-        bool ballistics = Data.Settings.Ballistics;
-
-        RemoteAPI.SendKill(Data.Id, new PSKillEvent {
-            Id = ++KillEventsRecorded,
-            Time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            Map = Data.Settings.Map,
-            Round = RoundsPlayed + 1,
-            Killer = killer?.CSteamID.ToString(),
-            KillerName = killer?.CharacterName,
-            Victim = victim.CSteamID.ToString(),
-            VictimName = victim.CharacterName,
-            Cause = cause.ToString().ToLowerInvariant(),
-            Limb = limb.ToString().ToLowerInvariant(),
-            Weapon = killer?.Player.equipment.itemID ?? 0,
-            KillerPosition = killer != null ? PSVector3.From(killer.Player.transform.position) : null,
-            VictimPosition = PSVector3.From(victim.Player.transform.position),
-            Hits = FightTracker.TakeFight(victim.CSteamID),
-            ReciprocalHits = murderer != CSteamID.Nil
-                ? FightTracker.TakeHitsFrom(murderer, victim.CSteamID)
-                : [],
-            Shots = murderer != CSteamID.Nil && ballistics ? FightTracker.RecentShotsBy(murderer) : []
-        });
     }
 
     private static void OnPlayerRevive(UnturnedPlayer player, Vector3 position, byte angle) {
@@ -1502,76 +1404,14 @@ internal abstract class PSManager {
             if (Scores.AnyUp) Scores.Refresh(Sheet());
         }
 
-        if (now - LastVisibilityCheck >= VisibilityIntervalSeconds) {
-            LastVisibilityCheck = now;
-            VisibilityTracker.Tick(Data.Teams);
-        }
-
-        if (now - LastDebugStateLogged >= DebugStateLogIntervalSeconds) {
-            LastDebugStateLogged = now;
-            LogPlayerStates();
-        }
-
-        if (now - LastUpdateSent < UpdateIntervalSeconds) return;
-
-        SendUpdateState();
     }
 
-    /// Prints exactly what LiveState.RoundState would tell the overlay for every roster
-    /// player, on its own 10s cadence, so alive/dead can be watched from the server console
-    /// alone — no browser, no OBS, no waiting for the next kill/round event to see a change.
-    private static void LogPlayerStates() {
-        foreach (PSTeam team in Data.Teams) {
-            foreach (ulong user in team.Players) {
-                CSteamID steamID = new(user);
-                Player player = PlayerTool.getPlayer(steamID);
+    /// Rounds won per team, for the site's admin page. Sent when a match is taken and
+    /// each time a round or the match is decided; each report replaces the last.
+    private static void SendRounds() {
+        if (Data?.Teams == null) return;
 
-                if (player == null) {
-                    Logger.Log($"[alive-check] {steamID} => offline");
-                    continue;
-                }
-
-                string state = LiveState.RoundState(steamID, player);
-                string name = player.channel.owner.playerID.characterName;
-                Logger.Log($"[alive-check] {name} ({steamID}) => {state} "
-                    + $"(deadThisRound={!StatService.IsAliveThisRound(steamID)}, isDead={player.life.isDead}, isSafe={player.movement.isSafe})");
-            }
-        }
-    }
-
-    /// Appends to the rolling kill feed, keeping only what the overlay draws. The killer
-    /// is null for a death nobody caused, which the overlay renders without an attacker.
-    private static void RecordKill(UnturnedPlayer victim, UnturnedPlayer killer, ELimb limb) {
-        RecentKills.Add(new PSUpdateKill {
-            Id = ++EventsRecorded,
-            Killer = killer?.CharacterName,
-            Victim = victim.CharacterName,
-            Weapon = killer?.Player.equipment.itemID ?? 0,
-            Limb = limb.ToString().ToLowerInvariant()
-        });
-
-        if (RecentKills.Count > FeedLength) RecentKills.RemoveAt(0);
-    }
-
-    /// Records a result for the overlay to announce. The id increases so the overlay can
-    /// tell a new result from the same one being repeated by every later tick.
-    private static void RecordEvent(string kind, string teamName) {
-        LatestEvent = new PSUpdateEvent {
-            Id = ++EventsRecorded,
-            Kind = kind,
-            Team = teamName,
-            Round = RoundsPlayed
-        };
-    }
-
-    private static void SendUpdateState() {
-        if (Data?.Teams == null) {
-            Logger.LogError("SendUpdateState() has no match data to report!");
-            return;
-        }
-
-        LastUpdateSent = Time.realtimeSinceStartup;
-        RemoteAPI.SendState(Data.Id, LiveState.Build(Data, RoundsPlayed, LatestEvent, RecentKills));
+        RemoteAPI.SendRounds(Data.Id, Data.Teams.ToDictionary(team => team.Name, team => Score(team)));
     }
 
     // ---- the bar ------------------------------------------------------------------

@@ -4,11 +4,12 @@
     "joinTimeoutSeconds": 120,
     "gamemodes": [
         {
-            "name": "Competitive",
+            "name": "Arena 1v1",
             "kitsAllowed": ["meta", "sniper"],
             "teams": 2,
             "playersPerTeam": 1,
             "usesElo": true,
+            "menuOrder": 4,
 
             "optionBanningEnabled": true,
             "map": ["Alpha Valley"],
@@ -60,11 +61,12 @@
                 }
             ]
         }, {
-            "name": "Drums",
+            "name": "Arena Drums 1v1",
             "kitsAllowed": ["meta"],
             "teams": 2,
             "playersPerTeam": 1,
-            "usesElo": true,
+            "usesElo": false,
+            "menuOrder": 6,
 
             "optionBanningEnabled": true,
             "map": ["Alpha Valley"],
@@ -87,11 +89,12 @@
                 }
             ]
         }, {
-            "name": "Ranged",
+            "name": "Arena Sniper 1v1",
             "kitsAllowed": ["sniper"],
             "teams": 2,
             "playersPerTeam": 1,
-            "usesElo": true,
+            "usesElo": false,
+            "menuOrder": 5,
 
             "optionBanningEnabled": true,
             "map": ["Alpha Valley"],
@@ -146,6 +149,7 @@
             "teams": 2,
             "playersPerTeam": 2,
             "usesElo": false,
+            "hideFromMM": true,
 
             "optionBanningEnabled": true,
             "map": ["Alpha Valley"],
@@ -202,6 +206,7 @@
             "teams": 4,
             "playersPerTeam": 1,
             "usesElo": false,
+            "hideFromMM": true,
 
             "optionBanningEnabled": false,
             "map": ["Alpha Valley"],
@@ -310,24 +315,25 @@
             ]
         },
         {
-            "name": "Raid",
-            "kitsAllowed": ["meta"],
+            "name": "RAID 1v1",
+            "kitsAllowed": ["meta", "sniper"],
             "teams": 2,
             "playersPerTeam": 1,
-            "usesElo": false,
+            "usesElo": true,
             "optionBanningEnabled": false,
             "map": ["Alpha Valley"],
             "movement": [true, false],
             "ballistics": [true, false],
             "defaultItems": [],
             "powerups": [],
-            "hideFromMM": true
+            "menuOrder": 2
         }, {
-            "name": "Competitive",
+            "name": "Arena 2v2",
             "kitsAllowed": ["meta", "sniper"],
             "teams": 2,
             "playersPerTeam": 2,
             "usesElo": true,
+            "menuOrder": 3,
 
             "optionBanningEnabled": true,
             "map": ["Alpha Valley"],
@@ -378,6 +384,19 @@
                     ]
                 }
             ]
+        }, {
+            "name": "RAID 2v2",
+            "kitsAllowed": ["meta", "sniper"],
+            "teams": 2,
+            "playersPerTeam": 2,
+            "usesElo": true,
+            "menuOrder": 1,
+            "optionBanningEnabled": false,
+            "map": ["Alpha Valley"],
+            "movement": [true, false],
+            "ballistics": [true, false],
+            "defaultItems": [],
+            "powerups": []
         }
     ],
 

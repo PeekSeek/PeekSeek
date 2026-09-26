@@ -6,7 +6,7 @@
     <RootNamespace>PeekSeekLobby</RootNamespace>
     <AssemblyName>PeekSeekLobby</AssemblyName>
     <Product>PeekSeekLobby</Product>
-    <Version>1.13.1</Version>
+    <Version>1.14.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,10 +1,19 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import time
 from typing import Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, String, desc, text
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    ForeignKey,
+    String,
+    desc,
+    func,
+    text,
+)
 from sqlmodel import Field, SQLModel
 
 from src.core.settings import settings
@@ -34,18 +43,8 @@ class AuthorizedServer(SQLModel, table=True):
 
 
 class LobbyPopulation(SQLModel, table=True):
-    """How many players one lobby server currently has standing in its arena.
-
-    The queue is not this number and cannot stand in for it. A lobby holds players
-    back from the queue on purpose to keep its own browser listing worth joining, so
-    a busy arena can honestly report nobody queueing at all — and "0 in queue" is the
-    one thing the Discord counter must never say while six people are fighting.
-
-    One row per server, overwritten in place: this is a current reading, and the only
-    thing that reads it wants to know what is true now. What the arena looked like an
-    hour ago is `ArenaReading`'s job, and it is kept apart precisely so that the
-    counter's question stays a single-row lookup no matter how long the history grows.
-    """
+    """How many players one lobby server has standing in its arena right now. One row
+    per server, overwritten; the history is `ArenaReading`'s."""
 
     __tablename__ = "LobbyPopulations"
 
@@ -122,67 +121,41 @@ class LobbyPopulation(SQLModel, table=True):
                 )
                 region["players"] += row.players
 
-            for result in (
-                db.query(MatchResult)
-                .where(MatchResult.matchId.isnot(None))
-                .order_by(desc(MatchResult.endTime))
-                .limit(200)
+            # The page only mentions a match from the last half hour.
+            recent = datetime.now(timezone.utc) - timedelta(minutes=31)
+            lastEnded = (
+                db.query(MatchResult.region, func.max(MatchResult.endTime))
+                .where(MatchResult.endTime >= recent)
+                .group_by(MatchResult.region)
                 .all()
-            ):
-                region = activity.setdefault(
-                    result.region, {"players": 0, "lastMatchMinutes": None}
-                )
-                if region["lastMatchMinutes"] is not None:
-                    continue
-                # endTime is written as a naive UTC datetime and read back naive on
-                # SQLite and aware on Postgres. A naive one is read as *local* time by
-                # .timestamp(), which on a UTC+2 box aged every match by two hours and
-                # pushed it past the half hour the page is willing to mention.
-                ended = result.endTime
-                if ended.tzinfo is None:
-                    ended = ended.replace(tzinfo=timezone.utc)
-                since = (datetime.now(timezone.utc) - ended).total_seconds()
-                region["lastMatchMinutes"] = max(0, int(since // 60))
+            )
+
+        for regionName, ended in lastEnded:
+            region = activity.setdefault(
+                regionName, {"players": 0, "lastMatchMinutes": None}
+            )
+            # Written naive UTC; SQLite reads it back naive, which .timestamp() would
+            # take for local time.
+            if ended.tzinfo is None:
+                ended = ended.replace(tzinfo=timezone.utc)
+            since = (datetime.now(timezone.utc) - ended).total_seconds()
+            region["lastMatchMinutes"] = max(0, int(since // 60))
         return activity
 
     @staticmethod
     def playingNow() -> int:
-        """Everyone playing PeekSeek anywhere: in a lobby arena, or in a live match.
-
-        The two halves come from opposite directions and that is the point. Lobbies
-        report themselves, because only they know who is standing in them. Match
-        servers are never asked — the site already knows every roster it handed out,
-        so twelve match servers need no code at all to be counted here.
-
-        They partition rather than overlap: a lobby counts only the players who are
-        not on a match, so somebody still in the arena picking their kit is counted
-        once, by the match rather than by the room they happen to be standing in.
-        """
+        """Everyone playing anywhere: lobbies report who stands in them, and every
+        roster the site handed out is on a match. A lobby counts only players not on a
+        match, so nobody is counted twice."""
         from .match import Match
 
         return LobbyPopulation.countFresh() + len(Match.playersInAMatch())
 
 
 class ArenaReading(SQLModel, table=True):
-    """What one lobby's arena looked like at one moment, kept for as long as it is
-    useful to look back at.
-
-    This table exists because the only question that matters — why are there not more
-    matches per day — was unanswerable. Matches are recorded, and nothing else was: how
-    many people walked into the arena, how many of them asked for a match, how long the
-    arena sat empty, and how much of the waiting was this lobby's own hold rather than
-    an absence of opponents. All four are readable from these rows and from nothing else
-    the site stores.
-
-    `held` is the one worth having. A lobby keeps a floor of players back from the queue
-    so its browser listing stays worth joining, which is a trade — matches given up now
-    for players attracted later — and until this column existed there was no number
-    anywhere on either side of it.
-
-    Written only when a reading differs from the one before it, so a quiet arena costs
-    one row rather than one every five seconds, and the gap between two rows is itself
-    how long that state lasted.
-    """
+    """What one lobby's arena looked like at one moment: how many stood in it, how many
+    wanted a match, and how many the lobby held back. Written only when a reading
+    changes, so the gap between two rows is how long a state lasted."""
 
     __tablename__ = "ArenaReadings"
 
@@ -264,18 +237,8 @@ class ArenaReading(SQLModel, table=True):
 
     @staticmethod
     def _announceWakeUp(players: int, region: str | None) -> None:
-        """Tell Discord the arena is live.
-
-        This is the only push the game has for the moment that decides the whole day. An
-        arena that has been empty for hours does not refill on its own — the Unturned
-        browser sorts on player count, so an empty server is invisible and the person who
-        joins it anyway finds nobody, leaves, and takes the next few hours with them. The
-        one lever there is is to tell the people who would come if they knew, while that
-        first player is still standing in it.
-
-        Deliberately not the same thing as the counter channel, which is ambient and only
-        moves twice per ten minutes. This is a message somebody gets notified about.
-        """
+        """Tell Discord a long-empty arena has a player in it, while they are still
+        there to be joined."""
         from src.core import notify
 
         where = settings.region_names.get(region, "the arena")

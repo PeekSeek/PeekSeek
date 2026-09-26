@@ -221,7 +221,7 @@ def test_a_server_that_reports_itself_free_releases_the_match_it_abandoned(
             db.query(data.MatchResult).where(data.MatchResult.matchId == match.id).one()
         )
         assert result.data["unscored"] == "abandoned"
-    assert data.User.getCurrentMatchId(first.steam64) is None
+    assert data.Match.currentFor(first.steam64) is None
 
 
 def test_a_match_nobody_could_host_is_cancelled_once_its_grace_runs_out(
@@ -245,7 +245,7 @@ def test_a_match_nobody_could_host_is_cancelled_once_its_grace_runs_out(
     with opendb() as db:
         stored = db.query(data.Match).where(data.Match.id == match.id).one()
     assert stored.finished is True
-    assert data.User.getCurrentMatchId(first.steam64) is None
+    assert data.Match.currentFor(first.steam64) is None
 
 
 def test_a_stranded_match_is_taken_by_a_server_rather_than_scrapped(
@@ -395,26 +395,28 @@ def test_a_malformed_result_is_rejected_rather_than_silently_dropped(
         assert not db.query(data.Match).where(data.Match.id == match.id).one().finished
 
 
-def test_kills_append_to_the_match_result(gameserver, user_factory):
-    killer, victim = user_factory(), user_factory()
-    match = makeMatch(killer, victim, matchSettings=DECIDED)
+def test_round_wins_replace_the_last_report(gameserver, user_factory):
+    first, second = user_factory(), user_factory()
+    match = makeMatch(first, second, matchSettings=DECIDED)
+    url = f"/server/v1/matches/{match.id}/rounds"
 
-    r = gameserver.post(
-        f"/server/v1/matches/{match.id}/kills",
-        json={"killer": str(killer.steam64), "victim": str(victim.steam64)},
-    )
+    gameserver.post(url, json={"wins": {"a": 1, "b": 0}})
+    r = gameserver.post(url, json={"wins": {"a": 1, "b": 1}})
 
     assert r.status_code == 200
     with opendb() as db:
-        stored = (
-            db.query(data.MatchResult).where(data.MatchResult.matchId == match.id).one()
-        )
-    assert len(stored.data["kills"]) == 1
+        stored = db.query(data.Match).where(data.Match.id == match.id).one()
+    assert stored.roundWins == {"a": 1, "b": 1}
+
+
+def test_round_wins_must_be_counts(gameserver):
+    r = gameserver.post("/server/v1/matches/1/rounds", json={"wins": {"a": "two"}})
+    assert r.status_code == 400
 
 
 def test_a_malformed_body_400s_instead_of_crashing(gameserver):
     r = gameserver.post(
-        "/server/v1/matches/1/kills",
+        "/server/v1/matches/1/rounds",
         content=b"not json",
         headers={"Content-Type": "application/json"},
     )
@@ -830,17 +832,16 @@ def test_deciding_without_a_match_is_a_404(gameserver, user_factory):
     assert r.status_code == 404
 
 
-def test_a_draw_moves_elo_on_performance_alone():
+def test_a_draw_does_not_move_the_ladder():
     """A gamemode that caps its overtime can end level. A draw is neither the win's
-    gain nor the loss's cost: the same kills and deaths move Elo the same whether the
-    player was on the side that would have won or not."""
+    gain nor the loss's cost, and it is the same whether the player was on the side
+    that would have won or not. Kills no longer move the ladder at all."""
     from src.core import matchmaking
 
-    drawn = matchmaking._eloDelta(1000, 1000, 2, 2, won=True, draw=True)
-    assert drawn == matchmaking._eloDelta(1000, 1000, 2, 2, won=False, draw=True)
-    assert drawn == int(3.5 * 2) - int(2.5 * 2)
+    drawn = matchmaking._ladderDelta(1000, 1000, won=True, draw=True)
+    assert drawn == matchmaking._ladderDelta(1000, 1000, won=False, draw=True) == 0
     assert (
-        matchmaking._eloDelta(1000, 1000, 2, 2, won=True)
+        matchmaking._ladderDelta(1000, 1000, won=True)
         > drawn
-        > matchmaking._eloDelta(1000, 1000, 2, 2, won=False)
+        > matchmaking._ladderDelta(1000, 1000, won=False)
     )

@@ -155,12 +155,11 @@ def _counter_name(playing: int, queued: int) -> str:
 def refresh_player_counter() -> None:
     """Rename the counter channel to the live arena population.
 
-    Skipped when the number has not moved, which matters more than it looks:
-    Discord allows two channel renames per ten minutes and answers the third with a
-    429, so spending one on "still 4" is spending the one that would have announced
-    the fifth player arriving.
+    Discord allows two renames per ten minutes, so the channel is renamed only when
+    its current name is wrong, and only by one copy of the site at a time.
     """
     from src.core import models as data
+    from src.core.db import COUNTER_LOCK, exclusively
 
     headers = _headers()
     channel = settings.counter_channel
@@ -168,23 +167,21 @@ def refresh_player_counter() -> None:
         return
 
     name = _counter_name(data.LobbyPopulation.playingNow(), data.UserHB.countAllFresh())
-    if name == refresh_player_counter.last_name:
-        return
-
-    try:
-        response = requests.patch(
-            f"{DISCORD_API}/channels/{channel}",
-            headers=headers,
-            json={"name": name},
-            timeout=DISCORD_TIMEOUT,
-        )
-        response.raise_for_status()
-        refresh_player_counter.last_name = name
-    except requests.RequestException as error:
-        logging.error("Failed to rename counter channel: %s", error)
-
-
-refresh_player_counter.last_name = None
+    url = f"{DISCORD_API}/channels/{channel}"
+    with exclusively(COUNTER_LOCK) as held:
+        if not held:
+            return
+        try:
+            current = requests.get(url, headers=headers, timeout=DISCORD_TIMEOUT)
+            current.raise_for_status()
+            if current.json().get("name") == name:
+                return
+            renamed = requests.patch(
+                url, headers=headers, json={"name": name}, timeout=DISCORD_TIMEOUT
+            )
+            renamed.raise_for_status()
+        except requests.RequestException as error:
+            logging.error("Failed to rename counter channel: %s", error)
 
 
 async def keep_player_counter_current() -> None:

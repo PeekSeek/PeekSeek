@@ -68,100 +68,6 @@ def test_404_renders_error_page(client):
     assert "text/html" in r.headers["content-type"]
 
 
-def test_overlay_requires_id_or_created_by(client):
-    r = client.get("/overlay")
-    assert r.status_code == 302
-    assert r.headers["location"] == "/"
-
-
-def test_overlay_quotes_the_match_id_in_the_script(client):
-    r = client.get("/overlay", params={"id": "5"})
-    assert r.status_code == 200
-    assert 'let matchid = "5"' in r.text
-    assert "let createdby = null" in r.text
-
-
-def test_overlay_quotes_a_steam64_created_by_without_losing_precision(client):
-    """A steam64 is ~17 digits, past Number.MAX_SAFE_INTEGER — interpolated unquoted
-    into the page it becomes a JS number literal that silently rounds, and createdBy
-    never matches the match again. Must stay a string end to end."""
-    steam64 = "76561198012345678"
-    r = client.get("/overlay", params={"createdBy": steam64})
-    assert r.status_code == 200
-    assert f'let createdby = "{steam64}"' in r.text
-
-
-def test_match_overlay_finds_a_premium_users_custom_match_by_created_by(
-    client, login, user_factory
-):
-    """The premium /match/custom flow, end to end: create the match through the real
-    route (not by constructing Match directly), then confirm ?createdBy=<creator> on
-    the public overlay endpoint actually finds it."""
-    owner = user_factory()
-    owner.setPermission("premium", True)
-    login(client, owner)
-
-    created = client.post(
-        "/match/custom",
-        json={
-            "teams": {"one": [str(owner.steam64)], "two": ["76561197960287930"]},
-            "region": "paris",
-            "gamemode": 0,
-            "ballistics": True,
-            "map": "Alpha Valley",
-            "movement": True,
-        },
-    )
-    assert created.status_code == 200
-    matchId = int(created.text)
-
-    r = client.get("/match/overlay", params={"createdBy": owner.steam64})
-    assert r.status_code == 200
-    assert r.json()["id"] == matchId
-
-
-def test_match_overlay_created_by_also_finds_a_premium_users_regular_match(
-    client, user_factory
-):
-    """The personal overlay link is meant to follow whatever match a premium streamer
-    is actually playing — regular matchmaking is how most of their matches happen, not
-    just the ones they spin up through /match/custom."""
-    from src.core.db import open as opendb
-    from src.core import models as data
-
-    player = user_factory()
-    player.setPermission("premium", True)
-    with opendb() as db:
-        match = data.Match(
-            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
-        )
-        db.add(match)
-        db.flush()
-        matchId = match.id
-
-    r = client.get("/match/overlay", params={"createdBy": player.steam64})
-    assert r.status_code == 200
-    assert r.json()["id"] == matchId
-
-
-def test_match_overlay_created_by_requires_premium(client, user_factory):
-    """The personal overlay link is a premium perk — a non-premium participant must
-    not get a working ?createdBy= link just by having played a match."""
-    from src.core.db import open as opendb
-    from src.core import models as data
-
-    player = user_factory()
-    with opendb() as db:
-        match = data.Match(
-            gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
-        )
-        db.add(match)
-        db.flush()
-
-    r = client.get("/match/overlay", params={"createdBy": player.steam64})
-    assert r.status_code == 404
-
-
 def test_profile_page_renders_match_history(client, user_factory):
     from src.core.db import open as opendb
     from src.core import models as data
@@ -175,16 +81,6 @@ def test_profile_page_renders_match_history(client, user_factory):
         db.flush()
         matchId = match.id
 
-    data.MatchResult.appendKill(
-        matchId,
-        {
-            "round": 1,
-            "killerName": "kcvdh",
-            "victimName": "Ferret",
-            "weapon": 363,
-            "limb": "skull",
-        },
-    )
     data.MatchResult.recordFinalResults(
         matchId,
         {
@@ -280,7 +176,7 @@ def test_profile_page_with_no_matches_renders(client, user_factory):
     assert "No matches played yet." in r.text
 
 
-def test_match_detail_page_renders_the_kill_log(client, user_factory):
+def test_match_detail_page_renders_the_result(client, user_factory):
     from src.core.db import open as opendb
     from src.core import models as data
 
@@ -293,16 +189,6 @@ def test_match_detail_page_renders_the_kill_log(client, user_factory):
         db.flush()
         matchId = match.id
 
-    data.MatchResult.appendKill(
-        matchId,
-        {
-            "round": 1,
-            "killerName": "kcvdh",
-            "victimName": "Ferret",
-            "weapon": 363,
-            "limb": "skull",
-        },
-    )
     data.MatchResult.recordFinalResults(
         matchId,
         {str(player.steam64): {"Kills": 1, "Deaths": 0, "Headshots": 1, "Won": True}},
@@ -311,7 +197,7 @@ def test_match_detail_page_renders_the_kill_log(client, user_factory):
     r = client.get(f"/match/{matchId}")
 
     assert r.status_code == 200
-    assert "Ferret" in r.text
+    assert "WIN" in r.text
 
 
 def test_match_detail_page_missing_match_404s(client):

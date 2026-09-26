@@ -9,9 +9,31 @@ build = "develop"
 queue_timeout = 60   # seconds without a heartbeat before a player drops from queue
 host_grace = 20      # seconds past selection a serverless match waits before it is cancelled
 party_timeout = 600  # seconds with nobody looking at a party before it disbands
-max_team_elo_gap = 400   # widest average-Elo gap allowed between the teams in one match
+max_team_elo_gap = 400   # widest average-skill gap allowed between the teams in one match
 rematch_cooldown = 300   # seconds before the same two players can be put against each other again
-match_cooldown = 5       # seconds the site waits after making a match before it makes another, anywhere
+match_cooldown = 1       # seconds the site waits after making a match before it makes another, anywhere
+
+[ranking]
+# Two numbers per player. Skill is the hidden estimate matchmaking balances on: moved by
+# wins and losses only, zero-sum within a match, never touched by a season. The ladder is
+# the Elo players see and grind, and it is pulled towards skill rather than being it.
+#
+# The ladder: a win is worth `win_points` and a loss costs `loss_points`, a draw nothing.
+# Sitting below your skill makes a win worth up to (1 + max_boost) times as much and a
+# loss cost as little as (1 - max_relief) of it, growing smoothly with the gap until it
+# is `converge_scale` wide. At or above skill it is plain +/- points, so the ladder of a
+# player winning half their games stays where it is.
+win_points = 20
+loss_points = 20
+converge_scale = 200
+max_boost = 1.5
+max_relief = 0.75
+# Skill deviation, in Elo points: how unsure the site is of a player's skill. A higher
+# one moves skill further per match, and every match played shrinks it.
+new_deviation = 350    # an account with no standing at all
+seed_deviation = 200   # a standing that predates skill, seeded from its Elo
+min_deviation = 60     # the least unsure a veteran ever gets, so skill can still follow them
+deviation_drift = 15   # added back before every match, the way Glicko-2's volatility is
 
 [ranks]
 # The badge a player's Elo earns them. `elo` is where a tier starts and it runs until
@@ -19,7 +41,7 @@ match_cooldown = 5       # seconds the site waits after making a match before it
 # `icon` names a file in public/ranks, and `role` the Discord role it grants. A tier-1
 # badge shares its base tier's role: the ladder shows Immune 1, Discord shows Immune.
 #
-# The ladder starts at 100 because _eloDelta refuses to take anybody below it, and a
+# The ladder starts at 100 because _ladderDelta refuses to take anybody below it, and a
 # new account is seeded at 300, so Silver is where everyone begins and Bronze is
 # somewhere you fall to rather than somewhere you start.
 tiers = [

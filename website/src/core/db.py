@@ -1,4 +1,6 @@
+import threading
 import traceback
+from contextlib import contextmanager
 
 from sqlalchemy import inspect, text
 from sqlalchemy.pool import StaticPool
@@ -43,6 +45,45 @@ if settings.db_url.startswith("sqlite"):
         cursor = connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+
+# Advisory lock keys. Any numbers work, so long as no two jobs share one.
+MATCHMAKER_LOCK = 0x5045454B
+COUNTER_LOCK = 0x50454B43
+
+_localLocks = {MATCHMAKER_LOCK: threading.Lock(), COUNTER_LOCK: threading.Lock()}
+
+
+@contextmanager
+def exclusively(key: int):
+    """Yields whether this call holds `key` across every copy of the site. Never waits.
+
+    A Postgres advisory lock, released with the transaction. SQLite is only ever the
+    tests, which run in one process, so a thread lock stands in for it there.
+    """
+    assert key in _localLocks, "Unknown lock key."
+    if engine.dialect.name != "postgresql":
+        held = _localLocks[key].acquire(blocking=False)
+        try:
+            yield held
+        finally:
+            if held:
+                _localLocks[key].release()
+        return
+
+    with engine.connect() as connection, connection.begin():
+        yield connection.execute(
+            text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": key}
+        ).scalar()
+
+
+def alongside(db, key: int) -> None:
+    """Hold `key` shared for the rest of this session's transaction, waiting for
+    whoever holds it exclusively. Many can share it; `exclusively` cannot get it
+    while anyone does. A no-op on SQLite, whose tests run in one process."""
+    assert key in _localLocks, "Unknown lock key."
+    if engine.dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock_shared(:key)"), {"key": key})
 
 
 class open:
@@ -114,12 +155,22 @@ def addMissingColumns() -> None:
             connection.execute(text(statement))
 
 
+def addMissingIndexes() -> None:
+    """Create indexes a model has gained since its table was first created, which
+    `create_all` skips for a table that already exists."""
+    for table in SQLModel.metadata.sorted_tables:
+        for index in table.indexes:
+            index.create(bind=engine, checkfirst=True)
+
+
 from . import models  # noqa: F401, E402 — ensures all tables are registered
 from sqlalchemy.orm import configure_mappers
 
 configure_mappers()
 SQLModel.metadata.create_all(engine)
 addMissingColumns()
+addMissingIndexes()
+models.MatchPlayer.backfill()
 
 if settings.bootstrap_admin:
     models.User.bootstrapAdmin(settings.bootstrap_admin)
