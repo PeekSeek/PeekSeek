@@ -1113,18 +1113,23 @@ Everything else in <code>config.toml</code> is the same everywhere.</p>
 </tr>
 <tr>
 <td><code>max_team_elo_gap</code></td>
-<td>200</td>
-<td>Widest average-Elo gap allowed between the two teams</td>
+<td>400</td>
+<td>Widest average-skill gap allowed between the two teams</td>
 </tr>
 <tr>
 <td><code>rematch_cooldown</code></td>
 <td>300</td>
 <td>Seconds before the same two players can be put against each other again</td>
 </tr>
+<tr>
+<td><code>match_cooldown</code></td>
+<td>1</td>
+<td>Seconds after one match is made before the next can be, site-wide</td>
+</tr>
 </tbody>
 </table>
-<p>See <a href="../match-lifecycle/#what-decides-a-roster">the match lifecycle</a> for how the last two
-interact. One repeated pairing rejects a whole roster.</p>
+<p>See <a href="../match-lifecycle/#what-decides-a-roster">the match lifecycle</a> for how the gap and
+the rematch cooldown interact. One repeated pairing rejects a whole roster.</p>
 <hr />
 <h2 id="lobby"><code>[lobby]</code></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[lobby]</span>

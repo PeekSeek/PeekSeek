@@ -990,8 +990,8 @@ is.</p>
 same calls and speaks the same JSON.</p>
 </blockquote>
 <p>That is not aspiration. The website has no import, no branch and no model that reaches
-into Unturned. Matchmaking, Elo, parties, queueing, events, the admin panel, the stream
-overlay and the Discord integration are all game-agnostic already.</p>
+into Unturned. Matchmaking, Elo, parties, queueing, events, the admin panel and the Discord
+integration are all game-agnostic already.</p>
 <p><strong>Your real job is writing one agent for your game that implements the polling loop.</strong>
 Everything below is smaller than that.</p>
 <hr />
@@ -1001,7 +1001,7 @@ Everything below is smaller than that.</p>
 <li>Poll <code>GET /server/v1/session</code> with <code>serverCode</code> and <code>matchId</code>.</li>
 <li>Switch on <code>action</code>: <code>idle</code>, <code>wait</code>, <code>host</code>, <code>abort</code>.</li>
 <li>On <code>host</code>, start a match from the payload: teams, per-player loadouts, settings.</li>
-<li>Stream <code>POST /matches/{id}/kills</code> and <code>POST /matches/{id}/state</code> as things happen.</li>
+<li><code>POST /matches/{id}/rounds</code> each time a round is decided.</li>
 <li><code>POST /matches/{id}/result</code> at the end, <strong>retrying until acknowledged</strong>.</li>
 </ol>
 <p>That is the entire contract. It is HTTP and JSON, so it can be a RocketMod plugin, a
@@ -1151,7 +1151,6 @@ payloads and every template that renders a profile.</p>
 <li>The whole match lifecycle and its retry semantics</li>
 <li>Events, signups, and tournament pairings</li>
 <li>The admin panel</li>
-<li>The stream overlay</li>
 <li>Discord integration</li>
 <li>Sessions, permissions, bans, and the IP allow-list</li>
 </ul>

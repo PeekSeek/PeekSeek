@@ -573,6 +573,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#how-a-result-is-rated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a result is rated
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#states" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -883,6 +894,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#how-a-result-is-rated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a result is rated
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#states" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1028,14 +1050,9 @@ indefinitely, which matters because it is the only call that scores anything.</p
 </thead>
 <tbody>
 <tr>
-<td><code>POST /matches/{id}/state</code></td>
+<td><code>POST /matches/{id}/rounds</code></td>
 <td>No</td>
-<td>Overlay snapshot. Each replaces the last, so a dropped one costs nothing.</td>
-</tr>
-<tr>
-<td><code>POST /matches/{id}/kills</code></td>
-<td>No</td>
-<td>One kill as it happens. Batching to the end loses the log with the server.</td>
+<td>Rounds won per team. Each replaces the last, so a dropped one costs nothing.</td>
 </tr>
 <tr>
 <td><code>POST /matches/{id}/result</code></td>
@@ -1057,6 +1074,21 @@ is what used to make walking out of a losing match free.</p>
 when nobody turned up, and it is not the same as a real result that happened to be
 goalless.</p>
 </div>
+<h2 id="how-a-result-is-rated">How a result is rated</h2>
+<p>A ranked result moves two numbers for every player on the roster.</p>
+<ul>
+<li><strong>Skill</strong> is hidden, and it is what teams are balanced on. A team's rating is its
+  players' mean, the expected score is logistic, and each player moves by a Glicko-2 step
+  that is bigger the less certain their skill still is. Only the win, loss or draw
+  counts, never kills. What one side gains the other loses, and seasons never touch it.</li>
+<li><strong>Elo</strong> is the ladder: the number on the profile, the badge and the Discord role. A win
+  is worth <code>win_points</code> and a loss costs <code>loss_points</code>. While the ladder sits below skill
+  a win is worth more and a loss costs less, which is how a season's soft reset is won
+  back; at or above skill it is the plain points, so a player winning half their games
+  stays put. A draw is worth nothing, and nobody goes below 100.</li>
+</ul>
+<p><code>Elo Change</code> in the result summary is the ladder's move. The tunables are under
+<code>[ranking]</code> in <a href="../configuration/"><code>config.toml</code></a>.</p>
 <hr />
 <h2 id="states">States</h2>
 <p>Derived from the match row rather than stored, so each fact lives in one place.</p>
@@ -1094,13 +1126,13 @@ started".</p>
 <p>Two rules. Failing them is a real outcome: those players stay in the queue rather than
 being handed a bad match.</p>
 <ul>
-<li>Teams must be within <strong><code>max_team_elo_gap</code></strong> average Elo of each other.</li>
+<li>Teams must be within <strong><code>max_team_elo_gap</code></strong> average skill of each other.</li>
 <li>Two players are not put against each other again within <strong><code>rematch_cooldown</code></strong>.</li>
 </ul>
 <p>One repeated pairing rejects the whole roster, so <code>(a+b vs c+d)</code> blocks <code>(a+b vs c+e)</code>.
 Swapping one team-mate still leaves <code>a</code> and <code>b</code> facing <code>c</code> a second time.</p>
 <p>Parties are never split across teams. Within those constraints, the longest-waiting
-players are matched first and teams are balanced on Elo. Every number here is in
+players are matched first and teams are balanced on skill. Every number here is in
 <code>[matchmaking]</code> in <a href="../configuration/"><code>config.toml</code></a>.</p>
 <hr />
 <h2 id="next">Next</h2>
