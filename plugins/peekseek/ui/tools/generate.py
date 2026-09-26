@@ -13,9 +13,9 @@ in Sprites/ are kept.
 
 Two screens, two design languages, on purpose. The boards are something you click, so
 they are built like a page of the site: the same panel, the same selectable tile, the
-same px. The match HUD is composited over play like the stream overlay, so it is built
-like that: one flat fill, greyscale, red only for jeopardy. Sizes are the site's px and
-the overlay's vw at 1920, which is what the game draws at UI scale 1.
+same px. The match HUD is composited over play, so it is built for that: one flat fill,
+greyscale, red only for jeopardy. Sizes are the site's px and the old stream overlay's vw
+at 1920, which is what the game draws at UI scale 1.
 
 The font is Selawik, because the site asks for the system UI font, Segoe UI on Windows,
 and Selawik is Microsoft's open stand-in for it; the game leaves a font that is not
@@ -59,7 +59,7 @@ PANEL_RADIUS = 8        # .mainElement border-radius
 PANEL_PAD = 20          # .mainElement padding
 GAP = 10                # the gap inside chips and between tiles
 
-# ---- the overlay, for the HUD (website/public/assets/css/overlay.css at 1920) --------
+# ---- the HUD, in the retired stream overlay's values at 1920 ------------------------
 FLAT = "#0f0f0f"        # .flat
 INK = "#f2f2f2"
 MUTED = "#8a8a8a"

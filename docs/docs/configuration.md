@@ -63,11 +63,12 @@ Every number that decides whether a roster becomes a match.
 | `queue_timeout` | 60 | Seconds without a heartbeat before a player drops from the queue |
 | `host_grace` | 20 | Seconds past selection a serverless match waits before it is cancelled |
 | `party_timeout` | 600 | Seconds with nobody looking at a party before it disbands |
-| `max_team_elo_gap` | 200 | Widest average-Elo gap allowed between the two teams |
+| `max_team_elo_gap` | 400 | Widest average-skill gap allowed between the two teams |
 | `rematch_cooldown` | 300 | Seconds before the same two players can be put against each other again |
+| `match_cooldown` | 1 | Seconds after one match is made before the next can be, site-wide |
 
-See [the match lifecycle](match-lifecycle.md#what-decides-a-roster) for how the last two
-interact. One repeated pairing rejects a whole roster.
+See [the match lifecycle](match-lifecycle.md#what-decides-a-roster) for how the gap and
+the rematch cooldown interact. One repeated pairing rejects a whole roster.
 
 ---
 
