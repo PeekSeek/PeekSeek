@@ -176,9 +176,8 @@ class Match(SQLModel, table=True):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-    # The four states a match can be in. They are derived from `finished`, `claimed`
-    # and `meta["hostedAt"]` rather than stored — a fourth place to write the same fact
-    # is a fourth place for it to disagree. ClassVar keeps SQLModel from reading them
+    # The four states a match can be in, derived from `finished`, `claimed` and
+    # `meta["hostedAt"]` rather than stored. ClassVar keeps SQLModel from reading them
     # as columns.
     PENDING: ClassVar[str] = "pending"  # exists, no game server holds it
     PICKING: ClassVar[str] = "picking"  # a server holds it while its players choose
@@ -209,13 +208,8 @@ class Match(SQLModel, table=True):
         return self.time + mmconfig["selectKitsTime"]
 
     def readyToHost(self) -> bool:
-        """Whether everything the game server needs to run this match has been decided.
-
-        Deliberately not "is a server available" — that is the caller's business. This
-        answers only "is there anything left to wait for", which is every map/ballistics/
-        movement pick made, and either every player locked in or the selection window
-        run out.
-        """
+        """Whether every map, ballistics and movement pick is made, and every player
+        has locked in or the selection window has run out."""
         return (
             not self.finished
             and self.meta["ballistics"] is not None
@@ -238,9 +232,7 @@ class Match(SQLModel, table=True):
         ]
 
     def allKitsLocked(self) -> bool:
-        """True once every player has made every pick the gamemode asks for them to
-        make, so the match can start the moment picking is actually done rather than
-        always waiting out the full selection timer."""
+        """True once every player has made every pick the gamemode asks of them."""
         gm = mmconfig["gamemodes"][self.gamemode]
         needsKit = len(gm["kitsAllowed"]) > 1
         needsPowerup = len(gm["powerups"]) > 1
@@ -251,17 +243,9 @@ class Match(SQLModel, table=True):
         )
 
     def assignTo(self, serverCode: str) -> "Match | None":
-        """Hand this match to a game server, if it is still going spare. From here on
-        that server is the only one that can host it, and the only one whose result
-        report will be believed.
-
-        The update *is* the claim, which is why `claimed IS NULL` is in the WHERE and
-        the row count is checked: two free servers in one region both find the same
-        pending match, and this is what tells the second one it lost. Written
-        unconditionally, both wrote their own code over the other's and both went on to
-        host the same match — the pending-match twin of the queue race `UserHB.claim`
-        already closes. None means somebody else got there first.
-        """
+        """Hand this match to a game server if nobody holds it yet, or None if another
+        server got there first. The conditional update is the claim, so two servers that
+        find the same pending match cannot both take it."""
         from src.core.db import open
 
         with open() as db:
@@ -278,12 +262,8 @@ class Match(SQLModel, table=True):
         return self
 
     def markHosting(self) -> None:
-        """Record that the server has now been handed the match and is running it.
-
-        This is what makes the session poll idempotent: a server that asks again gets
-        told to carry on rather than being handed the same match a second time, which
-        would restart the round and kick everyone already playing.
-        """
+        """Record that the server has been handed the match, so asking again is told
+        to carry on instead of being handed it twice."""
         from src.core.db import open
 
         self.meta = self.meta | {"hostedAt": time()}
@@ -291,21 +271,9 @@ class Match(SQLModel, table=True):
             db.query(Match).where(Match.id == self.id).update({"meta": self.meta})
 
     def _tellPlayersToJoin(self) -> None:
-        """DM everyone on the match a button that launches the game.
-
-        More than a quarter of all matches ever made were never played: matchmaking
-        worked, a server was assigned, and nobody turned up. The existing DM goes out
-        when the match is *created*, which is minutes earlier and before there is
-        anywhere to go, so by the time there is, the only thing that told them has
-        scrolled away.
-
-        This one fires at the moment there is something to join, which is the moment a
-        server takes the match, and carries the button that joins it, so the whole
-        path from "your match is ready" to being in the server is one press.
-
-        Failures are swallowed on purpose. This runs inside the session poll that hands
-        a server its match, and a Discord outage must not stop a match being played.
-        """
+        """DM everyone on the match a button that launches the game, the moment there
+        is a server to join. Failures are logged, not raised: this runs inside a game
+        server's poll, and a Discord outage must not stop a match."""
         import logging
 
         from src.core.db import open
@@ -345,11 +313,7 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def pendingFor(region: str) -> "Match | None":
-        """The oldest match in this region that nobody is hosting yet.
-
-        Oldest first, not newest: a match that has been waiting is the one closest to
-        having its players give up on it, so it gets the next free server.
-        """
+        """The oldest match in this region that nobody is hosting yet."""
         from src.core.db import open
 
         with open() as db:
@@ -366,24 +330,9 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def undeliveredFor(serverCode: str) -> "Match | None":
-        """A match this server holds but has never been told to host.
-
-        Matchmaking runs inside the poll that asks for work, so the match exists before
-        the answer describing it does. Lose that answer — the poll timed out on a slow
-        Steam or Discord call, the server restarted — and the server comes back asking
-        as a free server while already holding a match it has never heard of. Left
-        alone, the next poll abandoned that match and built a second one for the same
-        players, and the poll after that a third: one pairing, a new match and a new
-        "Match started" post every few seconds.
-
-        Handing the same match back instead is what makes the poll idempotent for a
-        match that has been created but not yet delivered, the way `markHosting` already
-        makes it idempotent for one that has.
-
-        Only ever a match that was never hosted. One this server was actually running
-        and has now gone quiet about is abandoned rather than handed back, which is the
-        line `releaseAbandoned` draws from the other side.
-        """
+        """A match this server holds but was never told to host, because the answer
+        that described it was lost. Handed back instead of building a second match for
+        the same players."""
         if not serverCode or serverCode == "0":
             return None
 
@@ -430,21 +379,12 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def releaseAbandoned(serverCode: str) -> None:
-        """A server reporting itself free has no match — so if it still holds one that
-        never finished, that match's only "I'm done" signal never arrived. Nothing else
-        revisits a match a server is holding, so left alone its players stay stuck in it
-        forever.
+        """Record as abandoned every match a server that says it is free still holds.
 
-        A server with a result to report keeps naming the match in its polls until the
-        report is acknowledged, so reaching here means the server genuinely has nothing
-        left to say about it. The match is recorded as abandoned rather than merely
-        closed: nobody's Elo moves, because no winner was ever reported, but the match
-        stops being invisible.
-
-        A match this server was never told to host is the one exception, and it is
-        given its selection window plus the host grace before being written off. That
-        is a match the site created and then failed to deliver, not one a server
-        dropped, and `undeliveredFor` is about to hand it straight back.
+        A server keeps naming a match until its result is acknowledged, so a free server
+        has nothing left to report. Nobody's Elo moves. A match it was never told to host
+        gets its selection window and the host grace first, since `undeliveredFor` is
+        about to hand it back.
         """
         if not serverCode or serverCode == "0":
             return
@@ -459,10 +399,6 @@ class Match(SQLModel, table=True):
                 .where(Match.finished.is_(False), Match.claimed == serverCode)
                 .all()
             ):
-                # Never handed over, so there is nothing here to have been abandoned:
-                # the answer that would have told this server about it was lost.
-                # `undeliveredFor` gives it back on this same poll instead, and only
-                # once that window has run out is it written off like any other.
                 deadline = match.selectionEndsAt() + settings.host_grace
                 if not match.meta.get("hostedAt") and time() < deadline:
                     continue
@@ -480,16 +416,9 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def cancelStranded() -> None:
-        """Cancel every match that has run out of ways to ever be played.
-
-        Matchmaking only makes a match for a server that has just said it is free, so
-        the only matches that reach here are ones created without one — a custom match,
-        an event pairing — that no server picked up. Once selection has closed on such a
-        match, `hostGrace` more seconds is all it gets: game servers poll every few
-        seconds, so a match that has gone that long without one has none coming.
-
-        Left alone, such a match would keep its players out of matchmaking forever.
-        """
+        """Cancel every custom or event match no server took within its selection
+        window and the host grace. Left alone it would keep its players out of
+        matchmaking forever."""
         from src.core.db import open
         from src.core.webhook import Webhook
 
@@ -514,13 +443,8 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def resolveExpiredPicks() -> None:
-        """Auto-decide every stalled map/ballistics/movement pick that is past its
-        deadline, across every unfinished match.
-
-        Enforced here, from the game servers' own polling, rather than only when a
-        player's match page happens to ask: a match whose players all closed the tab
-        used to sit on an undecided pick forever, never becoming hostable, never being
-        cancelled, and never letting its players queue for anything else.
+        """Auto-decide every map, ballistics or movement pick past its deadline, from
+        the game servers' polls, so a match nobody is watching still becomes hostable.
         """
         from src.core.db import open
 
@@ -586,19 +510,15 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def _nextPickDeadline(m: dict) -> float | None:
-        """A fresh pickTimeout if anything's still undecided, else None — each of
-        ballistics/map/movement gets its own full window rather than sharing the match's
-        original deadline, so a slow first pick doesn't starve the next one."""
+        """A fresh pickTimeout while anything is undecided, so each pick gets a full
+        window of its own. None once everything is decided."""
         if any(m[o] is None for o in ["ballistics", "map", "movement"]):
             return time() + mmconfig["pickTimeout"]
         return None
 
     def resolvedMetaIfExpired(self) -> dict | None:
-        """Auto-decide the current ballistics/map/movement pick once its deadline passes,
-        so a player can't stall the match indefinitely by never clicking. Falls back to
-        the gamemode's first configured option — the same "index 0" convention
-        kits/powerups already use when nobody picks. Returns None when there's nothing to
-        resolve, so callers only write to the DB when something actually changed."""
+        """The current pick decided as the gamemode's first option once its deadline
+        passes, or None when there is nothing to decide."""
         deadline = self.meta.get("pickDeadline")
         if deadline is None or time() < deadline:
             return None
@@ -619,16 +539,9 @@ class Match(SQLModel, table=True):
         return m
 
     def collapsedMetaIfNobodyIsPicking(self) -> dict | None:
-        """Every outstanding ballistics/map/movement pick decided at once, or None when
-        there is nothing left to decide.
-
-        The pick phase is only worth waiting on while somebody is at a browser to use
-        it. Once every player has locked their kit and powerup from in-game, nobody is,
-        and what is left of the phase is three `pickTimeout` windows of dead time
-        between a match being ready and anyone being teleported into it. Falls back to
-        the same "index 0" option `resolvedMetaIfExpired` uses, so a collapsed pick and
-        an expired one produce the same match.
-        """
+        """Every outstanding pick decided at once as the gamemode's first option, or
+        None when there is nothing left. Used once everyone has locked in from in game,
+        since nobody is at a browser to make the rest."""
         notPicked = [
             o for o in ["ballistics", "map", "movement"] if self.meta[o] is None
         ]
@@ -663,10 +576,8 @@ class Match(SQLModel, table=True):
         }
 
     def connectCode(self) -> str | None:
-        """What a player types into Unturned to join this match, once there is anything
-        to join: from the moment a server holds it, since the picks are made on that
-        server as well as here. Null before that, and null for the "0" sentinel a
-        server too old to report its own code holds it with."""
+        """What a player types into Unturned to join this match: the holding server's
+        code from the moment it holds the match, else None."""
         if self.status not in (Match.PICKING, Match.LIVE) or self.claimed in (
             None,
             "0",

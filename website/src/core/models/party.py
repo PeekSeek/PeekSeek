@@ -141,24 +141,9 @@ class UserHB(SQLModel, table=True):
 
     @staticmethod
     def claim(steam64s) -> bool:
-        """Take these players out of the queue, and say whether this call is the one
-        that got them.
-
-        This is the lock that stops two game servers building a match out of the same
-        people. Both scan the queue, both like the same roster, and both end up here,
-        but each delete runs in a transaction of its own, so the second one waits for
-        the first to commit and then finds nothing left to remove. Being told False
-        means somebody else got there first, and the caller must not create anything.
-
-        All of them or none. A partial claim would take players out of a queue they
-        are still waiting in, having handed the rest of their roster to another
-        server, so anything short of the full set is rolled back and they stay queued.
-
-        Leaving the queue is also what makes them unavailable everywhere else, which is
-        why it happens before the match is built rather than alongside it: building one
-        means Steam lookups and Discord messages, and for that whole second these
-        players would still be sitting in the queue for the next server to find.
-        """
+        """Take all of these players out of the queue, or none of them, and say
+        whether this call got them. Done before the match is built, so nobody else can
+        find them queued while it is."""
         from src.core.db import open
 
         steam64s = [int(s) for s in steam64s]

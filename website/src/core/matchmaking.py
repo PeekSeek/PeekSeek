@@ -29,22 +29,11 @@ mmconfig = settings.mmconfig
 
 
 def matchForServer(region: str, serverCode: str) -> "data.Match | None":
-    """Find this free server the best match it can host right now, and give it to it.
-
-    Tried in order:
-
-    1. A match that already exists and has nobody to host it — a custom match, or an
-       event pairing. Those are made by players rather than by matchmaking, so they are
-       the ones actually waiting on a server.
-    2. A fresh match built out of the queue, created already assigned to this server.
-
-    Returns the match this server is now holding, or None when there is nothing to do.
-    """
+    """Give this free server a match: a custom or event match waiting for a server
+    first, else a new one built from the queue. None when there is nothing to do."""
     waiting = data.Match.pendingFor(region)
     if waiting:
-        # None when another server claimed it between the read and the write. Falling
-        # through rather than returning it is the point: this server is still free, and
-        # the queue may well have a match in it for them.
+        # None when another server took it first; this one is still free for the queue.
         taken = waiting.assignTo(serverCode)
         if taken:
             return taken
@@ -55,10 +44,10 @@ def matchForServer(region: str, serverCode: str) -> "data.Match | None":
 def _asTheMatchmaker(makeMatch):
     """Run makeMatch as the only matchmaker across every copy of the site, or not at all.
 
-    Two polls scanning the queue at once would both find the same players free and
-    build the same match twice. The lock is let go only once the match is written, and
-    nobody makes another until `match_cooldown` after the newest one, so the next scan
-    always sees who the last one took. A poll that loses is told to idle.
+    Two polls scanning the queue at once would build the same match twice. The lock is
+    let go only once the match is written, so the next scan sees who it took, and queue
+    writes hold it shared, so nobody is queued while a match is being written. A poll
+    that loses is told to idle.
     """
     with exclusively(MATCHMAKER_LOCK) as held:
         if not held or _madeOneRecently():
@@ -73,17 +62,9 @@ def _madeOneRecently() -> bool:
 
 
 def _matchFromQueue(region: str, serverCode: str) -> "data.Match | None":
-    """The first gamemode in this region with a full complement of queued players, made
-    into a match and handed to the calling server.
-
-    One match per call on purpose: one server can only host one match, and a second
-    match made in the same breath would have no server of its own to go to.
-
-    Anyone already on an unfinished match is dropped before the scan starts rather than
-    checked once a roster has been built. A player can be in both places at once: lobby
-    servers re-queue everyone standing in them on a timer, and a player matched a moment
-    ago is still standing there. The queue on its own is not a list of who is free.
-    """
+    """One match from the first gamemode in this region the queue can fill, handed to
+    the calling server. Players already on a match are dropped first, since a lobby
+    keeps re-queueing whoever stands in it."""
     inAMatch = data.Match.playersInAMatch()
     with open() as db:
         queued = [

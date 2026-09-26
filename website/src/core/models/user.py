@@ -150,21 +150,9 @@ class User(SQLModel, table=True):
 
     @staticmethod
     def ensure(db, steam64) -> None:
-        """A Users row for this steam64, created if the site has never seen them.
-
-        Game servers report players the website has no account for — most people
-        standing in a warm-up lobby have never opened it — and everything hung off
-        Users by foreign key is refused outright by Postgres until the row exists.
-        Stat.append has always done this for match results; the queue did not, so
-        every one of those players 500'd the moment the lobby tried to queue them.
-
-        The account is created with their Steam name and avatar already on it. That
-        has to happen here, before the insert, because steam._persist_steam_data
-        writes with an UPDATE: a lookup made while there is no row to update stores
-        nothing and reports nothing wrong. That is how a player who joined a game
-        server got an account with no name, and then showed up as "Nameless"
-        everywhere the site drew them.
-        """
+        """A Users row for this steam64, created if the site has never seen them, since
+        most players in a lobby have never opened the site. The Steam profile is looked
+        up first, because storing it later is an UPDATE that needs the row."""
         if db.query(User).where(User.steam64 == steam64).first():
             return
 
@@ -185,12 +173,7 @@ class User(SQLModel, table=True):
     @staticmethod
     def _steamProfile(steam64) -> dict | None:
         """This player's name and avatar from Steam, or None if Steam would not say.
-
-        None rather than a placeholder on purpose: storing "Nameless" would make the
-        fallback permanent, since every later read finds stored data and stops asking.
-        Leaving it empty means the next lookup fills it in — and by then there is a
-        row for it to fill.
-        """
+        Never a placeholder, which would be stored and never asked about again."""
         from src.core import steam
 
         try:
