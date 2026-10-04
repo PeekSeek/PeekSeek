@@ -143,9 +143,12 @@ def signup(steam64: ApiSteam64, values: RequestValues):
 def event(request: Request, event: str, user: CurrentUser, join: str | None = None):
     signup = None
     ownsTeam = False
-    # ?join=<server code> launches Unturned on arrival, so an event announcement can
-    # point at one link that both explains the event and puts people on the server.
-    # A code that is not one is ignored rather than refused: the page is the point.
+    # ?join=<server code> adds a launch button to the page. It used to fire the launch
+    # on arrival, which Unturned's own in-game banners will not carry: SDG asks that a
+    # banner link lead somewhere informative and never auto-join a server, so the brief
+    # loads first and the player presses the button. A code that is not one is ignored
+    # rather than refused, and an event link with no ?join= at all is the normal case:
+    # the page is the event brief and the button is an extra.
     launch = connectUrl(join) if join else None
 
     with opendb() as db:
@@ -175,6 +178,11 @@ def event(request: Request, event: str, user: CurrentUser, join: str | None = No
                         signup = _s
                         break
 
+        # Only worth asking when there is a button for it to sit beside, and only
+        # worth showing when somebody is actually queued: "1 player queued" argues
+        # against joining rather than for it.
+        queued = data.UserHB.countFreshForEvent(ev.id) if launch else 0
+
         users = None
         if signup:
             # A roster draws the same card as the podium does, so it needs the same two
@@ -203,6 +211,8 @@ def event(request: Request, event: str, user: CurrentUser, join: str | None = No
                 "rendermd": MarkdownIt().render,
                 "users": users,
                 "launch": launch,
+                "serverCode": join if launch else None,
+                "queued": queued,
             },
         )
 

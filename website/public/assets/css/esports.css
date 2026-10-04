@@ -75,6 +75,32 @@
     align-items: flex-start;
 }
 
+/* ---- Join: the panel ?join= adds ---------------------------------------- */
+
+/* The launch is a link, not a button, because nothing happens until it is followed,
+   so it needs the button's look without the underline a link brings. */
+.joinPanel {
+    gap: 10px;
+}
+
+.joinActions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.joinActions a {
+    text-decoration: none;
+}
+
+/* The one number on the page that is true only while you are looking at it, so it gets
+   the queue's own accent rather than the brand red, which on this site means jeopardy. */
+.queueCount b {
+    color: #47bbe9;
+}
+
 /* ---- Sign-up: the team name / join code pairs ---------------------------- */
 
 .signupPanel {
