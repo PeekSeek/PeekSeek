@@ -1,0 +1,96 @@
+/* PeekSeek's palette over Starlight's own tokens, so the docs read as part of the site
+   rather than as a stock theme. Only the palette, the font stack and the panel darkness
+   levels are overridden; layout, search and nav are left to Starlight, which is the
+   whole reason for using it.
+
+       #0a0a0a  the page, and the site's base panel
+       #121212  every raised surface: header, sidebar, code, table heads, asides
+       #ffffff  all text, dimmed with a hex alpha suffix where it should sit back
+       #ff0000  brand red, the accent and nothing else
+
+   Links are the site's info blue (#47bbe9, lifting to #aae0ff on hover) rather than the
+   accent: these pages are dense with them, and red reads as jeopardy everywhere else in
+   the project.
+
+   Nothing outside those four is introduced. Where Starlight needs an intermediate
+   value it is an alpha variant of white or red (#fff8, #f004), which is also how the
+   site expresses opacity: a hex alpha suffix on the base colour, never rgba(). */
+
+:root {
+  --sl-font: ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Starlight's gray ramp runs light to dark and drives muted text, borders and
+     raised fills. Mapped onto white-with-alpha so every grey here is the page
+     showing through white, not a new colour. */
+  --sl-color-white: #fff;
+  --sl-color-gray-1: #fff;
+  --sl-color-gray-2: #fffd;
+  --sl-color-gray-3: #fff8;
+  --sl-color-gray-4: #fff4;
+  --sl-color-gray-5: #fff2;
+  --sl-color-gray-6: #121212;
+  --sl-color-black: #0a0a0a;
+
+  /* accent-low is a large fill behind white text and accent-high is a link hover.
+     Pure #f00 is too loud for the first, and the second is a link state, so it takes
+     the lighter blue. */
+  --sl-color-accent-low: #f003;
+  --sl-color-accent: #f00;
+  --sl-color-accent-high: #aae0ff;
+
+  --sl-color-text: #fff;
+  --sl-color-text-accent: #47bbe9;
+  --sl-color-text-invert: #0a0a0a;
+
+  --sl-color-bg: #0a0a0a;
+  --sl-color-bg-nav: #121212;
+  --sl-color-bg-sidebar: #121212;
+  --sl-color-bg-inline-code: #121212;
+  --sl-color-bg-accent: #f00;
+
+  --sl-color-hairline: #fff2;
+  --sl-color-hairline-light: #fff4;
+  --sl-color-hairline-shade: #121212;
+}
+
+/* The site is dark-only, and a light docs theme would be the one surface in the whole
+   project that is not. Both schemes resolve to the palette above, and the theme select
+   is hidden rather than left offering a choice that changes nothing. */
+:root[data-theme="light"] {
+  color-scheme: dark;
+}
+
+starlight-theme-select {
+  display: none;
+}
+
+/* The docs lean on tables heavily (every config knob is a table row), and Starlight
+   leaves them unfilled. A #121212 head gives each one a readable top edge. */
+.sl-markdown-content th {
+  background: #121212;
+}
+
+/* The site's "dim until relevant" treatment: sidebar entries sit back and come up to
+   full white on hover or when current, the same as the app's own sidebar. */
+.sidebar-content a {
+  color: #fff8;
+}
+
+.sidebar-content a:hover,
+.sidebar-content a[aria-current="page"] {
+  color: #fff;
+}
+
+.sidebar-content a[aria-current="page"] {
+  background: #fff2;
+}
+
+/* The social icons inherit the link colour, and a blue GitHub mark beside a white
+   wordmark reads as a mistake. They are chrome, not links to follow mid-sentence. */
+.social-icons a {
+  color: #fff;
+}
+
+.social-icons a:hover {
+  color: #fff8;
+}

@@ -1,0 +1,23 @@
+# The build context is the repository root (see website/Dockerfile), and the COPY lines
+# there take website/src, website/public and docs/ wholesale, so exclusions belong here.
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.benchmarks/
+.venv/
+website/src/tests/
+website/.env
+website/test.db
+
+# Reinstalled in the docs build stage from the lockfile; the host copy may be built for
+# another platform and is large enough to dominate the context upload.
+docs/node_modules/
+docs/dist/
+docs/.astro/
+
+# Not part of the image at all.
+bot/
+plugins/
+sound-design/
+.git/

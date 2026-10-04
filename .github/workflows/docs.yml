@@ -3,42 +3,39 @@ name: docs
 on:
   push:
     branches: [main]
-    paths: ["docs/**", ".github/workflows/docs.yml"]
+    paths: ["docs/**", "website/API.md", ".github/workflows/docs.yml"]
   pull_request:
     branches: [main]
-    paths: ["docs/**", ".github/workflows/docs.yml"]
+    paths: ["docs/**", "website/API.md", ".github/workflows/docs.yml"]
   workflow_dispatch: # path filters mean a shared change may not trigger this on its own
-
-permissions:
-  contents: write
-
-defaults:
-  run:
-    working-directory: docs
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt
-      # --strict fails the build on a broken internal link, which is the only docs
-      # error worth blocking a merge for.
-      - run: mkdocs build --strict
 
-  deploy:
-    needs: build
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # gh-deploy writes a branch, so it needs the history
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r requirements.txt
-      - run: mkdocs gh-deploy --force
+      # The site renders its API reference from the app's own OpenAPI schema, so the
+      # docs build needs the website's dependencies to generate it.
+      - run: pip install -r website/requirements.txt
+      - run: npm ci
+        working-directory: docs
+      - run: npm run schema
+        working-directory: docs
+        env:
+          DB: sqlite:// # Settings requires it; nothing connects.
+
+      # starlight-links-validator fails the build on a broken internal link, which is
+      # the only docs error worth blocking a merge for. This is a check, not a deploy:
+      # the built site ships inside the website image (see website/Dockerfile) and goes
+      # out with the next deploy of the site, not from here.
+      - run: npm run build
+        working-directory: docs

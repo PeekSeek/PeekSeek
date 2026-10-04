@@ -18,6 +18,20 @@ class Settings:
     def __init__(self, root: Path | None = None):
         self.root = root or Path(__file__).resolve().parent.parent
         self.public = self.root.parent / "public"
+        # The built documentation site, served at /docs. The image has it beside
+        # public/; a checkout has it where the docs project builds it. Neither is
+        # present until something builds it, and the app still has to start.
+        self.docs = next(
+            (
+                path
+                for path in (
+                    self.root.parent / "docs",
+                    self.root.parent.parent / "docs" / "dist",
+                )
+                if path.is_dir()
+            ),
+            None,
+        )
         toml = tomllib.loads((self.root / "config.toml").read_text("utf-8"))
 
         # One image serves every environment, so the deploy picks the hostname.
