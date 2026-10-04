@@ -1,6 +1,6 @@
 # PeekSeek Match
 
-[![peekseek-plugin](https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml/badge.svg)](https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml)
+[![peekseek-match](https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-match.yml/badge.svg)](https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-match.yml)
 
 The RocketMod plugin that makes an Unturned server a PeekSeek match server. It holds
 the session with the site, takes the match the site hands it, puts the roster in its
@@ -151,16 +151,16 @@ JIT resolves a method's full type references before running any of it.
 
 ## Continuous integration
 
-[../../.github/workflows/peekseek-plugin.yml](../../.github/workflows/peekseek-plugin.yml)
+[../../.github/workflows/peekseek-match.yml](../../.github/workflows/peekseek-match.yml)
 lints (`dotnet format --verify-no-changes`), tests, and on `main` with a bumped
 `<Version>` tags `peekseek-v<version>` and attaches the built DLL. ARENA's and RAID's
-workflows also run on a change under `plugins/peekseek/plugin/`, since they compile
+workflows also run on a change under `plugins/peekseek-match/plugin/`, since they compile
 against it.
 
 ## Layout
 
 ```
-plugins/peekseek/
+plugins/peekseek-match/
 ├── PeekSeek.sln
 ├── plugin/
 │   ├── PeekSeek.cs                  # Rocket hook, and every line of copy

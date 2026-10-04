@@ -143,7 +143,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public float RangeSpreadDegrees;
 
     /// The kill feed at the top right, from the PeekSeek Kill Feed workshop item
-    /// (`plugins/peekseek/ui`), which the server has to list in
+    /// (`plugins/peekseek-match/ui`), which the server has to list in
     /// WorkshopDownloadConfig.json. Left empty, there is no feed; the chat lines stay
     /// either way. The key is any small number no other plugin here uses.
     public string KillFeedEffectGUID;

@@ -1,12 +1,12 @@
-name: peekseek-plugin
+name: peekseek-match
 
 on:
   push:
     branches: [main, develop]
-    paths: ["plugins/peekseek/**", ".github/workflows/peekseek-plugin.yml"]
+    paths: ["plugins/peekseek-match/**", ".github/workflows/peekseek-match.yml"]
   pull_request:
     branches: [main]
-    paths: ["plugins/peekseek/**", ".github/workflows/peekseek-plugin.yml"]
+    paths: ["plugins/peekseek-match/**", ".github/workflows/peekseek-match.yml"]
   workflow_dispatch: # path filters mean a shared change may not trigger this on its own
 
 permissions:
@@ -16,12 +16,12 @@ permissions:
 # the older answer is about code nobody is looking at any more. The release job is
 # guarded by its own tag-exists check, so a cancelled run cannot leave a half-cut tag.
 concurrency:
-  group: peekseek-plugin-${{ github.ref }}
+  group: peekseek-match-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
   run:
-    working-directory: plugins/peekseek
+    working-directory: plugins/peekseek-match
 
 jobs:
   lint:
@@ -86,7 +86,7 @@ jobs:
         run: |
           $out = "PeekSeek-${{ steps.version.outputs.version }}.zip"
           Compress-Archive -Path plugin/bin/Release/net48/* -DestinationPath $out
-          "artifact=plugins/peekseek/$out" >> $env:GITHUB_ENV
+          "artifact=plugins/peekseek-match/$out" >> $env:GITHUB_ENV
 
       - name: Create GitHub release
         if: steps.check.outputs.exists == 'false'

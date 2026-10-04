@@ -222,7 +222,7 @@ All of them need `peekseek.raid.start`.
 ## The screens
 
 Every screen Raid uses is Match's, in the PeekSeek UI workshop item built from
-`plugins/peekseek/ui`: the bar along the top, the footprint board, the swap board, the
+`plugins/peekseek-match/ui`: the bar along the top, the footprint board, the swap board, the
 defenders' powerup board, the attackers' map beside theirs, and the build panel. The same item carries
 the flag and the sentry as items. Raid asks for a board through `Host.Board` and tells
 the bar what it needs to know through `IGamemode`: which team holds and which attacks

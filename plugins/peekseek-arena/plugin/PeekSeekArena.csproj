@@ -22,7 +22,7 @@
   <!-- Compiled against PeekSeek Match and loaded beside it, never shipped with it: a
        second PeekSeek.dll under Rocket/Plugins would load as a second plugin. -->
   <ItemGroup>
-    <ProjectReference Include="..\..\peekseek\plugin\PeekSeek.csproj" Private="false" />
+    <ProjectReference Include="..\..\peekseek-match\plugin\PeekSeek.csproj" Private="false" />
   </ItemGroup>
 
   <ItemGroup>

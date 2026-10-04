@@ -33,14 +33,12 @@ website/scripts/           one-off tools you run by hand, never at request time
 website/tooling/           the JS and CSS linters, kept out of the runtime image
 ```
 
-There is no `utils`, `helpers`, `common`, or `misc` in anything maintained here, and
-adding one is not a judgement call. Behaviour lives with the data it operates on.
+There is no `utils`, `helpers`, `common`, or `misc` anywhere in this repo, and adding one
+is not a judgement call. Behaviour lives with the data it operates on. The last one went
+out with the plugin that held it.
 
-Two places break rules on this page, and both are named rather than quietly tolerated:
+One place breaks a rule on this page, and it is named rather than quietly tolerated:
 
-- `plugins/utelemetry/plugin/src/util` is exactly the catch-all this rule forbids. The
-  component is dormant - one commit, one feature, a different author - and it is the only
-  directory here that is not MIT. Removing it is the fix, not reorganising it.
 - `LobbyManager.cs`, `PSManager.cs`, `Raid.cs` and `RaidWorld.cs` carry around forty
   `// ---- section ----` banner comments, which restate organisation rather than explain
   behaviour. Each banner names a class that wants extracting; they go away by splitting
@@ -142,7 +140,7 @@ black .
 
 cd website && pytest -v
 cd website/tooling && npm install && npm run lint     # the JS and the stylesheets
-cd plugins/peekseek && dotnet format && dotnet test PeekSeek.sln
+cd plugins/peekseek-match && dotnet format && dotnet test PeekSeek.sln
 ```
 
 CI runs the same checks per component, path-filtered, so a website change never runs the

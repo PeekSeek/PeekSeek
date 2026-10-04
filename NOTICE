@@ -2,24 +2,15 @@ PeekSeek
 Copyright (c) 2025 Kieran van der Heijde
 
 This product is licensed under the MIT License; see LICENSE. That licence covers
-every component in this repository except the one named below. The third-party
-material listed after it is included under its own terms, which are not changed
-by ours.
-
-Component under a different licence
------------------------------------
-plugins/utelemetry/   PolyForm Noncommercial 1.0.0, see plugins/utelemetry/LICENSE
-
-  Not MIT, and not commercially usable. It is an optional telemetry plugin that
-  nothing else in the repository depends on, so a distribution that drops the
-  directory is MIT throughout. A distribution that keeps it may not be sold.
+every component in this repository, with no exceptions. The third-party material
+listed below is included under its own terms, which are not changed by ours.
 
 Fonts, bundled in the Match plugin's Unity assets
 -------------------------------------------------
 JetBrains Mono, SIL Open Font License 1.1
-  plugins/peekseek/ui/Assets/PeekSeek/Fonts/JetBrainsMono-LICENSE.txt
+  plugins/peekseek-match/ui/Assets/PeekSeek/Fonts/JetBrainsMono-LICENSE.txt
 Selawik, SIL Open Font License 1.1
-  plugins/peekseek/ui/Assets/PeekSeek/Fonts/Selawik-LICENSE.txt
+  plugins/peekseek-match/ui/Assets/PeekSeek/Fonts/Selawik-LICENSE.txt
 
 Game and framework assemblies, resolved at build time, never redistributed here
 -------------------------------------------------------------------------------

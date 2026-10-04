@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/website.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/website.yml/badge.svg" alt="website"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/bot.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/bot.yml/badge.svg" alt="bot"></a>
-  <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml/badge.svg" alt="peekseek-plugin"></a>
+  <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-match.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-match.yml/badge.svg" alt="peekseek-match"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-arena.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-arena.yml/badge.svg" alt="peekseek-arena"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-raid.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-raid.yml/badge.svg" alt="peekseek-raid"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml/badge.svg" alt="peekseek-lobby"></a>
@@ -20,7 +20,7 @@
 
 ---
 
-Eight deployables live here. The website is the backend the plugins talk to, which is
+Seven deployables live here. The website is the backend the plugins talk to, which is
 why they share a repo: a change to the `/server/v1/*` API and the plugin call that hits
 it lands in one commit. That contract is written down in
 [website/API.md](website/API.md).
@@ -28,17 +28,16 @@ it lands in one commit. That contract is written down in
 | Component | What it is | Language | Status |
 | --- | --- | --- | --- |
 | [website/](website/) | The whole site and API: pages, JSON endpoints, and the `/server/v1/*` API game servers run on | FastAPI, Python 3.12 | maintained |
-| [plugins/peekseek/](plugins/peekseek/) | PeekSeek Match: the RocketMod plugin that runs a match server, the session, the roster, the score, the result and every in-game screen; gamemodes plug into it | C#, net48 | maintained |
+| [plugins/peekseek-match/](plugins/peekseek-match/) | PeekSeek Match: the RocketMod plugin that runs a match server, the session, the roster, the score, the result and every in-game screen; gamemodes plug into it | C#, net48 | maintained |
 | [plugins/peekseek-arena/](plugins/peekseek-arena/) | PeekSeek ARENA: the arena round, last team standing, as a gamemode for Match | C#, net48 | maintained |
 | [plugins/peekseek-raid/](plugins/peekseek-raid/) | PeekSeek RAID: build a base, then take turns cracking each other's, as a gamemode for Match | C#, net48 | maintained |
 | [plugins/peekseek-lobby/](plugins/peekseek-lobby/) | RocketMod plugin that runs the waiting arena: queueing from in-game, kits, AFK handling | C#, net48 | maintained |
 | [plugins/peekseek-armor-skin/](plugins/peekseek-armor-skin/) | RocketMod plugin that gives every player one of four skin colours and a full military set's damage resistance, whatever they wear | C#, net48 | maintained |
 | [bot/](bot/) | Discord bot for staff: `/ban`, `/stop`, `/stats`. Imports the website's own moderation code | Python 3.12 | maintained |
-| [plugins/utelemetry/](plugins/utelemetry/) | RocketMod plugin for PvP telemetry beyond kill counts | C#, net48 | **dormant** |
 
-`dormant` means what it says: utelemetry has one commit, one feature and a different
-author, and it is the only directory here that is not MIT — see
-[NOTICE](NOTICE) before you redistribute. Everything else is in service.
+Every one of them is in service and every one of them is MIT. If that ever stops being
+true of one, the Status column says so here rather than leaving it to look like a peer of
+the rest.
 
 Each component keeps its own README with the detail; start there.
 [CONTRIBUTING.md](CONTRIBUTING.md) has the branch model and the conventions.
@@ -62,7 +61,7 @@ pip install -e ../website -r requirements.txt
 python src/bot.py
 
 # any plugin
-cd plugins/peekseek           # or peekseek-arena, -raid, -lobby, -armor-skin
+cd plugins/peekseek-match           # or peekseek-arena, -raid, -lobby, -armor-skin
 dotnet build PeekSeek.sln -c Release
 dotnet test PeekSeek.sln
 ```
@@ -78,7 +77,7 @@ committed as a binary we have no right to redistribute. The compiled DLL lands i
 
 One workflow per component in [.github/workflows/](.github/workflows/), each filtered on
 its own path, so touching the website does not run the C# jobs and vice versa. Tags for
-plugin releases are prefixed (`utelemetry-v1.2.3`) because one repo now ships several.
+plugin releases are prefixed (`peekseek-raid-v0.4.3`) because one repo ships several.
 
 Two workflows are not per-component: `audit.yml` runs `pip-audit` against the lockfiles
 on a schedule, and `docs.yml` builds the documentation site with its link checker. No

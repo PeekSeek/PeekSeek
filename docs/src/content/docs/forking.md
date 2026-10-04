@@ -48,7 +48,7 @@ The two shipped plugins are the reference implementation:
 
 | Plugin | Implements |
 |---|---|
-| [`plugins/peekseek`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek) | The match loop above |
+| [`plugins/peekseek-match`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek-match) | The match loop above |
 | [`plugins/peekseek-lobby`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek-lobby) | The waiting arena, queueing from in-game, kits, AFK |
 
 ---
@@ -163,6 +163,3 @@ See
 [CONTRIBUTING.md](https://github.com/PeekSeek/PeekSeek/blob/main/CONTRIBUTING.md)
 for the branch model and conventions. The licence is MIT, so you owe nothing. It is just
 nicer this way.
-
-One directory is not MIT: `plugins/utelemetry/` is PolyForm Noncommercial 1.0.0, so a
-fork you intend to sell drops it. Nothing else in the repository depends on it.

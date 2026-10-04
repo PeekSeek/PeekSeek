@@ -462,7 +462,7 @@ if "ship" in only:
     import shutil
 
     repo = OUT.parent
-    game = repo / "plugins/peekseek/ui/Assets/PeekSeekKillFeed/Sounds"
+    game = repo / "plugins/peekseek-match/ui/Assets/PeekSeekKillFeed/Sounds"
     site = repo / "website/public/sounds"
     game.mkdir(exist_ok=True), site.mkdir(exist_ok=True)
     for name, (folder, concept) in CHOSEN.items():
