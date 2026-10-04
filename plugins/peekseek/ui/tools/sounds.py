@@ -23,9 +23,29 @@ EFFECTS = UI / "Assets/PeekSeekKillFeed/Bundles/Effects"
 FIRST_ID = 43130  # the kill feed's screens hold 43120 to 43125
 
 # Same names, same order, as the Sound enum in Hud/Sounds.cs: the id is FIRST_ID + index.
-NAMES = ["kill_1", "kill_2", "kill_3", "kill_4", "kill_5", "round_win", "round_loss", "match_point",
-         "match_win", "match_loss", "queue_join", "queue_leave", "match_found",
-         "count_1", "count_2", "count_3", "count_4", "count_5", "go", "time_10s", "pick_lock"]
+NAMES = [
+    "kill_1",
+    "kill_2",
+    "kill_3",
+    "kill_4",
+    "kill_5",
+    "round_win",
+    "round_loss",
+    "match_point",
+    "match_win",
+    "match_loss",
+    "queue_join",
+    "queue_leave",
+    "match_found",
+    "count_1",
+    "count_2",
+    "count_3",
+    "count_4",
+    "count_5",
+    "go",
+    "time_10s",
+    "pick_lock",
+]
 
 
 def guid(*parts):
@@ -156,14 +176,20 @@ Preload 0
 
 
 def meta(path, file_guid, body=None):
-    Path(f"{path}.meta").write_text(body or f"fileFormatVersion: 2\nguid: {file_guid}\n", encoding="utf-8")
+    Path(f"{path}.meta").write_text(
+        body or f"fileFormatVersion: 2\nguid: {file_guid}\n", encoding="utf-8"
+    )
 
 
 for index, name in enumerate(NAMES):
     source = SOUNDS / f"{name}.wav"
     folder = EFFECTS / folder_name(name)
     folder.mkdir(exist_ok=True)
-    meta(folder, guid(name, "folder"), f"fileFormatVersion: 2\nguid: {guid(name, 'folder')}\nfolderAsset: yes\n")
+    meta(
+        folder,
+        guid(name, "folder"),
+        f"fileFormatVersion: 2\nguid: {guid(name, 'folder')}\nfolderAsset: yes\n",
+    )
 
     clip = folder / f"{name}.wav"
     shutil.copy(source, clip)
@@ -174,7 +200,14 @@ for index, name in enumerate(NAMES):
     meta(prefab, guid(name, "prefab"))
 
     dat = folder / f"{folder_name(name)}.dat"
-    dat.write_text(DAT.format(guid=guid(name, "asset")[:32], id=FIRST_ID + index, name=name,
-                              lifetime=seconds(source) + 0.5), encoding="utf-8")
+    dat.write_text(
+        DAT.format(
+            guid=guid(name, "asset")[:32],
+            id=FIRST_ID + index,
+            name=name,
+            lifetime=seconds(source) + 0.5,
+        ),
+        encoding="utf-8",
+    )
     meta(dat, guid(name, "dat"))
     print(folder.name, FIRST_ID + index, guid(name, "asset"))

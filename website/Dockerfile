@@ -13,8 +13,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
 
-COPY website/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# The lock, not requirements.txt: every version pinned and hash-checked, so two builds
+# of the same commit install the same packages and nothing can be substituted in flight.
+COPY website/requirements.txt website/requirements.lock ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY website/src ./src
 COPY website/public ./public
@@ -48,6 +50,11 @@ COPY website/minify.py .
 RUN pip install --no-cache-dir csscompressor rjsmin \
     && python minify.py --in-place \
     && pip uninstall -y csscompressor rjsmin
+
+# Not root. Nothing the app does needs uid 0: it serves HTTP, reads a database and
+# writes nothing to disk. Added after the build steps so those still install as root.
+RUN useradd --create-home --uid 10001 peekseek && chown -R peekseek /app
+USER peekseek
 
 EXPOSE 8000
 

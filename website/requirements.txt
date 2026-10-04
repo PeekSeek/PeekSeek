@@ -1,3 +1,19 @@
+# What the site depends on, as a human writes it. What it *installs* is
+# requirements.lock, which pins every transitive package to an exact version and a
+# hash. The Dockerfile and CI both use the lock, so a rebuild resolves the same set
+# every time and pip-audit reports on what is actually deployed rather than on
+# whatever pip picked that morning.
+#
+# Change a dependency here, then regenerate both locks:
+#
+#     uv pip compile requirements.txt     --python-version 3.12 --generate-hashes \
+#         --no-strip-extras -o requirements.lock
+#     uv pip compile requirements-dev.in  --python-version 3.12 --generate-hashes \
+#         --no-strip-extras -o requirements-dev.lock
+#
+# 3.12 because that is what the image runs. Compiling on another version can resolve
+# a different set of wheels.
+
 fastapi
 uvicorn[standard]
 jinja2

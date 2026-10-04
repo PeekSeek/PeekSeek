@@ -5,8 +5,8 @@
 :root {
     --text: #fff;
     --bg: #0a0a0a;
-    --brand-light: #ff6666;
-    --brand-strong: #ff0000;
+    --brand-light: #f66;
+    --brand-strong: #f00;
     --border: #333;
     --primary: var(--brand-light);
     --font-main: ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -143,6 +143,10 @@ h2 {
 }
 
 footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     padding: 100px 0;
     font-size: 0.9rem;
@@ -178,13 +182,6 @@ footer a {
     max-width: 800px;
     margin: 0 auto;
     text-align: center;
-}
-
-footer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
 }
 
 .footerLinks {

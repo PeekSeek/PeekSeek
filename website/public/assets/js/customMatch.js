@@ -38,7 +38,7 @@ document.getElementById("customStart").addEventListener("click", () => {
         teams[i.children[1].value] = i.children[2].value.trim().split(/\s+/).filter(Boolean);
     }
 
-    const toValue = (v) => [false, true, null][Number(document.getElementById("customOption" + v).value)];
+    const toValue = v => [false, true, null][Number(document.getElementById("customOption" + v).value)];
 
     const matchData = {
         map: document.getElementById("customOption1").value,

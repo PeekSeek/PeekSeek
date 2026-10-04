@@ -12,6 +12,13 @@ on:
 permissions:
   contents: write
 
+# One run per branch. Successive pushes supersede each other for lint and test, where
+# the older answer is about code nobody is looking at any more. The release job is
+# guarded by its own tag-exists check, so a cancelled run cannot leave a half-cut tag.
+concurrency:
+  group: peekseek-armor-skin-${{ github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: plugins/peekseek-armor-skin
@@ -83,7 +90,9 @@ jobs:
 
       - name: Create GitHub release
         if: steps.check.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v2
+        # Pinned to a commit, not the v2 tag: this is the one action here with
+        # write scope, and a tag can be moved under us.
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}

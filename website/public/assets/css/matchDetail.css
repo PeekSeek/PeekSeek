@@ -5,6 +5,11 @@
 }
 
 .statTable {
+  /* The player cards in this table size themselves off these two, and carry a little
+     more height than the rest of the table needs because the badge hangs below the
+     avatar it sits on. */
+  --card-avatar-size: 30px;
+  --card-on-panel: var(--bg);
   width: 100%;
   background-color: var(--border);
   border-spacing: 2px;
@@ -40,10 +45,7 @@
    colour rather than a panel's, which is what the crest knocks its ring and its badge
    out in, and they carry a little more height than the rest of the table needs because
    the badge hangs below the avatar it sits on. */
-.statTable {
-  --card-avatar-size: 30px;
-  --card-on-panel: var(--bg);
-} .statTable td:has(.pc) {
+.statTable td:has(.pc) {
   padding-top: 8px;
   padding-bottom: 8px;
 }

@@ -411,8 +411,8 @@ def test_match_detail_shows_the_reader_their_own_elo_on_the_bar(
     assert 'class="rankCard yourRank"' in r.text
     assert 'data-rank="gold1"' in r.text
     # 620 into Gold 1 is 20% of the way through it, and the 30 Elo won is another 30%.
-    assert 'style="width:20.0%"' in r.text
-    assert 'class="gained" style="left:20.0%;width:30.0%"' in r.text
+    assert 'style="--held:20.0%"' in r.text
+    assert 'class="gained" style="--held:20.0%;--changed:30.0%"' in r.text
     assert "+30" in r.text
     assert "50 Elo to Immune" in r.text
 
@@ -428,7 +428,7 @@ def test_match_detail_calls_out_a_promotion(client, login, user_factory):
     assert 'data-rank="gold1"' in r.text
     # Promoted, so the bar fills the new tier from empty rather than from where the
     # Elo sat in the tier below.
-    assert 'class="gained" style="left:0.0%;width:10.0%"' in r.text
+    assert 'class="gained" style="--held:0.0%;--changed:10.0%"' in r.text
 
 
 def test_match_detail_calls_out_a_demotion(client, login, user_factory):
@@ -439,7 +439,7 @@ def test_match_detail_calls_out_a_demotion(client, login, user_factory):
     r = client.get(f"/match/{matchId}")
 
     assert 'class="rankMove down">Ranked down' in r.text
-    assert 'class="lost" style="left:90.0%;width:10.0%"' in r.text
+    assert 'class="lost" style="--held:90.0%;--changed:10.0%"' in r.text
 
 
 def test_match_detail_draws_no_bar_for_somebody_who_was_not_in_the_match(

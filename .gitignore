@@ -8,6 +8,10 @@ test.db
 *.pyc
 **/__pycache__
 **/.pytest_cache
+# Neither of these was tracked, but neither was ignored either, so both showed in every
+# git status and were one `git add .` from being committed.
+**/.ruff_cache
+**/.benchmarks
 data.sql
 **/.db
 **/.venv
@@ -16,6 +20,13 @@ data.sql
 **/obj
 **/bin
 **/.vs
+
+# Unity: the editor regenerates all of it, and Library/ alone is tens of megabytes.
+**/ui/Library
+**/ui/Temp
+**/ui/Logs
+**/ui/UserSettings
+**/ui/Build
 
 # Node (docs)
 **/node_modules

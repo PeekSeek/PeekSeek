@@ -57,7 +57,9 @@ class RoundWinsReport(ServerRequest):
 class MatchResultReport(ServerRequest):
     """`POST /matches/{matchId}/result`. The match's final per-player line."""
 
-    played: bool = Field(True, description="false when nobody turned up: scores nothing")
+    played: bool = Field(
+        True, description="false when nobody turned up: scores nothing"
+    )
     winningTeam: str | None = None
     draw: bool = False
     players: list[PlayerLine] = Field(
@@ -201,6 +203,12 @@ class SessionAnswer(BaseModel):
     )
     waiting_on: list[str] | None = Field(None, description="on wait")
     selection_ends_at: int | None = Field(None, description="on wait, Unix seconds")
-    match: dict | None = Field(None, description="the roster on wait, the whole match on host")
-    options: dict | None = Field(None, description="on wait: the kits and powerups to choose between")
-    picked: dict | None = Field(None, description="on wait: what each player has locked so far")
+    match: dict | None = Field(
+        None, description="the roster on wait, the whole match on host"
+    )
+    options: dict | None = Field(
+        None, description="on wait: the kits and powerups to choose between"
+    )
+    picked: dict | None = Field(
+        None, description="on wait: what each player has locked so far"
+    )

@@ -81,7 +81,9 @@ def _match(match: data.Match) -> dict:
     "/session",
     # Described, not enforced: see contracts.SessionAnswer for why a response model
     # would change the payload these plugins are compiled against.
-    responses={200: {"model": contracts.SessionAnswer, "description": "What to do next"}},
+    responses={
+        200: {"model": contracts.SessionAnswer, "description": "What to do next"}
+    },
 )
 def server_session(server: GameServer, serverCode: str = "0", matchId: int = 0):
     """The one call a game server makes on a loop. Answers what it should be doing.

@@ -24,18 +24,21 @@ LINK = 0.02
 
 # The board's tile grey and the site's greys, so the picture is part of the tile rather
 # than a photo stuck on it.
-FLOOR = (0xc8, 0xc8, 0xc8, 255)
-SEAM = (0x1a, 0x1a, 0x1a, 255)
-PILLAR = (0xf2, 0xf2, 0xf2, 255)
-FLAG = (0xff, 0x00, 0x00, 255)
-FLAG_RING = (0xff, 0xff, 0xff, 255)
+FLOOR = (0xC8, 0xC8, 0xC8, 255)
+SEAM = (0x1A, 0x1A, 0x1A, 255)
+PILLAR = (0xF2, 0xF2, 0xF2, 255)
+FLAG = (0xFF, 0x00, 0x00, 255)
+FLAG_RING = (0xFF, 0xFF, 0xFF, 255)
 
 
 def floors(shape):
     """(x, z, yaw, triangle) for every floor of a footprint."""
     if shape == "Square":
-        return [(across * EDGE, along * EDGE, 0.0, False)
-                for across in (-1, 0, 1) for along in (-1, 0, 1)]
+        return [
+            (across * EDGE, along * EDGE, 0.0, False)
+            for across in (-1, 0, 1)
+            for along in (-1, 0, 1)
+        ]
 
     pieces = []
     for k in range(6):
@@ -56,7 +59,12 @@ def corners(piece):
 
     if triangle:
         return [world(0, APEX_PIVOT), world(HALF, -HALF), world(-HALF, -HALF)]
-    return [world(-HALF, -HALF), world(HALF, -HALF), world(HALF, HALF), world(-HALF, HALF)]
+    return [
+        world(-HALF, -HALF),
+        world(HALF, -HALF),
+        world(HALF, HALF),
+        world(-HALF, HALF),
+    ]
 
 
 def vertices(shape):
@@ -82,7 +90,9 @@ def picture(shape, width, height, metres_across):
 
     seam = max(1, round(0.25 * px_per_m))
     for piece in floors(shape):
-        draw.polygon([at(x, z) for x, z in corners(piece)], fill=FLOOR, outline=SEAM, width=seam)
+        draw.polygon(
+            [at(x, z) for x, z in corners(piece)], fill=FLOOR, outline=SEAM, width=seam
+        )
 
     pillar = 0.45 * px_per_m
     for x, z in vertices(shape):

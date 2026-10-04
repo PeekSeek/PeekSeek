@@ -308,6 +308,7 @@
     z-index: 5;
     position: relative;
     background: var(--surface-high);
+
     --card-on-panel: var(--surface-high);
     color: var(--text);
     overflow: hidden;
@@ -339,10 +340,10 @@
 
   background: linear-gradient(
     to bottom,
-    #ffffff00   0%,
+    #fff0   0%,
     #ffee0026 30%,
     #ffee0026 70%,
-    #ffffff00   100%
+    #fff0   100%
   );
   filter: blur(30px);
 

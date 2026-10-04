@@ -52,8 +52,9 @@ function finalLine(player) {
     let line = `${esc(player.kills)}K ${esc(player.deaths)}D <span style="color:#aaa;">${hs}% HS</span>`;
     if (player.eloChange !== null && player.eloChange !== undefined) {
         const up = player.eloChange >= 0;
-        line += ` <span style="color:${up ? "#6c6" : "#f04444"};">${up ? "+" : ""}${esc(player.eloChange)}</span>`
-            + `<span style="color:#8885;"> (${esc(player.elo)})</span>`;
+        line +=
+            ` <span style="color:${up ? "#6c6" : "#f04444"};">${up ? "+" : ""}${esc(player.eloChange)}</span>` +
+            `<span style="color:#8885;"> (${esc(player.elo)})</span>`;
     }
     return line;
 }
@@ -76,10 +77,11 @@ function playerRow(player) {
 }
 
 function teamBlock(team) {
-    const score = team.wins === null || team.wins === undefined
-        ? "" : `<b>${esc(team.wins)}</b>`;
-    const eventScore = team.eventScore === null || team.eventScore === undefined
-        ? "" : `<span style="color:#8885;">event score ${esc(team.eventScore)}</span>`;
+    const score = team.wins === null || team.wins === undefined ? "" : `<b>${esc(team.wins)}</b>`;
+    const eventScore =
+        team.eventScore === null || team.eventScore === undefined
+            ? ""
+            : `<span style="color:#8885;">event score ${esc(team.eventScore)}</span>`;
 
     return `<div class="adminTeam">
         <div class="adminTeamHead">
@@ -101,7 +103,9 @@ function card(match) {
              <img src="/static/img/spectate.png" height="20" style="filter: invert(1);">Spectate</button>`
         : "";
 
-    const stop = match.over ? "" : `<button class="settingsButton" style="background-color:#faa;"
+    const stop = match.over
+        ? ""
+        : `<button class="settingsButton" style="background-color:#faa;"
           onclick="forceStopMatch(${esc(match.id)})">
           <img src="/static/img/stop.png" height="20" style="filter: invert(1);">Force stop</button>`;
 
@@ -135,14 +139,19 @@ function render(payload) {
     }
 
     const live = payload.matches.filter(m => !m.over).length;
-    stamp.textContent = `${live} live, ${payload.matches.length} in the last 24h`
-        + ` · updated ${new Date().toLocaleTimeString()}`;
+    stamp.textContent =
+        `${live} live, ${payload.matches.length} in the last 24h` +
+        ` · updated ${new Date().toLocaleTimeString()}`;
 }
 
 function refresh() {
-    return api.get("/admin/matches")
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(payload => { render(payload); loadBanState(); })
+    return api
+        .get("/admin/matches")
+        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then(payload => {
+            render(payload);
+            loadBanState();
+        })
         .catch(e => {
             const stamp = document.getElementById("refreshed");
             if (stamp) stamp.textContent = `Could not reach the site (${e}). Retrying.`;
@@ -160,7 +169,7 @@ function forceStopMatch(id) {
     if (!confirm(`Force stop Match.${id}? Nobody's Elo moves and its players are freed.`)) return;
 
     api.post("/admin/match/stop", { id })
-        .then(r => r.ok ? refresh() : alert("Failed."))
+        .then(r => (r.ok ? refresh() : alert("Failed.")))
         .catch(e => console.error("Error:", e));
 }
 

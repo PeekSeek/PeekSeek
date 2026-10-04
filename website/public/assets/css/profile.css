@@ -39,8 +39,6 @@
     "bn bn bn bn bn";
 }
 
-.identity { grid-area: id; }
-.chart    { grid-area: ch; }
 .s1       { grid-area: s1; }
 .s2       { grid-area: s2; }
 .s3       { grid-area: s3; }
@@ -81,6 +79,8 @@
 /* The subject of the page, so it is the one tile that is square-ish and centred rather
    than a list with a heading. */
 .identity {
+  grid-area: id;
+
   --card-on-panel: var(--surface);
   --card-avatar-size: 96px;
   align-items: center;
@@ -118,6 +118,7 @@
 /* A button that has to read as part of the sentence it sits in, so it drops every
    button style rather than adding one. */
 .chart {
+  grid-area: ch;
   min-height: 0;
 }
 

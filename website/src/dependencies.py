@@ -152,7 +152,11 @@ def body_schema(model: type) -> dict:
         "requestBody": {
             "required": True,
             "content": {
-                "application/json": {"schema": model.model_json_schema(ref_template="#/components/schemas/{model}")}
+                "application/json": {
+                    "schema": model.model_json_schema(
+                        ref_template="#/components/schemas/{model}"
+                    )
+                }
             },
         }
     }

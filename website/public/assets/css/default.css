@@ -39,10 +39,10 @@
   --veil: #3334;
 
   /* Brand red */
-  --brand: #ff4444;
-  --brand-light: #ff6666;
-  --brand-strong: #ff0000;
-  --brand-shade: #441111;
+  --brand: #f44;
+  --brand-light: #f66;
+  --brand-strong: #f00;
+  --brand-shade: #411;
   --brand-header: #2c0a0a;
 
   /* Status */
@@ -207,9 +207,8 @@ content .main {
   display: flex;
   flex-direction: column;
   padding: 0;
-} .info .flexrow {
-  margin-bottom: 10px !important;
 }
+
 
 .infoli h1 {
   font-size: 14px;
@@ -310,6 +309,7 @@ content .main {
    nav's own 20px, since the logout icon has nothing to line up with. */
 .info .flexrow {
   padding: 0 20px 0 12px;
+  margin-bottom: 10px !important;
 }
 
 /* The small avatar used wherever a player is named inside a denser row than the
@@ -647,6 +647,7 @@ content .main {
 .rankBar .gained, .rankBar .lost {
   left: var(--held, 0%);
   width: var(--changed, 0%);
+  animation: rankBarGrow 0.7s ease-out;
 }
 .rankBar .gained { background-color: var(--good); }
 .rankBar .lost { background-color: var(--brand); }
@@ -714,10 +715,6 @@ content .main {
 
 @keyframes rankBarGrow { from { width: 0; } }
 
-.rankBar .gained, .rankBar .lost {
-  animation: rankBarGrow 0.7s ease-out;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .rankBar .gained, .rankBar .lost { animation-duration: 0.001s; }
 }
@@ -733,7 +730,7 @@ content .main {
 } .warning span b {
   color: var(--warn);
 } .gdpr span b {
-  color: #00ccff;
+  color: #0cf;
 } .gdpr button {
   background-color: var(--text);
   color: #006680;
@@ -811,7 +808,7 @@ content .main {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   width: auto;
-  grid-gap: 20px;
+  gap: 20px;
   padding: 25px 20px;
   padding-top: 18px;
   background-color: var(--surface-raised);
@@ -833,9 +830,8 @@ content .main {
   border: 3px solid var(--surface);
   color: var(--text-dim);
 
+  /* Safari still wants the prefix for this one. */
   -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
   user-select: none;
 } .qgridoption h1 {
   font-size: 16px;

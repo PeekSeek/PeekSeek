@@ -166,7 +166,9 @@ def refresh_player_counter() -> None:
     if not channel or not headers:
         return
 
-    name = _counter_name(data.LobbyPopulation.playing_now(), data.UserHB.count_all_fresh())
+    name = _counter_name(
+        data.LobbyPopulation.playing_now(), data.UserHB.count_all_fresh()
+    )
     url = f"{DISCORD_API}/channels/{channel}"
     with exclusively(COUNTER_LOCK) as held:
         if not held:

@@ -9,6 +9,16 @@ on:
     paths: ["docs/**", "website/API.md", ".github/workflows/docs.yml"]
   workflow_dispatch: # path filters mean a shared change may not trigger this on its own
 
+# One run per branch. Successive pushes supersede each other for lint and test, where
+# the older answer is about code nobody is looking at any more. The release job is
+# guarded by its own tag-exists check, so a cancelled run cannot leave a half-cut tag.
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest

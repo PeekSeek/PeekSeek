@@ -62,7 +62,9 @@ def main(argv: list[str] | None = None) -> int:
 
     saved = before - after
     how = "rewrote" if written else "would rewrite (--in-place to do it)"
-    print(f"minify: {how} {len(targets)} files, {before:,} -> {after:,} bytes ({saved:,} saved)")
+    print(
+        f"minify: {how} {len(targets)} files, {before:,} -> {after:,} bytes ({saved:,} saved)"
+    )
     return 0
 
 

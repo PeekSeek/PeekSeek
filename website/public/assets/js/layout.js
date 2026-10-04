@@ -6,7 +6,7 @@
 
    This only adds the class; what "current" looks like is default.css's job. */
 
-document.querySelectorAll(".infoli a").forEach((link) => {
+document.querySelectorAll(".infoli a").forEach(link => {
     if (link.innerText.trim().toLowerCase() === document.body.dataset.currentPage) {
         link.classList.add("currentPage");
     }

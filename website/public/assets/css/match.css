@@ -5,7 +5,7 @@
 
 :root {
   --commit-red: #ff2d2d;
-  --commit-red-dim: rgba(255, 45, 45, 0.16);
+  --commit-red-dim: rgb(255, 45, 45, 0.16);
   --commit-card: #161616;
   --commit-line: #262626;
 }
