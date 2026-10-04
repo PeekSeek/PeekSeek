@@ -386,7 +386,7 @@ FACES = 5
 SITES = (
     # name, anchor (x, z), the spawns in dot order; all from PeekSeekRaidConfiguration.cs
     ("North", (74.97, 311.35), ((152.60, 383.00), (8.21, 286.77), (91.95, 232.95))),
-    ("South", (224.10, -379.60), ((150.36, -364.48), (207.59, -306.13), (311.91, -369.68))),
+    ("South", (224.10, -379.60), ((150.36, -364.48), (215.40, -304.40), (311.91, -369.68))),
 )
 MAP_GUIDS = ("e2f1a3b4c5d6e7f8a9b0c1d2e3f4a5b6", "f3a2b4c5d6e7f8a9b0c1d2e3f4a5b6c7")
 
