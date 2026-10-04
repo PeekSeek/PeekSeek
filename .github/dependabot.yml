@@ -38,7 +38,6 @@ updates:
       - /plugins/peekseek-raid/plugin
       - /plugins/peekseek-lobby/plugin
       - /plugins/peekseek-armor-skin/plugin
-      - /plugins/utelemetry/plugin
     schedule:
       interval: monthly
     groups:

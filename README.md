@@ -20,7 +20,7 @@
 
 ---
 
-Eight deployables live here. The website is the backend the plugins talk to, which is
+Seven deployables live here. The website is the backend the plugins talk to, which is
 why they share a repo: a change to the `/server/v1/*` API and the plugin call that hits
 it lands in one commit. That contract is written down in
 [website/API.md](website/API.md).
@@ -34,11 +34,10 @@ it lands in one commit. That contract is written down in
 | [plugins/peekseek-lobby/](plugins/peekseek-lobby/) | RocketMod plugin that runs the waiting arena: queueing from in-game, kits, AFK handling | C#, net48 | maintained |
 | [plugins/peekseek-armor-skin/](plugins/peekseek-armor-skin/) | RocketMod plugin that gives every player one of four skin colours and a full military set's damage resistance, whatever they wear | C#, net48 | maintained |
 | [bot/](bot/) | Discord bot for staff: `/ban`, `/stop`, `/stats`. Imports the website's own moderation code | Python 3.12 | maintained |
-| [plugins/utelemetry/](plugins/utelemetry/) | RocketMod plugin for PvP telemetry beyond kill counts | C#, net48 | **dormant** |
 
-`dormant` means what it says: utelemetry has one commit, one feature and a different
-author, and it is the only directory here that is not MIT — see
-[NOTICE](NOTICE) before you redistribute. Everything else is in service.
+Every one of them is in service and every one of them is MIT. If that ever stops being
+true of one, the Status column says so here rather than leaving it to look like a peer of
+the rest.
 
 Each component keeps its own README with the detail; start there.
 [CONTRIBUTING.md](CONTRIBUTING.md) has the branch model and the conventions.
@@ -78,7 +77,7 @@ committed as a binary we have no right to redistribute. The compiled DLL lands i
 
 One workflow per component in [.github/workflows/](.github/workflows/), each filtered on
 its own path, so touching the website does not run the C# jobs and vice versa. Tags for
-plugin releases are prefixed (`utelemetry-v1.2.3`) because one repo now ships several.
+plugin releases are prefixed (`peekseek-raid-v0.4.3`) because one repo ships several.
 
 Two workflows are not per-component: `audit.yml` runs `pip-audit` against the lockfiles
 on a schedule, and `docs.yml` builds the documentation site with its link checker. No

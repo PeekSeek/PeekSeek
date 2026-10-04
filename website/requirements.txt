@@ -6,13 +6,16 @@
 #
 # Change a dependency here, then regenerate both locks:
 #
-#     uv pip compile requirements.txt     --python-version 3.12 --generate-hashes \
-#         --no-strip-extras -o requirements.lock
-#     uv pip compile requirements-dev.in  --python-version 3.12 --generate-hashes \
-#         --no-strip-extras -o requirements-dev.lock
+#     uv pip compile requirements.txt     --universal --python-version 3.12 \
+#         --generate-hashes --no-strip-extras -o requirements.lock
+#     uv pip compile requirements-dev.in  --universal --python-version 3.12 \
+#         --generate-hashes --no-strip-extras -o requirements-dev.lock
 #
-# 3.12 because that is what the image runs. Compiling on another version can resolve
-# a different set of wheels.
+# 3.12 because that is what the image runs. --universal because the image is Linux while
+# people develop on Windows: without it the lock is resolved for whichever platform
+# compiled it, and uvicorn[standard] quietly loses uvloop when that is Windows — which
+# then fails `pip install --require-hashes` inside the image, with nothing in the lock to
+# suggest why. One lock, with environment markers, that installs correctly on both.
 
 fastapi
 uvicorn[standard]

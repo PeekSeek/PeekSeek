@@ -4,7 +4,7 @@
 # changes its mind turns every subsequent CI run red on code nobody touched, which is
 # the fastest way to teach people to ignore the build. Bump deliberately:
 #
-#     uv pip compile requirements-dev.in --python-version 3.12 --generate-hashes \
+#     uv pip compile requirements-dev.in --universal --python-version 3.12 --generate-hashes \
 #         -o requirements-dev.lock
 -r requirements.txt
 
