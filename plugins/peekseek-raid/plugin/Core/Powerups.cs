@@ -137,8 +137,11 @@ internal static class Powerups {
     /// seated, so hands are emptied first and the whole thing is tried a few times.
     private static IEnumerator Board(InteractableVehicle heli, Player pilot) {
         int token = round;
-        List<Player> team = [pilot, ..Host.Players().Where(player =>
-            player != pilot && !player.life.isDead && !raid.IsDefending(player.channel.owner.playerID.steamID.m_SteamID))];
+        List<Player> team = [
+            pilot,
+            .. Host.Players().Where(player =>
+                player != pilot && !player.life.isDead && !raid.IsDefending(player.channel.owner.playerID.steamID.m_SteamID))
+        ];
 
         for (int attempt = 0; attempt < 6; attempt++) {
             yield return new WaitForSeconds(0.35f);
@@ -206,6 +209,8 @@ internal static class Powerups {
     /// are followed to where they land.
     private static void OnThrown(UseableThrowable useable, GameObject thrown) {
         if (raid == null || useable?.equippedThrowableAsset == null) return;
+
+        Damage.Unprotect(useable.player);
 
         ushort id = useable.equippedThrowableAsset.id;
         CSteamID thrower = useable.player.channel.owner.playerID.steamID;

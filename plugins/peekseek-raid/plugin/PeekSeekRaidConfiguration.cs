@@ -138,6 +138,12 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
     public List<RaidItem> AttackBaseline;
     public List<RaidItem> DefenceBaseline;
 
+    /// How long an attacker cannot be hurt after they are placed for a live round, so a
+    /// round does not open with somebody shot where they land. It ends the moment that
+    /// attacker fires, aims or throws anything: protection that buys free breaching time
+    /// is worse than none. Defenders get none, having stood on their base all pick.
+    public float SpawnProtectSeconds;
+
     /// How long a decided round stays on screen before it ends: the flag down, or a
     /// side gone, and a moment to see it before everybody is moved.
     public float RoundEndDelay;
@@ -361,7 +367,7 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
                 BuildRadius = 32f,
                 AttackerSpawns = [
                     new SerializableVector3(150.36f, 85.01f, -364.48f),
-                    new SerializableVector3(207.59f, 72.66f, -306.13f),
+                    new SerializableVector3(215.40f, 72.66f, -304.40f),
                     new SerializableVector3(311.91f, 103.34f, -369.68f)
                 ]
             }
@@ -406,7 +412,7 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
             Option("Elevator", PowerupClass.Initializer, "", 1691,
                    [new RaidItem(1691, 4), new RaidItem(325, 2)]),
             Option("Scaffold", PowerupClass.Initializer, "", 316,
-                   [new RaidItem(1764, 1), new RaidItem(36, 6), new RaidItem(33, 3), new RaidItem(316, 3)]),
+                   [new RaidItem(1764, 1), new RaidItem(36, 6), new RaidItem(33, 3), new RaidItem(316, 3), new RaidItem(31, 2)]),
 
             // Support: suppression, a way in, a second life. The Suppressor is the meta
             // kit's Dragonfang (website/src/kits.json): red chevron, tactical laser,
@@ -429,13 +435,14 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
         DefenceBaseline = [];
 
         RoundEndDelay = 2.5f;
+        SpawnProtectSeconds = 3f;
         HalfTimeCharges = 5;
 
         // Charge, Keyhole, rocket (keyed by the launcher) and chainsaw (seconds).
         BreakRules = [
-            new BreakRule("Demolition Charge", 1241, 1, 1, 1.5f, 3, 3),
+            new BreakRule("Demolition Charge", 1241, 1, 1, 1, 3, 3),
             new BreakRule("Keyhole", 1520, 1, 0, 0, 0, 0),
-            new BreakRule("Rocket", 519, 2, 2, 2, 4, 4),
+            new BreakRule("Rocket", 519, 2, 1, 1, 3, 4),
             new BreakRule("Chainsaw", 490, 0, 1, 3, 0, 0)
         ];
         CutGapSeconds = 0.6f;
@@ -458,7 +465,7 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
         KeyholeItemId = 1520;
 
         SuppressorGunId = 132;
-        SuppressorPlayerDamage = 9f;
+        SuppressorPlayerDamage = 18f;
         SuppressorGlassMultiplier = 2f;
 
         FlashbangItemId = 1346;

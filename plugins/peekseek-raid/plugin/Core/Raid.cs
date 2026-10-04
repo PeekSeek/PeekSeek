@@ -963,6 +963,15 @@ internal class Raid : IGamemode {
         pendingWinner = winner;
         pendingAt = Time.realtimeSinceStartup + PeekSeekRaid.Config.RoundEndDelay;
         Host.RoundWon(winner, line);
+
+        // One line a player a round, so pick and win rates can be read out of the log
+        // rather than argued about.
+        foreach (Player player in Players()) {
+            ulong steam64 = player.channel.owner.playerID.steamID.m_SteamID;
+            int side = SideOf(steam64);
+            Logger.Log($"Round {round} pick: {NameOf(steam64)} {(side == DefendedSite ? "defence" : "attack")} "
+                       + $"{ChosenOption(steam64)?.Name ?? "none"} {(side == winner ? "won" : "lost")}");
+        }
     }
 
     /// After the pause: either the next round, or the end of the match, won or level.
@@ -1143,6 +1152,8 @@ internal class Raid : IGamemode {
             player.teleportToLocationUnsafe(RaidWorld.StandingSpot(defended), defended.Yaw);
             return;
         }
+
+        Damage.Protect(steam64);
 
         int spawn = Math.Max(0, Board.SpawnChosen(steam64));
         List<ulong> same = Roster(side).Where(mate => Math.Max(0, Board.SpawnChosen(mate)) == spawn).ToList();
