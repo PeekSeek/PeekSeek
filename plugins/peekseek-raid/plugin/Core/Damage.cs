@@ -35,16 +35,27 @@ internal static class Damage {
 
     private static readonly CutTimer cuts = new(0.6f);
 
+    /// When each attacker's spawn protection runs out. Stamped where they are placed,
+    /// dropped the moment they fire, aim or throw: untouchable is only fair while it
+    /// buys nothing.
+    private static readonly Dictionary<ulong, float> protectedUntil = [];
+
     private static Raid raid;
 
     internal static void Hook(Raid running) {
         raid = running;
         cuts.Clear();
         DamageTool.damagePlayerRequested += OnDamagePlayer;
+        UseableGun.onBulletSpawned += Fired;
+        UseableGun.onProjectileSpawned += Launched;
+        UseableGun.OnAimingChanged_Global += Aimed;
     }
 
     internal static void Unhook() {
         DamageTool.damagePlayerRequested -= OnDamagePlayer;
+        UseableGun.onBulletSpawned -= Fired;
+        UseableGun.onProjectileSpawned -= Launched;
+        UseableGun.OnAimingChanged_Global -= Aimed;
         raid = null;
         Current = null;
     }
@@ -187,10 +198,31 @@ internal static class Damage {
 
     // ---- players -----------------------------------------------------------------
 
+    /// An attacker is untouchable for SpawnProtectSeconds from where they come in.
+    internal static void Protect(ulong steam64) {
+        protectedUntil[steam64] = Time.realtimeSinceStartup + PeekSeekRaid.Config.SpawnProtectSeconds;
+    }
+
+    /// Anything offensive gives the protection up, and shooting is not the only way to
+    /// spend it: a charge is thrown, a rocket is aimed.
+    internal static void Unprotect(Player player) {
+        protectedUntil.Remove(player.channel.owner.playerID.steamID.m_SteamID);
+    }
+
+    private static void Fired(UseableGun gun, BulletInfo bullet) => Unprotect(gun.player);
+    private static void Launched(UseableGun gun, GameObject projectile) => Unprotect(gun.player);
+    private static void Aimed(UseableGun gun) => Unprotect(gun.player);
+
     /// A rocket is 90 on a direct hit and at most 60 otherwise; a Keyhole grenade
     /// never hurts anybody; the Suppressor's bullets are cut to its own number.
     private static void OnDamagePlayer(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
         if (raid == null) return;
+
+        ulong hurt = parameters.player.channel.owner.playerID.steamID.m_SteamID;
+        if (protectedUntil.TryGetValue(hurt, out float until) && Time.realtimeSinceStartup < until) {
+            shouldAllow = false;
+            return;
+        }
 
         if (Current != null) {
             if (Current.Tool == PeekSeekRaid.Config.KeyholeItemId) {

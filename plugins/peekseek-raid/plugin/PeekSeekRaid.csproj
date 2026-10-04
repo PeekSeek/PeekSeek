@@ -6,7 +6,7 @@
     <RootNamespace>PeekSeekRaid</RootNamespace>
     <AssemblyName>PeekSeekRaid</AssemblyName>
     <Product>PeekSeekRaid</Product>
-    <Version>0.4.1</Version>
+    <Version>0.4.3</Version>
   </PropertyGroup>
 
   <ItemGroup>
