@@ -131,13 +131,28 @@ class UserHB(SQLModel, table=True):
             return UserHB._fresh(db).count()
 
     @staticmethod
-    def _fresh(db):
-        """Matchmaking heartbeats young enough to count. A read only: `freshInQueue`
-        is what sweeps out the stale and the barred."""
+    def _fresh(db, eventId: int | None = None):
+        """Matchmaking heartbeats young enough to count: the open queue by default, or
+        one event's own queue. A read only: `freshInQueue` is what sweeps out the stale
+        and the barred."""
         return db.query(UserHB).where(
-            UserHB.eventId.is_(None),
+            UserHB.eventId.is_(None) if eventId is None else UserHB.eventId == eventId,
             UserHB.time >= time() - settings.queue_timeout,
         )
+
+    @staticmethod
+    def countFreshForEvent(eventId: int) -> int:
+        """How many players are waiting for one event's match right now.
+
+        Shown on the event page beside its join button, so a visitor can see whether
+        there is anybody to play against before they launch the game. It goes through
+        `_fresh` rather than `freshInQueue` because that one deletes what it finds and
+        a page render has no business writing.
+        """
+        from src.core.db import open
+
+        with open() as db:
+            return UserHB._fresh(db, eventId).count()
 
     @staticmethod
     def claim(steam64s) -> bool:
