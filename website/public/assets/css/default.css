@@ -6,16 +6,71 @@
    copying it -- esports.css and esports2.css were once the same file and drifted
    four rules apart, which is the failure this rule exists to prevent. */
 
+/* ---- Colour tokens ----------------------------------------------------------
+
+   Every colour the site uses, named for the job it does rather than the value it
+   happens to be. A stylesheet that wants a colour reaches for one of these; it does
+   not write a hex literal. There were 294 of those across these fourteen files
+   resolving to 84 values, which is how #ff4444 and #f04444 came to sit side by side
+   doing the same job, and why changing one shade meant finding every copy of it.
+
+   Add a token when a second rule needs a colour. Do not add a token per rule. */
+
+:root {
+  /* Text, lightest to dimmest */
+  --text: #fff;
+  --text-bright: #f5f5f5;
+  --text-dim: #aaa;
+  --text-muted: #8a8a8a;
+  --black: #000;
+
+  /* Surfaces, darkest (the page) upwards */
+  --bg: #0a0a0a;
+  --surface: #121212;
+  --surface-raised: #1a1a1a;
+  --surface-high: #222;
+
+  /* Lines and separators */
+  --border: #333;
+  --border-strong: #888;
+  --line: #8885;
+  --line-faint: #8883;
+  --wash: #8882;
+  --veil: #3334;
+
+  /* Brand red */
+  --brand: #ff4444;
+  --brand-light: #ff6666;
+  --brand-strong: #ff0000;
+  --brand-shade: #441111;
+  --brand-header: #2c0a0a;
+
+  /* Status */
+  --info: #47bbe9;
+  --good: #7ee08a;
+  --warn: #ffa34e;
+  --bad: #f5335f;
+  --gold: #f9c948;
+
+  /* Standing: the ring drawn around an avatar */
+  --premium: #a960f0;
+  --discord: #5865f2;
+  --place-1: #ffd700;
+  --place-2: #c0c0c0;
+  --place-3: #cd7f32;
+}
+
+
 * {
   margin: 0;
   padding: 0;
-  color: #fff;
+  color: var(--text);
   font-family: ui-sans-serif,system-ui,-apple-system;
   text-decoration: none;
 }
 
 body {
-  background-color: #0a0a0a;
+  background-color: var(--bg);
 }
 
 /* ---- Page shell: header, sidebar, content column, footer ---------------- */
@@ -46,7 +101,7 @@ footer .inner img {
 }
 
 header {
-  background-color: #2c0a0a;
+  background-color: var(--brand-header);
   height: 80px;
 } header .inner{
   display: flex;
@@ -69,7 +124,7 @@ header {
   border-top-left-radius: 15px;
   border-top-right-radius: 15px;
 
-  background-color: #0a0a0a;
+  background-color: var(--bg);
 } .bg .container {
   display: grid;
   grid-template-columns: auto 40px;
@@ -81,14 +136,14 @@ header {
   align-items: center;
   gap: 20px;
 } header .nav a {
-  color: #aaa;
+  color: var(--text-dim);
   display: flex;
   flex-direction: row;
   justify-content: center;
   gap: 10px;
 }
 header .nav a:hover {
-  color: #fff;
+  color: var(--text);
 }
 
 content .inner {
@@ -98,7 +153,7 @@ content .inner {
 }
 
 content .inner .sidebar {
-  background-color: #0a0a0a;
+  background-color: var(--bg);
   height: 90vh;
 
   border-bottom-left-radius: 15px;
@@ -108,7 +163,7 @@ content .inner .sidebar {
 
   padding: 0 10px;
 } .sidebar .section {
-  border-top: 1px solid #8882;
+  border-top: 1px solid var(--wash);
   padding: 15px 5px;
   width: auto;
   display: flex;
@@ -120,7 +175,7 @@ content .inner .sidebar {
   flex-direction: row;
   align-items: center;
   gap: 5px;
-  color: #8885;
+  color: var(--line);
   text-transform: uppercase;
 } .sidebar img {
   width: 24px;
@@ -144,7 +199,7 @@ content .main {
   margin-top: 20px;
   flex-direction: column;
   gap: 5px;
-  background-color: #0a0a0a;
+  background-color: var(--bg);
   border-radius: 15px;
   padding: 10px 0;
   overflow-y: scroll;
@@ -158,7 +213,7 @@ content .main {
 
 .infoli h1 {
   font-size: 14px;
-  color: #8883;
+  color: var(--line-faint);
   display: grid;
   grid-template-columns: 20px auto 1fr;
   align-items: center;
@@ -167,7 +222,7 @@ content .main {
   margin-bottom: 3px;
 } .infoli h1 div {
   height: 1px;
-  background-color: #8882;
+  background-color: var(--wash);
 }
 
 .infoli a {
@@ -190,7 +245,7 @@ content .main {
 /* The page you are on, marked by layout.js. Esports gets the blue the section uses
    everywhere else; every other page gets the site red. */
 .infoli a.currentPage {
-  background-color: #411;
+  background-color: var(--brand-shade);
   cursor: default;
 } .infoli a.currentPage img {
   filter: brightness(1);
@@ -210,7 +265,7 @@ content .main {
 /* ---- Shared components -------------------------------------------------- */
 
 .mainElement {
-  background-color: #0a0a0a;
+  background-color: var(--bg);
   border-radius: 8px;
   padding: 20px;
   width: auto;
@@ -241,10 +296,10 @@ content .main {
 
 /* The sidebar's own player card: the same card the leaderboard rows draw, at the same
    size, so a player looks the same in the corner of every page as they do on the
-   ladder. Sized here rather than in the card, which never sets its own --av so that a
+   ladder. Sized here rather than in the card, which never sets its own --avatar-size so that a
    context can. */
 .info {
-  --pcav: 28px;
+  --card-avatar-size: 28px;
 }
 
 /* Lines the picture's centre up with the centre of the Play and Discord icons below it,
@@ -271,24 +326,24 @@ content .main {
 /* ---- The player card ---------------------------------------------------- */
 
 /* One component for every place the site names a player: the podium, the ladder rows,
-   a profile header, a match table, a team roster, the sidebar. A caller sets --av, the
+   a profile header, a match table, a team roster, the sidebar. A caller sets --avatar-size, the
    avatar's edge, and the crest, the ring, the name and the rank line all size
    themselves off it, so a new context costs one declaration instead of a new set of
    rules. This replaced seven of those, which had drifted to five avatar treatments and
    seven badge sizes between them.
 
-   --pcbg is what the ring's gap and the badge's outline are knocked out in, so a card
+   --avatar-knockout is what the ring's gap and the badge's outline are knocked out in, so a card
    sitting on a panel has to say so; the page's own colour is the default. */
 .pc {
-  --av: var(--pcav, 34px);
-  --pcbg: var(--pcpanel, #0a0a0a);
-  --gap: max(2px, calc(var(--av) * 0.045));
-  --ringw: max(2px, calc(var(--av) * 0.04));
-  --ring: var(--pcring, #3334);
+  --avatar-size: var(--card-avatar-size, 34px);
+  --avatar-knockout: var(--card-on-panel, var(--bg));
+  --ring-gap: max(2px, calc(var(--avatar-size) * 0.045));
+  --ring-width: max(2px, calc(var(--avatar-size) * 0.04));
+  --ring-colour: var(--card-ring-colour, var(--veil));
 
   display: flex;
   align-items: center;
-  gap: calc(var(--av) * 0.26);
+  gap: calc(var(--avatar-size) * 0.26);
   min-width: 0;
   /* The whole affordance. Nothing here lights up on hover -- a card is a link, and the
      pointer is what says so. */
@@ -297,21 +352,21 @@ content .main {
 
 /* Top three first, always: a player who is both second on the ladder and an admin
    wears silver. The ring is the only thing that says either, so the rarer fact wins. */
-.pc[data-ring="discord"] { --ring: #5865f2; }
-.pc[data-ring="premium"] { --ring: #ffa34e; }
-.pc[data-ring="admin"]   { --ring: #ff0000; }
-.pc[data-place="3"]      { --ring: #cd7f32; }
-.pc[data-place="2"]      { --ring: #c0c0c0; }
-.pc[data-place="1"]      { --ring: #ffd700; }
+.pc[data-ring="discord"] { --ring-colour: var(--discord); }
+.pc[data-ring="premium"] { --ring-colour: var(--warn); }
+.pc[data-ring="admin"]   { --ring-colour: var(--brand-strong); }
+.pc[data-place="3"]      { --ring-colour: var(--place-3); }
+.pc[data-place="2"]      { --ring-colour: var(--place-2); }
+.pc[data-place="1"]      { --ring-colour: var(--place-1); }
 
 .pc .crest {
   position: relative;
-  width: var(--av);
-  height: var(--av);
+  width: var(--avatar-size);
+  height: var(--avatar-size);
   flex-shrink: 0;
   /* The ring is reserved whether or not this player has one, so nothing on the page
      reflows the day somebody links their Discord. */
-  margin: calc(var(--gap) + var(--ringw));
+  margin: calc(var(--ring-gap) + var(--ring-width));
 } .pc .crest .av {
   width: 100%;
   height: 100%;
@@ -319,35 +374,35 @@ content .main {
   object-fit: cover;
   display: block;
   /* Drawn outside the image rather than as a border, so the avatar keeps every pixel
-     it was given and the gap between photo and ring stays even at any --av. */
+     it was given and the gap between photo and ring stays even at any --avatar-size. */
   box-shadow:
-    0 0 0 var(--gap) var(--pcbg),
-    0 0 0 calc(var(--gap) + var(--ringw)) var(--ring);
+    0 0 0 var(--ring-gap) var(--avatar-knockout),
+    0 0 0 calc(var(--ring-gap) + var(--ring-width)) var(--ring-colour);
 }
 
 /* The badge is mounted on the avatar rather than parked beside the name: a player is
    their rank, and at a glance the two should arrive as one object. */
 .pc .crest .badge {
-  --badge: max(14px, calc(var(--av) * 0.3));
-  --knock: max(2px, calc(var(--av) * 0.03));
+  --badge-size: max(14px, calc(var(--avatar-size) * 0.3));
+  --badge-outline: max(2px, calc(var(--avatar-size) * 0.03));
   position: absolute;
   left: 50%;
   /* The badge's centre sits on the bottom of the ring: half of it over the picture,
      half below, with the ring running through the middle and cut by the badge's own
      margin. Derived from the ring rather than the avatar so it stays centred on the
-     ring at every --av instead of drifting inside as the ring gets thicker. */
-  bottom: calc(-1 * (var(--gap) + var(--ringw) / 2) - var(--badge) / 2);
+     ring at every --avatar-size instead of drifting inside as the ring gets thicker. */
+  bottom: calc(-1 * (var(--ring-gap) + var(--ring-width) / 2) - var(--badge-size) / 2);
   transform: translateX(-50%);
-  width: var(--badge);
-  height: var(--badge);
+  width: var(--badge-size);
+  height: var(--badge-size);
   /* Four hard shadows, one per side, give the art a margin that follows its own
      silhouette. A disc behind it would read as a frame, and the badge is never framed,
      cropped or ringed -- but it still has to lift off whatever avatar is under it. */
   filter:
-    drop-shadow(var(--knock) 0 0 var(--pcbg))
-    drop-shadow(calc(var(--knock) * -1) 0 0 var(--pcbg))
-    drop-shadow(0 var(--knock) 0 var(--pcbg))
-    drop-shadow(0 calc(var(--knock) * -1) 0 var(--pcbg));
+    drop-shadow(var(--badge-outline) 0 0 var(--avatar-knockout))
+    drop-shadow(calc(var(--badge-outline) * -1) 0 0 var(--avatar-knockout))
+    drop-shadow(0 var(--badge-outline) 0 var(--avatar-knockout))
+    drop-shadow(0 calc(var(--badge-outline) * -1) 0 var(--avatar-knockout));
 }
 
 .pc .lines {
@@ -357,7 +412,7 @@ content .main {
   gap: 1px;
 } .pc .name {
   font-weight: 700;
-  font-size: clamp(16px, calc(var(--av) * 0.28), 22px);
+  font-size: clamp(16px, calc(var(--avatar-size) * 0.28), 22px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -368,12 +423,12 @@ content .main {
    are read as one fact rather than two. Nothing else gets a prefix: an admin's ring
    already says it, and a word in front of a name would say it twice. */
 .pc .place {
-  color: var(--ring);
+  color: var(--ring-colour);
 }
 
 .pc .sub {
-  font-size: clamp(12px, calc(var(--av) * 0.16), 14px);
-  color: #8a8a8a;
+  font-size: clamp(12px, calc(var(--avatar-size) * 0.16), 14px);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -386,7 +441,7 @@ content .main {
 .pc[data-axis="column"] {
   flex-direction: column;
   text-align: center;
-  gap: calc(var(--av) * 0.1);
+  gap: calc(var(--avatar-size) * 0.1);
   /* Fills the tile rather than sizing to the name, which is what gives the name a width
      to ellipsis against: a content-sized card just grows until it leaves the tile. */
   align-self: stretch;
@@ -409,7 +464,7 @@ content .main {
 
 .seasonPicker select {
   background-color: transparent;
-  color: #fff;
+  color: var(--text);
   border: 0;
   outline: 0;
   border-radius: 5px;
@@ -419,7 +474,7 @@ content .main {
   font-family: inherit;
   cursor: pointer;
 } .seasonPicker select:focus-visible {
-  outline: 2px solid #47bbe9;
+  outline: 2px solid var(--info);
   outline-offset: 2px;
 }
 
@@ -431,8 +486,8 @@ content .main {
 }
 
 .steamlogin {
-  background-color: #fff;
-  color: #000;
+  background-color: var(--text);
+  color: var(--black);
   width: 250px;
   height: 45px;
   border-radius: 10px;
@@ -450,8 +505,8 @@ content .main {
 }
 
 .settingsButton {
-  background-color: #fff;
-  color: #000;
+  background-color: var(--text);
+  color: var(--black);
   height: 35px;
   border-radius: 5px;
   outline: 0;
@@ -488,14 +543,14 @@ content .main {
    data-rank carries the icon name the template already has, which keeps the nine
    colours here and out of the nine places a badge gets drawn.
 
-   The global `* { color: #fff }` sets a colour on every element directly instead of
+   The global `* { color: var(--text) }` sets a colour on every element directly instead of
    letting one cascade, so anything meant to pick up the rank colour has to ask for it
    back with `color: inherit`. */
-[data-rank="bronze"], [data-rank="bronze1"] { --rank: #d9784a; color: #d9784a; }
-[data-rank="silver"], [data-rank="silver1"] { --rank: #e3e9ef; color: #e3e9ef; }
-[data-rank="gold"],   [data-rank="gold1"]   { --rank: #f9c948; color: #f9c948; }
-[data-rank="immune"], [data-rank="immune1"] { --rank: #a960f0; color: #a960f0; }
-[data-rank="apollo"]                        { --rank: #f5335f; color: #f5335f; }
+[data-rank="bronze"], [data-rank="bronze1"] { --rank-colour: #d9784a; color: #d9784a; }
+[data-rank="silver"], [data-rank="silver1"] { --rank-colour: #e3e9ef; color: #e3e9ef; }
+[data-rank="gold"],   [data-rank="gold1"]   { --rank-colour: var(--gold); color: var(--gold); }
+[data-rank="immune"], [data-rank="immune1"] { --rank-colour: var(--premium); color: var(--premium); }
+[data-rank="apollo"]                        { --rank-colour: var(--bad); color: var(--bad); }
 
 /* The badge art is the whole element. It is never cropped, framed or ringed, so a
    page that rounds off its avatars has to say it means the avatars. */
@@ -513,7 +568,7 @@ content .main {
   display: flex;
   align-items: center;
   gap: 16px;
-  background-color: #121212;
+  background-color: var(--surface);
   border-radius: 6px;
   padding: 14px 16px;
   margin: 5px 0;
@@ -541,16 +596,16 @@ content .main {
 
 .rankGoal {
   font-size: 12px;
-  color: #8a8a8a;
+  color: var(--text-muted);
 }
 
 .rankDelta {
   font-size: 16px;
   font-weight: 800;
 } .rankDelta.pos {
-  color: #7ee08a;
+  color: var(--good);
 } .rankDelta.neg {
-  color: #ff4444;
+  color: var(--brand);
 }
 
 /* Only drawn when a match actually moved somebody between tiers, which is the one
@@ -561,23 +616,26 @@ content .main {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 } .rankMove.up {
-  color: #7ee08a;
+  color: var(--good);
 } .rankMove.down {
-  color: #ff4444;
+  color: var(--brand);
 }
 
 .rankBar {
   position: relative;
   height: 8px;
   border-radius: 4px;
-  background-color: #1a1a1a;
+  background-color: var(--surface-raised);
   overflow: hidden;
   width: 100%;
 } .rankBar i {
   position: absolute;
   top: 0;
   bottom: 0;
+  /* --held and --changed are the only things the template sets, because only the server
+     knows them. Everything drawn from them is here. */
   left: 0;
+  width: var(--held, 0%);
   color: inherit;
   background-color: currentColor;
   border-radius: 4px;
@@ -586,19 +644,23 @@ content .main {
 /* What one match moved, drawn on the same bar as the total rather than beside it: the
    green sits on the end the player just earned, the red on the end they just gave back.
    Same two colours the match list already uses for an Elo change. */
-.rankBar .gained { background-color: #7ee08a; }
-.rankBar .lost { background-color: #ff4444; }
+.rankBar .gained, .rankBar .lost {
+  left: var(--held, 0%);
+  width: var(--changed, 0%);
+}
+.rankBar .gained { background-color: var(--good); }
+.rankBar .lost { background-color: var(--brand); }
 
 /* The changed slice grows in from nothing on load. The bar is server-rendered and
    never moves again, so this is the only chance the page gets to show the Elo landing
    rather than presenting it as though it had always been there. `from` alone, because
-   the width it grows to is the inline one the template worked out. */
+   the width it grows to is --changed, which the template supplies. */
 /* Above 800 there is no bar, because there is no threshold left to cross: the badge
    above is a seat. The Elo and the place in the queue for one are the whole answer, and
    only the two numbers are bold -- ELO and # are labels, there to be looked past. */
 .rankStanding {
   font-size: 13px;
-  color: #8a8a8a;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 } .rankStanding b {
   color: inherit;
@@ -613,23 +675,23 @@ content .main {
    gap out of it with the same knockout the avatar's ring uses, so the fill reads as
    passing under the badge and arriving at the next one. */
 .rankProgress {
-  --tick: 22px;
+  --tick-colour: 22px;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   row-gap: 4px;
   width: 100%;
 } .rankProgress .tick {
-  --knock: 4px;
+  --badge-outline: 4px;
   position: relative;
   z-index: 1;
-  height: var(--tick);
-  width: var(--tick);
+  height: var(--tick-colour);
+  width: var(--tick-colour);
   filter:
-    drop-shadow(var(--knock) 0 0 var(--pcpanel, #0a0a0a))
-    drop-shadow(calc(var(--knock) * -1) 0 0 var(--pcpanel, #0a0a0a))
-    drop-shadow(0 var(--knock) 0 var(--pcpanel, #0a0a0a))
-    drop-shadow(0 calc(var(--knock) * -1) 0 var(--pcpanel, #0a0a0a));
+    drop-shadow(var(--badge-outline) 0 0 var(--card-on-panel, var(--bg)))
+    drop-shadow(calc(var(--badge-outline) * -1) 0 0 var(--card-on-panel, var(--bg)))
+    drop-shadow(0 var(--badge-outline) 0 var(--card-on-panel, var(--bg)))
+    drop-shadow(0 calc(var(--badge-outline) * -1) 0 var(--card-on-panel, var(--bg)));
 } .rankProgress .rankBar {
   /* Half a badge into each end, so the bar runs from the centre of the badge you wear
      to the centre of the one above rather than stopping at their edges: empty means
@@ -641,11 +703,11 @@ content .main {
      bar was landing half a badge to the left of where it belonged and stopping half a
      badge short of the one it is meant to arrive at. */
   width: auto;
-  margin: 0 calc(var(--tick) / -2);
+  margin: 0 calc(var(--tick-colour) / -2);
   z-index: 0;
 } .rankProgress .mark {
   font-size: 11px;
-  color: #8a8a8a;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -669,11 +731,11 @@ content .main {
   min-height: 20px;
   flex-direction: unset;
 } .warning span b {
-  color: #ffa34e;
+  color: var(--warn);
 } .gdpr span b {
   color: #00ccff;
 } .gdpr button {
-  background-color: #fff;
+  background-color: var(--text);
   color: #006680;
   font-weight: bolder;
   padding: 5px 20px;
@@ -721,7 +783,7 @@ content .main {
    sentence it labels, but still a fixed thing to point at in a dispute. */
 .bigger {
   font-size: 12px;
-  color: #333;
+  color: var(--border);
   font-weight: bold;
 }
 
@@ -729,9 +791,9 @@ content .main {
    the ids nobody reads until something has gone wrong. The `*` reset at the top of
    this file colours every element, so descendants have to be told to inherit. */
 .muted {
-  color: #333;
+  color: var(--border);
 } .mutedSmall {
-  color: #333;
+  color: var(--border);
   font-size: 12px;
 } .muted *, .mutedSmall * {
   color: inherit;
@@ -752,7 +814,7 @@ content .main {
   grid-gap: 20px;
   padding: 25px 20px;
   padding-top: 18px;
-  background-color: #1a1a1a;
+  background-color: var(--surface-raised);
   border-radius: 10px;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
@@ -768,8 +830,8 @@ content .main {
   border-radius: 10px;
   min-height: 80px;
   cursor: pointer;
-  border: 3px solid #121212;
-  color: #aaa;
+  border: 3px solid var(--surface);
+  color: var(--text-dim);
 
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -777,18 +839,18 @@ content .main {
   user-select: none;
 } .qgridoption h1 {
   font-size: 16px;
-  color: #fff;
+  color: var(--text);
   display: flex;
   align-items: center;
   gap: 5px;
 } .qgridoption h1 b {
   color: #ff9d9db6;
 } .qgridoption h1 b::before {
-  color: #fff;
+  color: var(--text);
 } .qgridoption * {
   color: inherit;
 }.isSelected {
-  background-color: #121212;
+  background-color: var(--surface);
 } .isSelected::before {
   content: "Selected";
   font-size: 12px;
@@ -843,12 +905,12 @@ content .main {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #8882;
+  background: var(--wash);
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #8883;
+  background: var(--line-faint);
 }
 
 /* ---- Utilities, last on purpose ------------------------------------------- */

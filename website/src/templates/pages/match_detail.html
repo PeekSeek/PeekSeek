@@ -24,8 +24,11 @@
           <span class="rankDelta {{ 'pos' if you.delta >= 0 else 'neg' }}">{{ "+" if you.delta >= 0 else "" }}{{you.delta}}</span>
         </div>
         <div class="rankBar">
-          <i style="width:{{you.bar.held}}%"></i>
-          <i class="{{you.bar.direction}}" style="left:{{you.bar.held}}%;width:{{you.bar.changed}}%"></i>
+          {# The two percentages are the server's; everything drawn from them is in
+             default.css. A custom property is the only thing a stylesheet cannot
+             supply for itself. #}
+          <i style="--held:{{you.bar.held}}%"></i>
+          <i class="{{you.bar.direction}}" style="--held:{{you.bar.held}}%;--changed:{{you.bar.changed}}%"></i>
         </div>
         <span class="rankGoal">{{you.elo}} Elo. {{you.rank.goal}}</span>
       </div>

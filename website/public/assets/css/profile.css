@@ -50,7 +50,7 @@
 .bans     { grid-area: bn; }
 
 .tile {
-  background-color: #121212;
+  background-color: var(--surface);
   border-radius: 10px;
   padding: 16px;
   display: flex;
@@ -63,10 +63,10 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #8a8a8a;
+  color: var(--text-muted);
   margin: 0;
 } .tile .empty {
-  color: #8a8a8a;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -81,8 +81,8 @@
 /* The subject of the page, so it is the one tile that is square-ish and centred rather
    than a list with a heading. */
 .identity {
-  --pcpanel: #121212;
-  --pcav: 96px;
+  --card-on-panel: var(--surface);
+  --card-avatar-size: 96px;
   align-items: center;
   justify-content: center;
   text-align: center;
@@ -108,11 +108,11 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #8a8a8a;
+  color: var(--text-muted);
   font-size: 13px;
   margin-top: 4px;
 } .identity .accountLine span {
-  color: #8a8a8a;
+  color: var(--text-muted);
 }
 
 /* A button that has to read as part of the sentence it sits in, so it drops every
@@ -139,7 +139,7 @@
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #8a8a8a;
+  color: var(--text-muted);
 } .statcard .value {
   font-size: 22px;
   font-weight: 800;
@@ -159,7 +159,7 @@
      half a tile tall each. */
   align-content: start;
 } .kits .statcard {
-  background-color: #121212;
+  background-color: var(--surface);
   border-radius: 6px;
   padding: 9px 12px;
 }
@@ -193,7 +193,7 @@
   gap: 14px;
   border-radius: 6px;
   padding: 10px 14px;
-  background-color: #121212;
+  background-color: var(--surface);
   flex-shrink: 0;
   cursor: pointer;
 } .matchrow .map {
@@ -204,27 +204,27 @@
 } .matchrow .map .name {
   font-size: 14px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 } .matchrow .map .when {
   font-size: 11px;
-  color: #8a8a8a;
+  color: var(--text-muted);
 } .matchrow .kd, .matchrow .hs {
   font-size: 12.5px;
-  color: #8a8a8a;
+  color: var(--text-muted);
   white-space: nowrap;
 } .matchrow .kd b {
-  color: #fff;
+  color: var(--text);
 } .matchrow .elo {
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 } .matchrow .elo.pos {
-  color: #7ee08a;
+  color: var(--good);
 } .matchrow .elo.neg {
-  color: #ff4444;
+  color: var(--brand);
 }
 
 /* The same bento narrower, and then stacked. The profile keeps its fixed column for as
@@ -301,7 +301,7 @@
 /* The quietest line in the group and the smallest: what a player has is worth saying
    once, under where they stand, and never louder than it. */
 .profileRank {
-    color: #8a8a8a;
+    color: var(--text-muted);
     font-size: 11px;
     letter-spacing: 0.04em;
 }
@@ -311,8 +311,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: #fff;
-    color: #000;
+    background: var(--text);
+    color: var(--black);
     border: 0;
     border-radius: 5px;
     padding: 5px 7px;
@@ -324,7 +324,7 @@
     line-height: 1;
 }
 .profileButton img {filter: brightness(0)}
-.profileButton:focus-visible { outline: 2px solid #47bbe9; outline-offset: 2px; }
+.profileButton:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 
 /* Bans reuse the match row, because they are the same shape of thing: a list of
    what has happened to this account. Only the leading column differs. */
@@ -341,11 +341,11 @@
     letter-spacing: 0.06em;
     min-width: 58px;
 }
-.banlist .loss .banState { color: #f04444; }
-.banlist .win .banState { color: #8885; }
+.banlist .loss .banState { color: var(--brand); }
+.banlist .win .banState { color: var(--line); }
 
 .banNote {
-    color: #8885;
+    color: var(--line);
     font-size: 12px;
     margin-left: auto;
     text-align: right;

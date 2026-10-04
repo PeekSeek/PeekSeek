@@ -27,7 +27,7 @@
 }
 
 .event * {
-    color: #FFF;
+    color: var(--text);
 }
 
 .event .eventTitle {
@@ -41,7 +41,7 @@
 
 .event button {
     background-color: #007BFF;
-    color: #FFF;
+    color: var(--text);
     border: none;
     padding: 10px 15px;
     border-radius: 5px;
@@ -98,7 +98,7 @@
 /* The one number on the page that is true only while you are looking at it, so it gets
    the queue's own accent rather than the brand red, which on this site means jeopardy. */
 .queueCount b {
-    color: #47bbe9;
+    color: var(--info);
 }
 
 /* ---- Sign-up: the team name / join code pairs ---------------------------- */
@@ -145,7 +145,7 @@
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
 
-    color: #fff;
+    color: var(--text);
 }
 
 .eventSingleButton:hover, .eventButton:hover {
@@ -165,7 +165,7 @@
 
     cursor: pointer;
     font-weight: bold;
-    color: #fff;
+    color: var(--text);
 
     display: flex;
     flex-direction: row;
@@ -177,7 +177,7 @@
 
 .red {
     background-color: #ff4f4f;
-    color: #fff;
+    color: var(--text);
 } .red:hover {
     background-color: #ac3636;
 }
@@ -203,7 +203,7 @@
 }
 
 .usercontainer {
-    --pcav: 32px;
+    --card-avatar-size: 32px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -250,7 +250,7 @@
 /* The boxes are unchanged -- same widths, same 250px podium, same scale transforms,
    same margins. What is inside them is now one .pc (default.css) instead of a hand
    written avatar/name/badge stack, so the rules here name the card's parts and set
-   --pcav, and nothing else about the layout moved. */
+   --card-avatar-size, and nothing else about the layout moved. */
 
 .top3 {
     display: flex;
@@ -270,13 +270,13 @@
 }
 
 .top3 .pc {
-    --pcpanel: #121212;
+    --card-on-panel: var(--surface);
     /* Half the card, as `.top3 a img { width: 50% }` was. The ring replaces the 3px
        border and 5px padding that used to sit around it, and lands on the same
        outside edge. */
-    --pcav: 100px;
+    --card-avatar-size: 100px;
 
-    background-color: #121212;
+    background-color: var(--surface);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -298,18 +298,18 @@
 } .top3 .pc .sub {
     font-size: 11px;
     letter-spacing: 0.04em;
-    color: #8a8a8a;
+    color: var(--text-muted);
 }
 
 /* The medal borders and the h1::before numbers are gone: the ring and the "#1" are the
    card's own, so every place the site names a top-three player says it the same way. */
 .t1 {
-    box-shadow: 0 0 3px 5px #0a0a0a;
+    box-shadow: 0 0 3px 5px var(--bg);
     z-index: 5;
     position: relative;
-    background: #222;
-    --pcpanel: #222;
-    color: #fff;
+    background: var(--surface-high);
+    --card-on-panel: var(--surface-high);
+    color: var(--text);
     overflow: hidden;
 } .t1 * {
     z-index: 7;
@@ -382,7 +382,7 @@
 /* No fill and no card: these rows sit straight on the page, as they always have. The
    only thing that changed is that the rank now reads under the name. */
 .top10 .pc {
-    --pcav: 28px;
+    --card-avatar-size: 28px;
 
     padding-right: 5px;
     border-radius: 5px;
@@ -393,7 +393,7 @@
 .top10 > div > span {
     width: 30px;
     text-align: right;
-    color: #222;
+    color: var(--surface-high);
 }
 
 .aboutyou {
@@ -403,7 +403,7 @@
 }
 
 .youCard {
-    --pcav: 50px;
+    --card-avatar-size: 50px;
 
     border-radius: 15px;
     display: flex;
@@ -413,12 +413,12 @@
     position: relative;
 } .youCard .youElo {
     font-size: 10px;
-    color: #8a8a8a;
+    color: var(--text-muted);
     font-variant-numeric: tabular-nums;
 } .youCard i {
     position: absolute;
     top: 5px;
-    color: #333;
+    color: var(--border);
 } .youCard .logoTile {
     width: 50px;
 }
