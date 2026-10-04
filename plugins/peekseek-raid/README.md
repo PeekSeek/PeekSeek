@@ -3,8 +3,8 @@
 Build a base. Then take turns cracking each other's.
 
 A gamemode for [PeekSeek Match](../peekseek/), which runs the match, the roster, the
-score and the screens; this plugin is the rules. It was built as "Siege", and the
-original brief in `BRIEF.md` still calls it that.
+score and the screens; this plugin is the rules. It was built as "Siege", and a few
+comments in here still call it that.
 
 Two teams get five minutes on opposite ends of Alpha Valley to put up a building. After
 that the buildings never change again: they are photographed, and re-laid brick for brick
@@ -258,4 +258,4 @@ The plugin is compiled against `PeekSeek.dll` and loaded beside it; the DLL is n
 shipped with it, since a second `PeekSeek.dll` under `Rocket/Plugins` loads as a second
 plugin.
 
-See `BRIEF.md` for the original instructions and the places this deviates from them.
+See [DESIGN.md](DESIGN.md) for the design and the places this knowingly departs from it.

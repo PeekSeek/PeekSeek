@@ -145,19 +145,35 @@ def body_schema(model: type) -> dict:
     """An `openapi_extra` that documents `model` as a route's request body.
 
     Needed because the body arrives through `forced_json_body` rather than as a typed
-    parameter — FastAPI cannot infer a schema it never sees. The route validates into the
+    parameter - FastAPI cannot infer a schema it never sees. The route validates into the
     same model, so the published schema and the enforced one are one definition.
+
+    The schema is inlined whole, with nested models substituted in place of their `$ref`s.
+    An inlined schema cannot carry references: a `$ref` in an OpenAPI document resolves
+    against the document root, so both `#/components/schemas/X` and `#/$defs/X` dangle
+    here, and a dangling one fails the documentation build rather than the app. These
+    models are small enough that inlining them costs nothing.
     """
+    schema = model.model_json_schema()
+    definitions = schema.pop("$defs", {})
+
+    def inline(node):
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if ref and ref.startswith("#/$defs/"):
+                resolved = dict(definitions.get(ref.split("/")[-1], {}))
+                # Anything alongside the $ref (a description, a default) wins over the
+                # definition it points at, which is what $ref siblings mean.
+                return inline(resolved | {k: v for k, v in node.items() if k != "$ref"})
+            return {key: inline(value) for key, value in node.items()}
+        if isinstance(node, list):
+            return [inline(item) for item in node]
+        return node
+
     return {
         "requestBody": {
             "required": True,
-            "content": {
-                "application/json": {
-                    "schema": model.model_json_schema(
-                        ref_template="#/components/schemas/{model}"
-                    )
-                }
-            },
+            "content": {"application/json": {"schema": inline(schema)}},
         }
     }
 
