@@ -1,5 +1,9 @@
-# Forking for another game
-
+---
+title: Forking for another game
+description: What is Unturned-specific, and what it costs to replace
+sidebar:
+  order: 6
+---
 PeekSeek runs Unturned, but very little of it knows that. This page is an honest
 inventory of what you would have to replace, ordered by how much work each part actually
 is.
@@ -37,7 +41,7 @@ That is the entire contract. It is HTTP and JSON, so it can be a RocketMod plugi
 SourceMod extension, a Minecraft plugin, a sidecar process, or a few hundred lines in
 whatever language your game's modding API speaks.
 
-Read [the match lifecycle](match-lifecycle.md) before you start. The retry semantics are
+Read [the match lifecycle](/docs/match-lifecycle/) before you start. The retry semantics are
 the part people get wrong.
 
 The two shipped plugins are the reference implementation:
@@ -85,7 +89,7 @@ Unturned gun or a Counter-Strike weapon is not something the site inspects.
 
 `UnturnedItem` is the one badly named table, since it is really "a display name for a
 game item". Renaming it is a schema change and therefore manual, per
-[Architecture](architecture.md#data).
+[Architecture](/docs/architecture/#data).
 
 ---
 
@@ -135,8 +139,8 @@ Worth stating plainly, because it is most of the value:
 ## A realistic order
 
 1. Get the website running locally against SQLite.
-   [Getting Started](getting-started.md).
-2. Read [the match lifecycle](match-lifecycle.md) until the retry rules make sense.
+   [Getting Started](/docs/getting-started/).
+2. Read [the match lifecycle](/docs/match-lifecycle/) until the retry rules make sense.
 3. Allow-list a machine you control with `BOOTSTRAP_SERVERS` and poll `/server/v1/session`
    **by hand**, with curl. You will see `idle`.
 4. Queue a player through the site and watch your poll turn into `host`.

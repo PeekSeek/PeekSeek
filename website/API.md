@@ -5,7 +5,10 @@ else. It is deliberately not Unturned-specific: a server for a different game im
 the same calls and speaks the same JSON.
 
 The reference implementation is [src/routes/gameserver.py](src/routes/gameserver.py).
-Live, browsable docs for every route are at `/docs`.
+Every route's parameters, schemas and responses are generated from this app into
+[the server API reference](https://peekseek.net/docs/reference/server-api/), and the
+raw schema is at [`/openapi.json`](https://peekseek.net/openapi.json). The
+interactive explorer is at `/api`.
 
 ## Conventions
 

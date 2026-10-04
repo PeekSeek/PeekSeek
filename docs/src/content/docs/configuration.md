@@ -1,5 +1,9 @@
-# Configuration
-
+---
+title: Configuration
+description: Every knob, and which file or variable it lives in
+sidebar:
+  order: 5
+---
 Configuration splits by **kind**, not by environment.
 
 | Where | Holds | In the repository |
@@ -36,7 +40,7 @@ deployment run without the ability to touch anything real.
 | `BOOTSTRAP_SERVERS` | No game server can authenticate. |
 
 Both bootstraps should be unset once they have done their job. See
-[Self-hosting](self-hosting.md#first-run).
+[Self-hosting](/docs/self-hosting/#first-run).
 
 ---
 
@@ -67,7 +71,7 @@ Every number that decides whether a roster becomes a match.
 | `rematch_cooldown` | 300 | Seconds before the same two players can be put against each other again |
 | `match_cooldown` | 1 | Seconds after one match is made before the next can be, site-wide |
 
-See [the match lifecycle](match-lifecycle.md#what-decides-a-roster) for how the gap and
+See [the match lifecycle](/docs/match-lifecycle/#what-decides-a-roster) for how the gap and
 the rematch cooldown interact. One repeated pairing rejects a whole roster.
 
 ---
@@ -82,13 +86,14 @@ connect_code = "85568392936415589"
 The server code `/lobby` hands to the game. This is the steamID64 the server's login
 token owns, so it survives restarts.
 
-!!! note "Store the code, never the address"
-    A server running with FakeIP protection is given a fresh `169.254.x.x:port` by
-    Steam's relay every session, so the address is worth nothing written down. The code
-    beside it in the server console changes only when the login token does.
+:::note[Store the code, never the address]
+A server running with FakeIP protection is given a fresh `169.254.x.x:port` by
+Steam's relay every session, so the address is worth nothing written down. The code
+beside it in the server console changes only when the login token does.
 
-    Read a new one off the console after a token change. It is the line beginning
-    `Server Code:`.
+Read a new one off the console after a token change. It is the line beginning
+`Server Code:`.
+:::
 
 ---
 
@@ -99,9 +104,10 @@ token owns, so it survives restarts.
 list = ["admin", "canWriteBlog", "premium"]
 ```
 
-!!! danger "Order is a storage format"
-    A permission's index in this list is its **bit** in `Users.permissions`. Reordering
-    the list silently reassigns everyone's permissions. Append only.
+:::danger[Order is a storage format]
+A permission's index in this list is its **bit** in `Users.permissions`. Reordering
+the list silently reassigns everyone's permissions. Append only.
+:::
 
 ---
 
@@ -147,4 +153,4 @@ Paths, relative to `config.toml`, of the two JSON datasets.
 
 These are JSON rather than TOML because they are machine-shaped: deep, repetitive, and
 edited by tooling more often than by hand. Both are the most game-specific files in the
-website, and the first two you replace when [forking](forking.md).
+website, and the first two you replace when [forking](/docs/forking/).

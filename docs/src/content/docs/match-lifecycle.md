@@ -1,10 +1,15 @@
-# The match lifecycle
-
+---
+title: The match lifecycle
+description: How a match is formed, hosted, played and reported
+sidebar:
+  order: 3
+---
 If you read one page to understand the design, read this one. Every awkward-looking
 decision in the API comes from a single constraint.
 
-!!! abstract "The constraint"
-    A match cannot exist without a game server holding it.
+:::tip[The constraint]
+A match cannot exist without a game server holding it.
+:::
 
 ---
 
@@ -75,14 +80,15 @@ change nothing, so a reply lost on the way back costs a duplicate request rather
 doubled Elo swing. It is accepted even for a match already marked finished, because that
 is exactly what happens to a result that was slow to arrive.
 
-!!! danger "Report the whole roster"
-    `players` must include everyone on the match, including anyone who never joined and
-    anyone who left. A player the server omits is a player whose Elo never moves, which
-    is what used to make walking out of a losing match free.
+:::danger[Report the whole roster]
+`players` must include everyone on the match, including anyone who never joined and
+anyone who left. A player the server omits is a player whose Elo never moves, which
+is what used to make walking out of a losing match free.
 
-    `played: false` scores nothing and just releases the match. That is the honest answer
-    when nobody turned up, and it is not the same as a real result that happened to be
-    goalless.
+`played: false` scores nothing and just releases the match. That is the honest answer
+when nobody turned up, and it is not the same as a real result that happened to be
+goalless.
+:::
 
 ## How a result is rated
 
@@ -99,7 +105,7 @@ A ranked result moves two numbers for every player on the roster.
   stays put. A draw is worth nothing, and nobody goes below 100.
 
 `Elo Change` in the result summary is the ladder's move. The tunables are under
-`[ranking]` in [`config.toml`](configuration.md).
+`[ranking]` in [`config.toml`](/docs/configuration/).
 
 ---
 
@@ -133,7 +139,7 @@ Swapping one team-mate still leaves `a` and `b` facing `c` a second time.
 
 Parties are never split across teams. Within those constraints, the longest-waiting
 players are matched first and teams are balanced on skill. Every number here is in
-`[matchmaking]` in [`config.toml`](configuration.md).
+`[matchmaking]` in [`config.toml`](/docs/configuration/).
 
 ---
 
@@ -141,5 +147,5 @@ players are matched first and teams are balanced on skill. Every number here is 
 
 - [The full API contract](https://github.com/PeekSeek/PeekSeek/blob/main/website/API.md),
   including players, lobby population and the payload shapes
-- [Forking for another game](forking.md), which is mostly a matter of reimplementing this
+- [Forking for another game](/docs/forking/), which is mostly a matter of reimplementing this
   loop

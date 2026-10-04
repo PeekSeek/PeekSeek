@@ -1,0 +1,22 @@
+{
+  "name": "peekseek-docs",
+  "version": "0.0.0",
+  "description": "The PeekSeek documentation site",
+  "scripts": {
+    "schema": "python ../website/scripts/openapi.py openapi.json",
+    "prestart": "node scripts/import-api-contract.mjs",
+    "prebuild": "node scripts/import-api-contract.mjs",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "type": "module",
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.5",
+    "astro": "^7.3.5",
+    "sharp": "^0.35.5",
+    "starlight-links-validator": "^0.26.0",
+    "starlight-openapi": "^0.26.3"
+  },
+  "private": true
+}

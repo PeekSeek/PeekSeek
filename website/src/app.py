@@ -31,7 +31,16 @@ async def lifespan(app: FastAPI):
     counter.cancel()
 
 
-app = FastAPI(title="PeekSeek", dependencies=[Depends(load_user)], lifespan=lifespan)
+# /docs is the documentation site (mounted below), so the generated API explorer
+# moves to /api. Both read from the same /openapi.json, which is also what the docs
+# build renders its route reference from.
+app = FastAPI(
+    title="PeekSeek",
+    dependencies=[Depends(load_user)],
+    lifespan=lifespan,
+    docs_url="/api",
+    redoc_url=None,
+)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
@@ -39,6 +48,13 @@ app.add_middleware(
     max_age=60 * 60 * 24 * 30,
 )
 app.mount("/static", StaticFiles(directory=settings.public), name="static")
+
+# The docs are a static Starlight build served from this app so the handbook and the
+# route reference share the site's domain. Mounted only when built: a checkout that
+# has not run the docs build still has to start, and StaticFiles raises on a missing
+# directory.
+if settings.docs:
+    app.mount("/docs", StaticFiles(directory=settings.docs, html=True), name="docs")
 
 for module in (index, pages, auth, user, kits, admin, esports, gameserver, party):
     app.include_router(module.router)

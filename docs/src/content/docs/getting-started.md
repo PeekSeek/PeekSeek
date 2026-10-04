@@ -1,5 +1,9 @@
-# Getting Started
-
+---
+title: Getting started
+description: Run the website locally against a throwaway database
+sidebar:
+  order: 1
+---
 This gets the website running on your machine with a throwaway database. You do not need
 a game server, and you do not need Unturned.
 
@@ -34,13 +38,16 @@ Then start it:
 uvicorn src.app:app --reload
 ```
 
-The site is on [localhost:8000](http://localhost:8000). Interactive API docs, generated
-from the routes themselves, are at [localhost:8000/docs](http://localhost:8000/docs).
+The site is on [localhost:8000](http://localhost:8000). The interactive API explorer,
+generated from the routes themselves, is at
+[localhost:8000/api](http://localhost:8000/api) — `/docs` is these pages, which the
+app serves from the same port once they are built.
 
-!!! note "SQLite is for convenience, not fidelity"
-    `DB` takes any SQLAlchemy URL, and the schema is built by `create_all` either way.
-    SQLite will not reproduce Postgres-specific problems, integer width being the
-    obvious one. Use Postgres before you trust anything you measured.
+:::note[SQLite is for convenience, not fidelity]
+`DB` takes any SQLAlchemy URL, and the schema is built by `create_all` either way.
+SQLite will not reproduce Postgres-specific problems, integer width being the
+obvious one. Use Postgres before you trust anything you measured.
+:::
 
 ---
 
@@ -107,6 +114,6 @@ NuGet package, so there are no hand-copied `lib/` DLLs to find. The compiled DLL
 
 ## Next
 
-- [Architecture](architecture.md), if you want to know what you just started
-- [Self-hosting](self-hosting.md), when you want it on a real domain
-- [Configuration](configuration.md), for every setting in one table
+- [Architecture](/docs/architecture/), if you want to know what you just started
+- [Self-hosting](/docs/self-hosting/), when you want it on a real domain
+- [Configuration](/docs/configuration/), for every setting in one table

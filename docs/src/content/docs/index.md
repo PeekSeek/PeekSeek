@@ -1,15 +1,19 @@
-# PeekSeek
-
+---
+title: PeekSeek
+description: An open-source matchmaking and esports platform
+sidebar:
+  order: 0
+---
 PeekSeek is an open-source matchmaking and esports platform. It runs
 [peekseek.net](https://peekseek.net) for Unturned, and everything that makes it work is
 in [one repository](https://github.com/PeekSeek/PeekSeek).
 
 These docs are for three kinds of people:
 
-- **You want to run your own instance.** Start at [Getting Started](getting-started.md).
+- **You want to run your own instance.** Start at [Getting Started](/docs/getting-started/).
 - **You want to understand how it works** before trusting it. Start at
-  [Architecture](architecture.md).
-- **You want it for a different game.** Start at [Forking](forking.md). The part of the
+  [Architecture](/docs/architecture/).
+- **You want it for a different game.** Start at [Forking](/docs/forking/). The part of the
   system that talks to game servers was built to not care what game it is.
 
 ---
@@ -56,7 +60,7 @@ match it can, and takes it, all before answering the request.
 
 So a matchmade match is created already assigned to the server that will host it. There
 is no scheduler, no broker, and no window where a match exists with nowhere to play it.
-[The match lifecycle](match-lifecycle.md) walks through what that means in practice.
+[The match lifecycle](/docs/match-lifecycle/) walks through what that means in practice.
 
 ---
 
@@ -69,9 +73,9 @@ it, run it, sell it. Attribution is welcome and not required.
 
 ## Quick links
 
-- [Getting started](getting-started.md) with a local instance
-- [Architecture](architecture.md) and how the halves talk
-- [Self-hosting](self-hosting.md) a real deployment
-- [Configuration](configuration.md), every knob in one place
-- [Forking for another game](forking.md)
+- [Getting started](/docs/getting-started/) with a local instance
+- [Architecture](/docs/architecture/) and how the halves talk
+- [Self-hosting](/docs/self-hosting/) a real deployment
+- [Configuration](/docs/configuration/), every knob in one place
+- [Forking for another game](/docs/forking/)
 - [The game-server API contract](https://github.com/PeekSeek/PeekSeek/blob/main/website/API.md)

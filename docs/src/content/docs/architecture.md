@@ -1,5 +1,9 @@
-# Architecture
-
+---
+title: Architecture
+description: One FastAPI app, three audiences, and where the data lives
+sidebar:
+  order: 2
+---
 One FastAPI app serves three different audiences on one port. That is the whole shape of
 the system, and most of what follows is a consequence of it.
 
@@ -49,13 +53,14 @@ the order of that list is a storage format and not a preference.
 route under `/server/v1` returns `401` to an address that is not in it, and nothing in
 the site adds one. You seed the first entries with `BOOTSTRAP_SERVERS`.
 
-!!! warning "Reverse proxies and `--forwarded-allow-ips`"
-    Because server auth trusts `request.client.host`, uvicorn's proxy-header handling
-    has to be scoped. Setting `--forwarded-allow-ips=*` means any caller can set
-    `X-Forwarded-For` to an allow-listed address and walk through the IP check. The
-    shipped [Dockerfile](https://github.com/PeekSeek/PeekSeek/blob/main/website/Dockerfile)
-    scopes it to private ranges so only the proxy's own hop is trusted. Keep that
-    property if you change the deployment.
+:::caution[Reverse proxies and `--forwarded-allow-ips`]
+Because server auth trusts `request.client.host`, uvicorn's proxy-header handling
+has to be scoped. Setting `--forwarded-allow-ips=*` means any caller can set
+`X-Forwarded-For` to an allow-listed address and walk through the IP check. The
+shipped [Dockerfile](https://github.com/PeekSeek/PeekSeek/blob/main/website/Dockerfile)
+scopes it to private ranges so only the proxy's own hop is trusted. Keep that
+property if you change the deployment.
+:::
 
 ---
 
@@ -127,15 +132,16 @@ readable source, the image serves compressed files, and no template has to know 
 build it is in. The compressors are uninstalled in the same layer and never reach the
 running container.
 
-!!! note "One consequence worth knowing"
-    Because CSS is concatenated per file and served as written, plain cascade rules
-    apply. Utility classes such as `.hidden` have to come last in a stylesheet to beat
-    component rules of equal specificity.
+:::note[One consequence worth knowing]
+Because CSS is concatenated per file and served as written, plain cascade rules
+apply. Utility classes such as `.hidden` have to come last in a stylesheet to beat
+component rules of equal specificity.
+:::
 
 ---
 
 ## Next
 
-- [The match lifecycle](match-lifecycle.md), which is where the design shows
+- [The match lifecycle](/docs/match-lifecycle/), which is where the design shows
 - [The API contract](https://github.com/PeekSeek/PeekSeek/blob/main/website/API.md) in full
-- [Forking for another game](forking.md)
+- [Forking for another game](/docs/forking/)

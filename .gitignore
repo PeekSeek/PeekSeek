@@ -1,21 +1,25 @@
+.env
+.vscode
+.claude
+**/*.code-workspace
+test.db
+
 # Python
 *.pyc
-__pycache__/
+**/__pycache__
 **/.pytest_cache
 data.sql
 **/.db
 **/.venv
 
 # .NET
-**/obj/
-**/bin/
-**/.vs/
+**/obj
+**/bin
+**/.vs
 
-# Secrets
-.env
-
-# Editors
-.vscode
-.claude
-**/*.code-workspace
-test.db
+# Node (docs)
+**/node_modules
+**/dist
+**/.astro
+docs/openapi.json
+docs/src/content/docs/reference/api.md
