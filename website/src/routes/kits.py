@@ -110,7 +110,7 @@ def save_kit(
     data.Kit.add_or_update_data(steam64, category, selection)
     return templates.TemplateResponse(
         request=request,
-        name="app/_kit_editor.html",
+        name="partials/kitEditor.html",
         context={
             "category": category,
             "guns": kitsConfig["kits"][category],
@@ -140,6 +140,6 @@ def save_outfit(request: Request, steam64: LoggedInSteam64, values: RequestValue
     data.Kit.add_or_update_data(steam64, "outfit", selection)
     return templates.TemplateResponse(
         request=request,
-        name="app/_outfit_editor.html",
+        name="partials/outfitEditor.html",
         context={"outfits": kitsConfig["outfits"], "selection": selection},
     )

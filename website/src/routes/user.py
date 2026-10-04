@@ -181,7 +181,7 @@ def custom_match(request: Request, steam64: LoggedInSteam64):
         )
     )
     return templates.TemplateResponse(
-        request=request, name="app/custommatch.html", context={"gamemodes": gamemodes}
+        request=request, name="app/customMatch.html", context={"gamemodes": gamemodes}
     )
 
 
@@ -356,7 +356,7 @@ def match_detail(request: Request, matchId: int, user: CurrentUser):
         rings = data.User.rings_for(results.keys())
         return templates.TemplateResponse(
             request=request,
-            name="pages/match_detail.html",
+            name="pages/matchDetail.html",
             context={
                 "result": result,
                 "players": [

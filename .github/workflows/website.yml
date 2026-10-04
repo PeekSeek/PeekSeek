@@ -52,6 +52,24 @@ jobs:
       - run: pip install --require-hashes -r requirements-dev.lock
       - run: pytest -v
 
+  rank-art:
+    # The SVGs are the source and the PNGs are for Discord embeds, which will not render
+    # an SVG. Both have to be tracked: /static/ranks/<icon>.png is a documented URL that
+    # game servers fetch, so generating the PNGs only inside the image would 404 them for
+    # anyone running uvicorn directly. That leaves drift as the real risk - the badge art
+    # has been recoloured twice without the PNGs following - so this re-renders them and
+    # fails if they no longer match. Fuzzy, so an ImageMagick upgrade is not a red build.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # ubuntu-latest ships ImageMagick, so this costs nothing in the image.
+      - name: Are the badge PNGs still their SVGs?
+        working-directory: website
+        run: python scripts/render_rank_pngs.py --check
+
   web-assets:
     # 1,200 lines of hand-written JS and 3,100 of CSS had no linter at all, which is how
     # 294 duplicated colour literals and six duplicate selectors went unnoticed. Both
