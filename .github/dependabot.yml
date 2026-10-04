@@ -33,7 +33,7 @@ updates:
   # the same bump five times.
   - package-ecosystem: nuget
     directories:
-      - /plugins/peekseek/plugin
+      - /plugins/peekseek-match/plugin
       - /plugins/peekseek-arena/plugin
       - /plugins/peekseek-raid/plugin
       - /plugins/peekseek-lobby/plugin

@@ -3,10 +3,10 @@ name: peekseek-raid
 on:
   push:
     branches: [main, develop]
-    paths: ["plugins/peekseek-raid/**", "plugins/peekseek/plugin/**", ".github/workflows/peekseek-raid.yml"]
+    paths: ["plugins/peekseek-raid/**", "plugins/peekseek-match/plugin/**", ".github/workflows/peekseek-raid.yml"]
   pull_request:
     branches: [main]
-    paths: ["plugins/peekseek-raid/**", "plugins/peekseek/plugin/**", ".github/workflows/peekseek-raid.yml"]
+    paths: ["plugins/peekseek-raid/**", "plugins/peekseek-match/plugin/**", ".github/workflows/peekseek-raid.yml"]
   workflow_dispatch: # path filters mean a shared change may not trigger this on its own
 
 permissions:

@@ -8,9 +8,9 @@ listed below is included under its own terms, which are not changed by ours.
 Fonts, bundled in the Match plugin's Unity assets
 -------------------------------------------------
 JetBrains Mono, SIL Open Font License 1.1
-  plugins/peekseek/ui/Assets/PeekSeek/Fonts/JetBrainsMono-LICENSE.txt
+  plugins/peekseek-match/ui/Assets/PeekSeek/Fonts/JetBrainsMono-LICENSE.txt
 Selawik, SIL Open Font License 1.1
-  plugins/peekseek/ui/Assets/PeekSeek/Fonts/Selawik-LICENSE.txt
+  plugins/peekseek-match/ui/Assets/PeekSeek/Fonts/Selawik-LICENSE.txt
 
 Game and framework assemblies, resolved at build time, never redistributed here
 -------------------------------------------------------------------------------

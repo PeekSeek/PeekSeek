@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/website.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/website.yml/badge.svg" alt="website"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/bot.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/bot.yml/badge.svg" alt="bot"></a>
-  <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-plugin.yml/badge.svg" alt="peekseek-plugin"></a>
+  <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-match.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-match.yml/badge.svg" alt="peekseek-match"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-arena.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-arena.yml/badge.svg" alt="peekseek-arena"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-raid.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-raid.yml/badge.svg" alt="peekseek-raid"></a>
   <a href="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml"><img src="https://github.com/PeekSeek/PeekSeek/actions/workflows/peekseek-lobby.yml/badge.svg" alt="peekseek-lobby"></a>
@@ -28,7 +28,7 @@ it lands in one commit. That contract is written down in
 | Component | What it is | Language | Status |
 | --- | --- | --- | --- |
 | [website/](website/) | The whole site and API: pages, JSON endpoints, and the `/server/v1/*` API game servers run on | FastAPI, Python 3.12 | maintained |
-| [plugins/peekseek/](plugins/peekseek/) | PeekSeek Match: the RocketMod plugin that runs a match server, the session, the roster, the score, the result and every in-game screen; gamemodes plug into it | C#, net48 | maintained |
+| [plugins/peekseek-match/](plugins/peekseek-match/) | PeekSeek Match: the RocketMod plugin that runs a match server, the session, the roster, the score, the result and every in-game screen; gamemodes plug into it | C#, net48 | maintained |
 | [plugins/peekseek-arena/](plugins/peekseek-arena/) | PeekSeek ARENA: the arena round, last team standing, as a gamemode for Match | C#, net48 | maintained |
 | [plugins/peekseek-raid/](plugins/peekseek-raid/) | PeekSeek RAID: build a base, then take turns cracking each other's, as a gamemode for Match | C#, net48 | maintained |
 | [plugins/peekseek-lobby/](plugins/peekseek-lobby/) | RocketMod plugin that runs the waiting arena: queueing from in-game, kits, AFK handling | C#, net48 | maintained |
@@ -61,7 +61,7 @@ pip install -e ../website -r requirements.txt
 python src/bot.py
 
 # any plugin
-cd plugins/peekseek           # or peekseek-arena, -raid, -lobby, -armor-skin
+cd plugins/peekseek-match           # or peekseek-arena, -raid, -lobby, -armor-skin
 dotnet build PeekSeek.sln -c Release
 dotnet test PeekSeek.sln
 ```

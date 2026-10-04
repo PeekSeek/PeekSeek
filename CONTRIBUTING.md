@@ -140,7 +140,7 @@ black .
 
 cd website && pytest -v
 cd website/tooling && npm install && npm run lint     # the JS and the stylesheets
-cd plugins/peekseek && dotnet format && dotnet test PeekSeek.sln
+cd plugins/peekseek-match && dotnet format && dotnet test PeekSeek.sln
 ```
 
 CI runs the same checks per component, path-filtered, so a website change never runs the

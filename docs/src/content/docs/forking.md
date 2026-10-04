@@ -48,7 +48,7 @@ The two shipped plugins are the reference implementation:
 
 | Plugin | Implements |
 |---|---|
-| [`plugins/peekseek`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek) | The match loop above |
+| [`plugins/peekseek-match`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek-match) | The match loop above |
 | [`plugins/peekseek-lobby`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek-lobby) | The waiting arena, queueing from in-game, kits, AFK |
 
 ---

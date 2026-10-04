@@ -100,7 +100,7 @@ pass on a clean clone, your environment is fine.
 Only if you have a game server to put them on.
 
 ```sh
-cd plugins/peekseek          # or peekseek-arena, -raid, -lobby, -armor-skin
+cd plugins/peekseek-match          # or peekseek-arena, -raid, -lobby, -armor-skin
 dotnet build PeekSeek.sln -c Release
 dotnet test PeekSeek.sln
 ```
