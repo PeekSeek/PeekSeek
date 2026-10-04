@@ -15,17 +15,17 @@ def gameserver(client):
 
 
 def _ban(steam64, endTime=data.UserBan.PERMANENT):
-    with core_db.open() as db:
+    with core_db.session() as db:
         db.add(data.UserBan(steam64=steam64, endTime=endTime, reason="Cheating"))
 
 
 def _seen(steam64, address):
-    with core_db.open() as db:
+    with core_db.session() as db:
         data.UserIP.remember(db, steam64, address)
 
 
 def _barred(*steam64s):
-    with core_db.open() as db:
+    with core_db.session() as db:
         return set(data.UserBan.barring(steam64s, db))
 
 
@@ -57,7 +57,7 @@ def test_the_banner_stays_on_the_banned_account_only(user_factory):
     _seen(alt.steam64, "1.2.3.4")
     _ban(cheat.steam64)
 
-    assert data.UserBan.activeFor(alt.steam64) is None
+    assert data.UserBan.active_for(alt.steam64) is None
 
 
 def test_the_lobby_logs_the_ip_and_refuses_the_alt(gameserver, user_factory):
@@ -72,7 +72,7 @@ def test_the_lobby_logs_the_ip_and_refuses_the_alt(gameserver, user_factory):
 
     assert r.status_code == 200
     assert r.json()["ban"]["reason"] == "Cheating"
-    with core_db.open() as db:
+    with core_db.session() as db:
         assert db.query(data.UserHB).where(data.UserHB.steam64 == alt).first() is None
         assert db.query(data.UserIP).where(data.UserIP.steam64 == alt).count() == 1
 
@@ -82,13 +82,13 @@ def test_an_ip_is_logged_once(user_factory):
     _seen(player.steam64, "1.2.3.4")
     _seen(player.steam64, "1.2.3.4")
 
-    with core_db.open() as db:
+    with core_db.session() as db:
         assert db.query(data.UserIP).count() == 1
 
 
 def test_a_custom_match_refuses_a_barred_player(client, login, user_factory):
     owner, cheat, alt = user_factory(), user_factory(), user_factory()
-    owner.setPermission("premium", True)
+    owner.set_permission("premium", True)
     _seen(cheat.steam64, "1.2.3.4")
     _seen(alt.steam64, "1.2.3.4")
     _ban(cheat.steam64)
@@ -108,7 +108,7 @@ def test_a_custom_match_refuses_a_barred_player(client, login, user_factory):
 
     assert r.status_code == 400
     assert str(alt.steam64) in r.text
-    assert data.Match.currentFor(owner.steam64) is None
+    assert data.Match.current_for(owner.steam64) is None
 
 
 def test_a_match_can_never_be_built_with_a_barred_player(user_factory):

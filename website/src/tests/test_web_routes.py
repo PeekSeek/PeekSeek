@@ -69,11 +69,11 @@ def test_404_renders_error_page(client):
 
 
 def test_profile_page_renders_match_history(client, user_factory):
-    from src.core.db import open as opendb
+    from src.core.db import session
     from src.core import models as data
 
     player = user_factory()
-    with opendb() as db:
+    with session() as db:
         match = data.Match(
             gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
         )
@@ -81,7 +81,7 @@ def test_profile_page_renders_match_history(client, user_factory):
         db.flush()
         matchId = match.id
 
-    data.MatchResult.recordFinalResults(
+    data.MatchResult.record_final_results(
         matchId,
         {
             str(player.steam64): {
@@ -93,7 +93,7 @@ def test_profile_page_renders_match_history(client, user_factory):
             }
         },
     )
-    # recordFinalResults writes the match's own record; the running totals behind the
+    # record_final_results writes the match's own record; the running totals behind the
     # stat strip are a separate row the game server appends to. Without this the page
     # renders "User has no statistics" instead, which is what the statcards assertion
     # below was silently passing on back when profile.html carried its CSS inline and
@@ -118,13 +118,13 @@ def test_profile_page_renders_match_history(client, user_factory):
 def test_profile_page_renders_the_elo_trend_with_two_ranked_matches(
     client, user_factory
 ):
-    from src.core.db import open as opendb
+    from src.core.db import session
     from src.core import models as data
 
     player = user_factory()
     matchIds = []
     for _ in range(2):
-        with opendb() as db:
+        with session() as db:
             match = data.Match(
                 gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
             )
@@ -132,7 +132,7 @@ def test_profile_page_renders_the_elo_trend_with_two_ranked_matches(
             db.flush()
             matchIds.append(match.id)
 
-    data.MatchResult.recordFinalResults(
+    data.MatchResult.record_final_results(
         matchIds[0],
         {
             str(player.steam64): {
@@ -144,7 +144,7 @@ def test_profile_page_renders_the_elo_trend_with_two_ranked_matches(
             }
         },
     )
-    data.MatchResult.recordFinalResults(
+    data.MatchResult.record_final_results(
         matchIds[1],
         {
             str(player.steam64): {
@@ -177,11 +177,11 @@ def test_profile_page_with_no_matches_renders(client, user_factory):
 
 
 def test_match_detail_page_renders_the_result(client, user_factory):
-    from src.core.db import open as opendb
+    from src.core.db import session
     from src.core import models as data
 
     player = user_factory()
-    with opendb() as db:
+    with session() as db:
         match = data.Match(
             gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
         )
@@ -189,7 +189,7 @@ def test_match_detail_page_renders_the_result(client, user_factory):
         db.flush()
         matchId = match.id
 
-    data.MatchResult.recordFinalResults(
+    data.MatchResult.record_final_results(
         matchId,
         {str(player.steam64): {"Kills": 1, "Deaths": 0, "Headshots": 1, "Won": True}},
     )
@@ -206,11 +206,11 @@ def test_match_detail_page_missing_match_404s(client):
 
 
 def test_match_page_renders_the_commit_list(client, login, user_factory):
-    from src.core.db import open as opendb
+    from src.core.db import session
     from src.core import models as data
 
     player, opponent = user_factory(), user_factory()
-    with opendb() as db:
+    with session() as db:
         db.add(
             data.Match(
                 gamemode=0,
@@ -250,11 +250,11 @@ def test_match_page_never_shows_a_kit_or_powerup_as_pre_selected(
     choice was made when the saved pick is still None — the server falls back to the
     first kit/powerup at match time regardless, but the tile UI must not imply that's
     already "your" pick."""
-    from src.core.db import open as opendb
+    from src.core.db import session
     from src.core import models as data
 
     player, opponent = user_factory(), user_factory()
-    with opendb() as db:
+    with session() as db:
         db.add(
             data.Match(
                 gamemode=0,
@@ -337,7 +337,7 @@ def test_kit_editor_saves_a_pick_and_returns_it_selected(client, login, user_fac
     r = client.post("/me/kit/meta", data={"gun": gunId, "sight": sight})
 
     assert r.status_code == 200
-    assert data.Kit.publicData(player.steam64)["meta"]["items"][0][0] == int(gunId)
+    assert data.Kit.public_data(player.steam64)["meta"]["items"][0][0] == int(gunId)
     # The swapped-in response is the only feedback a player gets that their click
     # landed, so the tile it comes back with has to be the one they picked.
     assert re.search(rf'id="sight-{sight}"[^>]*\bchecked\b', r.text, re.S)
@@ -377,11 +377,11 @@ def test_profile_page_shows_the_rank_the_elo_earns(client, user_factory):
     assert "Elo to" not in r.text
 
 
-def _finishedMatchFor(player, **summary):
-    from src.core.db import open as opendb
+def _finished_match_for(player, **summary):
+    from src.core.db import session
     from src.core import models as data
 
-    with opendb() as db:
+    with session() as db:
         match = data.Match(
             gamemode=0, teams=[{"name": "one", "users": [str(player.steam64)]}]
         )
@@ -389,7 +389,7 @@ def _finishedMatchFor(player, **summary):
         db.flush()
         matchId = match.id
 
-    data.MatchResult.recordFinalResults(
+    data.MatchResult.record_final_results(
         matchId,
         {str(player.steam64): {"Kills": 4, "Deaths": 1, "Won": True, **summary}},
     )
@@ -402,7 +402,7 @@ def test_match_detail_shows_the_reader_their_own_elo_on_the_bar(
     """The bar is the one thing on this page that is about the reader rather than the
     match, so it is only drawn for the player who was in it."""
     player = user_factory()
-    matchId = _finishedMatchFor(player, **{"Current Elo": 620, "Elo Change": 30})
+    matchId = _finished_match_for(player, **{"Current Elo": 620, "Elo Change": 30})
 
     login(client, player)
     r = client.get(f"/match/{matchId}")
@@ -419,7 +419,7 @@ def test_match_detail_shows_the_reader_their_own_elo_on_the_bar(
 
 def test_match_detail_calls_out_a_promotion(client, login, user_factory):
     player = user_factory()
-    matchId = _finishedMatchFor(player, **{"Current Elo": 590, "Elo Change": 20})
+    matchId = _finished_match_for(player, **{"Current Elo": 590, "Elo Change": 20})
 
     login(client, player)
     r = client.get(f"/match/{matchId}")
@@ -433,7 +433,7 @@ def test_match_detail_calls_out_a_promotion(client, login, user_factory):
 
 def test_match_detail_calls_out_a_demotion(client, login, user_factory):
     player = user_factory()
-    matchId = _finishedMatchFor(player, **{"Current Elo": 610, "Elo Change": -20})
+    matchId = _finished_match_for(player, **{"Current Elo": 610, "Elo Change": -20})
 
     login(client, player)
     r = client.get(f"/match/{matchId}")
@@ -447,7 +447,7 @@ def test_match_detail_draws_no_bar_for_somebody_who_was_not_in_the_match(
 ):
     player = user_factory()
     stranger = user_factory()
-    matchId = _finishedMatchFor(player, **{"Current Elo": 620, "Elo Change": 30})
+    matchId = _finished_match_for(player, **{"Current Elo": 620, "Elo Change": 30})
 
     login(client, stranger)
     r = client.get(f"/match/{matchId}")
@@ -462,7 +462,7 @@ def test_match_detail_of_an_unranked_match_has_no_rank_to_show(client, user_fact
     """An unranked gamemode records no Elo Change, and neither did anything played
     before Elo existed, so there is nothing to badge rather than a change of zero."""
     player = user_factory()
-    matchId = _finishedMatchFor(player)
+    matchId = _finished_match_for(player)
 
     r = client.get(f"/match/{matchId}")
 
@@ -478,9 +478,9 @@ def test_leaderboard_badges_the_players_it_lists(client, login, user_factory):
     top = user_factory()
     data.Stat.append(top.steam64, "unt", elo=450)  # 750, Immune
 
-    # getTop10 caches for a minute, and an earlier test's ladderPosition call will have
+    # get_top10 caches for a minute, and an earlier test's ladder_position call will have
     # filled it with rows that no longer exist by the time this one runs.
-    statModule.Stat.forgetTop()
+    statModule.Stat.forget_top()
 
     login(client, top)
     r = client.get("/esports/")
@@ -513,7 +513,7 @@ def test_a_top_three_place_outranks_a_permission_ring(client, user_factory):
         permissions=2 ** settings.permissions.index("admin"), discord=99
     )
     data.Stat.append(admin.steam64, "unt", elo=600)
-    statModule.Stat.forgetTop()
+    statModule.Stat.forget_top()
 
     r = client.get(f"/u/{admin.steam64}")
 
@@ -532,7 +532,7 @@ def test_a_linked_discord_rings_a_player_who_is_off_the_podium(client, user_fact
 
     player = user_factory(discord=1234)
     data.Stat.append(player.steam64, "unt", elo=50)
-    statModule.Stat.forgetTop()
+    statModule.Stat.forget_top()
 
     r = client.get(f"/u/{player.steam64}")
 
@@ -546,7 +546,7 @@ def test_a_linked_discord_rings_a_player_who_is_off_the_podium(client, user_fact
 def test_an_ordinary_page_never_rebuilds_the_top_ten(client, login, user_factory):
     """The sidebar's badge must not be the thing that asks Steam about ten players.
 
-    getTop10 caches for a minute and rebuilds by looking up ten profiles, one blocking
+    get_top10 caches for a minute and rebuilds by looking up ten profiles, one blocking
     call each. page_context runs on every render of every page, so a badge there that
     forced the rebuild put that whole cost on whichever page happened to be next.
     """
@@ -554,7 +554,7 @@ def test_an_ordinary_page_never_rebuilds_the_top_ten(client, login, user_factory
 
     me = user_factory()
     login(client, me)
-    statModule.Stat.forgetTop()
+    statModule.Stat.forget_top()
 
     assert client.get(f"/u/{me.steam64}").status_code == 200
     # The ids behind a ring are one cheap query; the ten Steam profiles behind the
@@ -590,7 +590,7 @@ def test_the_tier_under_a_capped_one_shows_a_position_instead_of_a_bar(
 def test_leaderboard_renders_for_a_signed_out_visitor(client):
     from src.core.models import stat as statModule
 
-    statModule.Stat.forgetTop()
+    statModule.Stat.forget_top()
     assert client.get("/esports/").status_code == 200
 
 
@@ -602,11 +602,11 @@ def test_play_page_carries_the_region_activity_it_has(client, login, user_factor
     from datetime import datetime, timedelta
     from time import time
 
-    from src.core.db import open as opendb
+    from src.core.db import session
     from src.core import models as data
 
     player = user_factory()
-    with opendb() as db:
+    with session() as db:
         db.add(data.AuthorizedServer(address="203.0.113.10", region="paris"))
         db.add(data.LobbyPopulation(address="203.0.113.10", players=6, at=int(time())))
         match = data.Match(

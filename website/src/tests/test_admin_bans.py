@@ -6,11 +6,11 @@ import pytest
 from sqlmodel import Session
 
 from src.core import models as data
-from src.core.db import engine, open as opendb
+from src.core.db import engine, session
 
 
 @pytest.fixture(autouse=True)
-def _noDiscord(monkeypatch):
+def _no_discord(monkeypatch):
     monkeypatch.setattr(
         "src.core.notify.send_discord_channel", lambda *a, **k: True, raising=False
     )
@@ -85,7 +85,7 @@ def test_banning_from_the_dashboard_uses_the_same_path(
     )
 
     assert r.status_code == 200
-    stored = data.UserBan.activeFor(target.steam64)
+    stored = data.UserBan.active_for(target.steam64)
     assert stored.reason == "Toxicity"
     # The note records who did it without the admin having to type their own name.
     assert stored.moderatorNote.startswith("by ")
@@ -107,7 +107,7 @@ def test_a_custom_ban_takes_its_days(client, login, admin, user_factory):
         },
     )
 
-    stored = data.UserBan.activeFor(target.steam64)
+    stored = data.UserBan.active_for(target.steam64)
     assert stored.reason == "Ban evasion"
     assert abs(stored.endTime - (time() + 3 * 86400)) < 10
 
@@ -123,8 +123,8 @@ def test_overturning_keeps_the_row_and_says_who_lifted_it(
     r = client.post("/admin/unban", json={"id": banId})
 
     assert r.status_code == 200
-    assert data.UserBan.activeFor(target.steam64) is None
-    with opendb() as db:
+    assert data.UserBan.active_for(target.steam64) is None
+    with session() as db:
         row = db.query(data.UserBan).where(data.UserBan.id == banId).first()
     assert row is not None
     assert row.endTime == 0
@@ -273,7 +273,7 @@ def test_a_ban_ending_before_the_event_does_not_block_signup(
     r = client.post(f"/esports/signup?eventId={eventId}&team=Late+Bloomers")
 
     assert r.status_code == 200
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.EventSignup).count() == 1
 
 
@@ -287,7 +287,7 @@ def test_a_ban_running_past_the_start_blocks_signup(client, login, user_factory)
 
     assert r.status_code == 403
     assert "after this event starts" in r.text
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.EventSignup).count() == 0
 
 

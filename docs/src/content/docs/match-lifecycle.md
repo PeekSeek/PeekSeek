@@ -48,7 +48,7 @@ Exactly one of four answers comes back. `action` is the only field to switch on.
 
 ```jsonc
 {"action": "idle"}
-{"action": "wait",  "matchId": 42, "waitingOn": ["7656…"], "selectionEndsAt": 1786000060}
+{"action": "wait",  "matchId": 42, "waiting_on": ["7656…"], "selection_ends_at": 1786000060}
 {"action": "host",  "match": { /* full payload */ }}
 {"action": "abort", "matchId": 42, "reason": "matchOver"}
 ```

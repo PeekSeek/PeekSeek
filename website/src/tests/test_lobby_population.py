@@ -11,7 +11,7 @@ from time import time
 import pytest
 
 from src.core import models as data
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core.notify import _counter_name
 
 
@@ -31,7 +31,7 @@ def report(gameserver, players, **counts):
 
 
 def readings(address="testclient"):
-    with opendb() as db:
+    with session() as db:
         return (
             db.query(data.ArenaReading)
             .where(data.ArenaReading.address == address)
@@ -43,14 +43,14 @@ def readings(address="testclient"):
 def test_a_lobby_reporting_its_population_is_counted(gameserver):
     report(gameserver, 6)
 
-    assert data.LobbyPopulation.countFresh() == 6
+    assert data.LobbyPopulation.count_fresh() == 6
 
 
 def test_reporting_again_replaces_rather_than_adds(gameserver):
     report(gameserver, 6)
     report(gameserver, 3)
 
-    assert data.LobbyPopulation.countFresh() == 3
+    assert data.LobbyPopulation.count_fresh() == 3
 
 
 def test_every_reporting_lobby_is_added_up(gameserver):
@@ -58,33 +58,33 @@ def test_every_reporting_lobby_is_added_up(gameserver):
     data.AuthorizedServer.bootstrap({"10.0.0.9": "utah"})
     data.LobbyPopulation.report("10.0.0.9", 5)
 
-    assert data.LobbyPopulation.countFresh() == 9
+    assert data.LobbyPopulation.count_fresh() == 9
 
 
 def test_nobody_anywhere_counts_as_nobody():
-    assert data.LobbyPopulation.countFresh() == 0
+    assert data.LobbyPopulation.count_fresh() == 0
 
 
 def test_an_unauthorized_server_cannot_report(client):
     r = client.post("/server/v1/lobby/population", json={"players": 99})
 
     assert r.status_code == 401
-    assert data.LobbyPopulation.countFresh() == 0
+    assert data.LobbyPopulation.count_fresh() == 0
 
 
 def test_a_lobby_that_stopped_reporting_is_not_counted(gameserver):
     """A lobby that crashed with eleven people in it would otherwise keep
     advertising them for as long as its row survives."""
     report(gameserver, 11)
-    with opendb() as db:
+    with session() as db:
         row = db.query(data.LobbyPopulation).first()
         row.at = int(time()) - 600
 
-    assert data.LobbyPopulation.countFresh() == 0
+    assert data.LobbyPopulation.count_fresh() == 0
 
 
-def makeMatch(first, second):
-    with opendb() as db:
+def make_match(first, second):
+    with session() as db:
         db.add(
             data.Match(
                 gamemode=0,
@@ -99,24 +99,24 @@ def makeMatch(first, second):
 def test_players_in_a_live_match_are_playing(user_factory):
     """Match servers are never asked. The site handed out the roster, so it already
     knows, which is what keeps twelve match servers out of this entirely."""
-    makeMatch(user_factory(), user_factory())
+    make_match(user_factory(), user_factory())
 
-    assert data.LobbyPopulation.playingNow() == 2
+    assert data.LobbyPopulation.playing_now() == 2
 
 
 def test_arena_and_match_players_are_added_together(gameserver, user_factory):
     report(gameserver, 3)
-    makeMatch(user_factory(), user_factory())
+    make_match(user_factory(), user_factory())
 
-    assert data.LobbyPopulation.playingNow() == 5
+    assert data.LobbyPopulation.playing_now() == 5
 
 
 def test_a_finished_match_is_nobody(user_factory):
-    makeMatch(user_factory(), user_factory())
-    with opendb() as db:
+    make_match(user_factory(), user_factory())
+    with session() as db:
         db.query(data.Match).update({"finished": True})
 
-    assert data.LobbyPopulation.playingNow() == 0
+    assert data.LobbyPopulation.playing_now() == 0
 
 
 @pytest.mark.parametrize(
@@ -150,7 +150,7 @@ def test_a_report_is_kept_as_history_as_well_as_a_current_reading(gameserver):
     what was true over time."""
     report(gameserver, 3, queueing=3, held=1)
 
-    assert data.LobbyPopulation.countFresh() == 3
+    assert data.LobbyPopulation.count_fresh() == 3
     assert [(r.players, r.queueing, r.held) for r in readings()] == [(3, 3, 1)]
 
 
@@ -184,7 +184,7 @@ def test_a_lobby_that_reports_no_counts_stores_none_rather_than_zero(gameserver)
     assert reading.held is None
 
 
-def wokeUp(previous_players, seconds_ago, now_players=1):
+def woke_up(previous_players, seconds_ago, now_players=1):
     """Whether a lobby reporting `now_players` counts as waking, given what it last
     said and how long ago it said it."""
     previous = data.ArenaReading(
@@ -192,32 +192,32 @@ def wokeUp(previous_players, seconds_ago, now_players=1):
         at=int(time()) - seconds_ago,
         players=previous_players,
     )
-    return data.ArenaReading._isWakingUp(previous, now_players)
+    return data.ArenaReading._is_waking_up(previous, now_players)
 
 
 def test_an_arena_that_has_been_dead_for_hours_is_worth_announcing():
-    assert wokeUp(previous_players=0, seconds_ago=7200)
+    assert woke_up(previous_players=0, seconds_ago=7200)
 
 
 def test_a_player_bouncing_off_an_empty_server_is_not(gameserver):
     """People join an empty server, find nobody, and leave within seconds. Announcing
     each of those teaches everybody to ignore the announcement that matters."""
-    assert not wokeUp(previous_players=0, seconds_ago=20)
+    assert not woke_up(previous_players=0, seconds_ago=20)
 
 
 def test_an_arena_that_was_already_busy_is_not_waking_up():
-    assert not wokeUp(previous_players=3, seconds_ago=7200, now_players=4)
+    assert not woke_up(previous_players=3, seconds_ago=7200, now_players=4)
 
 
 def test_an_arena_emptying_is_never_an_announcement():
-    assert not wokeUp(previous_players=2, seconds_ago=7200, now_players=0)
+    assert not woke_up(previous_players=2, seconds_ago=7200, now_players=0)
 
 
 def test_a_lobby_nobody_has_ever_heard_from_is_treated_as_quiet():
     """A server coming back up with people already in it is exactly the news this
     exists to carry."""
-    assert data.ArenaReading._isWakingUp(None, 2)
-    assert not data.ArenaReading._isWakingUp(None, 0)
+    assert data.ArenaReading._is_waking_up(None, 2)
+    assert not data.ArenaReading._is_waking_up(None, 0)
 
 
 def test_waking_up_is_announced_once_and_not_again(gameserver, monkeypatch):

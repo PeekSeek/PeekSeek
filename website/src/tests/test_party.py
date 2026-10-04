@@ -280,7 +280,7 @@ def test_queueing_with_no_gamemode_is_refused_in_its_own_words(
     client, login, user_factory
 ):
     """Not the party message — a solo player who picked nothing is not too big for
-    anything, and an empty bitmask used to reach addToQueue as a NULL gamemode."""
+    anything, and an empty bitmask used to reach add_to_queue as a NULL gamemode."""
     login(client, user_factory())
     r = client.get("/queue/heartbeat", params={"region": "paris"})
 

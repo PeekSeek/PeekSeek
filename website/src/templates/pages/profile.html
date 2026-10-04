@@ -34,12 +34,12 @@
     {# Where they stand, in one group: the ladder first and the account under it, close
        enough together to read as one answer and clear of the name above. #}
     <div class="profileStanding">
-        {% if stat %}{{ rankProgress(stat.rank, worldPosition) }}
+        {% if stat %}{{ rankProgress(stat.rank, world_position) }}
       {% else %}<span class="rankStanding">No matches in {{viewing.name}}</span>{% endif %}
       <span class="profileRank">
         {%- if not userData %}No user data
-        {%- elif userData.getPermission("admin") %}Admin
-        {%- elif userData.getPermission("premium") %}Premium
+        {%- elif userData.get_permission("admin") %}Admin
+        {%- elif userData.get_permission("premium") %}Premium
         {%- elif userData.discord %}Discord Linked
         {%- else %}Regular
         {%- endif %}</span>
@@ -80,7 +80,7 @@
      missing tile leaves a hole in the middle of the page rather than closing up. #}
   <div class="tile statcard s1"><span class="label">Win %</span><span class="value">{{round(stat.wins / max(played, 1) * 100, 1) if stat else "-"}}</span></div>
   <div class="tile statcard s2"><span class="label">K / D</span><span class="value">{{round(stat.kills / max(stat.deaths, 1), 2) if stat else "-"}}</span></div>
-  <div class="tile statcard s3"><span class="label">HS %</span><span class="value">{{stat.headshotPercent if stat else "-"}}</span></div>
+  <div class="tile statcard s3"><span class="label">HS %</span><span class="value">{{stat.headshot_percent if stat else "-"}}</span></div>
   <div class="tile statcard s4"><span class="label">Dmg / match</span><span class="value">{{round(stat.damageDealt / max(played, 1)) if stat else "-"}}</span></div>
 
   <section class="tile history">
@@ -139,7 +139,7 @@
         <span class="banState">{{ "Active" if b.endTime > now else ("Lifted" if b.endTime == 0 else "Expired") }}</span>
         <span class="map">
           <span class="name">{{ b.reason }}</span>
-          <span class="when">{{ b.created_at.strftime("%d/%m/%Y") if b.created_at else "" }} &middot; {{ b.expiryLabel }}</span>
+          <span class="when">{{ b.created_at.strftime("%d/%m/%Y") if b.created_at else "" }} &middot; {{ b.expiry_label }}</span>
         </span>
         <span class="banNote">{{ b.moderatorNote or "" }}</span>
       </div>

@@ -199,8 +199,8 @@ class SessionAnswer(BaseModel):
     reason: str | None = Field(
         None, description="on abort: unknownMatch | matchOver | hostedElsewhere"
     )
-    waitingOn: list[str] | None = Field(None, description="on wait")
-    selectionEndsAt: int | None = Field(None, description="on wait, Unix seconds")
+    waiting_on: list[str] | None = Field(None, description="on wait")
+    selection_ends_at: int | None = Field(None, description="on wait, Unix seconds")
     match: dict | None = Field(None, description="the roster on wait, the whole match on host")
     options: dict | None = Field(None, description="on wait: the kits and powerups to choose between")
     picked: dict | None = Field(None, description="on wait: what each player has locked so far")

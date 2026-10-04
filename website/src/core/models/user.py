@@ -53,15 +53,15 @@ class User(SQLModel, table=True):
             send_discord_dm(self.discord, title, message, **kwargs)
 
     @staticmethod
-    def getSteamData(steam64) -> object:
+    def steam_user(steam64) -> object:
         from src.core import steam
 
         if isinstance(steam64, User):
             steam64 = steam64.steam64
         return steam.User(steam64)
 
-    def getPermission(self, item: str) -> bool:
-        from src.core.db import open
+    def get_permission(self, item: str) -> bool:
+        from src.core.db import session
 
         if item not in settings.permissions:
             raise TypeError("Permission does not exist.")
@@ -69,11 +69,11 @@ class User(SQLModel, table=True):
         if isinstance(self, User):
             permissions = self.permissions
         else:
-            with open() as db:
+            with session() as db:
                 u = db.query(User).where(User.steam64 == self).first()
                 permissions = u.permissions if u else 0
 
-        if item != "admin" and User.getPermission(self, "admin"):
+        if item != "admin" and User.get_permission(self, "admin"):
             return True
 
         bit = 2 ** settings.permissions.index(item)
@@ -84,36 +84,36 @@ class User(SQLModel, table=True):
         """The colour drawn around this player's avatar wherever the site names them.
 
         A ring can only say one thing, so the rarest standing wins and admin is checked
-        first -- getPermission answers True to every permission for an admin, so asking
+        first -- get_permission answers True to every permission for an admin, so asking
         about premium first would call every admin a supporter. A place in the top three
         outranks all of these, but that is the ladder's to know rather than this
         account's, so it is applied where the card is drawn.
         """
-        if self.getPermission("admin"):
+        if self.get_permission("admin"):
             return "admin"
-        if self.getPermission("premium"):
+        if self.get_permission("premium"):
             return "premium"
         if self.discord:
             return "discord"
         return None
 
     @staticmethod
-    def ringsFor(steam64s) -> dict[str, str]:
+    def rings_for(steam64s) -> dict[str, str]:
         """Every ring on a page in one query, keyed by steam64 as a string.
 
         A match table names up to ten players and the ring is one column of one row
         each; asked one at a time that is ten round trips for a colour.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             users = (
                 db.query(User).where(User.steam64.in_([int(s) for s in steam64s])).all()
             )
             return {str(u.steam64): u.ring for u in users if u.ring}
 
-    def setPermission(self, item: str, value: bool) -> None:
-        from src.core.db import open
+    def set_permission(self, item: str, value: bool) -> None:
+        from src.core.db import session
 
         if item not in settings.permissions:
             raise TypeError("Permission does not exist.")
@@ -122,24 +122,24 @@ class User(SQLModel, table=True):
             self.permissions |= bit
         else:
             self.permissions &= ~bit
-        with open() as db:
+        with session() as db:
             db.query(User).where(User.steam64 == self.steam64).update(
                 {"permissions": self.permissions}
             )
 
     @staticmethod
-    def bootstrapAdmin(steam64: int) -> None:
+    def bootstrap_admin(steam64: int) -> None:
         """Give one account admin, creating it if it has never logged in.
 
         A fresh environment has nobody who can reach /admin, and no way to make
         anyone an admin through the site. Driven by BOOTSTRAP_ADMIN_STEAM64 so
         only the environments that set it are affected.
         """
-        from src.core.db import open
+        from src.core.db import session
         from uuid import uuid4
 
         bit = 2 ** settings.permissions.index("admin")
-        with open() as db:
+        with session() as db:
             user = db.query(User).where(User.steam64 == steam64).first()
             if user is None:
                 # The Steam callback matches on steam64, so this row is picked up
@@ -163,7 +163,7 @@ class User(SQLModel, table=True):
             User(
                 steam64=steam64,
                 uuid=str(uuid4()),
-                steam_data=User._steamProfile(steam64),
+                steam_data=User._steam_profile(steam64),
                 steam_fetched_at=datetime.now(timezone.utc),
             )
         )
@@ -171,7 +171,7 @@ class User(SQLModel, table=True):
         db.flush()
 
     @staticmethod
-    def _steamProfile(steam64) -> dict | None:
+    def _steam_profile(steam64) -> dict | None:
         """This player's name and avatar from Steam, or None if Steam would not say.
         Never a placeholder, which would be stored and never asked about again."""
         from src.core import steam
@@ -187,21 +187,21 @@ class User(SQLModel, table=True):
         return {"name": raw.get("personaname"), "avatar": raw.get("avatarfull")}
 
     @staticmethod
-    def addToQueue(
+    def add_to_queue(
         steam64,
         gamemode: int,
         partyId: int = None,
         region: str = "paris",
         eventId: int = None,
     ):
-        from src.core.db import MATCHMAKER_LOCK, alongside, open
+        from src.core.db import MATCHMAKER_LOCK, alongside, session
         from .match import Match, MatchPlayer
         from .party import UserHB
         from time import time
 
         if isinstance(steam64, User):
             steam64 = steam64.steam64
-        with open() as db:
+        with session() as db:
             # Every route into the queue comes through here, so this is the one place
             # a ban has to be checked for queueing to mean anything.
             ban = UserBan.barring([steam64], db).get(int(steam64))
@@ -238,13 +238,13 @@ class User(SQLModel, table=True):
             return None
 
     @staticmethod
-    def removeFromQueue(steam64):
-        from src.core.db import open
+    def remove_from_queue(steam64):
+        from src.core.db import session
         from .party import UserHB
 
         if isinstance(steam64, User):
             steam64 = steam64.steam64
-        with open() as db:
+        with session() as db:
             db.query(UserHB).where(UserHB.steam64 == steam64).delete()
 
 
@@ -312,7 +312,7 @@ class UserBan(SQLModel, table=True):
         return self.endTime >= UserBan.PERMANENT
 
     @property
-    def expiryLabel(self) -> str:
+    def expiry_label(self) -> str:
         from datetime import datetime, timezone
 
         if self.permanent:
@@ -322,7 +322,7 @@ class UserBan(SQLModel, table=True):
         )
 
     @property
-    def remainingLabel(self) -> str:
+    def remaining_label(self) -> str:
         """How much longer this lasts, in the unit somebody would say out loud.
 
         Days once there is more than a day left, hours below that, and "less than an
@@ -347,7 +347,7 @@ class UserBan(SQLModel, table=True):
         return f"another {days} day{'' if days == 1 else 's'}"
 
     @staticmethod
-    def activeFor(steam64, db=None) -> "UserBan | None":
+    def active_for(steam64, db=None) -> "UserBan | None":
         """This player's ban if one is in force right now, else None.
 
         The single answer to "may this player play", so the queue, the matchmaker, the
@@ -368,9 +368,9 @@ class UserBan(SQLModel, table=True):
         if db is not None:
             return query(db)
 
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as session:
+        with session() as session:
             ban = query(session)
             if ban is not None:
                 session.expunge(ban)
@@ -382,7 +382,7 @@ class UserBan(SQLModel, table=True):
 
         A player is barred by their own active ban, or by an active ban on any account
         that has been seen on one of their addresses. Players nothing bars are left out.
-        Account-only questions, such as the banner and the admin drawer, use `activeFor`.
+        Account-only questions, such as the banner and the admin drawer, use `active_for`.
         """
         from time import time
 
@@ -416,7 +416,7 @@ class UserBan(SQLModel, table=True):
         return barred
 
     @staticmethod
-    def activeAmong(steam64s, db=None) -> set:
+    def active_among(steam64s, db=None) -> set:
         """Which of these players are banned, in one query rather than one each.
 
         The matchmaker asks about every player in the queue on every poll, so asking
@@ -439,21 +439,21 @@ class UserBan(SQLModel, table=True):
         if db is not None:
             return query(db)
 
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as session:
+        with session() as session:
             return query(session)
 
     @staticmethod
-    def historyFor(steam64) -> list["UserBan"]:
+    def history_for(steam64) -> list["UserBan"]:
         """Every ban this player has ever had, newest first, expired ones included.
 
         An admin deciding what to do about somebody needs the pattern, not just whether
         they happen to be banned at this second.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             rows = (
                 db.query(UserBan)
                 .where(UserBan.steam64 == int(steam64))

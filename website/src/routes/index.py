@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from src.core.settings import settings
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core import models as data
 from src.core import matchmaking, notify
 from src.dependencies import ApiSteam64, templates
@@ -31,7 +31,7 @@ def play(request: Request):
     if not user:
         return RedirectResponse("/", status_code=302)
 
-    with opendb() as db:
+    with session() as db:
         events = []
         for signup in (
             db.query(data.EventSignup)
@@ -51,7 +51,7 @@ def play(request: Request):
             "events": events,
             "eventPlayers": {
                 e["event"].id: [
-                    data.User.getSteamData(s).toDict() | {"steam64": s}
+                    data.User.steam_user(s).to_dict() | {"steam64": s}
                     for s in e["users"]
                 ]
                 for e in events
@@ -79,14 +79,14 @@ def queue_heartbeat(
     scans this queue and forms one (see `/server/v1/session`), so this only ever adds
     them to it and reports what happened elsewhere.
     """
-    current_match = data.Match.currentFor(steam64)
+    current_match = data.Match.current_for(steam64)
     if current_match:
         return {"succes": "true", "matchid": current_match}
 
     if eventId is not None:
         return _event_heartbeat(steam64, team, eventId)
 
-    with opendb() as db:
+    with session() as db:
         party = data.Party.find(db, steam64)
     if party and str(party.steam64) != str(steam64):
         raise HTTPException(
@@ -94,14 +94,14 @@ def queue_heartbeat(
         )
 
     # The play page blocks this itself, so reaching it means something else called
-    # us — and an empty bitmask reached addToQueue as a NULL gamemode and 500'd.
+    # us — and an empty bitmask reached add_to_queue as a NULL gamemode and 500'd.
     if not gamemode:
         raise HTTPException(status_code=400, detail="Pick a gamemode before queueing.")
 
     partyMembers = party.data.get("members", []) if party else [str(steam64)]
     # Refusing here is the whole point: a party too big for every mode it picked
     # would otherwise sit in a queue matchmaking has already decided to skip.
-    gamemode = matchmaking.modesFittingParty(gamemode, len(partyMembers))
+    gamemode = matchmaking.modes_fitting_party(gamemode, len(partyMembers))
     if not gamemode:
         raise HTTPException(
             status_code=400,
@@ -115,7 +115,7 @@ def queue_heartbeat(
     # whatever guard happens to sit on the caller.
     refused = {}
     for member in partyMembers:
-        ban = data.User.addToQueue(
+        ban = data.User.add_to_queue(
             int(member), gamemode, partyId=(party.id if party else None), region=region
         )
         if ban is not None:
@@ -131,7 +131,7 @@ def queue_heartbeat(
 
 
 def _event_heartbeat(steam64, team, eventId):
-    with opendb() as db:
+    with session() as db:
         event = db.query(data.Event).where(data.Event.id == eventId).first()
         if not event:
             raise HTTPException(status_code=403, detail="Invalid event.")
@@ -155,11 +155,11 @@ def _event_heartbeat(steam64, team, eventId):
                 status_code=403, detail="You have reached your maximum matches."
             )
 
-    ban = data.User.addToQueue(steam64, team, eventId=eventId)
+    ban = data.User.add_to_queue(steam64, team, eventId=eventId)
     if ban is not None:
         raise HTTPException(status_code=403, detail=f"You are banned: {ban.reason}")
 
-    if matchmaking.attemptCreateEventMatch(steam64, eventId):
+    if matchmaking.attempt_create_event_match(steam64, eventId):
         return {"succes": "true", "matchid": 1}
     return {"succes": "true"}
 
@@ -169,7 +169,7 @@ def _ping_if_queueing_alone(region):
     channel = settings.queue_log_channel
     if not channel:
         return
-    with opendb() as db:
+    with session() as db:
         recent = [
             hb
             for hb in db.query(data.UserHB).where(data.UserHB.region == region).all()
@@ -191,7 +191,7 @@ def _ping_if_queueing_alone(region):
 
 @router.get("/queue/quit")
 def queue_quit(steam64: ApiSteam64):
-    data.User.removeFromQueue(steam64)
+    data.User.remove_from_queue(steam64)
     return PlainTextResponse("success")
 
 

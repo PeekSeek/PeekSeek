@@ -7,9 +7,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from markdown_it import MarkdownIt
 
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core import models as data
-from src.routes.pages import connectUrl
+from src.routes.pages import connect_url
 from src.dependencies import ApiSteam64, CurrentUser, RequestValues, templates
 
 router = APIRouter(prefix="/esports", tags=["esports"], include_in_schema=False)
@@ -24,7 +24,7 @@ def _get_events(db):
 
 @router.get("/")
 def esports_index(request: Request, user: CurrentUser, season: int | None = None):
-    with opendb() as db:
+    with session() as db:
         seasons = data.Season.all()
         viewing = data.Season.find(season) or data.Season.current()
         isCurrent = viewing.id == seasons[0].id
@@ -32,9 +32,9 @@ def esports_index(request: Request, user: CurrentUser, season: int | None = None
         # Your own standing in whichever season is on screen. A finished one has no
         # seats left to hand out, so the ring and the "#1" only belong to the live
         # ladder -- on an archived season they would be saying something about today.
-        standing = data.Stat.forSeason(user.steam64, viewing.id) if user else None
+        standing = data.Stat.for_season(user.steam64, viewing.id) if user else None
         position = (
-            data.Stat.ladderPosition(user.steam64) if user and isCurrent else None
+            data.Stat.ladder_position(user.steam64) if user and isCurrent else None
         )
         elo = standing.elo if standing else 300
 
@@ -47,7 +47,7 @@ def esports_index(request: Request, user: CurrentUser, season: int | None = None
                 "elo": elo,
                 # The signed-in player's own badge, which the top ten cannot supply
                 # because they are usually not in it.
-                "rank": standing.rank if standing else data.Rank.forElo(elo, position),
+                "rank": standing.rank if standing else data.Rank.for_elo(elo, position),
                 # Drawn as the ring around their own avatar, the same one they wear on
                 # the podium, so a player recognises themselves in both places.
                 "place": position,
@@ -61,7 +61,7 @@ def esports_index(request: Request, user: CurrentUser, season: int | None = None
 @router.post("/season")
 def start_season(request: Request, user: CurrentUser, values: RequestValues):
     """Open a new season. The name is the manager's; the word "Season" is the site's."""
-    if not user or not user.getPermission("season_manager"):
+    if not user or not user.get_permission("season_manager"):
         return PlainTextResponse("Not authorized", status_code=403)
 
     name = (values.get("name") or "").strip()
@@ -74,7 +74,7 @@ def start_season(request: Request, user: CurrentUser, values: RequestValues):
         return PlainTextResponse(str(error), status_code=400)
 
     # Everybody's standings just moved out from under the leaderboard's cache.
-    data.Stat.forgetTop()
+    data.Stat.forget_top()
     return RedirectResponse(f"/esports/?season={season.id}", status_code=302)
 
 
@@ -86,7 +86,7 @@ def signup(steam64: ApiSteam64, values: RequestValues):
     if not eventId:
         return PlainTextResponse("Event ID is required", status_code=400)
 
-    with opendb() as db:
+    with session() as db:
         event = db.query(data.Event).where(data.Event.id == eventId).first()
         if not event:
             return PlainTextResponse("Event not found", status_code=404)
@@ -106,7 +106,7 @@ def signup(steam64: ApiSteam64, values: RequestValues):
         ban = data.UserBan.barring([steam64], db).get(steam64)
         if ban is not None and ban.endTime >= event.data["meta"]["queueTimes"][0][0]:
             return PlainTextResponse(
-                f'Your "{ban.reason}" ban runs until {ban.expiryLabel}, which is after '
+                f'Your "{ban.reason}" ban runs until {ban.expiry_label}, which is after '
                 "this event starts.",
                 status_code=403,
             )
@@ -152,9 +152,9 @@ def event(request: Request, event: str, user: CurrentUser, join: str | None = No
     # loads first and the player presses the button. A code that is not one is ignored
     # rather than refused, and an event link with no ?join= at all is the normal case:
     # the page is the event brief and the button is an extra.
-    launch = connectUrl(join) if join else None
+    launch = connect_url(join) if join else None
 
-    with opendb() as db:
+    with session() as db:
         ev = db.query(data.Event).where(data.Event.name == event).first()
         if not ev:
             request.session["lastError"] = "Invalid event."
@@ -184,19 +184,19 @@ def event(request: Request, event: str, user: CurrentUser, join: str | None = No
         # Only worth asking when there is a button for it to sit beside, and only
         # worth showing when somebody is actually queued: "1 player queued" argues
         # against joining rather than for it.
-        queued = data.UserHB.countFreshForEvent(ev.id) if launch else 0
+        queued = data.UserHB.count_fresh_for_event(ev.id) if launch else 0
 
         users = None
         if signup:
             # A roster draws the same card as the podium does, so it needs the same two
-            # facts. Both are cheap: ladderPosition reads the cached top ten and every
+            # facts. Both are cheap: ladder_position reads the cached top ten and every
             # ring on the team comes back in one query.
             roster = [signup.ownerSteam64, *signup.users]
-            rings = data.User.ringsFor(roster)
+            rings = data.User.rings_for(roster)
             users = [
                 {
-                    "u": data.User.getSteamData(s),
-                    "place": data.Stat.ladderPosition(s),
+                    "u": data.User.steam_user(s),
+                    "place": data.Stat.ladder_position(s),
                     "ring": rings.get(str(s)),
                 }
                 for s in roster

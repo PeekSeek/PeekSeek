@@ -65,7 +65,7 @@ The app id `304930` is currently hardcoded in four places:
 | `src/routes/pages.py` | `UNTURNED_APP_ID` |
 | `src/templates/app/spectate.html` | twice, in the card link and the spectate button |
 | `public/assets/js/admin.js` | the spectate button |
-| `public/assets/js/match.js` | `connectUrl()` |
+| `public/assets/js/match.js` | `connect_url()` |
 
 If your game joins differently, this is where you change it. Lifting it into
 `config.toml` first is a good first commit for a fork, and a welcome pull request back.

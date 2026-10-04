@@ -3,7 +3,7 @@
 The game servers' API lives in test_gameserver_api.py."""
 
 from src.core import models as data
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core.settings import settings
 
 
@@ -41,7 +41,7 @@ def test_server_bootstrap_keeps_the_region_already_stored(client):
     data.AuthorizedServer.bootstrap({"testclient": "paris"})
     data.AuthorizedServer.bootstrap({"testclient": "utah"})
 
-    with opendb() as db:
+    with session() as db:
         servers = db.query(data.AuthorizedServer).all()
 
     assert [(s.address, s.region) for s in servers] == [("testclient", "paris")]
@@ -65,7 +65,7 @@ def test_change_uuid_refuses_get(client, user_factory):
     user = user_factory()
     r = client.get("/user/changeuuid", params={"uuid": user.uuid})
     assert r.status_code != 200
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.User).where(data.User.uuid == user.uuid).first()
 
 
@@ -84,7 +84,7 @@ def test_match_current_poll_auto_resolves_an_expired_pick(client, user_factory):
     from src.core import db as core_db
 
     first, second = user_factory(), user_factory()
-    with opendb() as db:
+    with session() as db:
         match = data.Match(
             gamemode=0,
             teams=[
@@ -132,7 +132,7 @@ def test_public_reputation_returns_elo(client, user_factory):
     r = client.get(f"/reputation/{player.steam64}")
 
     assert r.status_code == 200
-    assert r.json()["elo"] == data.Stat.getElo(player.steam64)
+    assert r.json()["elo"] == data.Stat.get_elo(player.steam64)
 
 
 def test_public_reputation_defaults_for_an_unknown_player(client):

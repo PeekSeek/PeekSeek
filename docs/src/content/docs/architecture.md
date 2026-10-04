@@ -69,7 +69,7 @@ property if you change the deployment.
 SQLModel over SQLAlchemy, and `DB` takes any SQLAlchemy URL.
 
 **There is no migration tool.** On startup, `create_all` builds tables that do not exist,
-and then `addMissingColumns` in `src/core/db.py` adds columns the models have gained
+and then `add_missing_columns` in `src/core/db.py` adds columns the models have gained
 since their table was built, backfilling a model default where there is one. Every
 `ALTER` it runs is printed at startup.
 

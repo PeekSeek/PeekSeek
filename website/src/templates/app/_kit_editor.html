@@ -42,7 +42,7 @@
       <h2 class="kitSlotName">{{ slot }}</h2>
       <div class="kitGrid">
         {% for itemId in options %}
-          {# A negative id is the same attachment at 0% durability (metagun.setAttach
+          {# A negative id is the same attachment at 0% durability (metagun.set_attach
              reads the sign and breaks the barrel), which its icon already stamps
              with "0%" -- the title just says it in words on hover. #}
           <label class="kitOption{% if itemId == selection[slot] %} kitOptionSelected{% endif %}"

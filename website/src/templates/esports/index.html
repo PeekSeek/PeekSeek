@@ -31,16 +31,16 @@
   </select>
 </form>
 
-  {% if rawUser and getPermission("season_manager") %}
+  {% if rawUser and get_permission("season_manager") %}
   {# The word "Season" is added for them, so the prompt asks for the part that is
      theirs. A new season files everybody's standings and starts the ladder empty, so
      it asks twice before it does it. #}
   <form method="post" action="/esports/season" id="newSeasonForm">
     <input type="hidden" name="name" id="newSeasonName">
-    <button type="button" class="settingsButton" onclick="startSeason()">New season</button>
+    <button type="button" class="settingsButton" onclick="start_season()">New season</button>
   </form>
   <script>
-    function startSeason() {
+    function start_season() {
       const name = prompt("Name the season. \"Season\" is added for you, so 26Q3 becomes Season 26Q3.");
       if (!name) return;
       if (!confirm(`Start Season ${name}? Everyone's standings are filed under {{viewing.name}} and the ladder starts empty.`)) return;

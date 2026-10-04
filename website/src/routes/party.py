@@ -8,7 +8,7 @@ from time import time
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core import models as data
 from src.dependencies import ApiSteam64
 
@@ -20,11 +20,11 @@ def party_status(steam64: ApiSteam64):
     """Polled by the play page: your party's roster, your pending invites, and
     (so a non-owner member's tab knows to redirect once the leader queues) whether
     you're already in a match."""
-    with opendb() as db:
+    with session() as db:
         party = data.Party.find(db, steam64)
-        invites = data.Party.pendingInvites(db, steam64)
+        invites = data.Party.pending_invites(db, steam64)
         return {
-            "matchId": data.Match.currentFor(steam64),
+            "matchId": data.Match.current_for(steam64),
             "party": (
                 None
                 if not party
@@ -32,13 +32,13 @@ def party_status(steam64: ApiSteam64):
                     "id": party.id,
                     "isOwner": str(party.steam64) == str(steam64),
                     "members": [
-                        data.User.getSteamData(int(s)).toDict() | {"steam64": s}
+                        data.User.steam_user(int(s)).to_dict() | {"steam64": s}
                         for s in party.data.get("members", [])
                     ],
                 }
             ),
             "invites": [
-                {"id": p.id, "from": data.User.getSteamData(p.steam64).toDict()}
+                {"id": p.id, "from": data.User.steam_user(p.steam64).to_dict()}
                 for p in invites
             ],
         }
@@ -49,7 +49,7 @@ def party_invite(steam64: ApiSteam64, target: int):
     if target == steam64:
         raise HTTPException(status_code=400, detail="You can't invite yourself.")
 
-    with opendb() as db:
+    with session() as db:
         party = data.Party.find(db, steam64)
         if party and str(party.steam64) != str(steam64):
             raise HTTPException(
@@ -79,19 +79,19 @@ def party_invite(steam64: ApiSteam64, target: int):
         if targetUser:
             targetUser.notify(
                 "Party invite",
-                f"{data.User.getSteamData(steam64).name} invited you to their party.",
+                f"{data.User.steam_user(steam64).name} invited you to their party.",
             )
     return PlainTextResponse("success")
 
 
 @router.post("/accept")
 def party_accept(steam64: ApiSteam64, partyId: int):
-    with opendb() as db:
+    with session() as db:
         target = db.query(data.Party).where(data.Party.id == partyId).first()
         if not target or str(steam64) not in target.data.get("invites", []):
             raise HTTPException(status_code=404, detail="No such invite.")
 
-        _leaveCurrentParty(db, steam64)
+        _leave_current_party(db, steam64)
 
         members = [*target.data.get("members", []), str(steam64)]
         invites = [s for s in target.data.get("invites", []) if s != str(steam64)]
@@ -103,7 +103,7 @@ def party_accept(steam64: ApiSteam64, partyId: int):
 
 @router.post("/decline")
 def party_decline(steam64: ApiSteam64, partyId: int):
-    with opendb() as db:
+    with session() as db:
         target = db.query(data.Party).where(data.Party.id == partyId).first()
         if not target:
             raise HTTPException(status_code=404, detail="No such invite.")
@@ -116,13 +116,13 @@ def party_decline(steam64: ApiSteam64, partyId: int):
 
 @router.post("/leave")
 def party_leave(steam64: ApiSteam64):
-    with opendb() as db:
-        _leaveCurrentParty(db, steam64)
-    data.User.removeFromQueue(steam64)
+    with session() as db:
+        _leave_current_party(db, steam64)
+    data.User.remove_from_queue(steam64)
     return PlainTextResponse("success")
 
 
-def _leaveCurrentParty(db, steam64: int) -> None:
+def _leave_current_party(db, steam64: int) -> None:
     """Drop the caller from their current party, promoting the next member to
     leader (or disbanding it if they were the last one). Called both from /leave and
     before /accept, since a player can only ever be in one party at a time."""

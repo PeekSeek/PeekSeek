@@ -62,7 +62,7 @@ class EventSignup(SQLModel, table=True):
     event: Event = Relationship(back_populates="signups")
 
     def __init__(self, ownerSteam64: int, eventId: int, teamname: str):
-        from src.core.db import open
+        from src.core.db import session
         from .user import User
 
         self.ownerSteam64 = ownerSteam64
@@ -73,7 +73,7 @@ class EventSignup(SQLModel, table=True):
         self.score = 0
         self.matchesplayed = 0
 
-        with open() as db:
+        with session() as db:
             user = db.query(User).where(User.steam64 == ownerSteam64).first()
             if user:
                 user.notify(

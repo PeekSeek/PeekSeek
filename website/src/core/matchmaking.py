@@ -1,6 +1,6 @@
 """Turning queued players into matches, and match results into stats.
 
-The queue itself lives on UserHB (freshInQueue/claim) and a match's lifecycle on
+The queue itself lives on UserHB (fresh_in_queue/claim) and a match's lifecycle on
 Match — this module only orchestrates.
 
 Matchmaking runs when a game server asks for work, never when a player asks for a
@@ -20,7 +20,7 @@ from time import time
 
 from sqlalchemy import false, func, or_
 
-from .db import MATCHMAKER_LOCK, exclusively, open
+from .db import MATCHMAKER_LOCK, exclusively, session
 from .settings import settings
 from . import models as data
 from . import notify
@@ -28,21 +28,21 @@ from . import notify
 mmconfig = settings.mmconfig
 
 
-def matchForServer(region: str, serverCode: str) -> "data.Match | None":
+def match_for_server(region: str, serverCode: str) -> "data.Match | None":
     """Give this free server a match: a custom or event match waiting for a server
     first, else a new one built from the queue. None when there is nothing to do."""
-    waiting = data.Match.pendingFor(region)
+    waiting = data.Match.pending_for(region)
     if waiting:
         # None when another server took it first; this one is still free for the queue.
-        taken = waiting.assignTo(serverCode)
+        taken = waiting.assign_to(serverCode)
         if taken:
             return taken
 
-    return _asTheMatchmaker(lambda: _matchFromQueue(region, serverCode))
+    return _as_the_matchmaker(lambda: _match_from_queue(region, serverCode))
 
 
-def _asTheMatchmaker(makeMatch):
-    """Run makeMatch as the only matchmaker across every copy of the site, or not at all.
+def _as_the_matchmaker(make_match):
+    """Run make_match as the only matchmaker across every copy of the site, or not at all.
 
     Two polls scanning the queue at once would build the same match twice. The lock is
     let go only once the match is written, so the next scan sees who it took, and queue
@@ -50,42 +50,42 @@ def _asTheMatchmaker(makeMatch):
     that loses is told to idle.
     """
     with exclusively(MATCHMAKER_LOCK) as held:
-        if not held or _madeOneRecently():
+        if not held or _made_one_recently():
             return None
-        return makeMatch()
+        return make_match()
 
 
-def _madeOneRecently() -> bool:
-    with open() as db:
+def _made_one_recently() -> bool:
+    with session() as db:
         newest = db.query(func.max(data.Match.time)).scalar()
     return newest is not None and time() - newest < settings.match_cooldown
 
 
-def _matchFromQueue(region: str, serverCode: str) -> "data.Match | None":
+def _match_from_queue(region: str, serverCode: str) -> "data.Match | None":
     """One match from the first gamemode in this region the queue can fill, handed to
     the calling server. Players already on a match are dropped first, since a lobby
     keeps re-queueing whoever stands in it."""
-    inAMatch = data.Match.playersInAMatch()
-    with open() as db:
+    inAMatch = data.Match.players_in_a_match()
+    with session() as db:
         queued = [
             heartbeat
-            for heartbeat in data.UserHB.freshInQueue(db)
+            for heartbeat in data.UserHB.fresh_in_queue(db)
             if heartbeat.region == region and str(heartbeat.steam64) not in inAMatch
         ]
 
-    skill = data.Stat.skillsOf(hb.steam64 for hb in queued)
+    skill = data.Stat.skills_of(hb.steam64 for hb in queued)
     for gamemodeId, gamemode in enumerate(mmconfig["gamemodes"]):
         candidates = [hb for hb in queued if hb.gamemode & (2**gamemodeId)]
-        players = _playersForMatch(candidates, gamemode, skill)
+        players = _players_for_match(candidates, gamemode, skill)
         if players:
-            return _createMatch(gamemodeId, players, region, serverCode)
+            return _create_match(gamemodeId, players, region, serverCode)
     return None
 
 
-def modesFittingParty(gamemode: int, partySize: int) -> int:
+def modes_fitting_party(gamemode: int, partySize: int) -> int:
     """The selected modes a party this size can actually be matched in.
 
-    _playersForMatch refuses to split a party across two teams, so a party larger
+    _players_for_match refuses to split a party across two teams, so a party larger
     than one team of a mode can never fill it — leaving that mode selected only
     buys them a queue they never come out of. Dropping it here is what turns that
     silent wait into either a queue that can match or an outright refusal.
@@ -97,12 +97,12 @@ def modesFittingParty(gamemode: int, partySize: int) -> int:
     )
 
 
-def _partyGroups(heartbeats: list) -> list[list[int]]:
+def _party_groups(heartbeats: list) -> list[list[int]]:
     """Queued players grouped by party — a solo player is a group of one — ordered by
     the earliest heartbeat in the group, so queueing together doesn't jump a party
     ahead of players who'd already been waiting.
 
-    Everyone here is already known to be free: _matchFromQueue drops the players who
+    Everyone here is already known to be free: _match_from_queue drops the players who
     are on a match before it hands the queue over.
     """
     groups: dict[object, list[int]] = {}
@@ -120,7 +120,7 @@ def _partyGroups(heartbeats: list) -> list[list[int]]:
 CANDIDATE_GROUPS = 8
 
 
-def _playersForMatch(queueList: list, mode: dict, skill: dict) -> list[int] | None:
+def _players_for_match(queueList: list, mode: dict, skill: dict) -> list[int] | None:
     """The best full roster this queue can currently produce, or None.
 
     "Best" is the first roster, taken longest-waiting-players first, that clears both
@@ -135,16 +135,16 @@ def _playersForMatch(queueList: list, mode: dict, skill: dict) -> list[int] | No
     needed = perTeam * mode["teams"]
     if len(queueList) < needed:
         return None
-    groups = [g for g in _partyGroups(queueList) if len(g) <= perTeam]
-    recentOpponents = _recentOpponentPairs()
+    groups = [g for g in _party_groups(queueList) if len(g) <= perTeam]
+    recentOpponents = _recent_opponent_pairs()
 
     for roster in _rosters(groups[:CANDIDATE_GROUPS], needed):
-        teams = _balancedTeams(roster, mode, skill)
+        teams = _balanced_teams(roster, mode, skill)
         if teams is None:
             continue
-        if _skillGap(teams, skill) > settings.max_team_elo_gap:
+        if _skill_gap(teams, skill) > settings.max_team_elo_gap:
             continue
-        if _wouldRepeatAFixture(teams, recentOpponents):
+        if _would_repeat_a_fixture(teams, recentOpponents):
             continue
         return [player for team in teams for player in team]
     return None
@@ -168,7 +168,7 @@ def _rosters(groups: list[list[int]], needed: int) -> list[list[list[int]]]:
     return [[group for _, group in roster] for roster in matching]
 
 
-def _balancedTeams(
+def _balanced_teams(
     groups: list[list[int]], mode: dict, skill: dict
 ) -> list[list[int]] | None:
     """Split these party groups across the mode's teams as evenly by Elo as they go.
@@ -180,33 +180,33 @@ def _balancedTeams(
     perTeam = mode["playersPerTeam"]
     teams: list[list[int]] = [[] for _ in range(mode["teams"])]
 
-    for group in sorted(groups, key=lambda g: (-len(g), -_groupSkill(g, skill))):
+    for group in sorted(groups, key=lambda g: (-len(g), -_group_skill(g, skill))):
         room = [team for team in teams if len(team) + len(group) <= perTeam]
         if not room:
             return None
-        min(room, key=lambda team: _teamSkill(team, skill)).extend(group)
+        min(room, key=lambda team: _team_skill(team, skill)).extend(group)
 
     return teams if all(len(team) == perTeam for team in teams) else None
 
 
-def _groupSkill(group: list[int], skill: dict) -> float:
+def _group_skill(group: list[int], skill: dict) -> float:
     """A group's summed skill. Skill rather than the ladder, because the ladder is a
     grind and a freshly reset season would otherwise pair a veteran with a novice."""
     return sum(skill[int(steam64)] for steam64 in group)
 
 
-def _teamSkill(team: list[int], skill: dict) -> float:
+def _team_skill(team: list[int], skill: dict) -> float:
     """A team's strength: the average skill of the players on it, so the comparison
     still means something when a team is short a player."""
-    return _groupSkill(team, skill) / len(team) if team else 0
+    return _group_skill(team, skill) / len(team) if team else 0
 
 
-def _skillGap(teams: list[list[int]], skill: dict) -> float:
-    strengths = [_teamSkill(team, skill) for team in teams]
+def _skill_gap(teams: list[list[int]], skill: dict) -> float:
+    strengths = [_team_skill(team, skill) for team in teams]
     return max(strengths) - min(strengths)
 
 
-def _recentOpponentPairs() -> set[frozenset]:
+def _recent_opponent_pairs() -> set[frozenset]:
     """Every pair of players who have been put on opposing teams recently.
 
     Read off the matches themselves rather than kept in a table of its own — a match
@@ -217,7 +217,7 @@ def _recentOpponentPairs() -> set[frozenset]:
     cooldown = settings.rematch_cooldown
     endedSince = datetime.now(timezone.utc) - timedelta(seconds=cooldown)
 
-    with open() as db:
+    with session() as db:
         # Three ways a match is still too fresh to run back, because Match.time is when
         # a match was *made*: a twenty-minute match is already outside a five-minute
         # cooldown by the time anybody could rematch, which is why this rule never fired
@@ -255,7 +255,7 @@ def _recentOpponentPairs() -> set[frozenset]:
     return pairs
 
 
-def _wouldRepeatAFixture(
+def _would_repeat_a_fixture(
     teams: list[list[int]], recentOpponents: set[frozenset]
 ) -> bool:
     """Whether this roster puts any two players against each other again too soon.
@@ -273,7 +273,7 @@ def _wouldRepeatAFixture(
     )
 
 
-def _createMatch(
+def _create_match(
     gamemode: int, players: list[int], region: str, serverCode: str
 ) -> "data.Match | None":
     """This roster, taken out of the queue and made into a match for the calling server.
@@ -300,7 +300,7 @@ def _createMatch(
         teams=[
             # Cut to length and made distinct by Match itself, so no caller can
             # produce two teams that the game server would read as one.
-            {"name": f"team_{data.User.getSteamData(t[0]).name}", "users": t}
+            {"name": f"team_{data.User.steam_user(t[0]).name}", "users": t}
             for t in teams
         ],
         region=region,
@@ -309,7 +309,7 @@ def _createMatch(
         # unassigned state the way a custom or event match briefly does.
         claimed=serverCode,
     )
-    with open() as db:
+    with session() as db:
         db.add(match)
         db.flush()
         db.refresh(match)
@@ -318,14 +318,14 @@ def _createMatch(
     return match
 
 
-def attemptCreateEventMatch(trackSteam64: int, eventId: int) -> bool:
+def attempt_create_event_match(trackSteam64: int, eventId: int) -> bool:
     """Pair up event teams whose owners are queueing. True if trackSteam64's
     team got a match."""
-    return bool(_asTheMatchmaker(lambda: _eventMatch(trackSteam64, eventId)))
+    return bool(_as_the_matchmaker(lambda: _event_match(trackSteam64, eventId)))
 
 
-def _eventMatch(trackSteam64: int, eventId: int) -> bool:
-    with open() as db:
+def _event_match(trackSteam64: int, eventId: int) -> bool:
+    with session() as db:
         event = db.query(data.Event).where(data.Event.id == eventId).first()
         in_queue_time = any(
             start <= int(time()) <= end
@@ -335,14 +335,14 @@ def _eventMatch(trackSteam64: int, eventId: int) -> bool:
             return False
 
         teams = []
-        for heartbeat in data.UserHB.freshInQueue(db, eventId=eventId):
-            team = _eventTeam(db, heartbeat, event)
+        for heartbeat in data.UserHB.fresh_in_queue(db, eventId=eventId):
+            team = _event_team(db, heartbeat, event)
             if team:
                 teams.append(team)
 
         if len(teams) < 2:
             return False
-        teams = _eventPairing(teams)
+        teams = _event_pairing(teams)
         if teams is None:
             return False
         meta = event.data["meta"]
@@ -353,7 +353,7 @@ def _eventMatch(trackSteam64: int, eventId: int) -> bool:
     if not data.UserHB.claim([team["users"][0] for team in teams]):
         return False
 
-    with open() as db:
+    with session() as db:
         db.add(
             data.Match(
                 gamemode=meta.get("gamemode", 1),
@@ -367,7 +367,7 @@ def _eventMatch(trackSteam64: int, eventId: int) -> bool:
     return any(int(team["users"][0]) == int(trackSteam64) for team in teams)
 
 
-def _eventPairing(teams: list[dict]) -> list[dict] | None:
+def _event_pairing(teams: list[dict]) -> list[dict] | None:
     """The first two queued teams who have not just played each other, or None.
 
     Queue order first, so the pair that has been waiting longest still goes first when
@@ -376,17 +376,17 @@ def _eventPairing(teams: list[dict]) -> list[dict] | None:
     match instead of holding the whole event until the clock runs out. An event with
     only two teams does wait, which is what a cooldown is.
     """
-    recentOpponents = _recentOpponentPairs()
+    recentOpponents = _recent_opponent_pairs()
     for home, away in combinations(teams, 2):
         roster = [[int(u) for u in home["users"]], [int(u) for u in away["users"]]]
-        if not _wouldRepeatAFixture(roster, recentOpponents):
+        if not _would_repeat_a_fixture(roster, recentOpponents):
             return [home, away]
     return None
 
 
-def _eventTeam(db, heartbeat, event) -> dict | None:
+def _event_team(db, heartbeat, event) -> dict | None:
     """The heartbeat owner's team entry, or None if the team can't play now."""
-    if data.Match.currentFor(heartbeat.steam64):
+    if data.Match.current_for(heartbeat.steam64):
         return None
 
     # Scoped to this event. Without the event_id a player who had ever signed up for
@@ -425,8 +425,8 @@ def _eventTeam(db, heartbeat, event) -> dict | None:
     }
 
 
-def normalizePlayerResult(player: dict) -> dict:
-    """One game server's report of one player, in the shape matchResults works in.
+def normalize_player_result(player: dict) -> dict:
+    """One game server's report of one player, in the shape match_results works in.
 
     Every counter defaults, so a build that predates a given stat reports what it has
     rather than failing the whole match.
@@ -444,7 +444,7 @@ def normalizePlayerResult(player: dict) -> dict:
     }
 
 
-def matchResults(
+def match_results(
     gamemodeInfo: dict,
     *users: dict,
     draw: bool = False,
@@ -465,7 +465,7 @@ def matchResults(
     who disconnected — the server reports its whole roster, so leaving a match is a
     loss like any other rather than a way to keep your Elo.
     """
-    players = [normalizePlayerResult(u) for u in users]
+    players = [normalize_player_result(u) for u in users]
 
     # Before anything is read: a player returning after a new season opened plays this
     # match on their carried-over Elo, and it has to be the Elo the match is scored
@@ -474,11 +474,11 @@ def matchResults(
     # earned is the honest seed, not the one a season just cut.
     skills: dict = {}
     if gamemodeInfo["usesElo"]:
-        skills = {p["steam64"]: data.Stat.getSkill(p["steam64"]) for p in players}
+        skills = {p["steam64"]: data.Stat.get_skill(p["steam64"]) for p in players}
         for player in players:
-            data.Stat.startSeason(player["steam64"])
+            data.Stat.start_season(player["steam64"])
 
-    avgElo = sum(data.Stat.getElo(p["steam64"]) for p in players) / len(players)
+    avgElo = sum(data.Stat.get_elo(p["steam64"]) for p in players) / len(players)
     results: dict = {}
 
     for player in players:
@@ -498,9 +498,9 @@ def matchResults(
 
         eloDelta = 0
         if gamemodeInfo["usesElo"]:
-            currentElo = data.Stat.getElo(player["steam64"])
+            currentElo = data.Stat.get_elo(player["steam64"])
             skill = skills[player["steam64"]][0]
-            eloDelta = _ladderDelta(currentElo, skill, won, draw)
+            eloDelta = _ladder_delta(currentElo, skill, won, draw)
             summary = {"Elo Change": eloDelta, "Current Elo": currentElo} | summary
 
         results[player["steam64"]] = summary
@@ -521,9 +521,9 @@ def matchResults(
 
     if gamemodeInfo["usesElo"]:
         sides = _sides(players, teams)
-        for steam64, (skill, deviation) in _skillUpdates(sides, skills, draw).items():
-            data.Stat.setSkill(steam64, skill, deviation)
-        _syncRankRoles([p["steam64"] for p in players])
+        for steam64, (skill, deviation) in _skill_updates(sides, skills, draw).items():
+            data.Stat.set_skill(steam64, skill, deviation)
+        _sync_rank_roles([p["steam64"] for p in players])
 
     return results, int(avgElo)
 
@@ -550,7 +550,7 @@ def _sides(players: list[dict], teams: list[list] | None) -> list[list[dict]]:
 GLICKO_SCALE = 400 / math.log(10)
 
 
-def _skillUpdates(
+def _skill_updates(
     sides: list[list[dict]], skills: dict, draw: bool
 ) -> dict[str, tuple[float, float]]:
     """Every player's new (skill, deviation), Glicko-2 style, for teams.
@@ -587,7 +587,7 @@ def _skillUpdates(
             g = 1 / math.sqrt(1 + 3 * otherSpread**2 / math.pi**2)
             expected = 1 / (1 + math.exp(-g * (mean - otherMean)))
             information += g**2 * expected * (1 - expected)
-            surprise += g * (_sideScore(side, sides[other], draw) - expected)
+            surprise += g * (_side_score(side, sides[other], draw) - expected)
 
         for player in side:
             widened = min(
@@ -619,7 +619,7 @@ def _skillUpdates(
     }
 
 
-def _sideScore(side: list[dict], other: list[dict], draw: bool) -> float:
+def _side_score(side: list[dict], other: list[dict], draw: bool) -> float:
     """What `side` scored against `other`: 1 for beating it, 0 for losing to it, and a
     half for a draw or for two sides that finished level."""
     if draw:
@@ -628,7 +628,7 @@ def _sideScore(side: list[dict], other: list[dict], draw: bool) -> float:
     return 0.5 if won == otherWon else float(won)
 
 
-def _syncRankRoles(steam64s: list) -> None:
+def _sync_rank_roles(steam64s: list) -> None:
     """Bring everybody's Discord rank role in line with the badge this match left them
     on, off the request that reported it.
 
@@ -644,7 +644,7 @@ def _syncRankRoles(steam64s: list) -> None:
     threading.Thread(target=run, daemon=True).start()
 
 
-def _ladderDelta(currentElo: int, skill: float, won: bool, draw: bool = False) -> int:
+def _ladder_delta(currentElo: int, skill: float, won: bool, draw: bool = False) -> int:
     """The ladder's move: flat points for a win or a loss, bent by how far the ladder
     sits below the player's skill, and never below the floor of 100.
 
@@ -664,15 +664,15 @@ def _ladderDelta(currentElo: int, skill: float, won: bool, draw: bool = False) -
     return max(delta, 100 - currentElo)
 
 
-def eventResults(eventId: int, matchid: int, *rawUsers: dict) -> str:
+def event_results(eventId: int, matchid: int, *rawUsers: dict) -> str:
     """Bump event scores/matches-played from a finished match and format the
     Discord summary."""
     if not matchid:
         raise ValueError("Invalid Match Id")
 
-    users = [normalizePlayerResult(u) for u in rawUsers]
+    users = [normalize_player_result(u) for u in rawUsers]
 
-    with open() as db:
+    with session() as db:
         match = db.query(data.Match).where(data.Match.id == matchid).first()
         results: list[dict] = []
 

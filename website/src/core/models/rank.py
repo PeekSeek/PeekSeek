@@ -23,7 +23,7 @@ class Rank:
         self._above = above
 
     @staticmethod
-    def forElo(elo: int, position: int | None = None) -> "Rank":
+    def for_elo(elo: int, position: int | None = None) -> "Rank":
         """The rank this Elo earns. `position` is the player's 1-based place on the
         ladder where the caller knows it.
 
@@ -52,11 +52,11 @@ class Rank:
         return self._tier.get("role")
 
     @property
-    def nextName(self) -> str | None:
+    def next_name(self) -> str | None:
         return self._above["name"] if self._above else None
 
     @property
-    def standsOnPosition(self) -> bool:
+    def stands_on_position(self) -> bool:
         """Whether what is left between this player and the tier above is people rather
         than Elo.
 
@@ -69,11 +69,11 @@ class Rank:
         return self._above is None or bool(self._above.get("places"))
 
     @property
-    def nextIcon(self) -> str | None:
+    def next_icon(self) -> str | None:
         return self._above["icon"] if self._above else None
 
     @property
-    def nextFloor(self) -> int | None:
+    def next_floor(self) -> int | None:
         """The Elo the tier above starts at.
 
         Drawn at the far end of the progress bar instead of the distance to it, so the
@@ -83,7 +83,7 @@ class Rank:
         return self._above["elo"] if self._above else None
 
     @property
-    def toNext(self) -> int:
+    def to_next(self) -> int:
         """Elo still to earn before the tier above.
 
         Zero at the top of the ladder, and zero again for a player who already has a
@@ -97,9 +97,9 @@ class Rank:
     @property
     def progress(self) -> float:
         """How far through this tier, 0 to 100, ready for the width of a bar."""
-        return self.progressAt(self.elo)
+        return self.progress_at(self.elo)
 
-    def progressAt(self, elo: int) -> float:
+    def progress_at(self, elo: int) -> float:
         """Where `elo` sits inside this tier, 0 to 100.
 
         Clamped, because the Elo a player came into a match with belongs to whichever
@@ -126,10 +126,10 @@ class Rank:
         which is the whole point of showing the change on the bar instead of beside it.
         """
         low, high = min(before, self.elo), max(before, self.elo)
-        held = self.progressAt(low)
+        held = self.progress_at(low)
         return {
             "held": held,
-            "changed": round(self.progressAt(high) - held, 1),
+            "changed": round(self.progress_at(high) - held, 1),
             "direction": "gained" if self.elo >= before else "lost",
         }
 
@@ -140,9 +140,9 @@ class Rank:
             return "Top of the ladder. Nobody above you."
 
         places = self._above.get("places")
-        if self.toNext == 0 and places:
+        if self.to_next == 0 and places:
             return (
                 f"You have the Elo for {self._above['name']}. "
                 f"It only seats {places}, so take a spot off somebody."
             )
-        return f"{self.toNext} Elo to {self._above['name']}"
+        return f"{self.to_next} Elo to {self._above['name']}"

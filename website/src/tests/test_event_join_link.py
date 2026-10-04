@@ -95,7 +95,7 @@ def test_queue_count_appears_only_once_somebody_is_queued(client, user_factory):
     quiet = client.get(f"/esports/event/{ev.name}?join={LOBBY}")
     assert "queueCount" not in quiet.text
 
-    data.User.addToQueue(owner.steam64, gamemode=1, region="paris", eventId=ev.id)
+    data.User.add_to_queue(owner.steam64, gamemode=1, region="paris", eventId=ev.id)
 
     busy = client.get(f"/esports/event/{ev.name}?join={LOBBY}")
     assert "queueCount" in busy.text
@@ -107,7 +107,7 @@ def test_the_open_queue_is_not_counted_as_the_event_queue(client, user_factory):
     them would put a number on the page that nobody is behind."""
     owner = user_factory()
     ev = event(owner)
-    data.User.addToQueue(owner.steam64, gamemode=1, region="paris")
+    data.User.add_to_queue(owner.steam64, gamemode=1, region="paris")
 
     r = client.get(f"/esports/event/{ev.name}?join={LOBBY}")
 

@@ -71,10 +71,10 @@
 
           <div class="infoli">
             <h1><div></div> User <div></div></h1>
-            {% if rawUser and getPermission("premium") %}
+            {% if rawUser and get_permission("premium") %}
             <a href="/me/custom/"> <img src="/static/img/custom.png" alt="">Custom Match</a>
             {% endif %}
-            {% if rawUser and getPermission("admin") %}
+            {% if rawUser and get_permission("admin") %}
             <a href="/admin/"> <img src="/static/img/admin.png" alt="">Admin</a>
             {% endif %}
             <a href="/me/settings/"> <img src="/static/img/settings.png" alt="">Settings</a>
@@ -103,7 +103,7 @@
 
             {% if ownBan %}
             <div class="mainElement warning">
-              <span>You are currently banned for <b>"{{ ownBan.reason }}"</b> for {{ ownBan.remainingLabel }}.</span>
+              <span>You are currently banned for <b>"{{ ownBan.reason }}"</b> for {{ ownBan.remaining_label }}.</span>
             </div>
             {% endif %}
 

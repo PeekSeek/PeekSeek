@@ -20,7 +20,7 @@ function getTeam(s64) {
 }
 
 /// A gamemode with only one kit or one powerup has nothing to pick, so a player is never
-/// "still picking" on that axis; mirrors Match.allKitsLocked() on the backend. Picking
+/// "still picking" on that axis; mirrors Match.all_kits_locked() on the backend. Picking
 /// doesn't stop anyone from changing their mind afterwards (see setKit/setPowerup); this
 /// only tracks whether a real choice has been made yet, not whether it's final.
 function hasPicked(s64) {

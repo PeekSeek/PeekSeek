@@ -14,11 +14,11 @@ from sqlmodel import Session
 from src.core import moderation
 from src.core import models as data
 from src.core.settings import settings
-from src.core.db import engine, open as opendb
+from src.core.db import engine, session
 
 
 @pytest.fixture(autouse=True)
-def _noDiscord(monkeypatch):
+def _no_discord(monkeypatch):
     """No test posts to Discord. Returns True so the caller's success path still runs."""
     monkeypatch.setattr(
         "src.core.notify.send_discord_channel", lambda *a, **k: True, raising=False
@@ -26,7 +26,7 @@ def _noDiscord(monkeypatch):
 
 
 def result(matchId: int, lines: dict, endTime=None):
-    """One MatchResults row, in the shape matchResults() writes."""
+    """One MatchResults row, in the shape match_results() writes."""
     with Session(engine) as session:
         session.add(
             data.MatchResult(
@@ -60,28 +60,28 @@ def stats(steam64, **values):
 
 def test_a_preset_duration_beats_a_passed_one():
     """Picking Toxicity is choosing not to decide the length; a stray days must not win."""
-    week = moderation.endTimeFor("toxicity", days=365)
+    week = moderation.end_time_for("toxicity", days=365)
 
     assert abs(week - (time() + 7 * moderation.DAY)) < 5
 
 
 def test_cheating_is_permanent():
-    assert moderation.endTimeFor("cheating", None) == data.UserBan.PERMANENT
+    assert moderation.end_time_for("cheating", None) == data.UserBan.PERMANENT
 
 
 def test_a_custom_ban_uses_its_days():
-    assert abs(moderation.endTimeFor(None, 3) - (time() + 3 * moderation.DAY)) < 5
+    assert abs(moderation.end_time_for(None, 3) - (time() + 3 * moderation.DAY)) < 5
 
 
 def test_the_note_always_names_who_issued_it():
     assert (
-        moderation.noteWithAuthor("clip in #reports", "Homeless", 76561198000000001)
+        moderation.note_with_author("clip in #reports", "Homeless", 76561198000000001)
         == "by Homeless/76561198000000001 clip in #reports"
     )
 
 
 def test_an_empty_note_is_still_attributed():
-    assert moderation.noteWithAuthor("  ", "TSB", 1) == "by TSB/1"
+    assert moderation.note_with_author("  ", "TSB", 1) == "by TSB/1"
 
 
 def test_preview_counts_matches_and_refunds(user_factory):
@@ -93,7 +93,7 @@ def test_preview_counts_matches_and_refunds(user_factory):
     result(1, {str(cheat.steam64): line(20, won=True), str(victim.steam64): line(-24)})
     result(2, {str(cheat.steam64): line(18, won=True), str(victim.steam64): line(-19)})
 
-    preview = moderation.previewBan(cheat.steam64)
+    preview = moderation.preview_ban(cheat.steam64)
 
     assert preview["matches"] == 2
     assert preview["players"] == 1
@@ -109,9 +109,9 @@ def test_preview_writes_nothing(user_factory):
     stats(victim.steam64, elo=276)
     result(1, {str(cheat.steam64): line(20, won=True), str(victim.steam64): line(-24)})
 
-    moderation.previewBan(cheat.steam64)
+    moderation.preview_ban(cheat.steam64)
 
-    with opendb() as db:
+    with session() as db:
         assert (
             db.query(data.Stat).where(data.Stat.steam64 == victim.steam64).first().elo
             == 276
@@ -137,11 +137,11 @@ def test_a_cheating_ban_refunds_both_directions(user_factory):
         },
     )
 
-    moderation.issueBan(
+    moderation.issue_ban(
         cheat.steam64, preset="cheating", byName="Homeless", bySteam64=1
     )
 
-    with opendb() as db:
+    with session() as db:
         assert (
             db.query(data.Stat).where(data.Stat.steam64 == loser.steam64).first().elo
             == 300
@@ -165,9 +165,9 @@ def test_a_cheating_ban_deletes_their_stats(user_factory):
     cheat = user_factory()
     stats(cheat.steam64, elo=700, kills=179)
 
-    moderation.issueBan(cheat.steam64, preset="cheating")
+    moderation.issue_ban(cheat.steam64, preset="cheating")
 
-    with opendb() as db:
+    with session() as db:
         assert (
             db.query(data.Stat).where(data.Stat.steam64 == cheat.steam64).count() == 0
         )
@@ -181,14 +181,14 @@ def test_a_cheating_ban_voids_the_matches(user_factory):
     stats(victim.steam64, elo=276)
     result(1, {str(cheat.steam64): line(20, won=True), str(victim.steam64): line(-24)})
 
-    moderation.issueBan(cheat.steam64, preset="cheating")
+    moderation.issue_ban(cheat.steam64, preset="cheating")
 
-    with opendb() as db:
+    with session() as db:
         row = db.query(data.MatchResult).first()
     assert "results" not in row.data
     assert str(cheat.steam64) in row.data["voidedResults"]
     assert row.data["voided"] == "cheating"
-    assert data.MatchResult.latestFor(victim.steam64) == []
+    assert data.MatchResult.latest_for(victim.steam64) == []
 
 
 def test_a_toxicity_ban_touches_nobody_elses_stats(user_factory):
@@ -198,9 +198,9 @@ def test_a_toxicity_ban_touches_nobody_elses_stats(user_factory):
     stats(victim.steam64, elo=276)
     result(1, {str(cheat.steam64): line(20, won=True), str(victim.steam64): line(-24)})
 
-    moderation.issueBan(cheat.steam64, preset="toxicity")
+    moderation.issue_ban(cheat.steam64, preset="toxicity")
 
-    with opendb() as db:
+    with session() as db:
         assert (
             db.query(data.Stat).where(data.Stat.steam64 == victim.steam64).first().elo
             == 276
@@ -214,32 +214,32 @@ def test_a_toxicity_ban_touches_nobody_elses_stats(user_factory):
 
 def test_a_ban_drops_them_from_the_queue(user_factory):
     player = user_factory()
-    data.User.addToQueue(player.steam64, 1)
+    data.User.add_to_queue(player.steam64, 1)
 
-    moderation.issueBan(player.steam64, preset="toxicity")
+    moderation.issue_ban(player.steam64, preset="toxicity")
 
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.UserHB).count() == 0
 
 
 def test_a_second_shorter_ban_adds_no_row(user_factory):
     """A player already serving a permanent ban is not banned harder by a week."""
     player = user_factory()
-    moderation.issueBan(player.steam64, preset="cheating")
+    moderation.issue_ban(player.steam64, preset="cheating")
 
-    moderation.issueBan(player.steam64, preset="toxicity")
+    moderation.issue_ban(player.steam64, preset="toxicity")
 
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.UserBan).count() == 1
 
 
 def test_a_longer_ban_does_add_a_row(user_factory):
     player = user_factory()
-    moderation.issueBan(player.steam64, preset="toxicity")
+    moderation.issue_ban(player.steam64, preset="toxicity")
 
-    moderation.issueBan(player.steam64, preset="matchfixing")
+    moderation.issue_ban(player.steam64, preset="matchfixing")
 
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.UserBan).count() == 2
 
 
@@ -247,14 +247,14 @@ def test_a_ban_needs_a_reason(user_factory):
     player = user_factory()
 
     with pytest.raises(ValueError):
-        moderation.issueBan(player.steam64, days=3)
+        moderation.issue_ban(player.steam64, days=3)
 
 
 def test_an_unknown_preset_is_refused(user_factory):
     player = user_factory()
 
     with pytest.raises(ValueError):
-        moderation.issueBan(player.steam64, preset="vibes")
+        moderation.issue_ban(player.steam64, preset="vibes")
 
 
 def test_an_overturn_is_announced_to_staff(user_factory, monkeypatch):
@@ -271,10 +271,10 @@ def test_an_overturn_is_announced_to_staff(user_factory, monkeypatch):
     monkeypatch.setattr("src.core.notify.send_discord_channel", capture)
 
     player = user_factory()
-    moderation.issueBan(player.steam64, preset="toxicity", note="said a thing")
-    banId = data.UserBan.activeFor(player.steam64).id
+    moderation.issue_ban(player.steam64, preset="toxicity", note="said a thing")
+    banId = data.UserBan.active_for(player.steam64).id
 
-    moderation.overturnBan(banId, byName="Homeless", bySteam64=1)
+    moderation.overturn_ban(banId, byName="Homeless", bySteam64=1)
 
     assert posted["channel"] == settings.overturn_channel
     # The ping has to be in content: a mention inside an embed notifies nobody.
@@ -289,7 +289,7 @@ def test_the_overturn_log_is_not_the_report_channel(user_factory):
     assert settings.overturn_channel != settings.report_channel
 
 
-def liveMatch(players: list) -> int:
+def live_match(players: list) -> int:
     """An unfinished match with these players on it."""
     from time import time as now
 
@@ -316,13 +316,13 @@ def test_a_cheating_ban_ends_the_match_they_are_in(user_factory):
     Elo would land after everything else was refunded."""
     cheat = user_factory()
     victim = user_factory()
-    matchId = liveMatch([cheat.steam64, victim.steam64])
+    matchId = live_match([cheat.steam64, victim.steam64])
 
-    moderation.issueBan(cheat.steam64, preset="cheating")
+    moderation.issue_ban(cheat.steam64, preset="cheating")
 
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.Match).where(data.Match.id == matchId).first().finished
-    stored = data.MatchResult.findFor(matchId)
+    stored = data.MatchResult.find_for(matchId)
     assert stored.data["unscored"] == "abandoned"
 
 
@@ -330,18 +330,18 @@ def test_a_toxicity_ban_leaves_their_match_alone(user_factory):
     """A week off for shouting does not void a match that is being played fairly."""
     player = user_factory()
     other = user_factory()
-    matchId = liveMatch([player.steam64, other.steam64])
+    matchId = live_match([player.steam64, other.steam64])
 
-    moderation.issueBan(player.steam64, preset="toxicity")
+    moderation.issue_ban(player.steam64, preset="toxicity")
 
-    with opendb() as db:
+    with session() as db:
         assert not db.query(data.Match).where(data.Match.id == matchId).first().finished
 
 
 def test_banning_someone_in_no_match_is_fine(user_factory):
     cheat = user_factory()
 
-    summary = moderation.issueBan(cheat.steam64, preset="cheating")
+    summary = moderation.issue_ban(cheat.steam64, preset="cheating")
 
     assert summary["cancelledMatch"] is None
 
@@ -356,13 +356,13 @@ def test_banning_somebody_the_site_has_never_seen(monkeypatch):
     )
     unknown = 76561199999999999
 
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.User).where(data.User.steam64 == unknown).first() is None
 
-    moderation.issueBan(unknown, preset="toxicity", note="reported in game")
+    moderation.issue_ban(unknown, preset="toxicity", note="reported in game")
 
-    assert data.UserBan.activeFor(unknown) is not None
-    with opendb() as db:
+    assert data.UserBan.active_for(unknown) is not None
+    with session() as db:
         created = db.query(data.User).where(data.User.steam64 == unknown).first()
     assert created is not None
     # Named on the way in, so the ban record reads as a person immediately rather than
@@ -376,10 +376,10 @@ def test_a_cheating_ban_on_an_unknown_player_works_too(monkeypatch):
     )
     unknown = 76561199999999998
 
-    summary = moderation.issueBan(unknown, preset="cheating")
+    summary = moderation.issue_ban(unknown, preset="cheating")
 
     assert summary["matches"] == 0
-    with opendb() as db:
+    with session() as db:
         assert (
             db.query(data.User).where(data.User.steam64 == unknown).first() is not None
         )
@@ -388,9 +388,9 @@ def test_a_cheating_ban_on_an_unknown_player_works_too(monkeypatch):
 def test_banning_a_known_player_does_not_duplicate_them(user_factory):
     player = user_factory()
 
-    moderation.issueBan(player.steam64, preset="toxicity")
+    moderation.issue_ban(player.steam64, preset="toxicity")
 
-    with opendb() as db:
+    with session() as db:
         assert (
             db.query(data.User).where(data.User.steam64 == player.steam64).count() == 1
         )

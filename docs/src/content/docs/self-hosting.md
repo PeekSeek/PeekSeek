@@ -63,7 +63,7 @@ your proxy's address. Do not widen it.
 ## Database
 
 Point `DB` at Postgres. The schema builds itself on startup: `create_all` adds missing
-tables, then `addMissingColumns` adds columns the models have gained, printing each
+tables, then `add_missing_columns` adds columns the models have gained, printing each
 `ALTER` as it runs.
 
 There is no migration tool and no migration step. Dropping, renaming or retyping a column
