@@ -1,8 +1,9 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PeekSeekLobby.Core;
 using Rocket.API;
 using Rocket.Unturned.Player;
 using SDG.Unturned;
+using Ping = PeekSeek.Core.Ping;
 
 namespace PeekSeekLobby.Commands;
 

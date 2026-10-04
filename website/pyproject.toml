@@ -1,0 +1,36 @@
+# The website as an installable package, so the Discord bot can depend on it.
+#
+# The bot runs the site's own src.core.moderation rather than a copy of it - that is what
+# stops a ban issued from Discord meaning something different to one issued from the
+# dashboard, and it is the right call. The mechanism was a sys.path.insert() driven by a
+# WEBSITE_SRC environment variable, with four `# noqa: E402` imports underneath it. That
+# is a path hack standing in for a dependency. This makes it a dependency:
+#
+#     pip install -e ../website     # from bot/, for local work
+#     pip install ./website         # in the bot's image
+#
+# The distribution is named peekseek-website; the import package stays `src`, because
+# that is what every module in the site already imports and renaming it is a separate
+# change from this one.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "peekseek-website"
+version = "0"           # Not released anywhere. The repository is the version.
+description = "The PeekSeek site, and the models, settings and moderation the bot shares with it."
+requires-python = ">=3.12"
+# Deliberately empty: requirements.lock is what installs the runtime set, pinned and
+# hash-checked. Declaring them loosely here as well would give pip a second, weaker
+# opinion about the same packages.
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.setuptools.package-data]
+# config.toml and the two JSON datasets are read on import, so settings cannot be
+# constructed without them and an installed copy has to carry them.
+src = ["config.toml", "kits.json", "mmconfig.json"]

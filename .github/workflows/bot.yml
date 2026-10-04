@@ -35,15 +35,15 @@ jobs:
         run: |
           pip install black==26.5.1
           pip install --require-hashes -r website/requirements.lock
+          pip install --no-deps ./website
           pip install -r bot/requirements.txt
 
       - run: black --check bot
 
-      # The point of the job: import the module the way the container does, with the
-      # website's own code on the path. A rename in src.core.moderation fails here.
+      # The point of the job: import the bot against the website package it shares code
+      # with. A rename in src.core.moderation fails here rather than in production.
       - name: Import the bot against the website it shares code with
         env:
-          WEBSITE_SRC: ${{ github.workspace }}/website
           DB: sqlite://
           BOT_TOKEN: ""
         working-directory: bot

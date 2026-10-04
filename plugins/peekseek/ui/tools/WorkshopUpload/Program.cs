@@ -1,4 +1,4 @@
-using Steamworks;
+﻿using Steamworks;
 using Steamworks.Ugc;
 
 // Publishes a built mod or map to the Steam Workshop, or updates it there.
@@ -43,7 +43,7 @@ string description = Flag("--description") ?? (isMap
 // a map has its own preview.
 string preview = isMap
     ? Path.Combine(Directory.GetDirectories(folder).First(), "Preview.png")
-    : Path.Combine(RepoRoot(), "website", "public", "img", "logo red.png");
+    : Path.Combine(RepoRoot(), "website", "public", "img", "logo-red.png");
 
 // The marker the game reads to learn what kind of content this is. Unturned's uploader
 // writes the same file into the folder it submits.

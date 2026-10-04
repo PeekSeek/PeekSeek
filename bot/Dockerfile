@@ -19,14 +19,15 @@ COPY bot/requirements.txt ./bot-requirements.txt
 RUN pip install --no-cache-dir --require-hashes -r website-requirements.lock \
     && pip install --no-cache-dir -r bot-requirements.txt
 
-# src/config.toml, mmconfig.json and kits.json all live here and are read on import,
-# so this is the whole tree rather than just the packages the bot names.
-COPY website/src ./website/src
+# The site installed as a package, so `from src.core import moderation` resolves the
+# ordinary way. It used to be a sys.path.insert() in bot.py pointed at WEBSITE_SRC, which
+# was a path hack standing in for a dependency. config.toml, mmconfig.json and kits.json
+# are read on import and travel with the package (see website/pyproject.toml).
+COPY website ./website
+RUN pip install --no-cache-dir --no-deps ./website
+
 COPY bot/src ./bot/src
 
-# Where bot.py puts the website on sys.path. Set here rather than hardcoded so the
-# layout can move without editing the source.
-ENV WEBSITE_SRC=/app/website
 ENV PYTHONUNBUFFERED=1
 
 # Not root. The bot dials out to Discord and reads a database; neither needs uid 0, and

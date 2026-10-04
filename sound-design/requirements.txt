@@ -1,0 +1,3 @@
+# What make_sounds.py needs. It also shells out to ffmpeg, which is not a pip package:
+# install it with your package manager and make sure it is on PATH.
+numpy>=1.26

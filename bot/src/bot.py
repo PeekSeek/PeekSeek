@@ -13,20 +13,19 @@ Discord's `administrator` only hides the commands from the picker; it is not the
 
 import asyncio
 import logging
-import os
-import sys
 import traceback
 from time import time
 
 import discord
 from discord import app_commands
 
-sys.path.insert(0, os.environ.get("WEBSITE_SRC", "/app/website"))
-
-from src.core import moderation  # noqa: E402
-from src.core import models as data  # noqa: E402
-from src.core.db import session  # noqa: E402
-from src.core.settings import settings  # noqa: E402
+# The site's own code, installed as the peekseek-website package rather than reached for
+# with a sys.path insert. Same module the dashboard runs, so a ban issued here and a ban
+# issued there cannot disagree - see the comment above and website/pyproject.toml.
+from src.core import moderation
+from src.core import models as data
+from src.core.db import session
+from src.core.settings import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
