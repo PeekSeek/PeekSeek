@@ -8,14 +8,32 @@ test.db
 *.pyc
 **/__pycache__
 **/.pytest_cache
+# Neither of these was tracked, but neither was ignored either, so both showed in every
+# git status and were one `git add .` from being committed.
+**/.ruff_cache
+**/.benchmarks
 data.sql
 **/.db
 **/.venv
+**/*.egg-info
+**/.eggs
 
 # .NET
 **/obj
 **/bin
 **/.vs
+
+# Build output of sound-design/make_sounds.py. The script is seeded, so a full run
+# reproduces all 51 WAVs byte for byte; tracking 11 MB of them bought nothing. The sixteen
+# that actually ship are committed under website/public/sounds and the kill feed's bundle.
+sound-design/*/
+
+# Unity: the editor regenerates all of it, and Library/ alone is tens of megabytes.
+**/ui/Library
+**/ui/Temp
+**/ui/Logs
+**/ui/UserSettings
+**/ui/Build
 
 # Node (docs)
 **/node_modules

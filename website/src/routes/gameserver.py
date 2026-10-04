@@ -13,13 +13,15 @@ The whole lifecycle runs through one call, `GET /session`.
 """
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import ValidationError
 
 from src.core.settings import settings
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core import models as data
 from src.core import matchmaking, notify, reports
 from src.core.webhook import Webhook
-from src.dependencies import GameServer, JsonBody, authorized_server
+from src.dependencies import GameServer, JsonBody, authorized_server, body_schema
+from src.routes import contracts
 
 router = APIRouter(
     prefix="/server/v1",
@@ -67,7 +69,7 @@ def _match(match: data.Match) -> dict:
         "players": [
             {
                 "steam64": str(steam64),
-                "kit": _items(data.Kit.getItems(steam64, match)),
+                "kit": _items(data.Kit.items_for(steam64, match)),
             }
             for steam64 in match.meta["userData"]
         ],
@@ -75,8 +77,15 @@ def _match(match: data.Match) -> dict:
     }
 
 
-@router.get("/session")
-def session(server: GameServer, serverCode: str = "0", matchId: int = 0):
+@router.get(
+    "/session",
+    # Described, not enforced: see contracts.SessionAnswer for why a response model
+    # would change the payload these plugins are compiled against.
+    responses={
+        200: {"model": contracts.SessionAnswer, "description": "What to do next"}
+    },
+)
+def server_session(server: GameServer, serverCode: str = "0", matchId: int = 0):
     """The one call a game server makes on a loop. Answers what it should be doing.
 
     `matchId` is the match the server holds, including one it has finished but not yet
@@ -94,22 +103,22 @@ def session(server: GameServer, serverCode: str = "0", matchId: int = 0):
     report safe to retry indefinitely.
     """
     if matchId:
-        answer = _answerAboutHeldMatch(matchId, serverCode)
-        data.Match.cancelStranded()
+        answer = _answer_about_held_match(matchId, serverCode)
+        data.Match.cancel_stranded()
         return _stamped(answer, server)
 
-    data.Match.releaseAbandoned(serverCode)
-    data.Match.resolveExpiredPicks()
+    data.Match.release_abandoned(serverCode)
+    data.Match.resolve_expired_picks()
 
     # A match this server holds but was never told about is handed back before a new
     # one is built, so a lost answer cannot turn into a second match for the same
     # players.
-    match = data.Match.undeliveredFor(serverCode) or matchmaking.matchForServer(
+    match = data.Match.undelivered_for(serverCode) or matchmaking.match_for_server(
         server.region, serverCode
     )
-    data.Match.cancelStranded()
+    data.Match.cancel_stranded()
 
-    answer = _hostOrWait(match) if match else {"action": "idle"}
+    answer = _host_or_wait(match) if match else {"action": "idle"}
     return _stamped(answer, server)
 
 
@@ -119,13 +128,13 @@ def _stamped(answer: dict, server: data.AuthorizedServer) -> dict:
     """
     return answer | {
         "region": server.region,
-        "queuedInRegion": data.UserHB.countFresh(server.region),
+        "queuedInRegion": data.UserHB.count_fresh(server.region),
     }
 
 
-def _answerAboutHeldMatch(matchId: int, serverCode: str) -> dict:
+def _answer_about_held_match(matchId: int, serverCode: str) -> dict:
     """What to tell a server that is already holding a match."""
-    with opendb() as db:
+    with session() as db:
         match = db.query(data.Match).where(data.Match.id == matchId).first()
 
     if match is None:
@@ -138,15 +147,15 @@ def _answerAboutHeldMatch(matchId: int, serverCode: str) -> dict:
     if match.status == data.Match.LIVE:
         return {"action": "idle"}
 
-    resolved = match.resolvedMetaIfExpired()
+    resolved = match.resolved_meta_if_expired()
     if resolved is not None:
-        with opendb() as db:
+        with session() as db:
             db.query(data.Match).where(data.Match.id == matchId).update(
                 {"meta": resolved}
             )
         match.meta = resolved
 
-    return _hostOrWait(match)
+    return _host_or_wait(match)
 
 
 def _roster(match: data.Match) -> dict:
@@ -176,18 +185,18 @@ def _options(match: data.Match) -> dict:
     return {"kits": kits, "powerups": powerups}
 
 
-def _hostOrWait(match: data.Match) -> dict:
+def _host_or_wait(match: data.Match) -> dict:
     """Hand over a match whose selection is done, or say what it is still waiting on.
 
     The wait carries the roster and the options, because the players are relayed to
     the server as soon as it holds the match and pick there.
     """
-    if not match.readyToHost():
+    if not match.ready_to_host():
         return {
             "action": "wait",
             "matchId": match.id,
-            "waitingOn": match.waitingOn(),
-            "selectionEndsAt": int(match.selectionEndsAt()),
+            "waitingOn": match.waiting_on(),
+            "selectionEndsAt": int(match.selection_ends_at()),
             "match": _roster(match),
             "options": _options(match),
             "picked": {
@@ -199,15 +208,15 @@ def _hostOrWait(match: data.Match) -> dict:
     # Built before it is marked hosted: a hosted match is never handed out again, so a
     # payload that failed to build here would leave a match nobody runs.
     payload = _match(match)
-    match.markHosting()
+    match.mark_hosting()
     return {"action": "host", "match": payload}
 
 
-@router.get("/matches/{matchId}")
-def match(matchId: int):
+@router.get("/matches/{matchId}", response_model=contracts.MatchState)
+def gameserver_match(matchId: int):
     """A match's state. `relayTo` is the server code to send its players to, and stays
     null until there is a server to send them to."""
-    with opendb() as db:
+    with session() as db:
         current = db.query(data.Match).where(data.Match.id == matchId).first()
     if current is None:
         raise HTTPException(status_code=404, detail="No such match.")
@@ -216,31 +225,45 @@ def match(matchId: int):
         "id": current.id,
         "region": current.region,
         "status": current.status,
-        "relayTo": current.connectCode(),
+        "relayTo": current.connect_code(),
     }
 
 
-@router.post("/matches/{matchId}/rounds")
-def matchRounds(matchId: int, payload: JsonBody):
+@router.post(
+    "/matches/{matchId}/rounds",
+    response_model=contracts.Status,
+    openapi_extra=body_schema(contracts.RoundWinsReport),
+)
+def match_rounds(matchId: int, payload: JsonBody):
     """Rounds won per team, sent each time a round is decided.
 
     Body: `{"wins": {"<team name>": <rounds won>, ...}}`. Each report replaces the last,
     so a lost one is covered by the next.
     """
-    wins = payload.get("wins")
-    if not isinstance(wins, dict) or not all(
-        isinstance(count, int) and count >= 0 for count in wins.values()
-    ):
-        raise HTTPException(
-            status_code=400, detail="`wins` must map team names to rounds won."
-        )
-
-    data.Match.recordRoundWins(matchId, {str(name): n for name, n in wins.items()})
+    wins = _validated(contracts.RoundWinsReport, payload).checked()
+    data.Match.record_round_wins(matchId, wins)
     return {"status": "ok"}
 
 
-@router.post("/matches/{matchId}/result")
-def matchResult(matchId: int, payload: JsonBody):
+def _validated(model: type, payload: dict):
+    """Parse a body that arrived through `forced_json_body` into its model.
+
+    The lenient parse is kept - a plugin's Content-Type is not worth refusing a report
+    over - so validation happens here rather than in the signature. A bad body is a 400
+    naming the field, not a 500 from scoring code reaching into a dict that lacks it.
+    """
+    try:
+        return model.model_validate(payload)
+    except (ValidationError, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@router.post(
+    "/matches/{matchId}/result",
+    response_model=contracts.Status,
+    openapi_extra=body_schema(contracts.MatchResultReport),
+)
+def match_result(matchId: int, payload: JsonBody):
     """The match's final per-player line. This is what moves Elo, and what ends a match.
 
     Safe to retry: a repeat is answered `alreadyRecorded` and changes nothing. Accepted
@@ -253,16 +276,17 @@ def matchResult(matchId: int, payload: JsonBody):
         draw         true when the match ended level. Elo moves on kills and deaths.
         players      every player on the roster, including no-shows and leavers.
     """
-    with opendb() as db:
+    with session() as db:
         current = db.query(data.Match).where(data.Match.id == matchId).first()
     if current is None:
         raise HTTPException(status_code=404, detail="No such match.")
 
-    if data.MatchResult.hasResults(matchId):
+    if data.MatchResult.has_results(matchId):
         return {"status": "alreadyRecorded", "matchId": matchId}
 
+    report = _validated(contracts.MatchResultReport, payload)
     try:
-        _score(current, payload)
+        _score(current, report)
     except Exception as error:
         Webhook(f"Match.{matchId}").error(
             "Result rejected",
@@ -270,41 +294,41 @@ def matchResult(matchId: int, payload: JsonBody):
         )
         raise HTTPException(status_code=400, detail=f"Could not score result: {error}")
 
-    with opendb() as db:
+    with session() as db:
         db.query(data.Match).where(data.Match.id == matchId).update(
             {"finished": True, "spectators": []}
         )
     return {"status": "recorded", "matchId": matchId}
 
 
-def _score(match: data.Match, payload: dict) -> None:
+def _score(match: data.Match, report: contracts.MatchResultReport) -> None:
     """Apply one result payload: event standings, or ranked Elo, or nothing at all for a
     match that was never played."""
-    players = payload.get("players") or []
+    players = [line.model_dump() for line in report.players]
 
     eventId = match.meta.get("eventId")
     if eventId:
         Webhook(f"Event.{eventId}").info(
             f"Match.{match.id} ({match.region}) Results",
-            matchmaking.eventResults(eventId, match.id, *players),
+            matchmaking.event_results(eventId, match.id, *players),
         )
         return
 
-    if not payload.get("played") or not players:
-        data.MatchResult.recordUnscored(match.id, "notPlayed")
+    if not report.played or not players:
+        data.MatchResult.record_unscored(match.id, "notPlayed")
         return
 
     gamemode = mmconfig["gamemodes"][match.gamemode]
-    result, avgElo = matchmaking.matchResults(
+    result, avgElo = matchmaking.match_results(
         gamemode,
         *players,
-        draw=bool(payload.get("draw")),
+        draw=report.draw,
         teams=[team["users"] for team in match.teams],
     )
-    data.MatchResult.recordFinalResults(match.id, result)
+    data.MatchResult.record_final_results(match.id, result)
 
     lines = "\n\n".join(
-        f"{data.User.getSteamData(s).name} ({s})\n"
+        f"{data.User.steam_user(s).name} ({s})\n"
         f"**[PeekSeek profile]({settings.profile_url(s)})** - "
         f"[Steam profile](https://steamcommunity.com/profiles/{s})\n"
         + "\n".join(f"**{name}** {value}" for name, value in stats.items())
@@ -313,13 +337,13 @@ def _score(match: data.Match, payload: dict) -> None:
     Webhook(f"Match.{match.id} ({match.region})").info(
         "Results", f"***Average Elo** {avgElo}*\n\n{lines}"
     )
-    _postResultPublicly(match, result, avgElo)
+    _post_result_publicly(match, result, avgElo)
 
 
-def _postResultPublicly(match: data.Match, result: dict, avgElo: int) -> None:
+def _post_result_publicly(match: data.Match, result: dict, avgElo: int) -> None:
     """The result again, as a scoreboard in the channel players read."""
     winners = [steam64 for steam64, stats in result.items() if stats.get("Won")]
-    names = {steam64: data.User.getSteamData(steam64).name for steam64 in result}
+    names = {steam64: data.User.steam_user(steam64).name for steam64 in result}
     scoreline = " vs ".join(
         f"**{names[steam64]}**" if steam64 in winners else names[steam64]
         for steam64 in result
@@ -358,20 +382,20 @@ def _player(steam64: int, matchId: int | None, ban) -> dict:
     choosing", and `choose` is what they are still choosing between."""
     match = None
     if matchId:
-        with opendb() as db:
+        with session() as db:
             match = db.query(data.Match).where(data.Match.id == matchId).first()
 
-    profile = data.User.getSteamData(steam64)
-    elo = data.Stat.getElo(steam64)
+    profile = data.User.steam_user(steam64)
+    elo = data.Stat.get_elo(steam64)
 
     return {
         "steam64": str(steam64),
         "name": profile.name,
         "avatar": profile.avatar,
         "elo": elo,
-        "rankIcon": data.Rank.forElo(elo, data.Stat.ladderPosition(steam64)).icon,
+        "rankIcon": data.Rank.for_elo(elo, data.Stat.ladder_position(steam64)).icon,
         "matchId": matchId or None,
-        "relayTo": match.connectCode() if match else None,
+        "relayTo": match.connect_code() if match else None,
         "choose": _choices(match, steam64) if match else None,
         "ban": (
             {
@@ -407,8 +431,8 @@ def _choices(match: "data.Match", steam64: int) -> dict | None:
     }
 
 
-@router.post("/players/{steam64}/decide")
-def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = None):
+@router.post("/players/{steam64}/decide", response_model=contracts.Decision)
+def decide_player(steam64: int, kit: str | None = None, powerup: str | None = None):
     """Lock this player's kit and/or powerup for the match they are on.
 
     Both fields are optional and checked against the gamemode. Once every player has
@@ -417,11 +441,11 @@ def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = Non
 
     Answers with the same `choose` block `GET /players/{steam64}` returns.
     """
-    matchId = data.Match.currentFor(steam64)
+    matchId = data.Match.current_for(steam64)
     if not matchId:
         raise HTTPException(status_code=404, detail="No match found.")
 
-    with opendb() as db:
+    with session() as db:
         match = db.query(data.Match).where(data.Match.id == matchId).first()
 
     choices = _choices(match, steam64)
@@ -439,16 +463,16 @@ def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = Non
         picked["powerup"] = powerup
 
     if picked:
-        with opendb() as db:
-            match.meta = match.getReturnedMeta(steam64, **picked)
+        with session() as db:
+            match.meta = match.get_returned_meta(steam64, **picked)
             db.query(data.Match).where(data.Match.id == matchId).update(
                 {"meta": match.meta}
             )
 
-        if match.allKitsLocked():
-            collapsed = match.collapsedMetaIfNobodyIsPicking()
+        if match.all_kits_locked():
+            collapsed = match.collapsed_meta_if_nobody_is_picking()
             if collapsed is not None:
-                with opendb() as db:
+                with session() as db:
                     db.query(data.Match).where(data.Match.id == matchId).update(
                         {"meta": collapsed}
                     )
@@ -457,7 +481,7 @@ def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = Non
     return {"matchId": matchId, "choose": _choices(match, steam64)}
 
 
-@router.get("/gamemodes")
+@router.get("/gamemodes", response_model=contracts.Gamemodes)
 def gamemodes():
     """What a player can queue for, in menu order, for a server that asks in game.
     `bit` is the gamemode's position in the whole list, which is what a queue mask means.
@@ -482,8 +506,12 @@ def gamemodes():
     return {"gamemodes": modes}
 
 
-@router.post("/lobby/population")
-def lobbyPopulation(server: GameServer, payload: JsonBody):
+@router.post(
+    "/lobby/population",
+    response_model=contracts.Status,
+    openapi_extra=body_schema(contracts.LobbyPopulationReport),
+)
+def lobby_population(server: GameServer, payload: JsonBody):
     """How many are in this lobby right now, once per heartbeat.
 
     Body:
@@ -494,32 +522,24 @@ def lobbyPopulation(server: GameServer, payload: JsonBody):
     Optional counts are stored as absent rather than zero, so an older lobby that does
     not report them never reads as nobody wanting a match.
     """
-    players = int(payload.get("players", 0))
-    data.LobbyPopulation.report(server.address, players)
+    report = _validated(contracts.LobbyPopulationReport, payload)
+    data.LobbyPopulation.report(server.address, report.players)
     data.ArenaReading.record(
-        server.address,
-        players,
-        _optionalCount(payload, "queueing"),
-        _optionalCount(payload, "held"),
+        server.address, report.players, report.queueing, report.held
     )
     return {"status": "recorded"}
 
 
-def _optionalCount(payload: dict, field: str) -> int | None:
-    value = payload.get(field)
-    return None if value is None else int(value)
-
-
-@router.get("/players/{steam64}")
-def player(steam64: int):
+@router.get("/players/{steam64}", response_model=contracts.PlayerState)
+def gameserver_player(steam64: int):
     """Everything a server needs to know about one player. Asking does not queue them."""
-    with opendb() as db:
+    with session() as db:
         ban = data.UserBan.barring([steam64], db).get(steam64)
-    return _player(steam64, data.Match.currentFor(steam64), ban)
+    return _player(steam64, data.Match.current_for(steam64), ban)
 
 
-@router.get("/players/{steam64}/kits")
-def playerKits(steam64: int):
+@router.get("/players/{steam64}/kits", response_model=dict[str, contracts.SavedKit])
+def player_kits(steam64: int):
     """Every kit this player has saved, resolved into ready-to-equip items, with the
     magazine broken out so a caller can keep the spare topped up."""
     return {
@@ -527,12 +547,12 @@ def playerKits(steam64: int):
             "items": _items(kit["items"]),
             "magazine": _items([kit["magazine"]])[0] if kit["magazine"] else None,
         }
-        for category, kit in data.Kit.publicData(steam64).items()
+        for category, kit in data.Kit.public_data(steam64).items()
     }
 
 
-@router.put("/players/{steam64}/queue")
-def joinQueue(
+@router.put("/players/{steam64}/queue", response_model=contracts.PlayerState)
+def join_queue(
     steam64: int, gamemodes: int = 1, region: str = "paris", ip: str | None = None
 ):
     """Put this player in the matchmaking queue, or keep them in it.
@@ -543,26 +563,26 @@ def joinQueue(
     the `ban` field.
     """
     if ip:
-        with opendb() as db:
+        with session() as db:
             data.UserIP.remember(db, steam64, ip)
 
-    matchId = data.Match.currentFor(steam64)
+    matchId = data.Match.current_for(steam64)
     if matchId:
-        with opendb() as db:
+        with session() as db:
             ban = data.UserBan.barring([steam64], db).get(steam64)
     else:
-        ban = data.User.addToQueue(steam64, gamemodes, region=region)
+        ban = data.User.add_to_queue(steam64, gamemodes, region=region)
     return _player(steam64, matchId, ban)
 
 
-@router.delete("/players/{steam64}/queue")
-def leaveQueue(steam64: int):
-    data.User.removeFromQueue(steam64)
+@router.delete("/players/{steam64}/queue", response_model=contracts.Status)
+def leave_queue(steam64: int):
+    data.User.remove_from_queue(steam64)
     return {"status": "ok"}
 
 
-@router.post("/reports")
-async def submitReport(
+@router.post("/reports", response_model=contracts.ReportAccepted)
+async def submit_report(
     reported: int = Form(...),
     reporter: int = Form(...),
     reason: str = Form(...),
@@ -603,11 +623,15 @@ async def submitReport(
     return {"status": "ok", "delivered": sent}
 
 
-@router.post("/players/{steam64}/bans")
-def banPlayer(steam64: int, payload: JsonBody):
+@router.post(
+    "/players/{steam64}/bans",
+    response_model=contracts.Status,
+    openapi_extra=body_schema(contracts.GuardBan),
+)
+def ban_player(steam64: int, payload: JsonBody):
     """A ban issued by anti-cheat on a game server. An empty body bans for "Cheating"."""
-    reason = payload.get("reason") or "Cheating"
-    with opendb() as db:
+    reason = _validated(contracts.GuardBan, payload).reason or "Cheating"
+    with session() as db:
         db.add(
             data.UserBan(
                 steam64=steam64,

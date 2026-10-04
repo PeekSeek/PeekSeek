@@ -68,7 +68,7 @@ CLASS_NAMES = {114: "MonoBehaviour", 222: "CanvasRenderer", 223: "Canvas"}
 
 
 def rgba(hex_colour, alpha=1.0):
-    r, g, b = (int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    r, g, b = (int(hex_colour[i : i + 2], 16) / 255 for i in (1, 3, 5))
     return f"{{r: {r:.4g}, g: {g:.4g}, b: {b:.4g}, a: {alpha:g}}}"
 
 
@@ -85,8 +85,18 @@ class Node:
 
     ids = iter(range(100000, 10_000_000))
 
-    def __init__(self, name, *, active=True, anchor_min=(0, 0), anchor_max=(1, 1),
-                 pivot=(0.5, 0.5), position=(0, 0), size=(0, 0), rotation=0):
+    def __init__(
+        self,
+        name,
+        *,
+        active=True,
+        anchor_min=(0, 0),
+        anchor_max=(1, 1),
+        pivot=(0.5, 0.5),
+        position=(0, 0),
+        size=(0, 0),
+        rotation=0,
+    ):
         self.name = name
         self.active = active
         self.anchor_min, self.anchor_max, self.pivot = anchor_min, anchor_max, pivot
@@ -108,14 +118,17 @@ class Node:
         return component_id
 
     def mono(self, guid, body, enabled=True):
-        return self.component(114, [
-            f"m_Enabled: {int(enabled)}",
-            "m_EditorHideFlags: 0",
-            f"m_Script: {{fileID: 11500000, guid: {guid}, type: 3}}",
-            "m_Name: ",
-            "m_EditorClassIdentifier: ",
-            *body,
-        ])
+        return self.component(
+            114,
+            [
+                f"m_Enabled: {int(enabled)}",
+                "m_EditorHideFlags: 0",
+                f"m_Script: {{fileID: 11500000, guid: {guid}, type: 3}}",
+                "m_Name: ",
+                "m_EditorClassIdentifier: ",
+                *body,
+            ],
+        )
 
     def emit(self, parent_rect_id, out):
         out.append(f"--- !u!1 &{self.id}")
@@ -138,7 +151,9 @@ class Node:
         out += HEADER
         out.append(f"  m_GameObject: {{fileID: {self.id}}}")
         half = math.radians(self.rotation) / 2
-        out.append(f"  m_LocalRotation: {{x: 0, y: 0, z: {math.sin(half):.6g}, w: {math.cos(half):.6g}}}")
+        out.append(
+            f"  m_LocalRotation: {{x: 0, y: 0, z: {math.sin(half):.6g}, w: {math.cos(half):.6g}}}"
+        )
         out.append("  m_LocalPosition: {x: 0, y: 0, z: 0}")
         out.append("  m_LocalScale: {x: 1, y: 1, z: 1}")
         out.append("  m_ConstrainProportionsScale: 0")
@@ -146,9 +161,15 @@ class Node:
         out += [f"  - {{fileID: {child.rect_id}}}" for child in self.children]
         out.append(f"  m_Father: {{fileID: {parent_rect_id}}}")
         out.append(f"  m_LocalEulerAnglesHint: {{x: 0, y: 0, z: {self.rotation:g}}}")
-        out.append(f"  m_AnchorMin: {{x: {self.anchor_min[0]:g}, y: {self.anchor_min[1]:g}}}")
-        out.append(f"  m_AnchorMax: {{x: {self.anchor_max[0]:g}, y: {self.anchor_max[1]:g}}}")
-        out.append(f"  m_AnchoredPosition: {{x: {self.position[0]:g}, y: {self.position[1]:g}}}")
+        out.append(
+            f"  m_AnchorMin: {{x: {self.anchor_min[0]:g}, y: {self.anchor_min[1]:g}}}"
+        )
+        out.append(
+            f"  m_AnchorMax: {{x: {self.anchor_max[0]:g}, y: {self.anchor_max[1]:g}}}"
+        )
+        out.append(
+            f"  m_AnchoredPosition: {{x: {self.position[0]:g}, y: {self.position[1]:g}}}"
+        )
         out.append(f"  m_SizeDelta: {{x: {self.size[0]:g}, y: {self.size[1]:g}}}")
         out.append(f"  m_Pivot: {{x: {self.pivot[0]:g}, y: {self.pivot[1]:g}}}")
 
@@ -165,41 +186,105 @@ class Node:
 
 # ---- placement -----------------------------------------------------------------------
 
+
 def top_left(name, x, y, w, h, **kw):
-    return Node(name, anchor_min=(0, 1), anchor_max=(0, 1), pivot=(0, 1), position=(x, -y), size=(w, h), **kw)
+    return Node(
+        name,
+        anchor_min=(0, 1),
+        anchor_max=(0, 1),
+        pivot=(0, 1),
+        position=(x, -y),
+        size=(w, h),
+        **kw,
+    )
 
 
 def top_right(name, x, y, w, h, **kw):
     """`x` in from the right edge."""
-    return Node(name, anchor_min=(1, 1), anchor_max=(1, 1), pivot=(1, 1), position=(-x, -y), size=(w, h), **kw)
+    return Node(
+        name,
+        anchor_min=(1, 1),
+        anchor_max=(1, 1),
+        pivot=(1, 1),
+        position=(-x, -y),
+        size=(w, h),
+        **kw,
+    )
 
 
 def top_center(name, x, y, w, h, **kw):
     """`x` is the offset of the centre from the parent's centre."""
-    return Node(name, anchor_min=(0.5, 1), anchor_max=(0.5, 1), pivot=(0.5, 1), position=(x, -y), size=(w, h), **kw)
+    return Node(
+        name,
+        anchor_min=(0.5, 1),
+        anchor_max=(0.5, 1),
+        pivot=(0.5, 1),
+        position=(x, -y),
+        size=(w, h),
+        **kw,
+    )
 
 
 def bottom_center(name, x, y, w, h, **kw):
     """`x` is the offset of the centre from the parent's centre, `y` up from the bottom."""
-    return Node(name, anchor_min=(0.5, 0), anchor_max=(0.5, 0), pivot=(0.5, 0), position=(x, y), size=(w, h), **kw)
+    return Node(
+        name,
+        anchor_min=(0.5, 0),
+        anchor_max=(0.5, 0),
+        pivot=(0.5, 0),
+        position=(x, y),
+        size=(w, h),
+        **kw,
+    )
 
 
 def bottom_left(name, x, y, w, h, **kw):
-    return Node(name, anchor_min=(0, 0), anchor_max=(0, 0), pivot=(0, 0), position=(x, y), size=(w, h), **kw)
+    return Node(
+        name,
+        anchor_min=(0, 0),
+        anchor_max=(0, 0),
+        pivot=(0, 0),
+        position=(x, y),
+        size=(w, h),
+        **kw,
+    )
 
 
 def bottom_right(name, x, y, w, h, **kw):
     """`x` and `y` in from the bottom-right corner."""
-    return Node(name, anchor_min=(1, 0), anchor_max=(1, 0), pivot=(1, 0), position=(-x, y), size=(w, h), **kw)
+    return Node(
+        name,
+        anchor_min=(1, 0),
+        anchor_max=(1, 0),
+        pivot=(1, 0),
+        position=(-x, y),
+        size=(w, h),
+        **kw,
+    )
 
 
 def centered(name, x, y, w, h, **kw):
-    return Node(name, anchor_min=(0.5, 0.5), anchor_max=(0.5, 0.5), position=(x, y), size=(w, h), **kw)
+    return Node(
+        name,
+        anchor_min=(0.5, 0.5),
+        anchor_max=(0.5, 0.5),
+        position=(x, y),
+        size=(w, h),
+        **kw,
+    )
 
 
 def top_stretch(name, y, h, inset, **kw):
     """Full parent width minus `inset` each side, `h` tall, `y` down from the top."""
-    return Node(name, anchor_min=(0, 1), anchor_max=(1, 1), pivot=(0.5, 1), position=(0, -y), size=(-2 * inset, h), **kw)
+    return Node(
+        name,
+        anchor_min=(0, 1),
+        anchor_max=(1, 1),
+        pivot=(0.5, 1),
+        position=(0, -y),
+        size=(-2 * inset, h),
+        **kw,
+    )
 
 
 def stretch(name, **kw):
@@ -208,84 +293,119 @@ def stretch(name, **kw):
 
 # ---- components ----------------------------------------------------------------------
 
+
 def canvas(node, sorting_order=0):
-    node.component(223, [
-        "m_Enabled: 1",
-        "serializedVersion: 3",
-        "m_RenderMode: 0",
-        "m_Camera: {fileID: 0}",
-        "m_PlaneDistance: 100",
-        "m_PixelPerfect: 0",
-        "m_ReceivesEvents: 1",
-        "m_OverrideSorting: 0",
-        "m_OverridePixelPerfect: 0",
-        "m_SortingBucketNormalizedSize: 0",
-        "m_VertexColorAlwaysGammaSpace: 0",
-        "m_AdditionalShaderChannelsFlag: 25",
-        "m_UpdateRectTransformForStandalone: 0",
-        "m_SortingLayerID: 0",
-        f"m_SortingOrder: {sorting_order}",
-        "m_TargetDisplay: 0",
-    ])
+    node.component(
+        223,
+        [
+            "m_Enabled: 1",
+            "serializedVersion: 3",
+            "m_RenderMode: 0",
+            "m_Camera: {fileID: 0}",
+            "m_PlaneDistance: 100",
+            "m_PixelPerfect: 0",
+            "m_ReceivesEvents: 1",
+            "m_OverrideSorting: 0",
+            "m_OverridePixelPerfect: 0",
+            "m_SortingBucketNormalizedSize: 0",
+            "m_VertexColorAlwaysGammaSpace: 0",
+            "m_AdditionalShaderChannelsFlag: 25",
+            "m_UpdateRectTransformForStandalone: 0",
+            "m_SortingLayerID: 0",
+            f"m_SortingOrder: {sorting_order}",
+            "m_TargetDisplay: 0",
+        ],
+    )
     # ConstantPixelSize: the game's UnturnedCanvasScaler multiplies this by the player's
     # UI scale setting, so sizes here are pixels at scale 1.
-    node.mono(CANVAS_SCALER, [
-        "m_UiScaleMode: 0",
-        "m_ReferencePixelsPerUnit: 100",
-        "m_ScaleFactor: 1",
-        "m_ReferenceResolution: {x: 1920, y: 1080}",
-        "m_ScreenMatchMode: 0",
-        "m_MatchWidthOrHeight: 0",
-        "m_PhysicalUnit: 3",
-        "m_FallbackScreenDPI: 96",
-        "m_DefaultSpriteDPI: 96",
-        "m_DynamicPixelsPerUnit: 1",
-        "m_PresetInfoIsWorld: 0",
-    ])
-    node.mono(GRAPHIC_RAYCASTER, [
-        "m_IgnoreReversedGraphics: 1",
-        "m_BlockingObjects: 0",
-        "m_BlockingMask:",
-        "  serializedVersion: 2",
-        "  m_Bits: 4294967295",
-    ])
+    node.mono(
+        CANVAS_SCALER,
+        [
+            "m_UiScaleMode: 0",
+            "m_ReferencePixelsPerUnit: 100",
+            "m_ScaleFactor: 1",
+            "m_ReferenceResolution: {x: 1920, y: 1080}",
+            "m_ScreenMatchMode: 0",
+            "m_MatchWidthOrHeight: 0",
+            "m_PhysicalUnit: 3",
+            "m_FallbackScreenDPI: 96",
+            "m_DefaultSpriteDPI: 96",
+            "m_DynamicPixelsPerUnit: 1",
+            "m_PresetInfoIsWorld: 0",
+        ],
+    )
+    node.mono(
+        GRAPHIC_RAYCASTER,
+        [
+            "m_IgnoreReversedGraphics: 1",
+            "m_BlockingObjects: 0",
+            "m_BlockingMask:",
+            "  serializedVersion: 2",
+            "  m_Bits: 4294967295",
+        ],
+    )
 
 
-def image(node, colour, alpha=1.0, *, sprite=None, sliced=True, enabled=True, preserve_aspect=False, raycast=False,
-          material=None):
+def image(
+    node,
+    colour,
+    alpha=1.0,
+    *,
+    sprite=None,
+    sliced=True,
+    enabled=True,
+    preserve_aspect=False,
+    raycast=False,
+    material=None,
+):
     """A rectangle in a colour. With `sprite` set it is that sprite, tinted: nine-sliced
     for a corner or a border that must not stretch, plain for a picture. `material` is
     the GUID of a material asset to draw it with instead of uGUI's own."""
     node.component(222, ["m_CullTransparentMesh: 1"])
-    return node.mono(IMAGE, [
-        f"m_Material: {{fileID: 2100000, guid: {material}, type: 2}}" if material else "m_Material: {fileID: 0}",
-        f"m_Color: {rgba(colour, alpha)}",
-        f"m_RaycastTarget: {int(raycast)}",
-        "m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}",
-        "m_Maskable: 1",
-        "m_OnCullStateChanged:",
-        "  m_PersistentCalls:",
-        "    m_Calls: []",
-        f"m_Sprite: {{fileID: 21300000, guid: {sprite}, type: 3}}" if sprite else "m_Sprite: {fileID: 0}",
-        f"m_Type: {1 if sprite and sliced else 0}",
-        f"m_PreserveAspect: {int(preserve_aspect)}",
-        "m_FillCenter: 1",
-        "m_FillMethod: 4",
-        "m_FillAmount: 1",
-        "m_FillClockwise: 1",
-        "m_FillOrigin: 0",
-        "m_UseSpriteMesh: 0",
-        "m_PixelsPerUnitMultiplier: 1",
-    ], enabled=enabled)
+    return node.mono(
+        IMAGE,
+        [
+            (
+                f"m_Material: {{fileID: 2100000, guid: {material}, type: 2}}"
+                if material
+                else "m_Material: {fileID: 0}"
+            ),
+            f"m_Color: {rgba(colour, alpha)}",
+            f"m_RaycastTarget: {int(raycast)}",
+            "m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}",
+            "m_Maskable: 1",
+            "m_OnCullStateChanged:",
+            "  m_PersistentCalls:",
+            "    m_Calls: []",
+            (
+                f"m_Sprite: {{fileID: 21300000, guid: {sprite}, type: 3}}"
+                if sprite
+                else "m_Sprite: {fileID: 0}"
+            ),
+            f"m_Type: {1 if sprite and sliced else 0}",
+            f"m_PreserveAspect: {int(preserve_aspect)}",
+            "m_FillCenter: 1",
+            "m_FillMethod: 4",
+            "m_FillAmount: 1",
+            "m_FillClockwise: 1",
+            "m_FillOrigin: 0",
+            "m_UseSpriteMesh: 0",
+            "m_PixelsPerUnitMultiplier: 1",
+        ],
+        enabled=enabled,
+    )
 
 
 def aspect_fit(node, ratio=1.0):
     """uGUI's AspectRatioFitter in FitInParent: the node becomes the largest rectangle
     of this ratio that fits its parent, whatever the screen is."""
-    node.mono(ASPECT_RATIO_FITTER, [
-        "m_AspectMode: 3",
-        f"m_AspectRatio: {ratio:g}",
-    ])
+    node.mono(
+        ASPECT_RATIO_FITTER,
+        [
+            "m_AspectMode: 3",
+            f"m_AspectRatio: {ratio:g}",
+        ],
+    )
 
 
 def mask(node, show=False):
@@ -307,22 +427,25 @@ def row(node, spacing=0, align=MIDDLE_CENTER, padding=0, control_width=False):
     as wide as it asks to be, a text as wide as its text and an image whatever its
     `layout_size` says, which with `fit_width` on the node makes a row as wide as what
     is in it."""
-    node.mono(HORIZONTAL_LAYOUT_GROUP, [
-        "m_Padding:",
-        f"  m_Left: {padding}",
-        f"  m_Right: {padding}",
-        "  m_Top: 0",
-        "  m_Bottom: 0",
-        f"m_ChildAlignment: {align}",
-        f"m_Spacing: {spacing:g}",
-        "m_ChildForceExpandWidth: 0",
-        "m_ChildForceExpandHeight: 0",
-        f"m_ChildControlWidth: {int(control_width)}",
-        "m_ChildControlHeight: 0",
-        "m_ChildScaleWidth: 0",
-        "m_ChildScaleHeight: 0",
-        "m_ReverseArrangement: 0",
-    ])
+    node.mono(
+        HORIZONTAL_LAYOUT_GROUP,
+        [
+            "m_Padding:",
+            f"  m_Left: {padding}",
+            f"  m_Right: {padding}",
+            "  m_Top: 0",
+            "  m_Bottom: 0",
+            f"m_ChildAlignment: {align}",
+            f"m_Spacing: {spacing:g}",
+            "m_ChildForceExpandWidth: 0",
+            "m_ChildForceExpandHeight: 0",
+            f"m_ChildControlWidth: {int(control_width)}",
+            "m_ChildControlHeight: 0",
+            "m_ChildScaleWidth: 0",
+            "m_ChildScaleHeight: 0",
+            "m_ReverseArrangement: 0",
+        ],
+    )
 
 
 def column(node, spacing=0, padding=0, top=0):
@@ -330,98 +453,116 @@ def column(node, spacing=0, padding=0, top=0):
     the node and as tall as it already is. A child that is switched off is left out,
     so a board of twelve row slots with three players in it is three rows tall rather
     than nine rows of empty panel."""
-    node.mono(VERTICAL_LAYOUT_GROUP, [
-        "m_Padding:",
-        f"  m_Left: {padding}",
-        f"  m_Right: {padding}",
-        f"  m_Top: {top}",
-        f"  m_Bottom: {padding}",
-        "m_ChildAlignment: 0",
-        f"m_Spacing: {spacing:g}",
-        "m_ChildForceExpandWidth: 1",
-        "m_ChildForceExpandHeight: 0",
-        "m_ChildControlWidth: 1",
-        "m_ChildControlHeight: 0",
-        "m_ChildScaleWidth: 0",
-        "m_ChildScaleHeight: 0",
-        "m_ReverseArrangement: 0",
-    ])
+    node.mono(
+        VERTICAL_LAYOUT_GROUP,
+        [
+            "m_Padding:",
+            f"  m_Left: {padding}",
+            f"  m_Right: {padding}",
+            f"  m_Top: {top}",
+            f"  m_Bottom: {padding}",
+            "m_ChildAlignment: 0",
+            f"m_Spacing: {spacing:g}",
+            "m_ChildForceExpandWidth: 1",
+            "m_ChildForceExpandHeight: 0",
+            "m_ChildControlWidth: 1",
+            "m_ChildControlHeight: 0",
+            "m_ChildScaleWidth: 0",
+            "m_ChildScaleHeight: 0",
+            "m_ReverseArrangement: 0",
+        ],
+    )
 
 
 def fit_height(node):
     """uGUI's ContentSizeFitter, vertical only: the node becomes as tall as its layout
     says it wants to be. Its pivot decides which way it grows."""
-    node.mono(CONTENT_SIZE_FITTER, [
-        "m_HorizontalFit: 0",
-        "m_VerticalFit: 2",
-    ])
+    node.mono(
+        CONTENT_SIZE_FITTER,
+        [
+            "m_HorizontalFit: 0",
+            "m_VerticalFit: 2",
+        ],
+    )
 
 
 def fit_width(node):
     """uGUI's ContentSizeFitter, horizontal only: the node becomes as wide as its layout
     says it wants to be. Its pivot decides which way it grows."""
-    node.mono(CONTENT_SIZE_FITTER, [
-        "m_HorizontalFit: 2",
-        "m_VerticalFit: 0",
-    ])
+    node.mono(
+        CONTENT_SIZE_FITTER,
+        [
+            "m_HorizontalFit: 2",
+            "m_VerticalFit: 0",
+        ],
+    )
 
 
 def layout_size(node, width, height):
     """What a node asks a layout for, when it has no text to measure: a picture is this
     big in the run whatever picture arrives."""
-    node.mono(LAYOUT_ELEMENT, [
-        "m_IgnoreLayout: 0",
-        "m_MinWidth: -1",
-        "m_MinHeight: -1",
-        f"m_PreferredWidth: {width:g}",
-        f"m_PreferredHeight: {height:g}",
-        "m_FlexibleWidth: -1",
-        "m_FlexibleHeight: -1",
-        "m_LayoutPriority: 1",
-    ])
+    node.mono(
+        LAYOUT_ELEMENT,
+        [
+            "m_IgnoreLayout: 0",
+            "m_MinWidth: -1",
+            "m_MinHeight: -1",
+            f"m_PreferredWidth: {width:g}",
+            f"m_PreferredHeight: {height:g}",
+            "m_FlexibleWidth: -1",
+            "m_FlexibleHeight: -1",
+            "m_LayoutPriority: 1",
+        ],
+    )
 
 
 def ignore_layout(node):
     """A child a layout leaves alone: a hairline drawn round the row is not a part of
     the row."""
-    node.mono(LAYOUT_ELEMENT, [
-        "m_IgnoreLayout: 1",
-        "m_MinWidth: -1",
-        "m_MinHeight: -1",
-        "m_PreferredWidth: -1",
-        "m_PreferredHeight: -1",
-        "m_FlexibleWidth: -1",
-        "m_FlexibleHeight: -1",
-        "m_LayoutPriority: 1",
-    ])
+    node.mono(
+        LAYOUT_ELEMENT,
+        [
+            "m_IgnoreLayout: 1",
+            "m_MinWidth: -1",
+            "m_MinHeight: -1",
+            "m_PreferredWidth: -1",
+            "m_PreferredHeight: -1",
+            "m_FlexibleWidth: -1",
+            "m_FlexibleHeight: -1",
+            "m_LayoutPriority: 1",
+        ],
+    )
 
 
 def button(node, target_image_id, normal, hover, pressed):
     """The node's own Image is the button. It is white and these tints are the real
     colours, which is how uGUI's colour transition is meant to be used."""
-    node.mono(BUTTON, [
-        "m_Navigation:",
-        "  m_Mode: 0",
-        "  m_WrapAround: 0",
-        "  m_SelectOnUp: {fileID: 0}",
-        "  m_SelectOnDown: {fileID: 0}",
-        "  m_SelectOnLeft: {fileID: 0}",
-        "  m_SelectOnRight: {fileID: 0}",
-        "m_Transition: 1",
-        "m_Colors:",
-        f"  m_NormalColor: {rgba(normal)}",
-        f"  m_HighlightedColor: {rgba(hover)}",
-        f"  m_PressedColor: {rgba(pressed)}",
-        f"  m_SelectedColor: {rgba(normal)}",
-        f"  m_DisabledColor: {rgba(normal)}",
-        "  m_ColorMultiplier: 1",
-        "  m_FadeDuration: 0.08",
-        "m_Interactable: 1",
-        f"m_TargetGraphic: {{fileID: {target_image_id}}}",
-        "m_OnClick:",
-        "  m_PersistentCalls:",
-        "    m_Calls: []",
-    ])
+    node.mono(
+        BUTTON,
+        [
+            "m_Navigation:",
+            "  m_Mode: 0",
+            "  m_WrapAround: 0",
+            "  m_SelectOnUp: {fileID: 0}",
+            "  m_SelectOnDown: {fileID: 0}",
+            "  m_SelectOnLeft: {fileID: 0}",
+            "  m_SelectOnRight: {fileID: 0}",
+            "m_Transition: 1",
+            "m_Colors:",
+            f"  m_NormalColor: {rgba(normal)}",
+            f"  m_HighlightedColor: {rgba(hover)}",
+            f"  m_PressedColor: {rgba(pressed)}",
+            f"  m_SelectedColor: {rgba(normal)}",
+            f"  m_DisabledColor: {rgba(normal)}",
+            "  m_ColorMultiplier: 1",
+            "  m_FadeDuration: 0.08",
+            "m_Interactable: 1",
+            f"m_TargetGraphic: {{fileID: {target_image_id}}}",
+            "m_OnClick:",
+            "  m_PersistentCalls:",
+            "    m_Calls: []",
+        ],
+    )
 
 
 def fits_line(node, line, wrap):
@@ -431,95 +572,112 @@ def fits_line(node, line, wrap):
     fixed_height = node.anchor_min[1] == node.anchor_max[1]
     if wrap or not fixed_height or node.size[1] >= line:
         return
-    raise ValueError(f"{node.name} is {node.size[1]:g}px tall, its text needs {line:.1f}")
+    raise ValueError(
+        f"{node.name} is {node.size[1]:g}px tall, its text needs {line:.1f}"
+    )
 
 
-def text(node, content, *, size, colour, halign=LEFT, valign=MIDDLE, bold=False,
-         wrap=False, spacing=0, uppercase=False, mono=False):
+def text(
+    node,
+    content,
+    *,
+    size,
+    colour,
+    halign=LEFT,
+    valign=MIDDLE,
+    bold=False,
+    wrap=False,
+    spacing=0,
+    uppercase=False,
+    mono=False,
+):
     """TextMeshPro text. `spacing` is letter spacing in hundredths of an em, the unit
     TMP uses, so CSS's 0.1em is 10."""
     font = FONT_MONO if mono else FONT_BOLD if bold else FONT_REGULAR
     fits_line(node, size * LINE_HEIGHT[font], wrap)
     node.component(222, ["m_CullTransparentMesh: 1"])
-    node.mono(TEXT_MESH_PRO_UGUI, [
-        "m_Material: {fileID: 0}",
-        f"m_Color: {rgba(colour)}",
-        "m_RaycastTarget: 0",
-        "m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}",
-        "m_Maskable: 1",
-        "m_OnCullStateChanged:",
-        "  m_PersistentCalls:",
-        "    m_Calls: []",
-        f"m_text: {quoted(content)}",
-        "m_isRightToLeft: 0",
-        f"m_fontAsset: {{fileID: 11400000, guid: {font}, type: 2}}",
-        "m_sharedMaterial: {fileID: 0}",
-        "m_fontSharedMaterials: []",
-        "m_fontMaterial: {fileID: 0}",
-        "m_fontMaterials: []",
-        "m_fontColor32:",
-        "  serializedVersion: 2",
-        "  rgba: 4294967295",
-        f"m_fontColor: {rgba(colour)}",
-        "m_enableVertexGradient: 0",
-        "m_colorMode: 3",
-        "m_fontColorGradient:",
-        "  topLeft: {r: 1, g: 1, b: 1, a: 1}",
-        "  topRight: {r: 1, g: 1, b: 1, a: 1}",
-        "  bottomLeft: {r: 1, g: 1, b: 1, a: 1}",
-        "  bottomRight: {r: 1, g: 1, b: 1, a: 1}",
-        "m_fontColorGradientPreset: {fileID: 0}",
-        "m_spriteAsset: {fileID: 0}",
-        "m_tintAllSprites: 0",
-        "m_StyleSheet: {fileID: 0}",
-        "m_TextStyleHashCode: -1183493901",
-        "m_overrideHtmlColors: 0",
-        "m_faceColor:",
-        "  serializedVersion: 2",
-        "  rgba: 4294967295",
-        f"m_fontSize: {size:g}",
-        f"m_fontSizeBase: {size:g}",
-        "m_fontWeight: 400",
-        "m_enableAutoSizing: 0",
-        "m_fontSizeMin: 8",
-        "m_fontSizeMax: 72",
-        f"m_fontStyle: {16 if uppercase else 0}",
-        f"m_HorizontalAlignment: {halign}",
-        f"m_VerticalAlignment: {valign}",
-        "m_textAlignment: 65535",
-        f"m_characterSpacing: {spacing:g}",
-        "m_wordSpacing: 0",
-        "m_lineSpacing: 0",
-        "m_lineSpacingMax: 0",
-        "m_paragraphSpacing: 0",
-        "m_charWidthMaxAdj: 0",
-        f"m_enableWordWrapping: {int(wrap)}",
-        "m_wordWrappingRatios: 0.4",
-        "m_overflowMode: 1",
-        "m_linkedTextComponent: {fileID: 0}",
-        "parentLinkedComponent: {fileID: 0}",
-        "m_enableKerning: 1",
-        "m_enableExtraPadding: 0",
-        "checkPaddingRequired: 0",
-        "m_isRichText: 1",
-        "m_parseCtrlCharacters: 1",
-        "m_isOrthographic: 1",
-        "m_isCullingEnabled: 0",
-        "m_horizontalMapping: 0",
-        "m_verticalMapping: 0",
-        "m_uvLineOffset: 0",
-        "m_geometrySortingOrder: 0",
-        "m_IsTextObjectScaleStatic: 0",
-        "m_VertexBufferAutoSizeReduction: 0",
-        "m_useMaxVisibleDescender: 1",
-        "m_pageToDisplay: 1",
-        "m_margin: {x: 0, y: 0, z: 0, w: 0}",
-        "m_isUsingLegacyAnimationComponent: 0",
-        "m_isVolumetricText: 0",
-        "m_hasFontAssetChanged: 0",
-        "m_baseMaterial: {fileID: 0}",
-        "m_maskOffset: {x: 0, y: 0, z: 0, w: 0}",
-    ])
+    node.mono(
+        TEXT_MESH_PRO_UGUI,
+        [
+            "m_Material: {fileID: 0}",
+            f"m_Color: {rgba(colour)}",
+            "m_RaycastTarget: 0",
+            "m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}",
+            "m_Maskable: 1",
+            "m_OnCullStateChanged:",
+            "  m_PersistentCalls:",
+            "    m_Calls: []",
+            f"m_text: {quoted(content)}",
+            "m_isRightToLeft: 0",
+            f"m_fontAsset: {{fileID: 11400000, guid: {font}, type: 2}}",
+            "m_sharedMaterial: {fileID: 0}",
+            "m_fontSharedMaterials: []",
+            "m_fontMaterial: {fileID: 0}",
+            "m_fontMaterials: []",
+            "m_fontColor32:",
+            "  serializedVersion: 2",
+            "  rgba: 4294967295",
+            f"m_fontColor: {rgba(colour)}",
+            "m_enableVertexGradient: 0",
+            "m_colorMode: 3",
+            "m_fontColorGradient:",
+            "  topLeft: {r: 1, g: 1, b: 1, a: 1}",
+            "  topRight: {r: 1, g: 1, b: 1, a: 1}",
+            "  bottomLeft: {r: 1, g: 1, b: 1, a: 1}",
+            "  bottomRight: {r: 1, g: 1, b: 1, a: 1}",
+            "m_fontColorGradientPreset: {fileID: 0}",
+            "m_spriteAsset: {fileID: 0}",
+            "m_tintAllSprites: 0",
+            "m_StyleSheet: {fileID: 0}",
+            "m_TextStyleHashCode: -1183493901",
+            "m_overrideHtmlColors: 0",
+            "m_faceColor:",
+            "  serializedVersion: 2",
+            "  rgba: 4294967295",
+            f"m_fontSize: {size:g}",
+            f"m_fontSizeBase: {size:g}",
+            "m_fontWeight: 400",
+            "m_enableAutoSizing: 0",
+            "m_fontSizeMin: 8",
+            "m_fontSizeMax: 72",
+            f"m_fontStyle: {16 if uppercase else 0}",
+            f"m_HorizontalAlignment: {halign}",
+            f"m_VerticalAlignment: {valign}",
+            "m_textAlignment: 65535",
+            f"m_characterSpacing: {spacing:g}",
+            "m_wordSpacing: 0",
+            "m_lineSpacing: 0",
+            "m_lineSpacingMax: 0",
+            "m_paragraphSpacing: 0",
+            "m_charWidthMaxAdj: 0",
+            f"m_enableWordWrapping: {int(wrap)}",
+            "m_wordWrappingRatios: 0.4",
+            "m_overflowMode: 1",
+            "m_linkedTextComponent: {fileID: 0}",
+            "parentLinkedComponent: {fileID: 0}",
+            "m_enableKerning: 1",
+            "m_enableExtraPadding: 0",
+            "checkPaddingRequired: 0",
+            "m_isRichText: 1",
+            "m_parseCtrlCharacters: 1",
+            "m_isOrthographic: 1",
+            "m_isCullingEnabled: 0",
+            "m_horizontalMapping: 0",
+            "m_verticalMapping: 0",
+            "m_uvLineOffset: 0",
+            "m_geometrySortingOrder: 0",
+            "m_IsTextObjectScaleStatic: 0",
+            "m_VertexBufferAutoSizeReduction: 0",
+            "m_useMaxVisibleDescender: 1",
+            "m_pageToDisplay: 1",
+            "m_margin: {x: 0, y: 0, z: 0, w: 0}",
+            "m_isUsingLegacyAnimationComponent: 0",
+            "m_isVolumetricText: 0",
+            "m_hasFontAssetChanged: 0",
+            "m_baseMaterial: {fileID: 0}",
+            "m_maskOffset: {x: 0, y: 0, z: 0, w: 0}",
+        ],
+    )
 
 
 def prefab(root):
@@ -529,6 +687,7 @@ def prefab(root):
 
 
 # ---- sprites -------------------------------------------------------------------------
+
 
 def png(width, height, alpha_at):
     """An all-white RGBA PNG whose alpha is `alpha_at(x, y)` in 0..1, y downward."""
@@ -541,12 +700,19 @@ def png(width, height, alpha_at):
     raw = b"".join(rows)
 
     def chunk(kind, data):
-        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
 
-    return (b"\x89PNG\r\n\x1a\n"
-            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw, 9))
-            + chunk(b"IEND", b""))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw, 9))
+        + chunk(b"IEND", b"")
+    )
 
 
 def coverage(inside, x, y, samples=4):
@@ -560,17 +726,19 @@ def coverage(inside, x, y, samples=4):
 
 def rounded_alpha(width, height, radius, corners=("tl", "tr", "bl", "br")):
     """A rectangle with the named corners rounded."""
+
     def inside(px, py):
         for name, (cx, cy) in {
-            "tl": (radius, radius), "tr": (width - radius, radius),
-            "bl": (radius, height - radius), "br": (width - radius, height - radius),
+            "tl": (radius, radius),
+            "tr": (width - radius, radius),
+            "bl": (radius, height - radius),
+            "br": (width - radius, height - radius),
         }.items():
             if name not in corners:
                 continue
             dx, dy = px - cx, py - cy
-            in_corner_box = (
-                (px < cx if name in ("tl", "bl") else px > cx)
-                and (py < cy if name in ("tl", "tr") else py > cy)
+            in_corner_box = (px < cx if name in ("tl", "bl") else px > cx) and (
+                py < cy if name in ("tl", "tr") else py > cy
             )
             if in_corner_box and dx * dx + dy * dy > radius * radius:
                 return 0
@@ -590,8 +758,15 @@ def ring_alpha(width, height, radius, thickness=1):
         if px < t or py < t or px > width - t or py > height - t:
             return 0
         r = radius - t
-        for cx, cy in ((t + r, t + r), (width - t - r, t + r), (t + r, height - t - r), (width - t - r, height - t - r)):
-            in_corner = (px < cx if cx < width / 2 else px > cx) and (py < cy if cy < height / 2 else py > cy)
+        for cx, cy in (
+            (t + r, t + r),
+            (width - t - r, t + r),
+            (t + r, height - t - r),
+            (width - t - r, height - t - r),
+        ):
+            in_corner = (px < cx if cx < width / 2 else px > cx) and (
+                py < cy if cy < height / 2 else py > cy
+            )
             if in_corner and (px - cx) ** 2 + (py - cy) ** 2 > r * r:
                 return 0
         return 1
@@ -605,6 +780,7 @@ def flare_alpha(size, outer_x):
     `M0 0 L10 0 L10 10 A10 10 0 0 0 0 0` path. Full width at the top edge, nothing at
     depth `size`: that is what makes a notch flare into a straight line instead of
     just rounding away from it."""
+
     def inside(px, py):
         dx, dy = px - outer_x, py - size
         return 0 if dx * dx + dy * dy < size * size else 1
@@ -616,14 +792,19 @@ def skull_alpha(size):
     """A skull: a round head with two eyes, a jaw under it with two gaps for teeth.
     The kill feed's mark for a death nobody dealt, and for one the server cannot put
     an item to."""
+
     def inside(px, py):
         x, y = px / size, py / size
         for ex in (0.37, 0.63):
-            if (x - ex) ** 2 + (y - 0.42) ** 2 <= 0.085 ** 2:
+            if (x - ex) ** 2 + (y - 0.42) ** 2 <= 0.085**2:
                 return 0
-        if 0.30 <= x <= 0.70 and 0.70 <= y <= 0.88 and (abs(x - 0.43) < 0.02 or abs(x - 0.57) < 0.02):
+        if (
+            0.30 <= x <= 0.70
+            and 0.70 <= y <= 0.88
+            and (abs(x - 0.43) < 0.02 or abs(x - 0.57) < 0.02)
+        ):
             return 0
-        if (x - 0.5) ** 2 + (y - 0.42) ** 2 <= 0.34 ** 2:
+        if (x - 0.5) ** 2 + (y - 0.42) ** 2 <= 0.34**2:
             return 1
         if 0.30 <= x <= 0.70 and 0.60 <= y <= 0.88:
             return 1
@@ -634,8 +815,11 @@ def skull_alpha(size):
 
 def disc_alpha(size):
     """A filled circle: a dot on a map, and the ground under the keep."""
+
     def inside(px, py):
-        return 1 if (px - size / 2) ** 2 + (py - size / 2) ** 2 <= (size / 2) ** 2 else 0
+        return (
+            1 if (px - size / 2) ** 2 + (py - size / 2) ** 2 <= (size / 2) ** 2 else 0
+        )
 
     return lambda x, y: coverage(inside, x, y)
 
@@ -645,13 +829,16 @@ def castle_alpha(size):
     of its own, and an arched gate. The role marker for the team holding the flag.
     Drawn here rather than taken from an icon set, so nothing about it is anybody
     else's."""
+
     def box(x, y, x0, y0, x1, y1):
         return x0 <= x <= x1 and y0 <= y <= y1
 
     def inside(px, py):
         x, y = px / size, py / size
         # The gate: an arch with a straight-sided opening under it, cut out of the wall.
-        if 0.41 <= x <= 0.59 and (y >= 0.77 or (x - 0.5) ** 2 + (y - 0.77) ** 2 <= 0.09 ** 2):
+        if 0.41 <= x <= 0.59 and (
+            y >= 0.77 or (x - 0.5) ** 2 + (y - 0.77) ** 2 <= 0.09**2
+        ):
             return 0
         if box(x, y, 0.08, 0.46, 0.92, 0.92):
             return 1
@@ -669,6 +856,7 @@ def castle_alpha(size):
 def swords_alpha(size):
     """Two crossed blades with a short guard each. The role marker for the team
     attacking. Drawn here for the same reason the keep is."""
+
     def near(px, py, ax, ay, bx, by, radius):
         dx, dy = bx - ax, by - ay
         t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
@@ -683,9 +871,19 @@ def swords_alpha(size):
         if near(px, py, lo, lo, hi, hi, thick) or near(px, py, hi, lo, lo, hi, thick):
             return 1
         # A guard across each blade near its grip, which is the bottom end.
-        for (gx, gy, ux, uy) in ((lo + (hi - lo) * 0.8, lo + (hi - lo) * 0.8, 1, -1),
-                                 (lo + (hi - lo) * 0.2, lo + (hi - lo) * 0.8, 1, 1)):
-            if near(px, py, gx - ux * guard, gy - uy * guard, gx + ux * guard, gy + uy * guard, thick):
+        for gx, gy, ux, uy in (
+            (lo + (hi - lo) * 0.8, lo + (hi - lo) * 0.8, 1, -1),
+            (lo + (hi - lo) * 0.2, lo + (hi - lo) * 0.8, 1, 1),
+        ):
+            if near(
+                px,
+                py,
+                gx - ux * guard,
+                gy - uy * guard,
+                gx + ux * guard,
+                gy + uy * guard,
+                thick,
+            ):
                 return 1
         return 0
 
@@ -701,7 +899,8 @@ def sprite(folder, name, guid, width, height, alpha_at, border):
 def sprite_file(folder, name, guid, png_bytes, border=0):
     """Write a finished PNG and the .meta that imports it as a sprite under `guid`."""
     Path(folder, name + ".png").write_bytes(png_bytes)
-    Path(folder, name + ".png.meta").write_text(f"""fileFormatVersion: 2
+    Path(folder, name + ".png.meta").write_text(
+        f"""fileFormatVersion: 2
 guid: {guid}
 TextureImporter:
   internalIDToNameTable: []
@@ -800,7 +999,10 @@ TextureImporter:
   userData:
   assetBundleName:
   assetBundleVariant:
-""", encoding="utf-8", newline="\n")
+""",
+        encoding="utf-8",
+        newline="\n",
+    )
     return guid
 
 
@@ -819,7 +1021,8 @@ def silhouette(folder):
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
 
-    Path(folder, "Silhouette.shader").write_text("""Shader "PeekSeek/UI Silhouette"
+    Path(folder, "Silhouette.shader").write_text(
+        """Shader "PeekSeek/UI Silhouette"
 {
     Properties
     {
@@ -867,8 +1070,12 @@ def silhouette(folder):
         }
     }
 }
-""", encoding="utf-8", newline="\n")
-    Path(folder, "Silhouette.shader.meta").write_text(f"""fileFormatVersion: 2
+""",
+        encoding="utf-8",
+        newline="\n",
+    )
+    Path(folder, "Silhouette.shader.meta").write_text(
+        f"""fileFormatVersion: 2
 guid: {SILHOUETTE_SHADER}
 ShaderImporter:
   externalObjects: {{}}
@@ -877,9 +1084,13 @@ ShaderImporter:
   userData:
   assetBundleName:
   assetBundleVariant:
-""", encoding="utf-8", newline="\n")
+""",
+        encoding="utf-8",
+        newline="\n",
+    )
 
-    Path(folder, "Silhouette.mat").write_text(f"""%YAML 1.1
+    Path(folder, "Silhouette.mat").write_text(
+        f"""%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!21 &2100000
 Material:
@@ -910,8 +1121,12 @@ Material:
     m_Colors:
     - _Color: {{r: 1, g: 1, b: 1, a: 1}}
   m_BuildTextureStacks: []
-""", encoding="utf-8", newline="\n")
-    Path(folder, "Silhouette.mat.meta").write_text(f"""fileFormatVersion: 2
+""",
+        encoding="utf-8",
+        newline="\n",
+    )
+    Path(folder, "Silhouette.mat.meta").write_text(
+        f"""fileFormatVersion: 2
 guid: {SILHOUETTE_MATERIAL}
 NativeFormatImporter:
   externalObjects: {{}}
@@ -919,6 +1134,9 @@ NativeFormatImporter:
   userData:
   assetBundleName:
   assetBundleVariant:
-""", encoding="utf-8", newline="\n")
+""",
+        encoding="utf-8",
+        newline="\n",
+    )
 
     return SILHOUETTE_MATERIAL

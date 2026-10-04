@@ -33,12 +33,15 @@ function renderParty(state) {
     }
 
     invitesEl.innerHTML = state.invites
-        .map(i => `<div class="partyInvite">` +
-            `<span><b>${i.from.name}</b> invited you to their party</span>` +
-            `<span class="partyInviteActions">` +
-            `<button type="button" onclick="respondToInvite(${i.id}, true)">Accept</button>` +
-            `<button type="button" onclick="respondToInvite(${i.id}, false)">Decline</button>` +
-            `</span></div>`)
+        .map(
+            i =>
+                `<div class="partyInvite">` +
+                `<span><b>${i.from.name}</b> invited you to their party</span>` +
+                `<span class="partyInviteActions">` +
+                `<button type="button" onclick="respondToInvite(${i.id}, true)">Accept</button>` +
+                `<button type="button" onclick="respondToInvite(${i.id}, false)">Decline</button>` +
+                `</span></div>`
+        )
         .join("");
 
     if (state.matchId && !partyRedirected) {
@@ -48,7 +51,10 @@ function renderParty(state) {
 }
 
 function pollParty() {
-    api.get("/party/").then(r => r.json()).then(renderParty).catch(() => {});
+    api.get("/party/")
+        .then(r => r.json())
+        .then(renderParty)
+        .catch(() => {});
 }
 
 function invitePartyMember() {

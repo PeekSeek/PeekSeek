@@ -1,0 +1,3 @@
+# Vendored and shipped minified by upstream. Reformatting it is pure risk for no gain,
+# and minify.py leaves it alone for the same reason.
+public/assets/js/htmx.min.js

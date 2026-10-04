@@ -1,0 +1,50 @@
+name: bot
+
+# The bot had no workflow at all: 1,200 lines driving /ban, /stop and /stats against
+# production moderation state, with no linting, no tests and no build check.
+#
+# Filtered on website/src/core/** as well as bot/**, because that is the real dependency:
+# the bot imports src.core.moderation so that a Discord ban and a dashboard ban are the
+# same ban. A website refactor could break it with every website job green.
+on:
+  push:
+    branches: [main, develop]
+    paths: ["bot/**", "website/src/core/**", "pyproject.toml", ".github/workflows/bot.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["bot/**", "website/src/core/**", "pyproject.toml", ".github/workflows/bot.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          pip install black==26.5.1
+          pip install --require-hashes -r website/requirements.lock
+          pip install --no-deps ./website
+          pip install -r bot/requirements.txt
+
+      - run: black --check bot
+
+      # The point of the job: import the bot against the website package it shares code
+      # with. A rename in src.core.moderation fails here rather than in production.
+      - name: Import the bot against the website it shares code with
+        env:
+          DB: sqlite://
+          BOT_TOKEN: ""
+        working-directory: bot
+        run: python -c "import sys; sys.path.insert(0, 'src'); import bot; print('imported', bot.__name__)"

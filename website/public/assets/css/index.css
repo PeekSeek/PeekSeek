@@ -1,16 +1,27 @@
+/* The landing page is the one page that does not load default.css, so it declares the
+   handful of tokens it uses rather than inheriting the site palette. --font-main and
+   --light were referenced below without ever being defined: body fell back to the user
+   agent's font and whatever colour it inherited. */
 :root {
-    --primary: #f66;
+    --text: #fff;
+    --bg: #0a0a0a;
+    --brand-light: #f66;
+    --brand-strong: #f00;
+    --border: #333;
+    --primary: var(--brand-light);
+    --font-main: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --light: #f5f5f5;
 }
 
 * {
-    color: #fff;
+    color: var(--text);
     font-family: sans-serif;
 }
 
 body {
     margin: 0;
     font-family: var(--font-main);
-    background-color: #0a0a0a;
+    background-color: var(--bg);
     color: var(--light);
     line-height: 1.6;
 }
@@ -83,8 +94,8 @@ nav {
     justify-content: space-between;
     align-items: center;
 
-    background-color: #f00;
-    color: #fff;
+    background-color: var(--brand-strong);
+    color: var(--text);
     padding: 10px 20px;
     border-radius: 6px;
     font-weight: bold;
@@ -132,10 +143,14 @@ h2 {
 }
 
 footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     padding: 100px 0;
     font-size: 0.9rem;
-    color: #fff;
+    color: var(--text);
 }
 
 footer a {
@@ -159,7 +174,7 @@ footer a {
 }
 
 #how-it-works h3 {
-    color: #f66;
+    color: var(--brand-light);
     font-size: 30px;
     margin-bottom: -15px;
 }
@@ -169,18 +184,11 @@ footer a {
     text-align: center;
 }
 
-footer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
 .footerLinks {
     display: flex;
     flex-direction: row;
     align-items: flex-end;
     justify-content: center;
     gap: 10px;
-    color: #333;
+    color: var(--border);
 }

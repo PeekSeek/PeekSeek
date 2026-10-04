@@ -65,7 +65,7 @@ The app id `304930` is currently hardcoded in four places:
 | `src/routes/pages.py` | `UNTURNED_APP_ID` |
 | `src/templates/app/spectate.html` | twice, in the card link and the spectate button |
 | `public/assets/js/admin.js` | the spectate button |
-| `public/assets/js/match.js` | `connectUrl()` |
+| `public/assets/js/match.js` | `connect_url()` |
 
 If your game joins differently, this is where you change it. Lifting it into
 `config.toml` first is a good first commit for a fork, and a welcome pull request back.
@@ -163,3 +163,6 @@ See
 [CONTRIBUTING.md](https://github.com/PeekSeek/PeekSeek/blob/main/CONTRIBUTING.md)
 for the branch model and conventions. The licence is MIT, so you owe nothing. It is just
 nicer this way.
+
+One directory is not MIT: `plugins/utelemetry/` is PolyForm Noncommercial 1.0.0, so a
+fork you intend to sell drops it. Nothing else in the repository depends on it.

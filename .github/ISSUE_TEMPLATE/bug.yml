@@ -1,0 +1,58 @@
+name: Bug
+description: Something does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Found a security problem? Do not file it here — see
+        [SECURITY.md](https://github.com/PeekSeek/PeekSeek/blob/main/SECURITY.md).
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Where
+      options:
+        - website (the site or its API)
+        - PeekSeek Match (the match server plugin)
+        - PeekSeek ARENA
+        - PeekSeek RAID
+        - PeekSeek Lobby
+        - peekseek-armor-skin
+        - Discord bot
+        - docs
+        - not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to get there
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Which instance
+      description: peekseek.net, or your own. For a plugin, the version in its filename or `/version`.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Anything in the logs
+      description: Console output, a stack trace, the browser console. Paste it rather than screenshotting it.
+      render: text

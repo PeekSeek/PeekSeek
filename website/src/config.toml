@@ -4,6 +4,9 @@
 domain = "127.0.0.1"        # public hostname, no scheme
 protocol = "http"
 build = "develop"
+# Google Analytics measurement ID. Empty renders no tag at all, which is what a fork
+# wants: a hardcoded ID would report every fork's traffic into somebody else's property.
+analytics_id = ""
 
 [matchmaking]
 queue_timeout = 60   # seconds without a heartbeat before a player drops from queue

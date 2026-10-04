@@ -81,7 +81,7 @@ def main() -> int:
 
     for steam64, discord, elo in players:
         position = top.index(int(steam64)) + 1 if int(steam64) in top else None
-        rank = Rank.forElo(elo, position)
+        rank = Rank.for_elo(elo, position)
         if not rank.role:
             tally["no role for tier"] += 1
             continue

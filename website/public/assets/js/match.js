@@ -20,7 +20,7 @@ function getTeam(s64) {
 }
 
 /// A gamemode with only one kit or one powerup has nothing to pick, so a player is never
-/// "still picking" on that axis; mirrors Match.allKitsLocked() on the backend. Picking
+/// "still picking" on that axis; mirrors Match.all_kits_locked() on the backend. Picking
 /// doesn't stop anyone from changing their mind afterwards (see setKit/setPowerup); this
 /// only tracks whether a real choice has been made yet, not whether it's final.
 function hasPicked(s64) {
@@ -32,8 +32,10 @@ function hasPicked(s64) {
 }
 
 function commitRow(name, picked) {
-    return `<div class="row"><span class="name">${name}</span>` +
-        `<span class="status ${picked ? "picked" : "picking"}">${picked ? "picked" : "picking…"}</span></div>`;
+    return (
+        `<div class="row"><span class="name">${name}</span>` +
+        `<span class="status ${picked ? "picked" : "picking"}">${picked ? "picked" : "picking…"}</span></div>`
+    );
 }
 
 function allSteam64s() {
@@ -41,7 +43,7 @@ function allSteam64s() {
 }
 
 function nameOf(s64) {
-    return data.users && data.users[s64] ? data.users[s64].name : (s64 === steam64 ? "You" : "Someone");
+    return data.users && data.users[s64] ? data.users[s64].name : s64 === steam64 ? "You" : "Someone";
 }
 
 /// Your own team by name always; opponents collapse to a picked-count summary until
@@ -53,14 +55,10 @@ function commitListHtml(picksDone, myTeamName) {
     const myTeam = data.teams.find(t => t.name === myTeamName);
     const opponents = data.teams.filter(t => t.name !== myTeamName).flatMap(t => t.users);
 
-    const myRows = (myTeam ? myTeam.users : [])
-        .map(s64 => commitRow(nameOf(s64), hasPicked(s64)))
-        .join("");
+    const myRows = (myTeam ? myTeam.users : []).map(s64 => commitRow(nameOf(s64), hasPicked(s64))).join("");
 
     const oppPickedCount = opponents.filter(hasPicked).length;
-    const oppRows = opponents
-        .map(s64 => commitRow(picksDone ? nameOf(s64) : "—", hasPicked(s64)))
-        .join("");
+    const oppRows = opponents.map(s64 => commitRow(picksDone ? nameOf(s64) : "—", hasPicked(s64))).join("");
 
     return `${myRows}
     <div class="opponents ${picksDone ? "expanded" : ""}">
@@ -79,8 +77,10 @@ function matchSettingsHtml() {
             ? `<span class="settingpill undecided">${label}<b>Undecided</b></span>`
             : `<span class="settingpill">${label}<b>${decidedText}</b></span>`;
 
-    return pill("Bullet drop", ballistics, ballistics ? "Enabled" : "Disabled") +
-        pill("Movement", movement, movement ? "Old" : "New");
+    return (
+        pill("Bullet drop", ballistics, ballistics ? "Enabled" : "Disabled") +
+        pill("Movement", movement, movement ? "Old" : "New")
+    );
 }
 
 function secondsUntil(unix) {
@@ -126,12 +126,21 @@ function update() {
 
     // ---- the rail
     const banText = banning
-        ? (myTurn ? "your turn" : `${nameOf(data.currentPick)} choosing`)
+        ? myTurn
+            ? "your turn"
+            : `${nameOf(data.currentPick)} choosing`
         : `drop ${params.ballistics ? "on" : "off"}, ${params.movement ? "old" : "new"} movement`;
     rail("railBans", banText, banning ? "now" : "done");
-    rail("railPicks", `${pickedCount} of ${everyone.length} picked`, allPicked ? "done" : (banning ? "" : "now"));
-    rail("railServer", serverCode ? "up, join now" : (allPicked ? "loading" : "waiting on picks"),
-        serverCode ? "done" : (allPicked ? "now" : ""));
+    rail(
+        "railPicks",
+        `${pickedCount} of ${everyone.length} picked`,
+        allPicked ? "done" : banning ? "" : "now"
+    );
+    rail(
+        "railServer",
+        serverCode ? "up, join now" : allPicked ? "loading" : "waiting on picks",
+        serverCode ? "done" : allPicked ? "now" : ""
+    );
     let readyText = "after the server";
     if (live) readyText = `join within ${clock(secondsUntil((params.hostedAt || 0) + joinTimeout))}`;
     else if (serverCode) readyText = "picks finish in game";
@@ -150,7 +159,9 @@ function update() {
         document.getElementById("b2").innerText = field === "ballistics" ? "Enabled" : "Old";
         if (myTurn) {
             title.textContent = `Your turn: ${label.toLowerCase()}`;
-            line.textContent = params.pickDeadline ? `Pick one. Auto-picks in ${secondsUntil(params.pickDeadline)}s.` : "Pick one.";
+            line.textContent = params.pickDeadline
+                ? `Pick one. Auto-picks in ${secondsUntil(params.pickDeadline)}s.`
+                : "Pick one.";
         } else {
             const who = data.users && data.users[data.currentPick];
             avatar.innerHTML = who ? `<img src="${who.avatar}" alt=""><span>${who.name}</span>` : "";
@@ -173,8 +184,9 @@ function update() {
 
     // ---- the rest keeps its place
     show("kits", !live);
-    document.getElementById("commitcount").innerHTML =
-        everyone.length ? `<b>${pickedCount}</b>/${everyone.length} picked` : "";
+    document.getElementById("commitcount").innerHTML = everyone.length
+        ? `<b>${pickedCount}</b>/${everyone.length} picked`
+        : "";
     document.getElementById("commitlist").innerHTML = commitListHtml(live, getTeam(steam64));
     document.getElementById("matchsettings").innerHTML = matchSettingsHtml();
 
@@ -190,10 +202,13 @@ function update() {
 
     api.get("/match/current").then(r => {
         if (r.status === 200) {
-            r.json().then(x => { data = x; });
+            r.json().then(x => {
+                data = x;
+            });
         } else {
             canInterval = false;
-            document.getElementById("message").innerHTML = `<h1>Lost the match</h1><span>The site did not answer. The match may still be on.</span><button class="mbutton" onclick="canInterval=true">Try again</button><button class="mbutton" style="margin-left:5px;" onclick="window.location.href='/play'">Back to matchmaking</button>`;
+            document.getElementById("message").innerHTML =
+                `<h1>Lost the match</h1><span>The site did not answer. The match may still be on.</span><button class="mbutton" onclick="canInterval=true">Try again</button><button class="mbutton" style="margin-left:5px;" onclick="window.location.href='/play'">Back to matchmaking</button>`;
             document.getElementById("message").style.display = "flex";
         }
     });
@@ -222,7 +237,9 @@ function decide(x) {
     if (!canDecide) return;
     canDecide = false;
     coreDecide({ pick: x });
-    setTimeout(() => { canDecide = true; }, 1000);
+    setTimeout(() => {
+        canDecide = true;
+    }, 1000);
 }
 
 function altDecide(category, value, publish = true) {

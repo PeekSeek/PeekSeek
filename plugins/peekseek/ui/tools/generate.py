@@ -30,41 +30,80 @@ from PIL import Image
 import footprints
 import raidboard
 import sitemap
-from unityyaml import (CAPLINE, CENTER, LEFT, RIGHT, TOP, Node, aspect_fit, bottom_center, bottom_left, bottom_right, button, canvas, column,
-                       castle_alpha, centered, disc_alpha, fit_height, fit_width, ignore_layout, image, layout_size, mask, prefab,
-                       ring_alpha, rounded_alpha, row, silhouette, skull_alpha, sprite, sprite_file, stretch, swords_alpha,
-                       text, top_center, top_left, top_right, top_stretch)
+from unityyaml import (
+    CAPLINE,
+    CENTER,
+    LEFT,
+    RIGHT,
+    TOP,
+    Node,
+    aspect_fit,
+    bottom_center,
+    bottom_left,
+    bottom_right,
+    button,
+    canvas,
+    column,
+    castle_alpha,
+    centered,
+    disc_alpha,
+    fit_height,
+    fit_width,
+    ignore_layout,
+    image,
+    layout_size,
+    mask,
+    prefab,
+    ring_alpha,
+    rounded_alpha,
+    row,
+    silhouette,
+    skull_alpha,
+    sprite,
+    sprite_file,
+    stretch,
+    swords_alpha,
+    text,
+    top_center,
+    top_left,
+    top_right,
+    top_stretch,
+)
 
 ASSETS = Path(__file__).resolve().parent.parent / "Assets"
-UNTURNED = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r"C:\Program Files (x86)\Steam\steamapps\common\Unturned")
+UNTURNED = (
+    Path(sys.argv[1])
+    if len(sys.argv) > 1
+    else Path(r"C:\Program Files (x86)\Steam\steamapps\common\Unturned")
+)
 ROOT = ASSETS / "PeekSeek"
 SPRITES = ROOT / "Sprites"
 EFFECTS = ROOT / "Bundles/Effects"
 KILLFEED_EFFECTS = ASSETS / "PeekSeekKillFeed/Bundles/Effects"
 
 # ---- the site, for the boards (website/public/assets/default.css) -------------------
-PAGE = "#0a0a0a"        # .mainElement
-SUB = "#1a1a1a"         # .qgrid
+PAGE = "#0a0a0a"  # .mainElement
+SUB = "#1a1a1a"  # .qgrid
 SUB_HOVER = "#242424"
-SELECTED = "#333333"    # #3334 over the sub-panel
+SELECTED = "#333333"  # #3334 over the sub-panel
 TEXT = "#ffffff"
 SECONDARY = "#aaaaaa"
 SELECTED_LABEL = "#aae0ff"
-CARD = "#161616"        # .powerupbutton, the match page's pick tile
+CARD = "#161616"  # .powerupbutton, the match page's pick tile
 CARD_LINE = "#262626"
 CARD_HOVER = "#3a3a3a"
-CARD_RED = "#ff2d2d"    # the match page's selected border
+CARD_RED = "#ff2d2d"  # the match page's selected border
 CARD_RED_FILL = "#3b1a1a"  # rgba(255, 45, 45, .16) over the card
-PANEL_RADIUS = 8        # .mainElement border-radius
-PANEL_PAD = 20          # .mainElement padding
-GAP = 10                # the gap inside chips and between tiles
+PANEL_RADIUS = 8  # .mainElement border-radius
+PANEL_PAD = 20  # .mainElement padding
+GAP = 10  # the gap inside chips and between tiles
 
 # ---- the HUD, in the retired stream overlay's values at 1920 ------------------------
-FLAT = "#0f0f0f"        # .flat
+FLAT = "#0f0f0f"  # .flat
 INK = "#f2f2f2"
 MUTED = "#8a8a8a"
-RED = "#ff4f4f"         # the side attacking, and jeopardy
-BLUE = "#4f9fff"        # the side holding
+RED = "#ff4f4f"  # the side attacking, and jeopardy
+BLUE = "#4f9fff"  # the side holding
 
 
 # Every sprite a screen can point at, by the name the code uses. Filled by
@@ -80,10 +119,22 @@ def write_sprites():
     maps = {}
     for site, (name, (anchor_x, anchor_z), _) in enumerate(SITES):
         guid = MAP_GUIDS[site]
-        picture = sitemap.picture(UNTURNED / "Maps" / "Alpha Valley", anchor_x, anchor_z, MAP_METRES, 2 * MAP_PX)
-        kept = (SPRITES / f"Map{name}.png").read_bytes() if picture is None and (SPRITES / f"Map{name}.png").exists() else None
+        picture = sitemap.picture(
+            UNTURNED / "Maps" / "Alpha Valley",
+            anchor_x,
+            anchor_z,
+            MAP_METRES,
+            2 * MAP_PX,
+        )
+        kept = (
+            (SPRITES / f"Map{name}.png").read_bytes()
+            if picture is None and (SPRITES / f"Map{name}.png").exists()
+            else None
+        )
         if picture is None and kept is None:
-            raise SystemExit(f"No Alpha Valley Map.png under {UNTURNED} and no Sprites/Map{name}.png to keep.")
+            raise SystemExit(
+                f"No Alpha Valley Map.png under {UNTURNED} and no Sprites/Map{name}.png to keep."
+            )
         if picture is None:
             print(f"no Unturned install at {UNTURNED}; keeping Sprites/Map{name}.png")
         maps[f"map{site}"] = (name, guid, picture or kept)
@@ -94,32 +145,128 @@ def write_sprites():
     for key, (name, guid, png_bytes) in maps.items():
         SPR[key] = sprite_file(SPRITES, f"Map{name}", guid, png_bytes)
 
-    SPR.update({
-        "disc": sprite(SPRITES, "Disc", "a4c3e5f6b7d8e9f0a1b2c3d4e5f6a7b8", 64, 64, disc_alpha(64), 0),
-        # The keep on the map, drawn at twice the size it is shown at like the footprints.
-        "keep": sprite(SPRITES, "Keep", "b5d4f6a7c8e9f0a1b2c3d4e5f6a7b8c9", 64, 64, castle_alpha(64), 0),
-        "round8": sprite(SPRITES, "Round8", "b1f0c2d3e4a5b6c7d8e9f0a1b2c3d4e5", 32, 32, rounded_alpha(32, 32, 8), 8),
-        "round6": sprite(SPRITES, "Round6", "c2a1d3e4f5b6c7d8e9f0a1b2c3d4e5f6", 24, 24, rounded_alpha(24, 24, 6), 6),
-        "round3": sprite(SPRITES, "Round3", "d4b2e6f7a8c9d0e1f2a3b4c5d6e7f8a9", 12, 12, rounded_alpha(12, 12, 3), 3),
-        "ring6": sprite(SPRITES, "Ring6", "e5c3f7a8b9d0e1f2a3b4c5d6e7f8a9b0", 24, 24, ring_alpha(24, 24, 6), 6),
-        # The PeekSeek mark, the site's own white-on-nothing cmw.png, at twice the size it
-        # is shown at.
-        "logo": sprite_file(SPRITES, "Logo", "f6d4a8b9c0e1f2a3b4c5d6e7f8a9b0c1", logo_png(2 * LOGO_H)),
-        "castle": sprite(SPRITES, "Castle", "c8a7d9e0f1b2c3d4e5f6a7b8c9d0e1f2", 24, 24, castle_alpha(24), 0),
-        "swords": sprite(SPRITES, "Swords", "d9b8e0f1a2c3d4e5f6a7b8c9d0e1f2a3", 24, 24, swords_alpha(24), 0),
-        "skull": sprite(SPRITES, "Skull", "c6e5a7b8d9f0a1b2c3d4e5f6a7b8c9d0", 40, 40, skull_alpha(40), 0),
-        # Drawn at twice the size they are shown at, so they stay sharp at UI scale 2.
-        # The six RAID class glyphs, from the powerups sheet, at twice the size shown.
-        **{f"glyph{g}": sprite_file(SPRITES, f"Glyph{raidboard.GLYPHS[g][0]}", raidboard.GLYPH_GUIDS[g],
-                                    raidboard.glyph_png(g, 4 * GLYPH_SIZE)) for g in range(6)},
-        "square": sprite_file(SPRITES, "FootprintSquare", "e0c9f1a2b3d4e5f6a7b8c9d0e1f2a3b4",
-                              footprints.picture("Square", 2 * FIGURE_W, 2 * FIGURE_H, FIGURE_METRES)),
-        "hexagonal": sprite_file(SPRITES, "FootprintHexagonal", "f1d0a2b3c4e5f6a7b8c9d0e1f2a3b4c5",
-                                 footprints.picture("Hexagonal", 2 * FIGURE_W, 2 * FIGURE_H, FIGURE_METRES)),
-    })
+    SPR.update(
+        {
+            "disc": sprite(
+                SPRITES,
+                "Disc",
+                "a4c3e5f6b7d8e9f0a1b2c3d4e5f6a7b8",
+                64,
+                64,
+                disc_alpha(64),
+                0,
+            ),
+            # The keep on the map, drawn at twice the size it is shown at like the footprints.
+            "keep": sprite(
+                SPRITES,
+                "Keep",
+                "b5d4f6a7c8e9f0a1b2c3d4e5f6a7b8c9",
+                64,
+                64,
+                castle_alpha(64),
+                0,
+            ),
+            "round8": sprite(
+                SPRITES,
+                "Round8",
+                "b1f0c2d3e4a5b6c7d8e9f0a1b2c3d4e5",
+                32,
+                32,
+                rounded_alpha(32, 32, 8),
+                8,
+            ),
+            "round6": sprite(
+                SPRITES,
+                "Round6",
+                "c2a1d3e4f5b6c7d8e9f0a1b2c3d4e5f6",
+                24,
+                24,
+                rounded_alpha(24, 24, 6),
+                6,
+            ),
+            "round3": sprite(
+                SPRITES,
+                "Round3",
+                "d4b2e6f7a8c9d0e1f2a3b4c5d6e7f8a9",
+                12,
+                12,
+                rounded_alpha(12, 12, 3),
+                3,
+            ),
+            "ring6": sprite(
+                SPRITES,
+                "Ring6",
+                "e5c3f7a8b9d0e1f2a3b4c5d6e7f8a9b0",
+                24,
+                24,
+                ring_alpha(24, 24, 6),
+                6,
+            ),
+            # The PeekSeek mark, the site's own white-on-nothing cmw.png, at twice the size it
+            # is shown at.
+            "logo": sprite_file(
+                SPRITES,
+                "Logo",
+                "f6d4a8b9c0e1f2a3b4c5d6e7f8a9b0c1",
+                logo_png(2 * LOGO_H),
+            ),
+            "castle": sprite(
+                SPRITES,
+                "Castle",
+                "c8a7d9e0f1b2c3d4e5f6a7b8c9d0e1f2",
+                24,
+                24,
+                castle_alpha(24),
+                0,
+            ),
+            "swords": sprite(
+                SPRITES,
+                "Swords",
+                "d9b8e0f1a2c3d4e5f6a7b8c9d0e1f2a3",
+                24,
+                24,
+                swords_alpha(24),
+                0,
+            ),
+            "skull": sprite(
+                SPRITES,
+                "Skull",
+                "c6e5a7b8d9f0a1b2c3d4e5f6a7b8c9d0",
+                40,
+                40,
+                skull_alpha(40),
+                0,
+            ),
+            # Drawn at twice the size they are shown at, so they stay sharp at UI scale 2.
+            # The six RAID class glyphs, from the powerups sheet, at twice the size shown.
+            **{
+                f"glyph{g}": sprite_file(
+                    SPRITES,
+                    f"Glyph{raidboard.GLYPHS[g][0]}",
+                    raidboard.GLYPH_GUIDS[g],
+                    raidboard.glyph_png(g, 4 * GLYPH_SIZE),
+                )
+                for g in range(6)
+            },
+            "square": sprite_file(
+                SPRITES,
+                "FootprintSquare",
+                "e0c9f1a2b3d4e5f6a7b8c9d0e1f2a3b4",
+                footprints.picture("Square", 2 * FIGURE_W, 2 * FIGURE_H, FIGURE_METRES),
+            ),
+            "hexagonal": sprite_file(
+                SPRITES,
+                "FootprintHexagonal",
+                "f1d0a2b3c4e5f6a7b8c9d0e1f2a3b4c5",
+                footprints.picture(
+                    "Hexagonal", 2 * FIGURE_W, 2 * FIGURE_H, FIGURE_METRES
+                ),
+            ),
+        }
+    )
 
 
-LOGO_H = 28             # the mark on the lobby's block
+LOGO_H = 28  # the mark on the lobby's block
 LOGO = ROOT.parents[4] / "website/public/img/cmw.png"
 
 
@@ -127,9 +274,12 @@ def logo_png(height):
     """The site's logo, cropped to its ink and scaled to `height`, as PNG bytes."""
     from io import BytesIO
     from PIL import Image
+
     mark = Image.open(LOGO).convert("RGBA")
     mark = mark.crop(mark.getbbox())
-    mark = mark.resize((round(mark.width * height / mark.height), height), Image.LANCZOS)
+    mark = mark.resize(
+        (round(mark.width * height / mark.height), height), Image.LANCZOS
+    )
     out = BytesIO()
     mark.save(out, "PNG", optimize=True)
     return out.getvalue()
@@ -152,10 +302,10 @@ PICKS = 5
 SHAPES = 2
 SWAPS = 6
 HEADLINE_H = 28
-ITEMS = 4               # rows on a powerup tile; an option has one or two
+ITEMS = 4  # rows on a powerup tile; an option has one or two
 
 FIGURE_W, FIGURE_H = 260, 240
-FIGURE_METRES = 26      # of ground across the picture: the hexagonal base is 23 wide
+FIGURE_METRES = 26  # of ground across the picture: the hexagonal base is 23 wide
 
 
 def panel(face, tiles, tile_w, tile_h, headline, make_tile):
@@ -169,13 +319,34 @@ def panel(face, tiles, tile_w, tile_h, headline, make_tile):
     board = centered(face, 0, 40, board_w, board_h, active=False)
     image(board, PAGE, sprite=SPR["round8"])
 
-    text(board.add(top_left(f"{face}_Headline", PANEL_PAD, PANEL_PAD, board_w - PANEL_PAD * 2 - 130, HEADLINE_H)),
-         headline, size=20, colour=TEXT, bold=True)
-    text(board.add(top_right(f"{face}_Timer", PANEL_PAD, 16, 120, 36)),
-         "20", size=28, colour=TEXT, halign=RIGHT, bold=True)
+    text(
+        board.add(
+            top_left(
+                f"{face}_Headline",
+                PANEL_PAD,
+                PANEL_PAD,
+                board_w - PANEL_PAD * 2 - 130,
+                HEADLINE_H,
+            )
+        ),
+        headline,
+        size=20,
+        colour=TEXT,
+        bold=True,
+    )
+    text(
+        board.add(top_right(f"{face}_Timer", PANEL_PAD, 16, 120, 36)),
+        "20",
+        size=28,
+        colour=TEXT,
+        halign=RIGHT,
+        bold=True,
+    )
 
     for i in range(tiles):
-        make_tile(board, face, i, PANEL_PAD + i * (tile_w + GAP), tiles_y, tile_w, tile_h)
+        make_tile(
+            board, face, i, PANEL_PAD + i * (tile_w + GAP), tiles_y, tile_w, tile_h
+        )
 
     return board
 
@@ -184,17 +355,34 @@ def tile(parent, face, i, x, y, w, h, fill_tile):
     """One selectable tile: the site's `.qgridoption`, and the button the plugin hears
     as `Board{face}{i}`."""
     node = parent.add(top_left(f"Board{face}{i}", x, y, w, h))
-    button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
+    button(
+        node,
+        image(node, "#ffffff", sprite=SPR["round8"], raycast=True),
+        SUB,
+        SUB_HOVER,
+        SELECTED,
+    )
 
     # First child, so it paints under everything else on the tile: the site's
     # selected state is a fill and a label, not a border.
     taken = node.add(stretch(f"{face}{i}_Taken", active=False))
     image(taken, SELECTED, sprite=SPR["round8"])
-    text(taken.add(top_right("Label", GAP, 8, 80, 16)), "Selected",
-         size=12, colour=SELECTED_LABEL, halign=RIGHT, bold=True)
+    text(
+        taken.add(top_right("Label", GAP, 8, 80, 16)),
+        "Selected",
+        size=12,
+        colour=SELECTED_LABEL,
+        halign=RIGHT,
+        bold=True,
+    )
 
-    text(node.add(top_left(f"{face}{i}_Number", GAP, 8, 40, 16)), str(i + 1),
-         size=13, colour=SECONDARY, bold=True)
+    text(
+        node.add(top_left(f"{face}{i}_Number", GAP, 8, 40, 16)),
+        str(i + 1),
+        size=13,
+        colour=SECONDARY,
+        bold=True,
+    )
 
     fill_tile(node, f"{face}{i}", i)
     return node
@@ -209,24 +397,74 @@ def powerup_tile(parent, face, i, x, y, w=POWERUP_W, h=POWERUP_H):
     one line saying what it does, then a row per item, `2x` and the item's picture.
     Selected is the same fill and label every other tile uses."""
     node = parent.add(top_left(f"Board{face}{i}", x, y, w, h))
-    button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
+    button(
+        node,
+        image(node, "#ffffff", sprite=SPR["round8"], raycast=True),
+        SUB,
+        SUB_HOVER,
+        SELECTED,
+    )
 
     taken = node.add(stretch(f"{face}{i}_Taken", active=False))
     image(taken, SELECTED, sprite=SPR["round8"])
-    text(taken.add(top_right("Label", GAP, 8, 80, 16)), "Selected",
-         size=12, colour=SELECTED_LABEL, halign=RIGHT, bold=True)
+    text(
+        taken.add(top_right("Label", GAP, 8, 80, 16)),
+        "Selected",
+        size=12,
+        colour=SELECTED_LABEL,
+        halign=RIGHT,
+        bold=True,
+    )
 
-    text(node.add(top_left(f"{face}{i}_Number", 10, 10, 20, 18)), str(i + 1), size=13, colour=SECONDARY, bold=True)
-    text(node.add(top_left(f"{face}{i}_Name", 28, 10, w - 38, 18)), "Demolition", size=13, colour=TEXT, bold=True)
+    text(
+        node.add(top_left(f"{face}{i}_Number", 10, 10, 20, 18)),
+        str(i + 1),
+        size=13,
+        colour=SECONDARY,
+        bold=True,
+    )
+    text(
+        node.add(top_left(f"{face}{i}_Name", 28, 10, w - 38, 18)),
+        "Demolition",
+        size=13,
+        colour=TEXT,
+        bold=True,
+    )
     # The one line that says what the pile of pictures under it adds up to.
-    text(node.add(top_stretch(f"{face}{i}_Blurb", BLURB_Y, BLURB_H, 10)), "",
-         size=11, colour=SECONDARY, valign=TOP, wrap=True)
+    text(
+        node.add(top_stretch(f"{face}{i}_Blurb", BLURB_Y, BLURB_H, 10)),
+        "",
+        size=11,
+        colour=SECONDARY,
+        valign=TOP,
+        wrap=True,
+    )
 
     for k in range(ITEMS):
-        row = node.add(top_left(f"{face}{i}_Item{k}", 0, BLURB_Y + BLURB_H + 4 + k * 22, w, 22, active=False))
-        text(row.add(top_left(f"{face}{i}_Item{k}_Count", w / 2 - 44, 0, 40, 22)), "3x",
-             size=13, colour=SECONDARY, halign=RIGHT, bold=True)
-        image(row.add(top_left(f"{face}{i}_Item{k}_Icon", w / 2 + 2, 1, 40, 20)), "#ffffff", enabled=False, preserve_aspect=True)
+        row = node.add(
+            top_left(
+                f"{face}{i}_Item{k}",
+                0,
+                BLURB_Y + BLURB_H + 4 + k * 22,
+                w,
+                22,
+                active=False,
+            )
+        )
+        text(
+            row.add(top_left(f"{face}{i}_Item{k}_Count", w / 2 - 44, 0, 40, 22)),
+            "3x",
+            size=13,
+            colour=SECONDARY,
+            halign=RIGHT,
+            bold=True,
+        )
+        image(
+            row.add(top_left(f"{face}{i}_Item{k}_Icon", w / 2 + 2, 1, 40, 20)),
+            "#ffffff",
+            enabled=False,
+            preserve_aspect=True,
+        )
 
     return node
 
@@ -253,28 +491,69 @@ def grid_h(tile_h):
 def glyphs(parent, prefix, x, y, size):
     """Every class glyph at one spot, all hidden; the plugin shows the one it means."""
     for g in range(GLYPHS):
-        image(parent.add(top_left(f"{prefix}{g}", x, y, size, size, active=False)), TEXT, sprite=SPR[f"glyph{g}"], sliced=False)
+        image(
+            parent.add(top_left(f"{prefix}{g}", x, y, size, size, active=False)),
+            TEXT,
+            sprite=SPR[f"glyph{g}"],
+            sliced=False,
+        )
 
 
 def raid_tile(parent, face, i, x, y, w=RAID_TILE_W, h=RAID_TILE_H):
     node = parent.add(top_left(f"Board{face}{i}", x, y, w, h))
-    button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
+    button(
+        node,
+        image(node, "#ffffff", sprite=SPR["round8"], raycast=True),
+        SUB,
+        SUB_HOVER,
+        SELECTED,
+    )
 
     taken = node.add(stretch(f"{face}{i}_Taken", active=False))
     image(taken, SELECTED, sprite=SPR["round8"])
 
     glyphs(node, f"{face}{i}_Glyph", 12, 12, GLYPH_SIZE)
-    text(node.add(top_left(f"{face}{i}_Name", 12 + GLYPH_SIZE + 7, 9, w - 60, 20)), "DEMOLITION",
-         size=13, colour=TEXT, bold=True, uppercase=True, spacing=8)
+    text(
+        node.add(top_left(f"{face}{i}_Name", 12 + GLYPH_SIZE + 7, 9, w - 60, 20)),
+        "DEMOLITION",
+        size=13,
+        colour=TEXT,
+        bold=True,
+        uppercase=True,
+        spacing=8,
+    )
 
     # The items in a row across the middle, with nothing behind them.
     items_y = 38
     items_h = h - items_y - 44
     for k in range(ITEMS):
-        item = node.add(top_left(f"{face}{i}_Item{k}", 12 + k * 46, items_y, 42, items_h, active=False))
-        image(item.add(stretch(f"{face}{i}_Item{k}_Icon")), "#ffffff", enabled=False, preserve_aspect=True)
-        text(item.add(bottom_right(f"{face}{i}_Item{k}_Count", -4, -3, 26, 14)), "2x", size=10, colour=TEXT, halign=RIGHT, bold=True)
-    text(node.add(bottom_left(f"{face}{i}_Blurb", 12, 8, w - 24, 32)), "", size=11, colour=SECONDARY, valign=TOP, wrap=True)
+        item = node.add(
+            top_left(
+                f"{face}{i}_Item{k}", 12 + k * 46, items_y, 42, items_h, active=False
+            )
+        )
+        image(
+            item.add(stretch(f"{face}{i}_Item{k}_Icon")),
+            "#ffffff",
+            enabled=False,
+            preserve_aspect=True,
+        )
+        text(
+            item.add(bottom_right(f"{face}{i}_Item{k}_Count", -4, -3, 26, 14)),
+            "2x",
+            size=10,
+            colour=TEXT,
+            halign=RIGHT,
+            bold=True,
+        )
+    text(
+        node.add(bottom_left(f"{face}{i}_Blurb", 12, 8, w - 24, 32)),
+        "",
+        size=11,
+        colour=SECONDARY,
+        valign=TOP,
+        wrap=True,
+    )
 
     # Somebody else's: the tile greyed under a dark veil, their face in the corner.
     claimed = node.add(stretch(f"{face}{i}_Claimed", active=False))
@@ -289,18 +568,48 @@ def raid_tile(parent, face, i, x, y, w=RAID_TILE_W, h=RAID_TILE_H):
 def tiles_grid(parent, face, x, y, tile_w=RAID_TILE_W, tile_h=RAID_TILE_H):
     for i in range(RAID_COLS * RAID_ROWS):
         r, c = divmod(i, RAID_COLS)
-        raid_tile(parent, face, i, x + c * (tile_w + GAP), y + r * (tile_h + GAP), tile_w, tile_h)
+        raid_tile(
+            parent,
+            face,
+            i,
+            x + c * (tile_w + GAP),
+            y + r * (tile_h + GAP),
+            tile_w,
+            tile_h,
+        )
 
 
 def raid_panel(face):
     """The defender's board: a headline, the clock, and every powerup."""
     board_w = PANEL_PAD * 2 + GRID_W
     tiles_y = PANEL_PAD + HEADLINE_H + 16
-    board = centered(face, 0, 40, board_w, tiles_y + grid_h(RAID_TILE_H) + PANEL_PAD, active=False)
+    board = centered(
+        face, 0, 40, board_w, tiles_y + grid_h(RAID_TILE_H) + PANEL_PAD, active=False
+    )
     image(board, PAGE, 0.94, sprite=SPR["round8"])
-    text(board.add(top_left(f"{face}_Headline", PANEL_PAD, PANEL_PAD, board_w - PANEL_PAD * 2 - 130, HEADLINE_H)),
-         "DEFEND  North", size=20, colour=TEXT, bold=True)
-    text(board.add(top_right(f"{face}_Timer", PANEL_PAD, 16, 120, 36)), "20", size=28, colour=TEXT, halign=RIGHT, bold=True)
+    text(
+        board.add(
+            top_left(
+                f"{face}_Headline",
+                PANEL_PAD,
+                PANEL_PAD,
+                board_w - PANEL_PAD * 2 - 130,
+                HEADLINE_H,
+            )
+        ),
+        "DEFEND  North",
+        size=20,
+        colour=TEXT,
+        bold=True,
+    )
+    text(
+        board.add(top_right(f"{face}_Timer", PANEL_PAD, 16, 120, 36)),
+        "20",
+        size=28,
+        colour=TEXT,
+        halign=RIGHT,
+        bold=True,
+    )
     tiles_grid(board, face, PANEL_PAD, tiles_y)
     return board
 
@@ -315,24 +624,59 @@ def shape_board_tile(parent, face, i, x, y, w, h):
 
 def pick_tile(tile, name, _):
     """A round's option: the item's picture from the site, its name, one line."""
-    image(tile.add(top_center(f"{name}_Icon", 0, 26, 96, 84)), "#ffffff", enabled=False, preserve_aspect=True)
-    text(tile.add(top_stretch(f"{name}_Name", 118, 22, 12)), "Rocket Launcher",
-         size=16, colour=TEXT, halign=CENTER, bold=True)
-    text(tile.add(top_stretch(f"{name}_Blurb", 144, 58, 14)),
-         "Two rockets. Opens brick, and nothing else you carry will.",
-         size=13, colour=SECONDARY, halign=CENTER, valign=TOP, wrap=True)
+    image(
+        tile.add(top_center(f"{name}_Icon", 0, 26, 96, 84)),
+        "#ffffff",
+        enabled=False,
+        preserve_aspect=True,
+    )
+    text(
+        tile.add(top_stretch(f"{name}_Name", 118, 22, 12)),
+        "Rocket Launcher",
+        size=16,
+        colour=TEXT,
+        halign=CENTER,
+        bold=True,
+    )
+    text(
+        tile.add(top_stretch(f"{name}_Blurb", 144, 58, 14)),
+        "Two rockets. Opens brick, and nothing else you carry will.",
+        size=13,
+        colour=SECONDARY,
+        halign=CENTER,
+        valign=TOP,
+        wrap=True,
+    )
 
 
 def shape_tile(tile, name, i):
     """A footprint: the whole starting base, drawn, then its name and one line. Tile
     order is the plugin's BaseShape order, Square then Hexagonal."""
     figure = ("square", "hexagonal")[i]
-    image(tile.add(top_center(f"{name}_Figure", 0, 26, FIGURE_W, FIGURE_H)),
-          "#ffffff", sprite=SPR[figure], sliced=False, preserve_aspect=True)
-    text(tile.add(top_stretch(f"{name}_Name", 274, 22, 12)), figure.capitalize(),
-         size=16, colour=TEXT, halign=CENTER, bold=True)
-    text(tile.add(top_stretch(f"{name}_Blurb", 300, 32, 14)), "",
-         size=13, colour=SECONDARY, halign=CENTER, valign=TOP, wrap=True)
+    image(
+        tile.add(top_center(f"{name}_Figure", 0, 26, FIGURE_W, FIGURE_H)),
+        "#ffffff",
+        sprite=SPR[figure],
+        sliced=False,
+        preserve_aspect=True,
+    )
+    text(
+        tile.add(top_stretch(f"{name}_Name", 274, 22, 12)),
+        figure.capitalize(),
+        size=16,
+        colour=TEXT,
+        halign=CENTER,
+        bold=True,
+    )
+    text(
+        tile.add(top_stretch(f"{name}_Blurb", 300, 32, 14)),
+        "",
+        size=13,
+        colour=SECONDARY,
+        halign=CENTER,
+        valign=TOP,
+        wrap=True,
+    )
 
 
 def boards():
@@ -342,7 +686,16 @@ def boards():
     canvas(root, sorting_order=0)
 
     root.add(panel("Pick", PICKS, POWERUP_W, POWERUP_H, "Powerup", powerup_tile))
-    root.add(panel("Shape", SHAPES, 300, 340, "Footprint. The first pick on the team counts.", shape_board_tile))
+    root.add(
+        panel(
+            "Shape",
+            SHAPES,
+            300,
+            340,
+            "Footprint. The first pick on the team counts.",
+            shape_board_tile,
+        )
+    )
     root.add(panel("Swap", SWAPS, 200, 220, "Metal Wall", option_tile))
 
     root.add(raid_panel("Raid"))
@@ -377,21 +730,25 @@ def boards():
 # fraction of the map rather than a pixel of it, so the same prefab is right on a
 # laptop and on a 1440p monitor.
 
-MAP_PX = 640            # the map at most; the sprite is twice this
-MAP_METRES = 260        # of ground across it: the furthest spawn is 108 m out
+MAP_PX = 640  # the map at most; the sprite is twice this
+MAP_METRES = 260  # of ground across it: the furthest spawn is 108 m out
 DOT = 28
-FACE = 22               # a teammate on a dot
+FACE = 22  # a teammate on a dot
 FACES = 5
 
 SITES = (
     # name, anchor (x, z), the spawns in dot order; all from PeekSeekRaidConfiguration.cs
     ("North", (74.97, 311.35), ((152.60, 383.00), (8.21, 286.77), (91.95, 232.95))),
-    ("South", (224.10, -379.60), ((150.36, -364.48), (215.40, -304.40), (311.91, -369.68))),
+    (
+        "South",
+        (224.10, -379.60),
+        ((150.36, -364.48), (215.40, -304.40), (311.91, -369.68)),
+    ),
 )
 MAP_GUIDS = ("e2f1a3b4c5d6e7f8a9b0c1d2e3f4a5b6", "f3a2b4c5d6e7f8a9b0c1d2e3f4a5b6c7")
 
 
-ATTACK_MAP = 410        # the map on the attacker's board; the sprite is far larger
+ATTACK_MAP = 410  # the map on the attacker's board; the sprite is far larger
 ATTACK_TILE_W = 196
 ATTACK_TILE_H = (ATTACK_MAP - GAP) // 2
 
@@ -407,10 +764,39 @@ def attack_screen():
     screen = centered("Attack", 0, 40, board_w, board_h, active=False)
     image(screen, PAGE, 0.94, sprite=SPR["round8"])
 
-    text(screen.add(top_left("Attack_Headline", PANEL_PAD, PANEL_PAD, board_w - PANEL_PAD * 2 - 130, HEADLINE_H)),
-         "ATTACK  North", size=20, colour=TEXT, bold=True)
-    text(screen.add(top_left("Attack_Line", PANEL_PAD + 260, PANEL_PAD + 4, 400, 20, active=False)), "", size=13, colour=SECONDARY)
-    text(screen.add(top_right("Attack_Timer", PANEL_PAD, 16, 120, 36)), "20", size=28, colour=TEXT, halign=RIGHT, bold=True)
+    text(
+        screen.add(
+            top_left(
+                "Attack_Headline",
+                PANEL_PAD,
+                PANEL_PAD,
+                board_w - PANEL_PAD * 2 - 130,
+                HEADLINE_H,
+            )
+        ),
+        "ATTACK  North",
+        size=20,
+        colour=TEXT,
+        bold=True,
+    )
+    text(
+        screen.add(
+            top_left(
+                "Attack_Line", PANEL_PAD + 260, PANEL_PAD + 4, 400, 20, active=False
+            )
+        ),
+        "",
+        size=13,
+        colour=SECONDARY,
+    )
+    text(
+        screen.add(top_right("Attack_Timer", PANEL_PAD, 16, 120, 36)),
+        "20",
+        size=28,
+        colour=TEXT,
+        halign=RIGHT,
+        bold=True,
+    )
 
     frame = screen.add(top_left("Attack_Map", PANEL_PAD, top_y, ATTACK_MAP, ATTACK_MAP))
     image(frame, "#ffffff", sprite=SPR["round8"])
@@ -423,17 +809,38 @@ def attack_screen():
 
     keep = frame.add(centered("Keep", 0, 0, 40, 40))
     image(keep, PAGE, 0.9, sprite=SPR["disc"], sliced=False)
-    image(keep.add(centered("KeepFigure", 0, 0, 24, 24)), TEXT, sprite=SPR["keep"], sliced=False)
-    text(frame.add(top_left("Attack_Site", 10, 6, 200, 20)), "North", size=14, colour=TEXT, bold=True)
+    image(
+        keep.add(centered("KeepFigure", 0, 0, 24, 24)),
+        TEXT,
+        sprite=SPR["keep"],
+        sliced=False,
+    )
+    text(
+        frame.add(top_left("Attack_Site", 10, 6, 200, 20)),
+        "North",
+        size=14,
+        colour=TEXT,
+        bold=True,
+    )
 
-    tiles_grid(screen, "Attack", PANEL_PAD + ATTACK_MAP + 14, top_y, ATTACK_TILE_W, ATTACK_TILE_H)
+    tiles_grid(
+        screen,
+        "Attack",
+        PANEL_PAD + ATTACK_MAP + 14,
+        top_y,
+        ATTACK_TILE_W,
+        ATTACK_TILE_H,
+    )
     return screen
 
 
 def on_map(anchor, point):
     """Where a world point lands on the map, as fractions of it from the bottom-left
     corner, which is how a uGUI anchor counts. North is up, so world z runs up."""
-    return (0.5 + (point[0] - anchor[0]) / MAP_METRES, 0.5 + (point[1] - anchor[1]) / MAP_METRES)
+    return (
+        0.5 + (point[0] - anchor[0]) / MAP_METRES,
+        0.5 + (point[1] - anchor[1]) / MAP_METRES,
+    )
 
 
 def dot(ground, site, i, fx, fy):
@@ -441,24 +848,78 @@ def dot(ground, site, i, fx, fy):
     anchored at a fraction of the map so it stays on its spawn at any size.
     `Spawn{site}{i}_On` is the same disc in white, shown on the one the viewer chose;
     `Spawn{site}{i}_Face{k}` are the teammates coming in there, in a row beside it."""
-    node = ground.add(Node(f"BoardSpawn{site}{i}", anchor_min=(fx, fy), anchor_max=(fx, fy), size=(DOT, DOT)))
-    button(node, image(node, "#ffffff", sprite=SPR["disc"], sliced=False, raycast=True), PAGE, SUB_HOVER, SELECTED)
-    text(node.add(stretch(f"Spawn{site}{i}_Number")), str(i + 1), size=12, colour=TEXT, halign=CENTER, bold=True)
+    node = ground.add(
+        Node(
+            f"BoardSpawn{site}{i}",
+            anchor_min=(fx, fy),
+            anchor_max=(fx, fy),
+            size=(DOT, DOT),
+        )
+    )
+    button(
+        node,
+        image(node, "#ffffff", sprite=SPR["disc"], sliced=False, raycast=True),
+        PAGE,
+        SUB_HOVER,
+        SELECTED,
+    )
+    text(
+        node.add(stretch(f"Spawn{site}{i}_Number")),
+        str(i + 1),
+        size=12,
+        colour=TEXT,
+        halign=CENTER,
+        bold=True,
+    )
 
     on = node.add(stretch(f"Spawn{site}{i}_On", active=False))
     image(on, "#ffffff", sprite=SPR["disc"], sliced=False)
-    text(on.add(stretch("Number")), str(i + 1), size=12, colour=PAGE, halign=CENTER, bold=True)
+    text(
+        on.add(stretch("Number")),
+        str(i + 1),
+        size=12,
+        colour=PAGE,
+        halign=CENTER,
+        bold=True,
+    )
 
     # Which way and how far, under the dot; the plugin sends it, from the spawn's own
     # numbers, so a dot is something a team can name to each other.
-    text(node.add(Node(f"Spawn{site}{i}_Label", anchor_min=(0.5, 0), anchor_max=(0.5, 0), pivot=(0.5, 1),
-                       position=(0, -2), size=(120, 16))), "NE  106 m", size=10, colour=TEXT, halign=CENTER, bold=True)
+    text(
+        node.add(
+            Node(
+                f"Spawn{site}{i}_Label",
+                anchor_min=(0.5, 0),
+                anchor_max=(0.5, 0),
+                pivot=(0.5, 1),
+                position=(0, -2),
+                size=(120, 16),
+            )
+        ),
+        "NE  106 m",
+        size=10,
+        colour=TEXT,
+        halign=CENTER,
+        bold=True,
+    )
 
     for k in range(FACES):
-        face = node.add(top_left(f"Spawn{site}{i}_Face{k}_Frame", DOT + 6 + k * (FACE + 3), (DOT - FACE) / 2, FACE, FACE))
+        face = node.add(
+            top_left(
+                f"Spawn{site}{i}_Face{k}_Frame",
+                DOT + 6 + k * (FACE + 3),
+                (DOT - FACE) / 2,
+                FACE,
+                FACE,
+            )
+        )
         image(face, "#ffffff", sprite=SPR["round6"])
         mask(face)
-        image(face.add(stretch(f"Spawn{site}{i}_Face{k}", active=False)), "#ffffff", enabled=False)
+        image(
+            face.add(stretch(f"Spawn{site}{i}_Face{k}", active=False)),
+            "#ffffff",
+            enabled=False,
+        )
 
 
 # ---- the match HUD -------------------------------------------------------------------
@@ -496,34 +957,38 @@ def dot(ground, site, i, fx, fy):
 # nothing else.
 
 BLOCK_W, BLOCK_H = 360, 50
-BLOCK_Y = 10            # the arena boxes' container inset
-ROW = 50                # the score line, the whole block
-SEAT = 50               # a face, the site's .userProfile chip
+BLOCK_Y = 10  # the arena boxes' container inset
+ROW = 50  # the score line, the whole block
+SEAT = 50  # a face, the site's .userProfile chip
 SEAT_GAP = 6
-WING_PAD = 8            # between the block and the first face
+WING_PAD = 8  # between the block and the first face
 SEATS = 5
 WING_W = WING_PAD + SEATS * (SEAT + SEAT_GAP) - SEAT_GAP
 HUD_W = BLOCK_W + 2 * WING_W
-PICK = 20               # the pick chip on a face's corner
-PICK_OVER = 3           # how far it pokes past the face's outer edge
-PICK_TILT = 10          # degrees; the one playful thing on the bar
-ROLE = 20               # the castle or the swords
-HEALTH_H = 6            # the bar under a face
+PICK = 20  # the pick chip on a face's corner
+PICK_OVER = 3  # how far it pokes past the face's outer edge
+PICK_TILT = 10  # degrees; the one playful thing on the bar
+ROLE = 20  # the castle or the swords
+HEALTH_H = 6  # the bar under a face
 HEALTH_GAP = 3
-HEALTH_STEPS = 10       # what the plugin lights, one message each
-PING_H = 13             # the viewer's own ping under their face
-GONE = 16               # the cross on a face whose player has left
+HEALTH_STEPS = 10  # what the plugin lights, one message each
+PING_H = 13  # the viewer's own ping under their face
+GONE = 16  # the cross on a face whose player has left
 
-GREEN = "#6fb65a"       # the health bar, above half
-AMBER = "#d9a521"       # and at half or under
-TRACK = "#2c2c2c"       # what is left of it
+GREEN = "#6fb65a"  # the health bar, above half
+AMBER = "#d9a521"  # and at half or under
+TRACK = "#2c2c2c"  # what is left of it
 
 
 def match_hud():
     root = Node("Effect")
     canvas(root, sorting_order=16)
 
-    hud = root.add(top_center("Hud", 0, 0, HUD_W, BLOCK_Y + BLOCK_H + HEALTH_GAP + HEALTH_H + PING_H))
+    hud = root.add(
+        top_center(
+            "Hud", 0, 0, HUD_W, BLOCK_Y + BLOCK_H + HEALTH_GAP + HEALTH_H + PING_H
+        )
+    )
 
     block = hud.add(top_center("Block", 0, BLOCK_Y, BLOCK_W, BLOCK_H))
     image(block, FLAT, sprite=SPR["round8"])
@@ -533,40 +998,121 @@ def match_hud():
     # line, or under a label, for the one phase that needs naming.
     line = block.add(stretch("Line"))
     row(line, spacing=4)
-    text(line.add(top_left("Team0_Name", 0, 0, 80, ROW)), "North", size=16, colour=INK, halign=RIGHT, bold=True)
-    text(line.add(top_left("Score0", 0, 0, 28, ROW)), "0", size=22, colour=INK, halign=CENTER, bold=True)
+    text(
+        line.add(top_left("Team0_Name", 0, 0, 80, ROW)),
+        "North",
+        size=16,
+        colour=INK,
+        halign=RIGHT,
+        bold=True,
+    )
+    text(
+        line.add(top_left("Score0", 0, 0, 28, ROW)),
+        "0",
+        size=22,
+        colour=INK,
+        halign=CENTER,
+        bold=True,
+    )
     role(line, "Castle0", "Swords0")
-    text(line.add(top_left("Timer", 0, 0, 68, ROW, active=False)), "0:30", size=18, colour=INK, halign=CENTER, mono=True)
+    text(
+        line.add(top_left("Timer", 0, 0, 68, ROW, active=False)),
+        "0:30",
+        size=18,
+        colour=INK,
+        halign=CENTER,
+        mono=True,
+    )
     clock = line.add(top_left("Clock", 0, 0, 68, ROW, active=False))
-    text(clock.add(top_left("Clock_Phase", 0, 7, 68, 12)), "BUILD",
-         size=9, colour=MUTED, halign=CENTER, bold=True, spacing=12)
-    text(clock.add(top_left("Clock_Timer", 0, 19, 68, 26)), "4:12", size=18, colour=INK, halign=CENTER, mono=True)
+    text(
+        clock.add(top_left("Clock_Phase", 0, 7, 68, 12)),
+        "BUILD",
+        size=9,
+        colour=MUTED,
+        halign=CENTER,
+        bold=True,
+        spacing=12,
+    )
+    text(
+        clock.add(top_left("Clock_Timer", 0, 19, 68, 26)),
+        "4:12",
+        size=18,
+        colour=INK,
+        halign=CENTER,
+        mono=True,
+    )
     role(line, "Castle1", "Swords1")
-    text(line.add(top_left("Score1", 0, 0, 28, ROW)), "1", size=22, colour=INK, halign=CENTER, bold=True)
-    text(line.add(top_left("Team1_Name", 0, 0, 80, ROW)), "South", size=16, colour=INK, halign=LEFT, bold=True)
+    text(
+        line.add(top_left("Score1", 0, 0, 28, ROW)),
+        "1",
+        size=22,
+        colour=INK,
+        halign=CENTER,
+        bold=True,
+    )
+    text(
+        line.add(top_left("Team1_Name", 0, 0, 80, ROW)),
+        "South",
+        size=16,
+        colour=INK,
+        halign=LEFT,
+        bold=True,
+    )
 
     # Faces run outward from the block on each side, on its line. A face is two
     # pictures of the same download, one at full strength and one at half, and the
     # plugin shows the half one while that player is out of the round: nothing a
     # server can send sets an alpha, but it can choose which of two images is on.
-    for prefix, place, corner, tilt in (("L", top_left, 0, -PICK_TILT), ("R", top_right, 1, PICK_TILT)):
+    for prefix, place, corner, tilt in (
+        ("L", top_left, 0, -PICK_TILT),
+        ("R", top_right, 1, PICK_TILT),
+    ):
         for i in range(SEATS):
             x = WING_W - WING_PAD - (i + 1) * SEAT - i * SEAT_GAP
-            seat = hud.add(place(f"{prefix}{i}", x, BLOCK_Y + BLOCK_H - SEAT, SEAT, SEAT + HEALTH_GAP + HEALTH_H + PING_H, active=False))
+            seat = hud.add(
+                place(
+                    f"{prefix}{i}",
+                    x,
+                    BLOCK_Y + BLOCK_H - SEAT,
+                    SEAT,
+                    SEAT + HEALTH_GAP + HEALTH_H + PING_H,
+                    active=False,
+                )
+            )
 
             frame = seat.add(top_left(f"{prefix}{i}_Frame", 0, 0, SEAT, SEAT))
             image(frame, "#ffffff", sprite=SPR["round8"])
             mask(frame)
             image(frame.add(stretch(f"{prefix}{i}_Avatar")), "#ffffff", enabled=False)
-            image(frame.add(stretch(f"{prefix}{i}_Faded", active=False)), "#ffffff", 0.5, enabled=False)
+            image(
+                frame.add(stretch(f"{prefix}{i}_Faded", active=False)),
+                "#ffffff",
+                0.5,
+                enabled=False,
+            )
 
             pick_chip(seat, f"{prefix}{i}_Pick", corner, tilt)
             gone_mark(seat, f"{prefix}{i}_Gone", 1 - corner)
             health_bar(seat, f"{prefix}{i}")
             # Under the health bar, for the viewer's own face only: their ping, in the
             # colour of what it is costing them. Off for everybody else.
-            text(seat.add(top_left(f"{prefix}{i}_Ping", -10, SEAT + HEALTH_GAP + HEALTH_H + 1, SEAT + 20, PING_H, active=False)),
-                 "190 ms", size=10, colour=INK, halign=CENTER, bold=True)
+            text(
+                seat.add(
+                    top_left(
+                        f"{prefix}{i}_Ping",
+                        -10,
+                        SEAT + HEALTH_GAP + HEALTH_H + 1,
+                        SEAT + 20,
+                        PING_H,
+                        active=False,
+                    )
+                ),
+                "190 ms",
+                size=10,
+                colour=INK,
+                halign=CENTER,
+                bold=True,
+            )
 
     return root
 
@@ -575,8 +1121,18 @@ def role(line, castle, swords):
     """The two role markers, one after the other in the line; the plugin shows one, or
     neither between rounds and in a gamemode that has no such thing. The castle is
     the side holding, in blue; the swords the side attacking, in red."""
-    image(line.add(top_left(castle, 0, 0, ROLE, ROLE, active=False)), BLUE, sprite=SPR["castle"], sliced=False)
-    image(line.add(top_left(swords, 0, 0, ROLE, ROLE, active=False)), RED, sprite=SPR["swords"], sliced=False)
+    image(
+        line.add(top_left(castle, 0, 0, ROLE, ROLE, active=False)),
+        BLUE,
+        sprite=SPR["castle"],
+        sliced=False,
+    )
+    image(
+        line.add(top_left(swords, 0, 0, ROLE, ROLE, active=False)),
+        RED,
+        sprite=SPR["swords"],
+        sliced=False,
+    )
 
 
 def pick_chip(seat, name, corner, tilt):
@@ -584,18 +1140,39 @@ def pick_chip(seat, name, corner, tilt):
     on the face, a little past its edge, tilted outward. Off until there is a pick to
     show."""
     centre_x = PICK / 2 - PICK_OVER
-    chip = seat.add(Node(name, anchor_min=(corner, 1), anchor_max=(corner, 1),
-                         position=(centre_x if corner == 0 else -centre_x, -(SEAT - PICK / 2 + 1)),
-                         size=(PICK, PICK), rotation=tilt, active=False))
-    image(chip.add(stretch(f"{name}_Icon")), "#ffffff", enabled=False, preserve_aspect=True)
+    chip = seat.add(
+        Node(
+            name,
+            anchor_min=(corner, 1),
+            anchor_max=(corner, 1),
+            position=(centre_x if corner == 0 else -centre_x, -(SEAT - PICK / 2 + 1)),
+            size=(PICK, PICK),
+            rotation=tilt,
+            active=False,
+        )
+    )
+    image(
+        chip.add(stretch(f"{name}_Icon")),
+        "#ffffff",
+        enabled=False,
+        preserve_aspect=True,
+    )
 
 
 def gone_mark(seat, name, corner):
     """A cross on the face's inner top corner for a player who has left the server,
     which a faded face alone does not say: faded is dead, and a leaver is not coming
     back next round."""
-    mark = seat.add(Node(name, anchor_min=(corner, 1), anchor_max=(corner, 1),
-                         position=(4 if corner == 0 else -4, -4), size=(GONE, GONE), active=False))
+    mark = seat.add(
+        Node(
+            name,
+            anchor_min=(corner, 1),
+            anchor_max=(corner, 1),
+            position=(4 if corner == 0 else -4, -4),
+            size=(GONE, GONE),
+            active=False,
+        )
+    )
     text(mark.add(stretch("Cross")), "×", size=15, colour=INK, halign=CENTER, bold=True)
 
 
@@ -604,7 +1181,9 @@ def health_bar(seat, name):
     colours the plugin chooses between, because it can turn an image on or off but
     not recolour it. The track is the mask, so the steps come out with its rounded
     ends. Everything here starts off; the plugin lights what there is."""
-    bar = seat.add(top_left(f"{name}_Health", 0, SEAT + HEALTH_GAP, SEAT, HEALTH_H, active=False))
+    bar = seat.add(
+        top_left(f"{name}_Health", 0, SEAT + HEALTH_GAP, SEAT, HEALTH_H, active=False)
+    )
     image(bar, TRACK, sprite=SPR["round3"])
     mask(bar, show=True)
 
@@ -612,7 +1191,19 @@ def health_bar(seat, name):
     for colour_name, colour in (("Green", GREEN), ("Amber", AMBER)):
         fill = bar.add(stretch(f"{name}_Health{colour_name}", active=False))
         for k in range(HEALTH_STEPS):
-            image(fill.add(top_left(f"{name}_{colour_name}{k}", k * step, 0, step, HEALTH_H, active=False)), colour)
+            image(
+                fill.add(
+                    top_left(
+                        f"{name}_{colour_name}{k}",
+                        k * step,
+                        0,
+                        step,
+                        HEALTH_H,
+                        active=False,
+                    )
+                ),
+                colour,
+            )
 
 
 # ---- the lobby's bar -----------------------------------------------------------------
@@ -639,20 +1230,50 @@ def lobby_bar():
     root = Node("Effect")
     canvas(root, sorting_order=16)
 
-    hud = root.add(top_center("Hud", 0, 0, BLOCK_W + 2 * LOBBY_WING_W, BLOCK_Y + BLOCK_H))
+    hud = root.add(
+        top_center("Hud", 0, 0, BLOCK_W + 2 * LOBBY_WING_W, BLOCK_Y + BLOCK_H)
+    )
 
     block = hud.add(top_center("Block", 0, BLOCK_Y, BLOCK_W, BLOCK_H))
     image(block, FLAT, sprite=SPR["round8"])
 
     line = block.add(stretch("Line"))
     row(line, spacing=8)
-    text(line.add(top_left("State", 0, 0, 90, ROW, active=False)), "QUEUE",
-         size=11, colour=MUTED, halign=RIGHT, bold=True, spacing=8)
-    text(line.add(top_left("State_Timer", 0, 0, 56, ROW, active=False)), "1:24", size=18, colour=INK, halign=LEFT, mono=True)
+    text(
+        line.add(top_left("State", 0, 0, 90, ROW, active=False)),
+        "QUEUE",
+        size=11,
+        colour=MUTED,
+        halign=RIGHT,
+        bold=True,
+        spacing=8,
+    )
+    text(
+        line.add(top_left("State_Timer", 0, 0, 56, ROW, active=False)),
+        "1:24",
+        size=18,
+        colour=INK,
+        halign=LEFT,
+        mono=True,
+    )
     line.add(top_left("Gap", 0, 0, 16, ROW, active=False))
-    text(line.add(top_left("Arena", 0, 0, 62, ROW, active=False)), "ARENA",
-         size=11, colour=MUTED, halign=RIGHT, bold=True, spacing=8)
-    text(line.add(top_left("Arena_Timer", 0, 0, 56, ROW, active=False)), "2:10", size=18, colour=INK, halign=LEFT, mono=True)
+    text(
+        line.add(top_left("Arena", 0, 0, 62, ROW, active=False)),
+        "ARENA",
+        size=11,
+        colour=MUTED,
+        halign=RIGHT,
+        bold=True,
+        spacing=8,
+    )
+    text(
+        line.add(top_left("Arena_Timer", 0, 0, 56, ROW, active=False)),
+        "2:10",
+        size=18,
+        colour=INK,
+        halign=LEFT,
+        mono=True,
+    )
 
     for prefix, place, corner in (("L", top_left, 0), ("R", top_right, 1)):
         for i in range(LOBBY_SEATS):
@@ -662,19 +1283,48 @@ def lobby_bar():
             image(frame, "#ffffff", sprite=SPR["round8"])
             mask(frame)
             image(frame.add(stretch(f"{prefix}{i}_Avatar")), "#ffffff", enabled=False)
-            image(frame.add(stretch(f"{prefix}{i}_Faded", active=False)), "#ffffff", 0.5, enabled=False)
+            image(
+                frame.add(stretch(f"{prefix}{i}_Faded", active=False)),
+                "#ffffff",
+                0.5,
+                enabled=False,
+            )
 
             # The text sits on this node rather than on a child of it: the server
             # addresses a child by name and sets the text on whatever component it
             # finds there, so a container with the text one level down takes the
             # message and drops it, and the face keeps whatever the prefab was saved
             # with.
-            kills = seat.add(Node(f"{prefix}{i}_Kills", anchor_min=(0, 0), anchor_max=(0, 0),
-                                  position=(6, 4), size=(KILLS_W, 18), rotation=PICK_TILT, active=False))
+            kills = seat.add(
+                Node(
+                    f"{prefix}{i}_Kills",
+                    anchor_min=(0, 0),
+                    anchor_max=(0, 0),
+                    position=(6, 4),
+                    size=(KILLS_W, 18),
+                    rotation=PICK_TILT,
+                    active=False,
+                )
+            )
             text(kills, "0", size=14, colour=INK, halign=CENTER, bold=True)
-            away = seat.add(Node(f"{prefix}{i}_Away", anchor_min=(1 - corner, 1), anchor_max=(1 - corner, 1),
-                                 position=(2 if corner == 1 else -2, -2), size=(26, 12), active=False))
-            text(away.add(stretch("Label")), "AFK", size=8, colour=INK, halign=CENTER, bold=True)
+            away = seat.add(
+                Node(
+                    f"{prefix}{i}_Away",
+                    anchor_min=(1 - corner, 1),
+                    anchor_max=(1 - corner, 1),
+                    position=(2 if corner == 1 else -2, -2),
+                    size=(26, 12),
+                    active=False,
+                )
+            )
+            text(
+                away.add(stretch("Label")),
+                "AFK",
+                size=8,
+                colour=INK,
+                halign=CENTER,
+                bold=True,
+            )
 
     return root
 
@@ -692,7 +1342,9 @@ PANEL_ROW_H = 28
 PANEL_PAD_ = 12
 PANEL_HEAD = 26
 PANEL_HINT = 40
-PANEL_H = PANEL_PAD_ + PANEL_HEAD + PANEL_ROWS * PANEL_ROW_H + 8 + PANEL_HINT + PANEL_PAD_
+PANEL_H = (
+    PANEL_PAD_ + PANEL_HEAD + PANEL_ROWS * PANEL_ROW_H + 8 + PANEL_HINT + PANEL_PAD_
+)
 
 
 def build_panel():
@@ -702,20 +1354,69 @@ def build_panel():
     board = root.add(top_right("Panel", 20, 120, PANEL_W, PANEL_H))
     image(board, FLAT, 0.9, sprite=SPR["round8"])
 
-    text(board.add(top_left("Title", PANEL_PAD_, PANEL_PAD_, PANEL_W - 2 * PANEL_PAD_, PANEL_HEAD)), "Left to lay",
-         size=11, colour=MUTED, bold=True, uppercase=True, spacing=10)
+    text(
+        board.add(
+            top_left(
+                "Title", PANEL_PAD_, PANEL_PAD_, PANEL_W - 2 * PANEL_PAD_, PANEL_HEAD
+            )
+        ),
+        "Left to lay",
+        size=11,
+        colour=MUTED,
+        bold=True,
+        uppercase=True,
+        spacing=10,
+    )
 
     for i in range(PANEL_ROWS):
         y = PANEL_PAD_ + PANEL_HEAD + i * PANEL_ROW_H
-        row = board.add(top_left(f"Row{i}", PANEL_PAD_, y, PANEL_W - 2 * PANEL_PAD_, PANEL_ROW_H, active=False))
-        image(row.add(top_left(f"Row{i}_Icon", 0, 2, 24, 24)), "#ffffff", enabled=False, preserve_aspect=True)
-        text(row.add(top_left(f"Row{i}_Count", 30, 0, 34, PANEL_ROW_H)), "12", size=15, colour=INK, halign=RIGHT, bold=True)
-        text(row.add(top_left(f"Row{i}_Name", 72, 0, PANEL_W - 2 * PANEL_PAD_ - 72, PANEL_ROW_H)), "Maple Wall",
-             size=13, colour=MUTED)
+        row = board.add(
+            top_left(
+                f"Row{i}",
+                PANEL_PAD_,
+                y,
+                PANEL_W - 2 * PANEL_PAD_,
+                PANEL_ROW_H,
+                active=False,
+            )
+        )
+        image(
+            row.add(top_left(f"Row{i}_Icon", 0, 2, 24, 24)),
+            "#ffffff",
+            enabled=False,
+            preserve_aspect=True,
+        )
+        text(
+            row.add(top_left(f"Row{i}_Count", 30, 0, 34, PANEL_ROW_H)),
+            "12",
+            size=15,
+            colour=INK,
+            halign=RIGHT,
+            bold=True,
+        )
+        text(
+            row.add(
+                top_left(
+                    f"Row{i}_Name", 72, 0, PANEL_W - 2 * PANEL_PAD_ - 72, PANEL_ROW_H
+                )
+            ),
+            "Maple Wall",
+            size=13,
+            colour=MUTED,
+        )
 
-    text(board.add(bottom_left("Hint", PANEL_PAD_, PANEL_PAD_, PANEL_W - 2 * PANEL_PAD_, PANEL_HINT)),
-         "Salvage a piece to change what it is made of, or take it down.",
-         size=12, colour=MUTED, valign=TOP, wrap=True)
+    text(
+        board.add(
+            bottom_left(
+                "Hint", PANEL_PAD_, PANEL_PAD_, PANEL_W - 2 * PANEL_PAD_, PANEL_HINT
+            )
+        ),
+        "Salvage a piece to change what it is made of, or take it down.",
+        size=12,
+        colour=MUTED,
+        valign=TOP,
+        wrap=True,
+    )
 
     return root
 
@@ -740,8 +1441,8 @@ def build_panel():
 FEED_ROWS = 6
 FEED_H = 26
 FEED_GAP = 4
-FEED_PAD = 8            # inside the row's ends
-FEED_SPACING = 6        # between the parts
+FEED_PAD = 8  # inside the row's ends
+FEED_SPACING = 6  # between the parts
 WEAPON_W = 40
 HEADSHOT = 16
 
@@ -753,24 +1454,58 @@ def kill_feed():
     feed = root.add(top_right("Feed", 20, 20, 600, FEED_ROWS * (FEED_H + FEED_GAP)))
 
     for i in range(FEED_ROWS):
-        fill = feed.add(top_right(f"Row{i}", 0, i * (FEED_H + FEED_GAP), 0, FEED_H, active=False))
+        fill = feed.add(
+            top_right(f"Row{i}", 0, i * (FEED_H + FEED_GAP), 0, FEED_H, active=False)
+        )
         image(fill, FLAT, sprite=SPR["round6"])
         row(fill, spacing=FEED_SPACING, padding=FEED_PAD, control_width=True)
         fit_width(fill)
 
-        mine = fill.add(Node(f"Row{i}_Mine", anchor_min=(0, 0), anchor_max=(1, 1), size=(2, 2), active=False))
+        mine = fill.add(
+            Node(
+                f"Row{i}_Mine",
+                anchor_min=(0, 0),
+                anchor_max=(1, 1),
+                size=(2, 2),
+                active=False,
+            )
+        )
         image(mine, RED, sprite=SPR["ring6"])
         ignore_layout(mine)
 
-        text(fill.add(top_left(f"Row{i}_Killer", 0, 0, 0, FEED_H)), "Ferret", size=13, colour=INK, bold=True)
-        text(fill.add(top_left(f"Row{i}_Streak", 0, 0, 0, FEED_H, active=False)), "II", size=11, colour=RED, bold=True)
-        weapon = fill.add(top_left(f"Row{i}_Weapon", 0, 0, WEAPON_W, FEED_H - 6, active=False))
-        image(weapon, "#ffffff", enabled=False, preserve_aspect=True, material=SILHOUETTE)
+        text(
+            fill.add(top_left(f"Row{i}_Killer", 0, 0, 0, FEED_H)),
+            "Ferret",
+            size=13,
+            colour=INK,
+            bold=True,
+        )
+        text(
+            fill.add(top_left(f"Row{i}_Streak", 0, 0, 0, FEED_H, active=False)),
+            "II",
+            size=11,
+            colour=RED,
+            bold=True,
+        )
+        weapon = fill.add(
+            top_left(f"Row{i}_Weapon", 0, 0, WEAPON_W, FEED_H - 6, active=False)
+        )
+        image(
+            weapon, "#ffffff", enabled=False, preserve_aspect=True, material=SILHOUETTE
+        )
         layout_size(weapon, WEAPON_W, FEED_H - 6)
-        skull = fill.add(top_left(f"Row{i}_Headshot", 0, 0, HEADSHOT, HEADSHOT, active=False))
+        skull = fill.add(
+            top_left(f"Row{i}_Headshot", 0, 0, HEADSHOT, HEADSHOT, active=False)
+        )
         image(skull, INK, sprite=SPR["skull"], sliced=False)
         layout_size(skull, HEADSHOT, HEADSHOT)
-        text(fill.add(top_left(f"Row{i}_Victim", 0, 0, 0, FEED_H)), "Homeless", size=13, colour=INK, bold=True)
+        text(
+            fill.add(top_left(f"Row{i}_Victim", 0, 0, 0, FEED_H)),
+            "Homeless",
+            size=13,
+            colour=INK,
+            bold=True,
+        )
 
     return root
 
@@ -789,12 +1524,39 @@ def banner():
     root = Node("Effect")
     canvas(root, sorting_order=17)
 
-    box = root.add(Node("Banner", anchor_min=(0.5, 0.74), anchor_max=(0.5, 0.74), size=(BANNER_W, BANNER_H)))
+    box = root.add(
+        Node(
+            "Banner",
+            anchor_min=(0.5, 0.74),
+            anchor_max=(0.5, 0.74),
+            size=(BANNER_W, BANNER_H),
+        )
+    )
     image(box, FLAT, 0.9, sprite=SPR["round8"])
-    text(box.add(top_stretch("Banner_Label", 10, 16, 16)), "TAKES ROUND 4",
-         size=11, colour=MUTED, halign=CENTER, bold=True, spacing=12)
-    text(box.add(top_stretch("Banner_Name", 26, 38, 16)), "South", size=30, colour=INK, halign=CENTER, bold=True)
-    text(box.add(top_stretch("Banner_Line", 66, 18, 16)), "The flag is down", size=12, colour=MUTED, halign=CENTER)
+    text(
+        box.add(top_stretch("Banner_Label", 10, 16, 16)),
+        "TAKES ROUND 4",
+        size=11,
+        colour=MUTED,
+        halign=CENTER,
+        bold=True,
+        spacing=12,
+    )
+    text(
+        box.add(top_stretch("Banner_Name", 26, 38, 16)),
+        "South",
+        size=30,
+        colour=INK,
+        halign=CENTER,
+        bold=True,
+    )
+    text(
+        box.add(top_stretch("Banner_Line", 66, 18, 16)),
+        "The flag is down",
+        size=12,
+        colour=MUTED,
+        halign=CENTER,
+    )
 
     return root
 
@@ -810,7 +1572,7 @@ def banner():
 # that brings the dead back on a clock: the lobby. A match server never turns it on.
 
 CARD_W = 560
-CARD_Y = 150            # up from the bottom edge, clear of the hotbar
+CARD_Y = 150  # up from the bottom edge, clear of the hotbar
 
 
 def death_card():
@@ -823,23 +1585,69 @@ def death_card():
     top = card.add(top_center("Card_Top", 0, 10, 0, 22))
     row(top, spacing=8, control_width=True)
     fit_width(top)
-    text(top.add(top_left("Card_Label", 0, 0, 0, 22)), "KILLED BY", size=11, colour=MUTED, bold=True, spacing=10)
-    text(top.add(top_left("Card_Killer", 0, 0, 0, 22)), "Ferret", size=14, colour=INK, bold=True)
+    text(
+        top.add(top_left("Card_Label", 0, 0, 0, 22)),
+        "KILLED BY",
+        size=11,
+        colour=MUTED,
+        bold=True,
+        spacing=10,
+    )
+    text(
+        top.add(top_left("Card_Killer", 0, 0, 0, 22)),
+        "Ferret",
+        size=14,
+        colour=INK,
+        bold=True,
+    )
     weapon = top.add(top_left("Card_Weapon", 0, 0, WEAPON_W, 20, active=False))
     image(weapon, "#ffffff", enabled=False, preserve_aspect=True, material=SILHOUETTE)
     layout_size(weapon, WEAPON_W, 20)
     skull = top.add(top_left("Card_Headshot", 0, 0, HEADSHOT, HEADSHOT, active=False))
     image(skull, INK, sprite=SPR["skull"], sliced=False)
     layout_size(skull, HEADSHOT, HEADSHOT)
-    text(top.add(top_left("Card_Distance", 0, 0, 0, 22, active=False)), "34 m", size=13, colour=INK)
+    text(
+        top.add(top_left("Card_Distance", 0, 0, 0, 22, active=False)),
+        "34 m",
+        size=13,
+        colour=INK,
+    )
 
-    text(card.add(top_stretch("Card_Line", 36, 18, 12)), "They had 27 HP left    You dealt 73 in 2 hits",
-         size=12, colour=MUTED, halign=CENTER)
+    text(
+        card.add(top_stretch("Card_Line", 36, 18, 12)),
+        "They had 27 HP left    You dealt 73 in 2 hits",
+        size=12,
+        colour=MUTED,
+        halign=CENTER,
+    )
 
-    count = root.add(Node("Respawn", anchor_min=(0.5, 0.5), anchor_max=(0.5, 0.5), position=(0, 40), size=(240, 80), active=False))
-    text(count.add(top_stretch("Respawn_Count", 0, 60, 0)), "5", size=44, colour=INK, halign=CENTER, mono=True)
-    text(count.add(top_stretch("Respawn_Label", 62, 16, 0)), "RESPAWNING",
-         size=11, colour=MUTED, halign=CENTER, bold=True, spacing=12)
+    count = root.add(
+        Node(
+            "Respawn",
+            anchor_min=(0.5, 0.5),
+            anchor_max=(0.5, 0.5),
+            position=(0, 40),
+            size=(240, 80),
+            active=False,
+        )
+    )
+    text(
+        count.add(top_stretch("Respawn_Count", 0, 60, 0)),
+        "5",
+        size=44,
+        colour=INK,
+        halign=CENTER,
+        mono=True,
+    )
+    text(
+        count.add(top_stretch("Respawn_Label", 62, 16, 0)),
+        "RESPAWNING",
+        size=11,
+        colour=MUTED,
+        halign=CENTER,
+        bold=True,
+        spacing=12,
+    )
 
     return root
 
@@ -875,28 +1683,35 @@ def death_card():
 # The panel is opaque. It is read while standing still, not composited over play, and
 # a scoreboard you can see the map through is a scoreboard nobody can read.
 
-BOARD_WIDE = 0.46       # of the screen
+BOARD_WIDE = 0.46  # of the screen
 BOARD_ROWS = 12
-BOARD_PAD = 3           # inside a row, on every side
+BOARD_PAD = 3  # inside a row, on every side
 BOARD_ROW_H = 30
 BOARD_ROW_GAP = 2
 BOARD_FACE = BOARD_ROW_H - 2 * BOARD_PAD
-BOARD_RANK = 13         # the badge on a face's corner
+BOARD_RANK = 13  # the badge on a face's corner
 BOARD_COLS = ("A", "B", "C", "D")
 BOARD_COL_W = 54
-BOARD_COL_PAD = 12      # between the last number and the end of the fill
-BOARD_PING_W = 56       # after the fill, the ping in it from its left edge
+BOARD_COL_PAD = 12  # between the last number and the end of the fill
+BOARD_PING_W = 56  # after the fill, the ping in it from its left edge
 BOARD_PING_GAP = 8
-BOARD_HEAD_H = LOGO_H   # the mark at the site's own size sets the heading's height
-BOARD_TITLE = 20        # Selawik's capitals at this size are the wordmark's on a 28px mark
+BOARD_HEAD_H = LOGO_H  # the mark at the site's own size sets the heading's height
+BOARD_TITLE = 20  # Selawik's capitals at this size are the wordmark's on a 28px mark
 BOARD_SUB_H = 18
 
 
 def wide(name, left, y, right, h, **kw):
     """A node that spans its parent's width minus `left` and `right`, `h` tall, `y`
     down from the top. The one shape a board built from the right edge needs."""
-    return Node(name, anchor_min=(0, 1), anchor_max=(1, 1), pivot=(0, 1),
-                position=(left, -y), size=(-(left + right), h), **kw)
+    return Node(
+        name,
+        anchor_min=(0, 1),
+        anchor_max=(1, 1),
+        pivot=(0, 1),
+        position=(left, -y),
+        size=(-(left + right), h),
+        **kw,
+    )
 
 
 def board_col(c):
@@ -912,60 +1727,163 @@ def scoreboard():
     # per player. A child that is switched off takes no space, so a board with three
     # players on it is three rows tall rather than nine rows of empty panel, and the
     # lobby's empty sub line costs nothing.
-    board = root.add(Node("Board", anchor_min=(0.5 - BOARD_WIDE / 2, 0.5), anchor_max=(0.5 + BOARD_WIDE / 2, 0.5),
-                          position=(0, 20), size=(0, 0)))
+    board = root.add(
+        Node(
+            "Board",
+            anchor_min=(0.5 - BOARD_WIDE / 2, 0.5),
+            anchor_max=(0.5 + BOARD_WIDE / 2, 0.5),
+            position=(0, 20),
+            size=(0, 0),
+        )
+    )
     image(board, PAGE, sprite=SPR["round8"])
     column(board, spacing=BOARD_ROW_GAP, padding=PANEL_PAD, top=PANEL_PAD)
     fit_height(board)
 
     head = board.add(wide("Board_Head", 0, 0, 0, BOARD_HEAD_H))
-    image(head.add(top_left("Logo", 0, 0, LOGO_W, LOGO_H)), TEXT, sprite=SPR["logo"],
-          sliced=False, preserve_aspect=True)
-    text(head.add(wide("Board_Title", LOGO_W + 12, 0, 130, BOARD_HEAD_H)), "Lobby",
-         size=BOARD_TITLE, colour=TEXT, valign=CAPLINE, bold=True)
-    text(head.add(top_right("Board_Timer", 0, 0, 120, BOARD_HEAD_H, active=False)), "2:10",
-         size=18, colour=TEXT, halign=RIGHT, valign=CAPLINE, mono=True)
+    image(
+        head.add(top_left("Logo", 0, 0, LOGO_W, LOGO_H)),
+        TEXT,
+        sprite=SPR["logo"],
+        sliced=False,
+        preserve_aspect=True,
+    )
+    text(
+        head.add(wide("Board_Title", LOGO_W + 12, 0, 130, BOARD_HEAD_H)),
+        "Lobby",
+        size=BOARD_TITLE,
+        colour=TEXT,
+        valign=CAPLINE,
+        bold=True,
+    )
+    text(
+        head.add(top_right("Board_Timer", 0, 0, 120, BOARD_HEAD_H, active=False)),
+        "2:10",
+        size=18,
+        colour=TEXT,
+        halign=RIGHT,
+        valign=CAPLINE,
+        mono=True,
+    )
 
     # On a match always, and never on the lobby, where it is switched off and the rows
     # move up to meet the heading.
-    text(board.add(wide("Board_Sub", LOGO_W + 12, 0, 0, BOARD_SUB_H, active=False)), "",
-         size=12, colour=SECONDARY)
+    text(
+        board.add(wide("Board_Sub", LOGO_W + 12, 0, 0, BOARD_SUB_H, active=False)),
+        "",
+        size=12,
+        colour=SECONDARY,
+    )
 
     headings = board.add(wide("Board_Columns", 0, 0, 0, 16))
     for c, col in enumerate(BOARD_COLS):
-        text(headings.add(top_right(f"Head_{col}", board_col(c), 0, BOARD_COL_W, 14)), col,
-             size=10, colour=SECONDARY, halign=RIGHT, bold=True, spacing=6)
+        text(
+            headings.add(top_right(f"Head_{col}", board_col(c), 0, BOARD_COL_W, 14)),
+            col,
+            size=10,
+            colour=SECONDARY,
+            halign=RIGHT,
+            bold=True,
+            spacing=6,
+        )
 
     columns = board_col(0) + BOARD_COL_W
     for i in range(BOARD_ROWS):
         line = board.add(wide(f"Row{i}", 0, 0, 0, BOARD_ROW_H, active=False))
 
-        image(line.add(wide(f"Row{i}_Me", 0, 0, BOARD_PING_W, BOARD_ROW_H, active=False)), SUB, sprite=SPR["round6"])
+        image(
+            line.add(wide(f"Row{i}_Me", 0, 0, BOARD_PING_W, BOARD_ROW_H, active=False)),
+            SUB,
+            sprite=SPR["round6"],
+        )
 
-        text(line.add(top_left(f"Row{i}_Head", BOARD_PAD, 0, 300, BOARD_ROW_H, active=False)), "NORTH",
-             size=10, colour=SECONDARY, bold=True, spacing=8)
+        text(
+            line.add(
+                top_left(f"Row{i}_Head", BOARD_PAD, 0, 300, BOARD_ROW_H, active=False)
+            ),
+            "NORTH",
+            size=10,
+            colour=SECONDARY,
+            bold=True,
+            spacing=8,
+        )
 
         body = line.add(stretch(f"Row{i}_Body"))
-        face = body.add(top_left(f"Row{i}_Frame", BOARD_PAD, BOARD_PAD, BOARD_FACE, BOARD_FACE))
+        face = body.add(
+            top_left(f"Row{i}_Frame", BOARD_PAD, BOARD_PAD, BOARD_FACE, BOARD_FACE)
+        )
         image(face, "#ffffff", sprite=SPR["round6"])
         mask(face)
         image(face.add(stretch(f"Row{i}_Avatar")), "#ffffff", enabled=False)
 
         # The rank badge, on the face's bottom-right corner, tilted out, on nothing.
-        rank = body.add(Node(f"Row{i}_Rank", anchor_min=(0, 1), anchor_max=(0, 1), pivot=(0.5, 0.5),
-                             position=(BOARD_PAD + BOARD_FACE - 2, -(BOARD_PAD + BOARD_FACE - 2)),
-                             size=(BOARD_RANK, BOARD_RANK), rotation=-10, active=False))
-        image(rank.add(stretch(f"Row{i}_Rank_Icon")), "#ffffff", enabled=False, preserve_aspect=True)
+        rank = body.add(
+            Node(
+                f"Row{i}_Rank",
+                anchor_min=(0, 1),
+                anchor_max=(0, 1),
+                pivot=(0.5, 0.5),
+                position=(BOARD_PAD + BOARD_FACE - 2, -(BOARD_PAD + BOARD_FACE - 2)),
+                size=(BOARD_RANK, BOARD_RANK),
+                rotation=-10,
+                active=False,
+            )
+        )
+        image(
+            rank.add(stretch(f"Row{i}_Rank_Icon")),
+            "#ffffff",
+            enabled=False,
+            preserve_aspect=True,
+        )
 
-        text(body.add(wide(f"Row{i}_Name", BOARD_PAD + BOARD_FACE + 8, 0, columns + 60, BOARD_ROW_H)), "kieran",
-             size=13, colour=TEXT, bold=True)
-        text(body.add(top_right(f"Row{i}_Tag", columns + 4, 0, 56, BOARD_ROW_H, active=False)), "MVP",
-             size=9, colour=SELECTED_LABEL, halign=RIGHT, bold=True, spacing=8)
+        text(
+            body.add(
+                wide(
+                    f"Row{i}_Name",
+                    BOARD_PAD + BOARD_FACE + 8,
+                    0,
+                    columns + 60,
+                    BOARD_ROW_H,
+                )
+            ),
+            "kieran",
+            size=13,
+            colour=TEXT,
+            bold=True,
+        )
+        text(
+            body.add(
+                top_right(f"Row{i}_Tag", columns + 4, 0, 56, BOARD_ROW_H, active=False)
+            ),
+            "MVP",
+            size=9,
+            colour=SELECTED_LABEL,
+            halign=RIGHT,
+            bold=True,
+            spacing=8,
+        )
         for c, col in enumerate(BOARD_COLS):
-            text(body.add(top_right(f"Row{i}_{col}", board_col(c), 0, BOARD_COL_W, BOARD_ROW_H)), "0",
-                 size=13, colour=TEXT, halign=RIGHT)
-        text(body.add(top_right(f"Row{i}_Ping", 0, 0, BOARD_PING_W - BOARD_PING_GAP, BOARD_ROW_H)), "23 ms",
-             size=12, colour=SECONDARY)
+            text(
+                body.add(
+                    top_right(
+                        f"Row{i}_{col}", board_col(c), 0, BOARD_COL_W, BOARD_ROW_H
+                    )
+                ),
+                "0",
+                size=13,
+                colour=TEXT,
+                halign=RIGHT,
+            )
+        text(
+            body.add(
+                top_right(
+                    f"Row{i}_Ping", 0, 0, BOARD_PING_W - BOARD_PING_GAP, BOARD_ROW_H
+                )
+            ),
+            "23 ms",
+            size=12,
+            colour=SECONDARY,
+        )
 
     return root
 
@@ -1000,47 +1918,162 @@ def queue_screen():
     board = root.add(centered("Queue", 0, 30, board_w, go_y + QUEUE_GO_H + PANEL_PAD))
     image(board, PAGE, sprite=SPR["round8"])
 
-    text(board.add(top_left("Queue_Headline", PANEL_PAD, PANEL_PAD, board_w - 2 * PANEL_PAD, HEADLINE_H)),
-         "Find a match", size=20, colour=TEXT, bold=True)
-    text(board.add(top_right("Queue_Line", PANEL_PAD, PANEL_PAD + 4, 420, 20, active=False)), "",
-         size=12, colour=SECONDARY, halign=RIGHT)
+    text(
+        board.add(
+            top_left(
+                "Queue_Headline",
+                PANEL_PAD,
+                PANEL_PAD,
+                board_w - 2 * PANEL_PAD,
+                HEADLINE_H,
+            )
+        ),
+        "Find a match",
+        size=20,
+        colour=TEXT,
+        bold=True,
+    )
+    text(
+        board.add(
+            top_right("Queue_Line", PANEL_PAD, PANEL_PAD + 4, 420, 20, active=False)
+        ),
+        "",
+        size=12,
+        colour=SECONDARY,
+        halign=RIGHT,
+    )
 
     for i in range(QUEUE_MODES):
         x = PANEL_PAD + (i % cols) * (QUEUE_MODE_W + GAP)
         y = modes_y + (i // cols) * (QUEUE_MODE_H + GAP)
-        node = board.add(top_left(f"BoardMode{i}", x, y, QUEUE_MODE_W, QUEUE_MODE_H, active=False))
-        button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
+        node = board.add(
+            top_left(f"BoardMode{i}", x, y, QUEUE_MODE_W, QUEUE_MODE_H, active=False)
+        )
+        button(
+            node,
+            image(node, "#ffffff", sprite=SPR["round8"], raycast=True),
+            SUB,
+            SUB_HOVER,
+            SELECTED,
+        )
         on = node.add(stretch(f"Mode{i}_On", active=False))
         image(on, SELECTED, sprite=SPR["round8"])
-        text(on.add(top_right("Label", GAP, 8, 80, 16)), "Queueing", size=10, colour=SELECTED_LABEL, halign=RIGHT, bold=True)
-        text(node.add(top_left(f"Mode{i}_Name", 12, 10, QUEUE_MODE_W - 24, 20)), "Competitive", size=15, colour=TEXT, bold=True)
-        text(node.add(top_left(f"Mode{i}_Blurb", 12, 32, QUEUE_MODE_W - 24, 34)), "META, SNIPER  1v1",
-             size=11, colour=SECONDARY, valign=TOP, wrap=True)
+        text(
+            on.add(top_right("Label", GAP, 8, 80, 16)),
+            "Queueing",
+            size=10,
+            colour=SELECTED_LABEL,
+            halign=RIGHT,
+            bold=True,
+        )
+        text(
+            node.add(top_left(f"Mode{i}_Name", 12, 10, QUEUE_MODE_W - 24, 20)),
+            "Competitive",
+            size=15,
+            colour=TEXT,
+            bold=True,
+        )
+        text(
+            node.add(top_left(f"Mode{i}_Blurb", 12, 32, QUEUE_MODE_W - 24, 34)),
+            "META, SNIPER  1v1",
+            size=11,
+            colour=SECONDARY,
+            valign=TOP,
+            wrap=True,
+        )
 
     for i in range(QUEUE_REGIONS):
         x = PANEL_PAD + i * (QUEUE_REGION_W + GAP)
-        node = board.add(top_left(f"BoardRegion{i}", x, regions_y, QUEUE_REGION_W, QUEUE_REGION_H, active=False))
-        button(node, image(node, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
-        image(node.add(stretch(f"Region{i}_On", active=False)), SELECTED, sprite=SPR["round8"])
-        text(node.add(top_left(f"Region{i}_Name", 12, 0, QUEUE_REGION_W - 70, QUEUE_REGION_H)), "EU-West",
-             size=14, colour=TEXT, bold=True)
-        text(node.add(top_right(f"Region{i}_Ping", 12, 0, 56, QUEUE_REGION_H, active=False)), "24 ms",
-             size=12, colour=SECONDARY, halign=RIGHT)
+        node = board.add(
+            top_left(
+                f"BoardRegion{i}",
+                x,
+                regions_y,
+                QUEUE_REGION_W,
+                QUEUE_REGION_H,
+                active=False,
+            )
+        )
+        button(
+            node,
+            image(node, "#ffffff", sprite=SPR["round8"], raycast=True),
+            SUB,
+            SUB_HOVER,
+            SELECTED,
+        )
+        image(
+            node.add(stretch(f"Region{i}_On", active=False)),
+            SELECTED,
+            sprite=SPR["round8"],
+        )
+        text(
+            node.add(
+                top_left(f"Region{i}_Name", 12, 0, QUEUE_REGION_W - 70, QUEUE_REGION_H)
+            ),
+            "EU-West",
+            size=14,
+            colour=TEXT,
+            bold=True,
+        )
+        text(
+            node.add(
+                top_right(f"Region{i}_Ping", 12, 0, 56, QUEUE_REGION_H, active=False)
+            ),
+            "24 ms",
+            size=12,
+            colour=SECONDARY,
+            halign=RIGHT,
+        )
 
     go = board.add(top_left("BoardQueue", PANEL_PAD, go_y, QUEUE_GO_W, QUEUE_GO_H))
-    button(go, image(go, "#ffffff", sprite=SPR["round8"], raycast=True), TEXT, "#dddddd", "#bbbbbb")
-    text(go.add(stretch("Queue_Go")), "FIND MATCH", size=15, colour=PAGE, halign=CENTER, bold=True, spacing=6)
+    button(
+        go,
+        image(go, "#ffffff", sprite=SPR["round8"], raycast=True),
+        TEXT,
+        "#dddddd",
+        "#bbbbbb",
+    )
+    text(
+        go.add(stretch("Queue_Go")),
+        "FIND MATCH",
+        size=15,
+        colour=PAGE,
+        halign=CENTER,
+        bold=True,
+        spacing=6,
+    )
 
-    stay = board.add(top_left("BoardQueueNo", PANEL_PAD + QUEUE_GO_W + GAP, go_y, QUEUE_GO_W, QUEUE_GO_H))
-    button(stay, image(stay, "#ffffff", sprite=SPR["round8"], raycast=True), SUB, SUB_HOVER, SELECTED)
-    text(stay.add(stretch("Queue_No")), "Not now", size=14, colour=SECONDARY, halign=CENTER)
+    stay = board.add(
+        top_left(
+            "BoardQueueNo", PANEL_PAD + QUEUE_GO_W + GAP, go_y, QUEUE_GO_W, QUEUE_GO_H
+        )
+    )
+    button(
+        stay,
+        image(stay, "#ffffff", sprite=SPR["round8"], raycast=True),
+        SUB,
+        SUB_HOVER,
+        SELECTED,
+    )
+    text(
+        stay.add(stretch("Queue_No")),
+        "Not now",
+        size=14,
+        colour=SECONDARY,
+        halign=CENTER,
+    )
 
     # Baked rather than sent: the game only swaps `<plugin_0/>` for the key this
     # player actually has bound when it spawns the effect, so a hint the plugin sends
     # would name a key nobody pressed. This is also the one place the scoreboard's key
     # is ever said, which is why it is on the screen everybody is shown.
-    text(board.add(top_right("Queue_Hint", PANEL_PAD, go_y + 12, 320, 20)),
-         "Hold <plugin_0/> for the scoreboard", size=11, colour=SECONDARY, halign=RIGHT)
+    text(
+        board.add(top_right("Queue_Hint", PANEL_PAD, go_y + 12, 320, 20)),
+        "Hold <plugin_0/> for the scoreboard",
+        size=11,
+        colour=SECONDARY,
+        halign=RIGHT,
+    )
 
     return root
 
@@ -1064,12 +2097,25 @@ def tag():
     row(box, spacing=8, padding=12, control_width=True)
     fit_width(box)
 
-    text(box.add(top_left("Tag_Text", 0, 0, 0, 30)), "OFF BASE", size=12, colour=INK, bold=True, spacing=8)
+    text(
+        box.add(top_left("Tag_Text", 0, 0, 0, 30)),
+        "OFF BASE",
+        size=12,
+        colour=INK,
+        bold=True,
+        spacing=8,
+    )
     for k in range(3):
         pip = box.add(top_left(f"Tag_Pip{k}", 0, 0, PIP_W, PIP_H, active=False))
         image(pip, INK, sprite=SPR["round3"])
         layout_size(pip, PIP_W, PIP_H)
-    text(box.add(top_left("Tag_Hurt", 0, 0, 0, 30, active=False)), "-12 / s", size=12, colour=RED, bold=True)
+    text(
+        box.add(top_left("Tag_Hurt", 0, 0, 0, 30, active=False)),
+        "-12 / s",
+        size=12,
+        colour=RED,
+        bold=True,
+    )
 
     return root
 

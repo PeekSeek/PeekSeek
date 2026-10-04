@@ -1,0 +1,58 @@
+{#- The one way the site draws a player.
+
+    Every context passes what it knows and leaves out what it does not: a roster has no
+    rank line, a podium has a place, a table row has neither. Sizing is not an argument
+    -- the caller sets --card-avatar-size on whatever wrapper it already has, so a page changes the
+    card by one declaration in its own stylesheet rather than by a flag here.
+
+    `ring` is what the player has earned off the ladder (admin, premium, discord) and
+    only shows outside the top three, which take the ring for their place instead. -#}
+{% macro playerCard(user, rank=None, elo=None, place=None, ring=None, axis="row", sub=true, extra="") %}
+<a class="pc {{extra}}" href="/u/{{user.steam64}}" data-axis="{{axis}}"
+  {%- if rank %} data-rank="{{rank.icon}}"{% endif %}
+  {%- if place and place <= 3 %} data-place="{{place}}"{% elif ring %} data-ring="{{ring}}"{% endif %}>
+  <span class="crest">
+    <img class="av" src="{{user.avatar}}" alt="">
+    {%- if rank %}
+    <img class="badge" src="/static/ranks/{{rank.icon}}.svg" alt="" title="{{rank.name}}">
+    {%- endif %}
+  </span>
+  <span class="lines">
+    <span class="name">{% if place and place <= 3 %}<b class="place">#{{place}}</b> {% endif %}{{user.name}}</span>
+    {%- if sub and (rank or elo) %}
+    <span class="sub">
+      {%- if rank %}<span class="tier">{{rank.name}}</span>{% endif %}
+      {%- if rank and elo %} {% endif %}
+      {%- if elo %}{{elo}}ELO{% endif %}
+    </span>
+    {%- endif %}
+  </span>
+</a>
+{% endmacro %}
+
+{#- Where a player is between the badge they wear and the one above it.
+
+    The two ends are the badges themselves with their Elo under them, and the bar runs
+    behind both, so the eye travels from one badge to the other rather than reading a
+    sentence about the distance. Nothing here names the gap: the reader has both
+    numbers and can do the subtraction. -#}
+{% macro rankProgress(rank, world_position=None) %}
+{%- if rank.stands_on_position %}
+{# No bar and no badge here: above 800 the badge above is a seat rather than a
+   threshold, so what is left to climb is the list itself. Two numbers say it, and only
+   the numbers are bold -- ELO and # are there to label them, not to be read. #}
+<div class="rankStanding"><b>{{rank.elo}}</b>ELO{% if world_position %} #<b>{{world_position}}</b>{% endif %}</div>
+{%- else %}
+<div class="rankProgress" data-rank="{{rank.icon}}">
+  <img class="tick" src="/static/ranks/{{rank.icon}}.svg" alt="" title="{{rank.name}}">
+  <div class="rankBar"><i style="--held:{{rank.progress}}%"></i></div>
+  {% if rank.next_icon %}
+  <img class="tick" src="/static/ranks/{{rank.next_icon}}.svg" alt="" title="{{rank.next_name}}">
+  {% else %}<span></span>{% endif %}
+
+  <span class="mark">{{rank.elo}}</span>
+  <span></span>
+  {% if rank.next_floor %}<span class="mark">{{rank.next_floor}}</span>{% else %}<span></span>{% endif %}
+</div>
+{%- endif %}
+{% endmacro %}

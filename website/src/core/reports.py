@@ -26,7 +26,7 @@ def _percent(part: int, whole: int) -> str:
     return f"{part / whole * 100:.1f}%"
 
 
-def _statLines(stats: dict) -> str:
+def _stat_lines(stats: dict) -> str:
     """The numbers a moderator judges a report on, and nothing else.
 
     Accuracy and headshot share are the two that separate a cheat from a good player,
@@ -81,9 +81,9 @@ def _name(steam64) -> str:
     something is happening in a live server, and a blocking lookup that Steam is
     refusing would hold the whole thing up to add a name nobody needs.
     """
-    from src.core.db import open as opendb
+    from src.core.db import session
 
-    with opendb() as db:
+    with session() as db:
         user = db.query(data.User).where(data.User.steam64 == int(steam64)).first()
         stored = (user.steam_data or {}) if user else {}
     return stored.get("name") or str(steam64)
@@ -133,7 +133,7 @@ def send(
             },
             {"name": "By", "value": f"`{reporter}`\n{_name(reporter)}", "inline": True},
             {"name": "Where", "value": where, "inline": True},
-            {"name": "This round", "value": _statLines(stats), "inline": False},
+            {"name": "This round", "value": _stat_lines(stats), "inline": False},
         ],
     }
     if screenshot:

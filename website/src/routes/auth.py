@@ -10,10 +10,12 @@ from fastapi.responses import RedirectResponse
 
 from src.core.notify import DISCORD_TIMEOUT
 from src.core.settings import settings
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core import models as data
 
-router = APIRouter(prefix="/auth")
+# Browser redirects, not an API: nothing here answers JSON, so none of it belongs in
+# the schema.
+router = APIRouter(prefix="/auth", tags=["auth"], include_in_schema=False)
 
 STEAM_OPENID = "https://steamcommunity.com/openid/login"
 OPENID_NS = "http://specs.openid.net/auth/2.0"
@@ -90,7 +92,7 @@ def steam_callback(request: Request):
     # token stays valid no matter how many times its owner signs in, with /me/settings
     # the only way to ever revoke it. Signing in now revokes every older session by
     # itself, which is what signing in is expected to do.
-    with opendb() as db:
+    with session() as db:
         existing = db.query(data.User).where(data.User.steam64 == steam64).first()
         if existing:
             db.query(data.User).where(data.User.steam64 == steam64).update(
@@ -129,7 +131,7 @@ def discord(request: Request):
     )
 
 
-@router.get("/callback/discord/")
+@router.get("/callback/discord")
 def discord_callback(request: Request, code: str):
     """Finish a Discord link.
 
@@ -167,7 +169,7 @@ def discord_callback(request: Request, code: str):
         request.session["lastError"] = "Could not link your Discord account."
         return _back(request)
 
-    with opendb() as db:
+    with session() as db:
         db.query(data.User).where(data.User.uuid == request.session["uuid"]).update(
             {"discord": me.json()["id"]}
         )

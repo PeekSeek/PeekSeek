@@ -8,7 +8,7 @@
 }
 
 .sections .section {
-  background-color: #121212;
+  background-color: var(--surface);
   display: flex;
   flex-direction: column;
   border-radius: 5px;
@@ -25,13 +25,13 @@
   flex-direction: column;
   align-items: center;
 } #customgrid select {
-  background-color: #121212;
+  background-color: var(--surface);
   padding: 8px 10px;
   border-radius: 5px;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
 } #customTeamsList input {
-  background-color: #121212;
-  border: 1px solid #333;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   margin: 5px 0;
   outline: 0;
   padding: 10px 15px;

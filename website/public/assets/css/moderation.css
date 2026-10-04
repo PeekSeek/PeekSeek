@@ -20,8 +20,8 @@
     width: min(680px, calc(100% - 40px));
     max-height: 85vh;
     overflow-y: auto;
-    background: #121212;
-    border: 1px solid #333;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 24px;
     z-index: 41;
@@ -48,33 +48,33 @@
 .modHead { display: flex; gap: 12px; align-items: center; }
 .modHead img { width: 44px; height: 44px; border-radius: 8px; }
 .modName { font-size: 18px; font-weight: 700; }
-.modId { font-size: 12px; color: #8885; }
+.modId { font-size: 12px; color: var(--line); }
 
 .modClose {
     margin-left: auto;
     background: none;
     border: 0;
-    color: #aaa;
+    color: var(--text-dim);
     font-size: 22px;
     cursor: pointer;
     line-height: 1;
     padding: 4px 8px;
 }
-.modClose:hover { color: #fff; }
+.modClose:hover { color: var(--text); }
 
 .modBanner {
     background: #4411117f;
-    border-left: 3px solid #f04444;
+    border-left: 3px solid var(--brand);
     padding: 10px 12px;
     border-radius: 0 5px 5px 0;
     margin: 14px 0;
     font-size: 13px;
 }
-.modBanner .t { color: #f04444; font-weight: 700; margin-bottom: 3px; }
-.modBanner .s { color: #aaa; font-size: 12.5px; line-height: 1.5; }
+.modBanner .t { color: var(--brand); font-weight: 700; margin-bottom: 3px; }
+.modBanner .s { color: var(--text-dim); font-size: 12.5px; line-height: 1.5; }
 
 .modSection {
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border);
     margin-top: 16px;
     padding-top: 12px;
 }
@@ -83,7 +83,7 @@
     font-size: 11px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #8885;
+    color: var(--line);
     font-weight: 700;
 }
 
@@ -96,21 +96,21 @@
 }
 .modBan:last-child { border-bottom: 0; }
 .modBan.expired { opacity: 0.45; }
-.modBan .w { color: #8885; font-size: 11.5px; width: 66px; flex: none; padding-top: 2px; }
+.modBan .w { color: var(--line); font-size: 11.5px; width: 66px; flex: none; padding-top: 2px; }
 .modBan .r { font-weight: 600; }
-.modBan .n { color: #8885; font-size: 12px; line-height: 1.45; }
+.modBan .n { color: var(--line); font-size: 12px; line-height: 1.45; }
 .modBan button {
     margin-left: auto;
     align-self: flex-start;
-    background: #1a1a1a;
-    color: #aaa;
-    border: 1px solid #333;
+    background: var(--surface-raised);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
     border-radius: 4px;
     font-size: 11px;
     padding: 3px 8px;
     cursor: pointer;
 }
-.modBan button:hover { color: #fff; border-color: #666; }
+.modBan button:hover { color: var(--text); border-color: #666; }
 
 .modTiles {
     display: grid;
@@ -119,18 +119,18 @@
     margin: 10px 0 14px;
 }
 .modTile {
-    background: #1a1a1a;
+    background: var(--surface-raised);
     border-radius: 7px;
     padding: 10px 12px;
     cursor: pointer;
     user-select: none;
     outline: 3px solid transparent;
 }
-.modTile:hover { outline-color: #3334; }
-.modTile.sel { background: #3334; outline-color: #6a2b2b; }
+.modTile:hover { outline-color: var(--veil); }
+.modTile.sel { background: var(--veil); outline-color: #6a2b2b; }
 .modTile .n { font-weight: 600; font-size: 13.5px; }
-.modTile .d { font-size: 11px; color: #8885; margin-top: 2px; }
-.modTile.sel .d { color: #ffa34e; }
+.modTile .d { font-size: 11px; color: var(--line); margin-top: 2px; }
+.modTile.sel .d { color: var(--warn); }
 
 .modField { margin-bottom: 12px; }
 .modField label {
@@ -138,32 +138,32 @@
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #8885;
+    color: var(--line);
     margin-bottom: 5px;
 }
 .modField input,
 .modField textarea {
     width: 100%;
-    background: #1a1a1a;
-    border: 1px solid #333;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
     border-radius: 5px;
     padding: 8px 10px;
     font-size: 13px;
-    color: #fff;
+    color: var(--text);
     font-family: inherit;
 }
 .modField textarea { min-height: 60px; resize: vertical; }
 .modField input:focus-visible,
 .modField textarea:focus-visible,
 .modTile:focus-visible {
-    outline: 2px solid #47bbe9;
+    outline: 2px solid var(--info);
     outline-offset: 1px;
 }
 
 /* Shown as real text so an admin can see exactly what gets stored, rather than
    trusting that something is prepended out of sight. */
 .modPrefix {
-    color: #47bbe9;
+    color: var(--info);
     font-size: 12px;
     margin-bottom: 4px;
     word-break: break-all;
@@ -177,21 +177,21 @@
     margin: 14px 0;
     font-size: 12.5px;
     line-height: 1.6;
-    color: #aaa;
+    color: var(--text-dim);
 }
 .modConsequence .h {
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #ffa34e;
+    color: var(--warn);
     margin-bottom: 6px;
 }
-.modConsequence b { color: #fff; }
+.modConsequence b { color: var(--text); }
 
 .modConfirm {
     display: block;
     width: 100%;
-    background: #f04444;
+    background: var(--brand);
     color: #180505;
     border: 0;
     border-radius: 5px;
@@ -200,7 +200,7 @@
     font-size: 14px;
     cursor: pointer;
 }
-.modConfirm:disabled { background: #444; color: #888; cursor: not-allowed; }
+.modConfirm:disabled { background: #444; color: var(--border-strong); cursor: not-allowed; }
 
 /* Ban state on a player row. Nothing is drawn for a clean player: twenty players a
    card is a lot of surface to spend on a state almost nobody is in. */
@@ -213,8 +213,8 @@
     border-radius: 3px;
     flex: none;
 }
-.banChip.active { background: #4411117f; color: #f04444; }
-.banChip.prior { background: #643c177f; color: #ffa34e; }
+.banChip.active { background: #4411117f; color: var(--brand); }
+.banChip.prior { background: #643c177f; color: var(--warn); }
 
  /* Always visible. Revealing it on hover meant you had to already know it was there
    to find it, and made the row twitch as the pointer crossed it. The chip beside the
@@ -225,22 +225,22 @@
     width: 24px;
     height: 24px;
     border-radius: 5px;
-    border: 1px solid #333;
+    border: 1px solid var(--border);
     background: transparent;
-    color: #8885;
+    color: var(--line);
     font-size: 12px;
     line-height: 1;
     cursor: pointer;
 }
-.modOpen:focus-visible { outline: 2px solid #47bbe9; outline-offset: 1px; }
+.modOpen:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
 
 .adminSearch {
-    background: #1a1a1a;
-    border: 1px solid #333;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
     border-radius: 5px;
     padding: 6px 10px;
     font-size: 13px;
-    color: #fff;
+    color: var(--text);
     font-family: inherit;
     width: 260px;
 }

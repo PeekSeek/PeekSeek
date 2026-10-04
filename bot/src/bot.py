@@ -3,7 +3,7 @@
 It imports the website's own `src.core` rather than calling the site over HTTP. The
 concept for this proposed an admin API, on the grounds that a second implementation of
 "ban" would drift from the first. Importing the module is not a second implementation:
-it is the same `moderation.issueBan` the dashboard runs, so the two cannot disagree, and
+it is the same `moderation.issue_ban` the dashboard runs, so the two cannot disagree, and
 it costs no new authentication surface on a public endpoint. The bot is a separate
 container built from the same repo, so it ships the same code by construction.
 
@@ -13,20 +13,19 @@ Discord's `administrator` only hides the commands from the picker; it is not the
 
 import asyncio
 import logging
-import os
-import sys
 import traceback
 from time import time
 
 import discord
 from discord import app_commands
 
-sys.path.insert(0, os.environ.get("WEBSITE_SRC", "/app/website"))
-
-from src.core import moderation  # noqa: E402
-from src.core import models as data  # noqa: E402
-from src.core.db import open as opendb  # noqa: E402
-from src.core.settings import settings  # noqa: E402
+# The site's own code, installed as the peekseek-website package rather than reached for
+# with a sys.path insert. Same module the dashboard runs, so a ban issued here and a ban
+# issued there cannot disagree - see the comment above and website/pyproject.toml.
+from src.core import moderation
+from src.core import models as data
+from src.core.db import session
+from src.core.settings import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -50,23 +49,23 @@ class PeekSeekBot(discord.Client):
 bot = PeekSeekBot()
 
 
-def linkedAccount(discordId: int) -> data.User | None:
+def linked_account(discordId: int) -> data.User | None:
     """The PeekSeek account this Discord user has linked, if any."""
-    with opendb() as db:
+    with session() as db:
         user = db.query(data.User).where(data.User.discord == int(discordId)).first()
         if user is not None:
             db.expunge(user)
         return user
 
 
-async def requireAdmin(interaction: discord.Interaction) -> data.User | None:
+async def require_admin(interaction: discord.Interaction) -> data.User | None:
     """The caller's PeekSeek account if they are an admin, else None after replying.
 
     Answers rather than raising so every command has one shape: a caller who is not an
     admin is told why in a message only they can see, instead of getting Discord's
     generic interaction failure.
     """
-    user = linkedAccount(interaction.user.id)
+    user = linked_account(interaction.user.id)
     if user is None:
         await interaction.response.send_message(
             "Your Discord is not linked to a PeekSeek account. Link it at "
@@ -75,7 +74,7 @@ async def requireAdmin(interaction: discord.Interaction) -> data.User | None:
         )
         return None
 
-    if not user.getPermission("admin"):
+    if not user.get_permission("admin"):
         await interaction.response.send_message(
             "That command is for admins.", ephemeral=True
         )
@@ -84,7 +83,7 @@ async def requireAdmin(interaction: discord.Interaction) -> data.User | None:
     return user
 
 
-def resolveTarget(player: discord.User | None, steam64: str | None):
+def resolve_target(player: discord.User | None, steam64: str | None):
     """Who a command is about, as (steam64, error). Exactly one of the two is set.
 
     A Discord member is resolved through the account they linked. When they have not
@@ -100,7 +99,7 @@ def resolveTarget(player: discord.User | None, steam64: str | None):
     if player is None:
         return None, "Give me a player or a steam64."
 
-    user = linkedAccount(player.id)
+    user = linked_account(player.id)
     if user is None:
         return None, (
             f"{player.mention} has not linked a PeekSeek account, so I cannot tell "
@@ -109,14 +108,14 @@ def resolveTarget(player: discord.User | None, steam64: str | None):
     return user.steam64, None
 
 
-def displayName(steam64) -> str:
-    with opendb() as db:
+def display_name(steam64) -> str:
+    with session() as db:
         user = db.query(data.User).where(data.User.steam64 == int(steam64)).first()
         stored = (user.steam_data or {}) if user else {}
     return stored.get("name") or str(steam64)
 
 
-def cheatingPreviewEmbed(target, preview: dict) -> discord.Embed:
+def cheating_preview_embed(target, preview: dict) -> discord.Embed:
     """What a cheating ban would cost everyone else, before it costs them anything."""
     lines = "\n".join(
         f"`{r['elo']:+d}` <{settings.base_url}/u/{r['steam64']}>"
@@ -127,7 +126,7 @@ def cheatingPreviewEmbed(target, preview: dict) -> discord.Embed:
 
     stats = preview["stats"]
     embed = discord.Embed(
-        title=f"Confirm permanent ban: {displayName(target)}",
+        title=f"Confirm permanent ban: {display_name(target)}",
         url=f"{settings.base_url}/u/{target}",
         colour=RED,
         description=lines or "No matches to refund.",
@@ -155,7 +154,7 @@ class ConfirmBan(discord.ui.View):
     """The confirmation a cheating ban goes through, and nothing else does.
 
     A cheating ban voids matches and moves other people's Elo. That should never happen
-    on one keystroke, and the numbers on the button are the ones `previewBan` actually
+    on one keystroke, and the numbers on the button are the ones `preview_ban` actually
     computed rather than an estimate.
 
     Sixty seconds, then the buttons stop working: a live Ban button sitting in old
@@ -182,7 +181,7 @@ class ConfirmBan(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, _: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         summary = await asyncio.to_thread(
-            moderation.issueBan,
+            moderation.issue_ban,
             self.steam64,
             preset="cheating",
             note=self.note,
@@ -190,7 +189,7 @@ class ConfirmBan(discord.ui.View):
             bySteam64=self.bySteam64,
         )
         await interaction.followup.send(
-            f"**{displayName(self.steam64)}** is permanently banned. "
+            f"**{display_name(self.steam64)}** is permanently banned. "
             f"{summary['matches']} matches voided, {summary['players']} players "
             f"refunded {summary['eloReturned']:+d} Elo. The full list is in the mod log.",
             ephemeral=True,
@@ -236,16 +235,16 @@ async def ban(
     original spec. Discord cannot make one option's requirement depend on another's
     value, so a fully optional set of five fields has a lot of ways to be wrong. A
     required choice deletes the most likely of them before it can happen."""
-    admin = await requireAdmin(interaction)
+    admin = await require_admin(interaction)
     if admin is None:
         return
 
-    target, error = resolveTarget(player, steam64)
+    target, error = resolve_target(player, steam64)
     if error:
         await interaction.response.send_message(error, ephemeral=True)
         return
 
-    byName = displayName(admin.steam64)
+    byName = display_name(admin.steam64)
     preset = reason.value
 
     if preset == "custom":
@@ -262,7 +261,7 @@ async def ban(
             )
             return
 
-        summary = moderation.issueBan(
+        summary = moderation.issue_ban(
             target,
             days=days,
             reason=note[:100],
@@ -271,13 +270,13 @@ async def ban(
             bySteam64=admin.steam64,
         )
         await interaction.response.send_message(
-            f"**{displayName(target)}** is banned for {days} days.", ephemeral=True
+            f"**{display_name(target)}** is banned for {days} days.", ephemeral=True
         )
         logging.info("Custom ban on %s by %s: %s", target, byName, summary)
         return
 
     if preset != "cheating":
-        moderation.issueBan(
+        moderation.issue_ban(
             target,
             preset=preset,
             note=note,
@@ -286,7 +285,7 @@ async def ban(
         )
         length = moderation.PRESETS[preset]["summary"]
         await interaction.response.send_message(
-            f"**{displayName(target)}** is banned for {length.lower()} "
+            f"**{display_name(target)}** is banned for {length.lower()} "
             f"({moderation.PRESETS[preset]['label']}).",
             ephemeral=True,
         )
@@ -294,10 +293,10 @@ async def ban(
 
     # Cheating: show what it would do before doing any of it.
     await interaction.response.defer(ephemeral=True)
-    preview = await asyncio.to_thread(moderation.previewBan, target)
+    preview = await asyncio.to_thread(moderation.preview_ban, target)
 
     await interaction.followup.send(
-        embed=cheatingPreviewEmbed(target, preview),
+        embed=cheating_preview_embed(target, preview),
         view=ConfirmBan(interaction.user.id, target, note, byName, admin.steam64),
         ephemeral=True,
     )
@@ -309,10 +308,10 @@ async def ban(
 async def stop(interaction: discord.Interaction, matchid: int):
     """Nobody's Elo moves and the match's players are freed, exactly as the dashboard's
     Force stop does."""
-    if await requireAdmin(interaction) is None:
+    if await require_admin(interaction) is None:
         return
 
-    with opendb() as db:
+    with session() as db:
         match = db.query(data.Match).where(data.Match.id == matchid).first()
         if match is None:
             await interaction.response.send_message(
@@ -326,14 +325,14 @@ async def stop(interaction: discord.Interaction, matchid: int):
             return
         db.query(data.Match).where(data.Match.id == matchid).update({"finished": True})
 
-    data.MatchResult.recordUnscored(matchid, "abandoned")
+    data.MatchResult.record_unscored(matchid, "abandoned")
     await interaction.response.send_message(
         f"Match {matchid} stopped. Nobody's Elo moved and its players are free.",
         ephemeral=True,
     )
 
 
-def profileLinks(target) -> discord.ui.View:
+def profile_links(target) -> discord.ui.View:
     """Their PeekSeek profile and their Steam profile, as link buttons.
 
     Link buttons need no interaction handling, so these keep working whatever state
@@ -358,7 +357,7 @@ def profileLinks(target) -> discord.ui.View:
     return view
 
 
-def inPeekSeek(interaction: discord.Interaction) -> bool:
+def in_peek_seek(interaction: discord.Interaction) -> bool:
     """Whether this command was run in PeekSeek's own server.
 
     A record shown there is worth showing to the channel: it is already public on the
@@ -372,7 +371,7 @@ def inPeekSeek(interaction: discord.Interaction) -> bool:
     )
 
 
-def rankColour(rank) -> int:
+def rank_colour(rank) -> int:
     """The colour of the Discord role this badge grants.
 
     Read off the role rather than kept beside the tier, so the embed is whatever colour
@@ -392,21 +391,21 @@ def rankColour(rank) -> int:
     return role.colour.value if role and role.colour.value else GREY
 
 
-async def sendStats(interaction: discord.Interaction, target, seasonId=None) -> None:
+async def send_stats(interaction: discord.Interaction, target, seasonId=None) -> None:
     """One player's record for one season. Deliberately says nothing about bans: that
     belongs to /unban, which is the command that acts on them.
 
-    No season means the one being played. `forSeason` is what makes those the same
+    No season means the one being played. `for_season` is what makes those the same
     call: the season being played is read off the live standing, and a finished one out
     of its archive, so nothing here has to know which of the two it is holding.
     """
     season = data.Season.find(seasonId) or data.Season.current()
-    record = data.Stat.forSeason(int(target), season.id)
+    record = data.Stat.for_season(int(target), season.id)
 
     embed = discord.Embed(
-        title=displayName(target),
+        title=display_name(target),
         url=f"{settings.base_url}/u/{target}",
-        colour=rankColour(record.rank) if record else GREY,
+        colour=rank_colour(record.rank) if record else GREY,
     )
     # The season names itself above the title, because the footer is the steam64's and
     # an embed that does not say which season it is answering for is worse than one
@@ -428,7 +427,7 @@ async def sendStats(interaction: discord.Interaction, target, seasonId=None) -> 
         embed.add_field(name="Kills", value=str(record.kills), inline=True)
         embed.add_field(name="Deaths", value=str(record.deaths), inline=True)
         embed.add_field(
-            name="Headshots", value=f"{record.headshotPercent}%", inline=True
+            name="Headshots", value=f"{record.headshot_percent}%", inline=True
         )
     else:
         embed.add_field(
@@ -436,11 +435,11 @@ async def sendStats(interaction: discord.Interaction, target, seasonId=None) -> 
         )
 
     await interaction.response.send_message(
-        embed=embed, view=profileLinks(target), ephemeral=not inPeekSeek(interaction)
+        embed=embed, view=profile_links(target), ephemeral=not in_peek_seek(interaction)
     )
 
 
-async def seasonOptions(
+async def season_options(
     interaction: discord.Interaction, current: str
 ) -> list[app_commands.Choice[int]]:
     """The season picker. Autocomplete rather than a fixed list of choices because
@@ -460,7 +459,7 @@ async def seasonOptions(
     steam64="Or their steam64.",
     season="Which season. Defaults to the one being played.",
 )
-@app_commands.autocomplete(season=seasonOptions)
+@app_commands.autocomplete(season=season_options)
 async def stats(
     interaction: discord.Interaction,
     player: discord.User | None = None,
@@ -470,7 +469,7 @@ async def stats(
     """Open to everyone. A player's Elo and K/D are already public on their profile,
     so gating the command that reads them out would only make it less useful."""
     if player is None and steam64 is None:
-        caller = linkedAccount(interaction.user.id)
+        caller = linked_account(interaction.user.id)
         if caller is None:
             await interaction.response.send_message(
                 "Your Discord is not linked to a PeekSeek account, so I do not know "
@@ -480,12 +479,12 @@ async def stats(
             return
         target = caller.steam64
     else:
-        target, error = resolveTarget(player, steam64)
+        target, error = resolve_target(player, steam64)
         if error:
             await interaction.response.send_message(error, ephemeral=True)
             return
 
-    await sendStats(interaction, target, season)
+    await send_stats(interaction, target, season)
 
 
 class BanSelect(discord.ui.Select):
@@ -527,7 +526,7 @@ class BanSelect(discord.ui.Select):
         banId = int(self.values[0])
 
         lifted = await asyncio.to_thread(
-            moderation.overturnBan, banId, self.byName, self.bySteam64
+            moderation.overturn_ban, banId, self.byName, self.bySteam64
         )
         if lifted is None:
             await interaction.followup.send(
@@ -537,7 +536,7 @@ class BanSelect(discord.ui.Select):
 
         await interaction.followup.send(
             f"Lifted the **{lifted['reason']}** ban on "
-            f"**{displayName(lifted['steam64'])}**. The record is kept and now says you "
+            f"**{display_name(lifted['steam64'])}**. The record is kept and now says you "
             "lifted it.",
             ephemeral=True,
         )
@@ -579,21 +578,21 @@ class PickBanToOverturn(discord.ui.View):
             await interaction.response.send_message(message, ephemeral=True)
 
 
-async def sendUnban(interaction: discord.Interaction, admin, target) -> None:
-    history = data.UserBan.historyFor(target)
+async def send_unban(interaction: discord.Interaction, admin, target) -> None:
+    history = data.UserBan.history_for(target)
     if not history:
         await interaction.response.send_message(
-            f"**{displayName(target)}** has never been banned.", ephemeral=True
+            f"**{display_name(target)}** has never been banned.", ephemeral=True
         )
         return
 
-    active = data.UserBan.activeFor(target)
+    active = data.UserBan.active_for(target)
     embed = discord.Embed(
-        title=f"Bans on {displayName(target)}",
+        title=f"Bans on {display_name(target)}",
         url=f"{settings.base_url}/u/{target}",
         colour=RED if active else GREY,
         description=(
-            f"Currently banned: **{active.reason}** until {active.expiryLabel}."
+            f"Currently banned: **{active.reason}** until {active.expiry_label}."
             if active
             else "They are not currently banned; these are all expired or already lifted."
         ),
@@ -602,7 +601,7 @@ async def sendUnban(interaction: discord.Interaction, admin, target) -> None:
     await interaction.response.send_message(
         embed=embed,
         view=PickBanToOverturn(
-            interaction.user.id, history, displayName(admin.steam64), admin.steam64
+            interaction.user.id, history, display_name(admin.steam64), admin.steam64
         ),
         ephemeral=True,
     )
@@ -618,16 +617,16 @@ async def unban(
     player: discord.User | None = None,
     steam64: str | None = None,
 ):
-    admin = await requireAdmin(interaction)
+    admin = await require_admin(interaction)
     if admin is None:
         return
 
-    target, error = resolveTarget(player, steam64)
+    target, error = resolve_target(player, steam64)
     if error:
         await interaction.response.send_message(error, ephemeral=True)
         return
 
-    await sendUnban(interaction, admin, target)
+    await send_unban(interaction, admin, target)
 
 
 # ---------------------------------------------------------------------------
@@ -678,7 +677,7 @@ class BanNote(discord.ui.Modal):
             self.add_item(self.reason)
 
     async def on_submit(self, interaction: discord.Interaction):
-        byName = displayName(self.admin.steam64)
+        byName = display_name(self.admin.steam64)
 
         if self.preset == "custom":
             if not str(self.days).strip().isdigit():
@@ -687,7 +686,7 @@ class BanNote(discord.ui.Modal):
                 )
                 return
             await asyncio.to_thread(
-                moderation.issueBan,
+                moderation.issue_ban,
                 self.target,
                 None,
                 int(str(self.days)),
@@ -697,14 +696,14 @@ class BanNote(discord.ui.Modal):
                 self.admin.steam64,
             )
             await interaction.response.send_message(
-                f"**{displayName(self.target)}** is banned for {self.days} days.",
+                f"**{display_name(self.target)}** is banned for {self.days} days.",
                 ephemeral=True,
             )
             return
 
         if self.preset != "cheating":
             await asyncio.to_thread(
-                moderation.issueBan,
+                moderation.issue_ban,
                 self.target,
                 self.preset,
                 None,
@@ -715,16 +714,16 @@ class BanNote(discord.ui.Modal):
             )
             length = moderation.PRESETS[self.preset]["summary"].lower()
             await interaction.response.send_message(
-                f"**{displayName(self.target)}** is banned for {length}.",
+                f"**{display_name(self.target)}** is banned for {length}.",
                 ephemeral=True,
             )
             return
 
         # Cheating shows what it would do before doing any of it, exactly as /ban does.
         await interaction.response.defer(ephemeral=True)
-        preview = await asyncio.to_thread(moderation.previewBan, self.target)
+        preview = await asyncio.to_thread(moderation.preview_ban, self.target)
         await interaction.followup.send(
-            embed=cheatingPreviewEmbed(self.target, preview),
+            embed=cheating_preview_embed(self.target, preview),
             view=ConfirmBan(
                 interaction.user.id,
                 self.target,
@@ -783,29 +782,29 @@ class PickPreset(discord.ui.View):
 
 
 @bot.tree.context_menu(name="PeekSeek stats")
-async def statsContext(interaction: discord.Interaction, member: discord.Member):
+async def stats_context(interaction: discord.Interaction, member: discord.Member):
     """Open to everyone, same as /stats."""
-    target, error = resolveTarget(member, None)
+    target, error = resolve_target(member, None)
     if error:
         await interaction.response.send_message(error, ephemeral=True)
         return
-    await sendStats(interaction, target)
+    await send_stats(interaction, target)
 
 
 @bot.tree.context_menu(name="Ban from PeekSeek")
 @app_commands.default_permissions(administrator=True)
-async def banContext(interaction: discord.Interaction, member: discord.Member):
-    admin = await requireAdmin(interaction)
+async def ban_context(interaction: discord.Interaction, member: discord.Member):
+    admin = await require_admin(interaction)
     if admin is None:
         return
 
-    target, error = resolveTarget(member, None)
+    target, error = resolve_target(member, None)
     if error:
         await interaction.response.send_message(error, ephemeral=True)
         return
 
     await interaction.response.send_message(
-        f"Banning **{displayName(target)}** (`{target}`).",
+        f"Banning **{display_name(target)}** (`{target}`).",
         view=PickPreset(interaction.user.id, target, admin),
         ephemeral=True,
     )
@@ -813,21 +812,21 @@ async def banContext(interaction: discord.Interaction, member: discord.Member):
 
 @bot.tree.context_menu(name="Lift PeekSeek ban")
 @app_commands.default_permissions(administrator=True)
-async def unbanContext(interaction: discord.Interaction, member: discord.Member):
-    admin = await requireAdmin(interaction)
+async def unban_context(interaction: discord.Interaction, member: discord.Member):
+    admin = await require_admin(interaction)
     if admin is None:
         return
 
-    target, error = resolveTarget(member, None)
+    target, error = resolve_target(member, None)
     if error:
         await interaction.response.send_message(error, ephemeral=True)
         return
 
-    await sendUnban(interaction, admin, target)
+    await send_unban(interaction, admin, target)
 
 
 @bot.tree.error
-async def onCommandError(interaction: discord.Interaction, error: Exception):
+async def on_command_error(interaction: discord.Interaction, error: Exception):
     """A command that raises must still say something.
 
     Without this an unhandled error leaves the admin looking at Discord's "the
@@ -873,7 +872,7 @@ EMOJI = {
 }
 
 
-def stickyEmbed() -> discord.Embed:
+def sticky_embed() -> discord.Embed:
     """Four questions, four answers, in the order somebody gets to them.
 
     Written for a reader who is angry, scanning, and may well be twelve. Each block is
@@ -938,7 +937,7 @@ def stickyEmbed() -> discord.Embed:
     return embed
 
 
-def stickyLinks() -> discord.ui.View:
+def sticky_links() -> discord.ui.View:
     """The three documents somebody argues about, one click away.
 
     Link buttons, so they keep working whatever state the bot is in, and so the rules
@@ -962,7 +961,7 @@ def stickyLinks() -> discord.ui.View:
     return view
 
 
-async def clearOldStickies(channel, keep: int | None = None) -> None:
+async def clear_old_stickies(channel, keep: int | None = None) -> None:
     """Delete every sticky this bot has left in the channel except the one to keep.
 
     A remembered message id was not enough. It lives in memory, so a restart forgets it
@@ -984,7 +983,7 @@ async def clearOldStickies(channel, keep: int | None = None) -> None:
             pass
 
 
-async def postSticky(channel) -> None:
+async def post_sticky(channel) -> None:
     """Post the notice, then remove every older copy.
 
     In that order on purpose: sweeping first would leave the channel with no notice for
@@ -993,9 +992,9 @@ async def postSticky(channel) -> None:
     """
     global stickyId
 
-    posted = await channel.send(embed=stickyEmbed(), view=stickyLinks())
+    posted = await channel.send(embed=sticky_embed(), view=sticky_links())
     stickyId = posted.id
-    await clearOldStickies(channel, keep=posted.id)
+    await clear_old_stickies(channel, keep=posted.id)
 
 
 @bot.event
@@ -1029,7 +1028,7 @@ async def on_message(message: discord.Message):
         await asyncio.sleep(STICKY_SETTLE)
         async with stickyLock:
             stickyPending = False
-            await postSticky(message.channel)
+            await post_sticky(message.channel)
     except discord.HTTPException as error:
         stickyPending = False
         logging.warning("Could not move the sticky: %s", error)
@@ -1044,7 +1043,7 @@ async def on_message(message: discord.Message):
 PRESENCE_INTERVAL = 60
 
 
-async def keepPresenceCurrent() -> None:
+async def keep_presence_current() -> None:
     """Keep the status showing what the sidebar counter shows.
 
     Deliberately the same sentence, from the same function. Two places saying how many
@@ -1067,7 +1066,7 @@ async def keepPresenceCurrent() -> None:
         try:
             name = await asyncio.to_thread(
                 lambda: _counter_name(
-                    data.LobbyPopulation.playingNow(), data.UserHB.countAllFresh()
+                    data.LobbyPopulation.playing_now(), data.UserHB.count_all_fresh()
                 )
             )
             if name != last:
@@ -1088,7 +1087,7 @@ WEEKLY_DAY = 0
 WEEKLY_HOUR = 15
 
 
-def weekOf(steam64) -> dict:
+def week_of(steam64) -> dict:
     """One player's last seven days, from their own match records.
 
     Read from MatchResults rather than Stats, because Stats is a running total and
@@ -1101,7 +1100,7 @@ def weekOf(steam64) -> dict:
     key = str(steam64)
     week = {"played": 0, "elo": 0, "kills": 0, "deaths": 0, "wins": 0}
 
-    for row in data.MatchResult.latestFor(steam64, limit=100):
+    for row in data.MatchResult.latest_for(steam64, limit=100):
         ended = row.endTime
         if ended.tzinfo is None:
             ended = ended.replace(tzinfo=timezone.utc)
@@ -1118,9 +1117,9 @@ def weekOf(steam64) -> dict:
     return week
 
 
-def leaderboardEmbed() -> discord.Embed:
+def leaderboard_embed() -> discord.Embed:
     lines = []
-    for place, row in enumerate(data.Stat.getTop10(), start=1):
+    for place, row in enumerate(data.Stat.get_top10(), start=1):
         name = getattr(row.u, "name", None) or "Nameless"
         lines.append(
             "`" + str(place).rjust(2) + ".` **" + name + "** " + str(row.elo) + " Elo"
@@ -1134,7 +1133,7 @@ def leaderboardEmbed() -> discord.Embed:
     )
 
 
-async def postWeekly() -> None:
+async def post_weekly() -> None:
     """The leaderboard to the channel, then everyone's own week to them.
 
     The recap goes only to people who played. A DM telling somebody they played nothing
@@ -1146,9 +1145,9 @@ async def postWeekly() -> None:
     if settings.sticky_channel:
         channel = bot.get_channel(int(settings.sticky_channel))
         if channel is not None:
-            await channel.send(embed=leaderboardEmbed())
+            await channel.send(embed=leaderboard_embed())
 
-    with opendb() as db:
+    with session() as db:
         linked = [
             (u.steam64, u.discord)
             for u in db.query(data.User).where(data.User.discord.isnot(None)).all()
@@ -1156,7 +1155,7 @@ async def postWeekly() -> None:
 
     sent = 0
     for steam64, discordId in linked:
-        week = await asyncio.to_thread(weekOf, steam64)
+        week = await asyncio.to_thread(week_of, steam64)
         if not week["played"]:
             continue
 
@@ -1185,7 +1184,7 @@ async def postWeekly() -> None:
     logging.info("Weekly: leaderboard posted, %s recaps sent", sent)
 
 
-async def keepWeeklyPost() -> None:
+async def keep_weekly_post() -> None:
     """Wait for Monday, post, then wait for the next one.
 
     Checks the clock rather than sleeping a week, so a restart on Sunday does not push
@@ -1203,7 +1202,7 @@ async def keepWeeklyPost() -> None:
 
         if now.weekday() == WEEKLY_DAY and now.hour == WEEKLY_HOUR and posted != week:
             try:
-                await postWeekly()
+                await post_weekly()
                 posted = week
             except Exception as error:
                 logging.warning("Weekly post failed: %s", error)
@@ -1224,9 +1223,9 @@ async def on_ready():
     # on_ready fires again after a reconnect, and a second copy of this loop would
     # fight the first over what the status says.
     if presenceTask is None or presenceTask.done():
-        presenceTask = asyncio.create_task(keepPresenceCurrent())
+        presenceTask = asyncio.create_task(keep_presence_current())
     if weeklyTask is None or weeklyTask.done():
-        weeklyTask = asyncio.create_task(keepWeeklyPost())
+        weeklyTask = asyncio.create_task(keep_weekly_post())
 
     if not settings.sticky_channel:
         return
@@ -1236,7 +1235,7 @@ async def on_ready():
         return
 
     async with stickyLock:
-        await postSticky(channel)
+        await post_sticky(channel)
 
 
 if __name__ == "__main__":

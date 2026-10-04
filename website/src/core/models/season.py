@@ -41,14 +41,14 @@ class Season(SQLModel, table=True):
         standing that predates seasons under it -- so nobody is treated as owing a
         refresher match for a season that was invented underneath them.
         """
-        from src.core.db import open
+        from src.core.db import session
         from .stat import Stat
 
         held = _current.get("season")
         if held is not None:
             return held
 
-        with open() as db:
+        with session() as db:
             season = db.query(Season).order_by(desc(Season.id)).first()
             if season:
                 _current["season"] = season
@@ -64,19 +64,19 @@ class Season(SQLModel, table=True):
     @staticmethod
     def all() -> list["Season"]:
         """Every season, newest first — the order a dropdown wants them in."""
-        from src.core.db import open
+        from src.core.db import session
 
         Season.current()
-        with open() as db:
+        with session() as db:
             return db.query(Season).order_by(desc(Season.id)).all()
 
     @staticmethod
     def find(seasonId) -> "Season | None":
-        from src.core.db import open
+        from src.core.db import session
 
         if seasonId is None:
             return None
-        with open() as db:
+        with session() as db:
             return db.query(Season).where(Season.id == int(seasonId)).first()
 
     @staticmethod
@@ -91,7 +91,7 @@ class Season(SQLModel, table=True):
         them across. Until then they are simply not in the new season's standings,
         which is true -- they have not played in it.
         """
-        from src.core.db import open
+        from src.core.db import session
         from .stat import SeasonStat, Stat
 
         ending = Season.current()
@@ -101,7 +101,7 @@ class Season(SQLModel, table=True):
         if label.lower().startswith("season "):
             label = label[len("season ") :].strip()
 
-        with open() as db:
+        with session() as db:
             # Names are unique, and "26Q3" typed twice is a likelier mistake than a
             # deliberate one. Caught here so the caller gets a sentence rather than an
             # IntegrityError surfacing as a 500 halfway through the archive.
@@ -127,9 +127,9 @@ class Season(SQLModel, table=True):
         first season has no start, because everything the ladder recorded before seasons
         existed happened during it.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             earlier = (
                 db.query(Season).where(Season.id < self.id).order_by(Season.id).first()
             )
@@ -152,7 +152,7 @@ class Season(SQLModel, table=True):
         return end is None or when < end
 
     @staticmethod
-    def carryOver(elo: int) -> int:
+    def carry_over(elo: int) -> int:
         """The Elo a player starts a new season on, given what they finished the last
         one with.
 

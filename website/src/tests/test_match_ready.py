@@ -11,7 +11,7 @@ from src.core import models as data
 from src.core.db import engine
 
 
-def liveMatch(players: list, claimed="85568392936415589") -> data.Match:
+def live_match(players: list, claimed="85568392936415589") -> data.Match:
     from time import time
 
     with Session(engine) as session:
@@ -43,10 +43,10 @@ def test_everyone_on_the_match_is_told(user_factory, monkeypatch):
 
     a = user_factory(discord=111)
     b = user_factory(discord=222)
-    match = liveMatch([a.steam64, b.steam64])
+    match = live_match([a.steam64, b.steam64])
 
     sent.clear()
-    match._tellPlayersToJoin()
+    match._tell_players_to_join()
 
     assert len(sent) == 2
     assert {s[0] for s in sent} == {111, 222}
@@ -63,10 +63,10 @@ def test_the_dm_carries_a_button_that_joins_the_server(user_factory, monkeypatch
 
     player = user_factory(discord=333)
     other = user_factory()
-    match = liveMatch([player.steam64, other.steam64], claimed="12345")
+    match = live_match([player.steam64, other.steam64], claimed="12345")
 
     sent.clear()
-    match._tellPlayersToJoin()
+    match._tell_players_to_join()
 
     button = sent[0]["components"][0]["components"][0]
     assert button["style"] == 5
@@ -84,10 +84,10 @@ def test_nothing_is_sent_before_there_is_anywhere_to_go(user_factory, monkeypatc
 
     a = user_factory(discord=444)
     b = user_factory(discord=555)
-    match = liveMatch([a.steam64, b.steam64], claimed="0")
+    match = live_match([a.steam64, b.steam64], claimed="0")
 
     sent.clear()
-    match._tellPlayersToJoin()
+    match._tell_players_to_join()
 
     assert sent == []
 
@@ -100,11 +100,11 @@ def test_discord_being_down_does_not_stop_the_match(user_factory, monkeypatch):
 
     a = user_factory(discord=666)
     b = user_factory(discord=777)
-    match = liveMatch([a.steam64, b.steam64])
+    match = live_match([a.steam64, b.steam64])
 
     # Patched only now, so building the match above is not what raises.
     monkeypatch.setattr("src.core.notify.send_discord_dm", explode)
-    match._tellPlayersToJoin()
+    match._tell_players_to_join()
 
 
 def test_unlinked_players_are_simply_skipped(user_factory, monkeypatch):
@@ -116,9 +116,9 @@ def test_unlinked_players_are_simply_skipped(user_factory, monkeypatch):
 
     linked = user_factory(discord=888)
     unlinked = user_factory()
-    match = liveMatch([linked.steam64, unlinked.steam64])
+    match = live_match([linked.steam64, unlinked.steam64])
 
     sent.clear()
-    match._tellPlayersToJoin()
+    match._tell_players_to_join()
 
     assert sent == [888]

@@ -34,19 +34,28 @@ These docs are for three kinds of people:
 
 ## The pieces
 
-Four deployables, one repository. They share it because the site and the plugins are two
-halves of one contract, and a change to both belongs in one commit.
+One repository, because the site and the plugins are two halves of one contract and a
+change to both belongs in one commit.
 
-| Component | What it is | Language |
-|---|---|---|
-| [`website/`](https://github.com/PeekSeek/PeekSeek/tree/main/website) | The whole site and API: pages, the JSON its own scripts call, and the `/server/v1/*` API game servers run on | FastAPI, Python 3.12 |
-| [`plugins/peekseek/`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek) | Runs matches on a game server: match state, lifecycle, ping-based damage scaling | C#, net48 |
-| [`plugins/peekseek-lobby/`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek-lobby) | Runs the waiting arena: queueing from in-game, kits, AFK handling | C#, net48 |
-| [`plugins/utelemetry/`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/utelemetry) | PvP telemetry beyond kill counts | C#, net48 |
-| [`plugins/peekseek-armor-skin/`](https://github.com/PeekSeek/PeekSeek/tree/main/plugins/peekseek-armor-skin) | Gives every player one of four skin colours and a full military set's damage resistance, whatever they wear | C#, net48 |
+**The [repository README](https://github.com/PeekSeek/PeekSeek#readme) lists every
+component, what it is, and whether it is maintained.** That table lives there and only
+there — this page used to carry a copy of it, which said "four deployables", listed five,
+and had never heard of two of the gamemodes.
 
-The RocketMod plugins are the only Unturned-specific code in the system. The website
-never imports anything that knows what Unturned is.
+What is worth knowing from here is the shape rather than the inventory:
+
+- **The website is the backend.** It holds the queue, the matches, the ratings and the
+  moderation state, and it is the only thing with a database.
+- **The plugins are clients of it.** Each one polls `/server/v1/*` and does what it is
+  told; none of them talks to another, and none of them has state worth keeping.
+- **Gamemodes plug into one plugin.** ARENA and RAID are gamemodes for PeekSeek Match,
+  loaded beside it, not servers of their own.
+- **The Discord bot imports the site's own code** rather than calling it over HTTP, so a
+  ban issued in Discord and a ban issued on the dashboard are the same function.
+
+The RocketMod plugins are the only Unturned-specific code in the system. The website never
+imports anything that knows what Unturned is, which is the thing that makes
+[forking it for another game](/docs/forking/) possible at all.
 
 ---
 
@@ -66,8 +75,16 @@ is no scheduler, no broker, and no window where a match exists with nowhere to p
 
 ## Licence
 
-MIT, per [LICENSE](https://github.com/PeekSeek/PeekSeek/blob/main/website/LICENSE). Fork
-it, run it, sell it. Attribution is welcome and not required.
+MIT, per [LICENSE](https://github.com/PeekSeek/PeekSeek/blob/main/LICENSE). Fork it, run
+it, sell it. Attribution is welcome and not required.
+
+One exception, and it is a real one: `plugins/utelemetry/` is under
+[PolyForm Noncommercial 1.0.0](https://github.com/PeekSeek/PeekSeek/blob/main/plugins/utelemetry/LICENSE),
+which forbids commercial use. Selling a distribution that includes it breaches those
+terms. It is an optional telemetry plugin nothing else depends on, so a commercial fork
+drops the directory and the rest is MIT.
+[NOTICE](https://github.com/PeekSeek/PeekSeek/blob/main/NOTICE) lists that and the
+third-party fonts and assemblies.
 
 ---
 

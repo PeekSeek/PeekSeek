@@ -38,6 +38,11 @@ class Settings:
         self.domain: str = os.environ.get("DOMAIN") or toml["app"]["domain"]
         self.protocol: str = os.environ.get("PROTOCOL") or toml["app"]["protocol"]
         self.build: str = os.environ.get("BUILD") or toml["app"]["build"]
+        # Empty on every fork and every staging environment, which is the point: the
+        # tag is only rendered when somebody has set their own measurement ID.
+        self.analytics_id: str = os.environ.get("ANALYTICS_ID") or toml["app"].get(
+            "analytics_id", ""
+        )
 
         self.permissions: list[str] = list(toml["permissions"]["list"])
         self.region_names: dict[str, str] = dict(toml["regions"]["names"])

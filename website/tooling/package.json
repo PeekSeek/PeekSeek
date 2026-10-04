@@ -1,0 +1,16 @@
+{
+  "name": "peekseek-web-tooling",
+  "private": true,
+  "description": "Linting for the site's hand-written JS and CSS. Separate from docs/ so the website image never installs Node.",
+  "scripts": {
+    "lint": "npm run lint:css && npm run lint:js",
+    "lint:css": "stylelint \"../public/assets/css/*.css\"",
+    "lint:js": "prettier --check ../public/assets/js --ignore-path ../.prettierignore",
+    "format": "prettier --write ../public/assets/js --ignore-path ../.prettierignore"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "stylelint": "16.25.0",
+    "stylelint-config-standard": "39.0.1"
+  }
+}

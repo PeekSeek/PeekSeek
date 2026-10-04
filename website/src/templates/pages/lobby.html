@@ -15,7 +15,7 @@
      tojson rather than the bare string, for the same reason the overlay quotes its
      ids: it emits a real JS string literal instead of trusting a config value to
      survive being pasted into source. */
-  window.location.href = {{ connectUrl | tojson }};
+  window.location.href = {{ connect_url | tojson }};
 </script>
 {% endblock %}
 
@@ -30,10 +30,10 @@
 </div>
 
 <div class="mainElement spaced">
-  <button type="button" class="settingsButton" onclick="window.location.href = '{{ connectUrl }}'">
+  <button type="button" class="settingsButton" onclick="window.location.href = '{{ connect_url }}'">
     <img src="/static/img/spectate.png" alt="" height="20">Open Unturned
   </button>
-  <span>Server code <b class="bigger">{{ connectCode }}</b></span>
+  <span>Server code <b class="bigger">{{ connect_code }}</b></span>
 </div>
 
 {% endblock %}

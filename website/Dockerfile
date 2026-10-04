@@ -13,8 +13,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
 
-COPY website/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# The lock, not requirements.txt: every version pinned and hash-checked, so two builds
+# of the same commit install the same packages and nothing can be substituted in flight.
+COPY website/requirements.txt website/requirements.lock ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY website/src ./src
 COPY website/public ./public
@@ -46,8 +48,13 @@ COPY --from=docs /docs/dist ./docs
 # uninstalled in the same layer so they never reach the running container.
 COPY website/minify.py .
 RUN pip install --no-cache-dir csscompressor rjsmin \
-    && python minify.py \
+    && python minify.py --in-place \
     && pip uninstall -y csscompressor rjsmin
+
+# Not root. Nothing the app does needs uid 0: it serves HTTP, reads a database and
+# writes nothing to disk. Added after the build steps so those still install as root.
+RUN useradd --create-home --uid 10001 peekseek && chown -R peekseek /app
+USER peekseek
 
 EXPOSE 8000
 
@@ -56,6 +63,6 @@ EXPOSE 8000
 # and uvicorn's ProxyHeadersMiddleware rewrites that from X-Forwarded-For whenever the
 # peer is in this list. "*" trusted it from every peer — including a client hitting
 # this container directly — so anyone could set X-Forwarded-For to a known
-# AuthorizedServers address and pass the /unt/* IP allowlist with no other access.
+# AuthorizedServers address and pass the /server/v1/* IP allowlist with no other access.
 # Scoped to Docker's private bridge/overlay ranges, only Traefik's own hop is trusted.
 CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"]

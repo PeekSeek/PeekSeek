@@ -1,0 +1,3 @@
+# The screen generator's only dependency. Stated here because it was previously only
+# mentioned inside a docstring, which is not a place pip looks.
+Pillow>=10,<13

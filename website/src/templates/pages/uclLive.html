@@ -2,6 +2,10 @@
 
 {% block head %}
     <link rel="stylesheet" href="/static/assets/css/uclLive.css" />
+    {# Twitch's loader has no versioned URL and no published hash, so it cannot carry an
+       integrity attribute the way chart.js does. Accepted risk, recorded rather than
+       forgotten: this page renders no session state beyond the sidebar, and the same is
+       true of the YouTube iframe below. Do not copy the pattern onto a page that does. #}
     <script src="https://embed.twitch.tv/embed/v1.js"></script>
 {% endblock %}
 

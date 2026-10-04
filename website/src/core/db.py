@@ -86,8 +86,13 @@ def alongside(db, key: int) -> None:
         db.execute(text("SELECT pg_advisory_xact_lock_shared(:key)"), {"key": key})
 
 
-class open:
-    """Context manager that yields a SQLModel Session with auto-commit/rollback."""
+class session:
+    """Context manager that yields a SQLModel Session with auto-commit/rollback.
+
+    Lowercase because it is used as `with session() as db:` and reads as a verb there.
+    It was called `open`, which shadowed the builtin at every call site and had every
+    consumer importing it under another name.
+    """
 
     def __enter__(self) -> Session:
         self._session = Session(engine, expire_on_commit=False)
@@ -106,7 +111,7 @@ class open:
             self._session.close()
 
 
-def _defaultClause(column) -> str:
+def _default_clause(column) -> str:
     """`DEFAULT <value>` for a column whose model declares one, so rows already in the
     table get that value rather than NULL. `Stats.headshots` is why this matters: the
     profile page divides by it, and `None / 1` raises just as loudly as a missing column.
@@ -117,7 +122,7 @@ def _defaultClause(column) -> str:
     return f" DEFAULT {column.type.literal_processor(dialect=engine.dialect)(default)}"
 
 
-def addMissingColumns() -> None:
+def add_missing_columns() -> None:
     """Add columns a model has gained since its table was first created.
 
     `create_all` only ever creates whole tables. A column added to a model whose table
@@ -143,7 +148,7 @@ def addMissingColumns() -> None:
             if column.name not in present:
                 statements.append(
                     f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" '
-                    f"{column.type.compile(engine.dialect)}{_defaultClause(column)}"
+                    f"{column.type.compile(engine.dialect)}{_default_clause(column)}"
                 )
 
     if not statements:
@@ -155,7 +160,7 @@ def addMissingColumns() -> None:
             connection.execute(text(statement))
 
 
-def addMissingIndexes() -> None:
+def add_missing_indexes() -> None:
     """Create indexes a model has gained since its table was first created, which
     `create_all` skips for a table that already exists."""
     for table in SQLModel.metadata.sorted_tables:
@@ -168,12 +173,12 @@ from sqlalchemy.orm import configure_mappers
 
 configure_mappers()
 SQLModel.metadata.create_all(engine)
-addMissingColumns()
-addMissingIndexes()
+add_missing_columns()
+add_missing_indexes()
 models.MatchPlayer.backfill()
 
 if settings.bootstrap_admin:
-    models.User.bootstrapAdmin(settings.bootstrap_admin)
+    models.User.bootstrap_admin(settings.bootstrap_admin)
 
 if settings.bootstrap_servers:
     models.AuthorizedServer.bootstrap(settings.bootstrap_servers)

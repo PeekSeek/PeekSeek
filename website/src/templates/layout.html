@@ -1,4 +1,4 @@
-{% from "_player.html" import playerCard %}
+{% from "partials/player.html" import playerCard %}
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
   <head>
@@ -13,19 +13,17 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="{{request.url}}" />
 
-    {# analytics #}
-    
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-17N801FQ1E"></script>
+    {# Rendered only where an ID is configured, so a fork reports to nobody by default. #}
+    {% if config.analytics_id %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ config.analytics_id }}"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
-      gtag('config', 'G-17N801FQ1E');
+      gtag('config', {{ config.analytics_id | tojson }});
     </script>
-
-    {# analytics #}
+    {% endif %}
 
     <meta http-equiv="Content-Security-Policy" content="script-src * 'unsafe-inline' 'unsafe-eval';">
 
@@ -73,10 +71,10 @@
 
           <div class="infoli">
             <h1><div></div> User <div></div></h1>
-            {% if rawUser and getPermission("premium") %}
+            {% if rawUser and get_permission("premium") %}
             <a href="/me/custom/"> <img src="/static/img/custom.png" alt="">Custom Match</a>
             {% endif %}
-            {% if rawUser and getPermission("admin") %}
+            {% if rawUser and get_permission("admin") %}
             <a href="/admin/"> <img src="/static/img/admin.png" alt="">Admin</a>
             {% endif %}
             <a href="/me/settings/"> <img src="/static/img/settings.png" alt="">Settings</a>
@@ -105,7 +103,7 @@
 
             {% if ownBan %}
             <div class="mainElement warning">
-              <span>You are currently banned for <b>"{{ ownBan.reason }}"</b> for {{ ownBan.remainingLabel }}.</span>
+              <span>You are currently banned for <b>"{{ ownBan.reason }}"</b> for {{ ownBan.remaining_label }}.</span>
             </div>
             {% endif %}
 

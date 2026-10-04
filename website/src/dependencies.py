@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 
 from src.core.settings import settings
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core import models as data
 
 
@@ -58,7 +58,7 @@ def load_user(request: Request) -> Optional[data.User]:
         return None
 
     ip = client_ip(request)
-    with opendb() as db:
+    with session() as db:
         user = db.query(data.User).where(data.User.uuid == uuid).first()
         if not user:
             request.session.pop("uuid", None)
@@ -96,7 +96,7 @@ ApiSteam64 = Annotated[int, Depends(require_api_login)]
 
 def authorized_server(request: Request) -> data.AuthorizedServer:
     """Allow only requests from an allow-listed game-server IP."""
-    with opendb() as db:
+    with session() as db:
         server = (
             db.query(data.AuthorizedServer)
             .where(data.AuthorizedServer.address == client_ip(request))
@@ -141,6 +141,43 @@ async def forced_json_body(request: Request):
 JsonBody = Annotated[dict, Depends(forced_json_body)]
 
 
+def body_schema(model: type) -> dict:
+    """An `openapi_extra` that documents `model` as a route's request body.
+
+    Needed because the body arrives through `forced_json_body` rather than as a typed
+    parameter - FastAPI cannot infer a schema it never sees. The route validates into the
+    same model, so the published schema and the enforced one are one definition.
+
+    The schema is inlined whole, with nested models substituted in place of their `$ref`s.
+    An inlined schema cannot carry references: a `$ref` in an OpenAPI document resolves
+    against the document root, so both `#/components/schemas/X` and `#/$defs/X` dangle
+    here, and a dangling one fails the documentation build rather than the app. These
+    models are small enough that inlining them costs nothing.
+    """
+    schema = model.model_json_schema()
+    definitions = schema.pop("$defs", {})
+
+    def inline(node):
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if ref and ref.startswith("#/$defs/"):
+                resolved = dict(definitions.get(ref.split("/")[-1], {}))
+                # Anything alongside the $ref (a description, a default) wins over the
+                # definition it points at, which is what $ref siblings mean.
+                return inline(resolved | {k: v for k, v in node.items() if k != "$ref"})
+            return {key: inline(value) for key, value in node.items()}
+        if isinstance(node, list):
+            return [inline(item) for item in node]
+        return node
+
+    return {
+        "requestBody": {
+            "required": True,
+            "content": {"application/json": {"schema": inline(schema)}},
+        }
+    }
+
+
 def page_context(request: Request) -> dict:
     """Values available to every template render — Flask's context_processor."""
     user: Optional[data.User] = getattr(request.state, "user", None)
@@ -150,24 +187,24 @@ def page_context(request: Request) -> dict:
         "lastPage": request.session.get("lastPage"),
         "uuid": request.session.get("uuid") or request.query_params.get("uuid"),
         "rawUser": user,
-        "user": data.User.getSteamData(user) if user else None,
+        "user": data.User.steam_user(user) if user else None,
         # The sidebar draws the same card as the leaderboard, so it needs the same two
         # facts on every page. Deliberately not named "rank"/"place": a context
         # processor runs after the route's own context and would overwrite those.
-        "userRank": data.Stat.rankFor(user.steam64) if user else None,
-        "userPlace": data.Stat.ladderPosition(user.steam64) if user else None,
-        "match": data.Match.currentFor(user.steam64) if user else None,
+        "userRank": data.Stat.rank_for(user.steam64) if user else None,
+        "userPlace": data.Stat.ladder_position(user.steam64) if user else None,
+        "match": data.Match.current_for(user.steam64) if user else None,
         "discord": user.discord if user else None,
         # Six accounts in seven have no Discord linked, so six players in seven cannot
         # be told their match is ready. That is the single thing capping every
         # notification the site sends, which is why it gets a banner rather than a
         # line in settings nobody opens.
         "needsDiscordLink": bool(user and not user.discord),
-        "getPermission": user.getPermission if user else (lambda permission: False),
+        "get_permission": user.get_permission if user else (lambda permission: False),
         # Raised as a banner rather than a wall. A ban stops somebody playing, not
         # reading: they still need their profile, the rules and the appeal link, and
         # the page that used to block all of that told them less than the banner does.
-        "ownBan": data.UserBan.activeFor(user.steam64) if user else None,
+        "ownBan": data.UserBan.active_for(user.steam64) if user else None,
     }
 
 

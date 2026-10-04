@@ -1,0 +1,23 @@
+# Formatter configuration for every Python file in the repository, not just website/.
+# CI used to run `black --check .` with working-directory: website, which covered three
+# files and missed the Discord bot, the sound generator and the six Unity build tools -
+# and a change to those triggers the C# workflow, which checks no Python at all.
+#
+# One formatter, by choice: Black. Ruff is not configured here and its caches are
+# ignored; two formatters with no shared configuration disagree, and the badge, the CI
+# job and the contributing guide all already said Black.
+
+[tool.black]
+# Everything under the repository root. The excludes are generated or vendored trees,
+# not code anybody writes.
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | \.claude/worktrees
+  | node_modules
+  | plugins/[^/]+/ui/(Library|Temp|obj|Build)
+  | plugins/[^/]+/plugin/(bin|obj)
+  | plugins/[^/]+/tests/(bin|obj)
+)/
+'''

@@ -63,12 +63,18 @@ your proxy's address. Do not widen it.
 ## Database
 
 Point `DB` at Postgres. The schema builds itself on startup: `create_all` adds missing
-tables, then `addMissingColumns` adds columns the models have gained, printing each
+tables, then `add_missing_columns` adds columns the models have gained, printing each
 `ALTER` as it runs.
 
 There is no migration tool and no migration step. Dropping, renaming or retyping a column
 is not covered and has to be done by hand. See
 [Architecture](/docs/architecture/#data) for what that trade buys.
+
+One consequence worth knowing before you wire anything up to read this database: a new
+table, or a column `add_missing_columns` fills in, only exists once the app has started
+with the model that declares it. So a schema change reaches anything querying the database
+directly - a dashboard, a reporting tool - one deploy later, never sooner. That is the
+only way a new table ever gets there.
 
 Back the database up yourself. Nothing in the application does it for you.
 
@@ -136,8 +142,9 @@ mechanism, not a convention, and it is worth preserving.
 
 ## What PeekSeek itself runs on
 
-[Dokploy](https://dokploy.com), with Traefik in front, on a single host. Nothing in the
-application depends on that, and any Docker host will do.
+[Dokploy](https://dokploy.com), with Traefik in front, on a single host, with production
+and staging as two separate applications off the same branch. Nothing in the application
+depends on any of that, and any Docker host will do.
 
 Two lessons from running it that are cheaper to read than to rediscover:
 

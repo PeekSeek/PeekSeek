@@ -1,3 +1,5 @@
+using PeekSeek.Core.Models;
+
 namespace PeekSeekLobby.Core.Models;
 
 public class LobbySpawn {

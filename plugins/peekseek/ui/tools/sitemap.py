@@ -14,7 +14,13 @@ from pathlib import Path
 
 from PIL import Image
 
-LEVEL_SIZES = (512, 1024, 2048, 4096, 8192)      # ELevelSize: TINY, SMALL, MEDIUM, LARGE, INSANE
+LEVEL_SIZES = (
+    512,
+    1024,
+    2048,
+    4096,
+    8192,
+)  # ELevelSize: TINY, SMALL, MEDIUM, LARGE, INSANE
 
 
 def picture(map_folder, anchor_x, anchor_z, metres, pixels):
@@ -38,7 +44,9 @@ def picture(map_folder, anchor_x, anchor_z, metres, pixels):
         (anchor_x + size / 2 + half) * scale,
         (size / 2 - anchor_z + half) * scale,
     )
-    crop = whole.crop(tuple(int(round(edge)) for edge in box)).resize((pixels, pixels), Image.LANCZOS)
+    crop = whole.crop(tuple(int(round(edge)) for edge in box)).resize(
+        (pixels, pixels), Image.LANCZOS
+    )
 
     out = BytesIO()
     crop.save(out, "PNG", optimize=True)

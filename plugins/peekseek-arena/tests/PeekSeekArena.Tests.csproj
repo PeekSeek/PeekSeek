@@ -14,6 +14,12 @@
 		<PackageReference Include="xunit" Version="2.*" />
 		<PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
 		<PackageReference Include="RestoreMonarchy.RocketRedist" Version="3.*" />
+		<!-- HarmonyPrefixOrderTests reads the [HarmonyPriority] attributes straight out
+		     of the built plugin's metadata. Cecil rather than reflection: loading the
+		     patch classes would resolve their Unturned parameter types, and one of the
+		     game's redistributed assemblies targets netstandard2.1, which net48 cannot
+		     load at all. Cecil reads metadata and resolves nothing. -->
+		<PackageReference Include="Mono.Cecil" Version="0.11.*" />
 	</ItemGroup>
 
 	<ItemGroup>

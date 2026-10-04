@@ -60,7 +60,7 @@ class Match(SQLModel, table=True):
     NAME_LIMIT: ClassVar[int] = 15
 
     @staticmethod
-    def _withDistinctNames(teams: list) -> list:
+    def _with_distinct_names(teams: list) -> list:
         """The same teams, with names guaranteed to differ from one another.
 
         The game server groups players by team name, so two teams with one name become
@@ -95,7 +95,7 @@ class Match(SQLModel, table=True):
         createdBy: int | None = None,
         **kwargs,
     ):
-        from src.core.db import open
+        from src.core.db import session
         from src.core.webhook import Webhook
         from .user import User, UserBan
 
@@ -105,7 +105,7 @@ class Match(SQLModel, table=True):
         self.time = int(time())
         self.gamemode = gamemode
         self.meta = {"userData": {}}
-        self.teams = Match._withDistinctNames(teams)
+        self.teams = Match._with_distinct_names(teams)
         self.roundWins = {}
         self.finished = False
         self.region = region
@@ -118,7 +118,7 @@ class Match(SQLModel, table=True):
         all_users = list(dict.fromkeys(str(u) for team in teams for u in team["users"]))
 
         admin_bit = 2 ** settings.permissions.index("admin")
-        with open() as db:
+        with session() as db:
             # Every caller keeps barred players out before it gets here.
             assert not UserBan.barring(all_users, db), "A barred player was matched."
             admins = [
@@ -147,7 +147,7 @@ class Match(SQLModel, table=True):
         creator = "matchmaking"
         if createdBy:
             creator = (
-                f"[{User.getSteamData(createdBy).name}]"
+                f"[{User.steam_user(createdBy).name}]"
                 f"({settings.profile_url(createdBy)}) `{createdBy}`"
             )
 
@@ -156,13 +156,13 @@ class Match(SQLModel, table=True):
             description=(
                 f"Match started in `{region}` by {creator} with:\n"
                 + "\n".join(
-                    f"- [{User.getSteamData(u).name}]({settings.profile_url(u)}) `{u}`"
+                    f"- [{User.steam_user(u).name}]({settings.profile_url(u)}) `{u}`"
                     for u in all_users
                 )
             ),
         )
 
-        with open() as db:
+        with session() as db:
             for user in db.query(User).where(User.steam64.in_(all_users)).all():
                 user.notify(
                     "Go to match",
@@ -200,14 +200,14 @@ class Match(SQLModel, table=True):
         return Match.PICKING if self.claimed else Match.PENDING
 
     @property
-    def statusLabel(self) -> str:
+    def status_label(self) -> str:
         """`status` in words, for the spectate and admin lists."""
         return Match.STATUS_LABELS[self.status]
 
-    def selectionEndsAt(self) -> float:
+    def selection_ends_at(self) -> float:
         return self.time + mmconfig["selectKitsTime"]
 
-    def readyToHost(self) -> bool:
+    def ready_to_host(self) -> bool:
         """Whether every map, ballistics and movement pick is made, and every player
         has locked in or the selection window has run out."""
         return (
@@ -215,10 +215,10 @@ class Match(SQLModel, table=True):
             and self.meta["ballistics"] is not None
             and self.meta["map"] is not None
             and self.meta["movement"] is not None
-            and (time() >= self.selectionEndsAt() or self.allKitsLocked())
+            and (time() >= self.selection_ends_at() or self.all_kits_locked())
         )
 
-    def waitingOn(self) -> list[str]:
+    def waiting_on(self) -> list[str]:
         """The players who still have a pick to make, for the server to name while it
         waits. Empty once selection is done, however it ended."""
         gm = mmconfig["gamemodes"][self.gamemode]
@@ -231,7 +231,7 @@ class Match(SQLModel, table=True):
             or (needsPowerup and user["powerup"] is None)
         ]
 
-    def allKitsLocked(self) -> bool:
+    def all_kits_locked(self) -> bool:
         """True once every player has made every pick the gamemode asks of them."""
         gm = mmconfig["gamemodes"][self.gamemode]
         needsKit = len(gm["kitsAllowed"]) > 1
@@ -242,13 +242,13 @@ class Match(SQLModel, table=True):
             for user in self.meta["userData"].values()
         )
 
-    def assignTo(self, serverCode: str) -> "Match | None":
+    def assign_to(self, serverCode: str) -> "Match | None":
         """Hand this match to a game server if nobody holds it yet, or None if another
         server got there first. The conditional update is the claim, so two servers that
         find the same pending match cannot both take it."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             taken = (
                 db.query(Match)
                 .where(Match.id == self.id, Match.claimed.is_(None))
@@ -258,29 +258,29 @@ class Match(SQLModel, table=True):
             return None
 
         self.claimed = serverCode
-        self._tellPlayersToJoin()
+        self._tell_players_to_join()
         return self
 
-    def markHosting(self) -> None:
+    def mark_hosting(self) -> None:
         """Record that the server has been handed the match, so asking again is told
         to carry on instead of being handed it twice."""
-        from src.core.db import open
+        from src.core.db import session
 
         self.meta = self.meta | {"hostedAt": time()}
-        with open() as db:
+        with session() as db:
             db.query(Match).where(Match.id == self.id).update({"meta": self.meta})
 
-    def _tellPlayersToJoin(self) -> None:
+    def _tell_players_to_join(self) -> None:
         """DM everyone on the match a button that launches the game, the moment there
         is a server to join. Failures are logged, not raised: this runs inside a game
         server's poll, and a Discord outage must not stop a match."""
         import logging
 
-        from src.core.db import open
+        from src.core.db import session
         from src.core.settings import settings
         from .user import User
 
-        code = self.connectCode()
+        code = self.connect_code()
         if not code:
             return
 
@@ -299,7 +299,7 @@ class Match(SQLModel, table=True):
         ]
 
         try:
-            with open() as db:
+            with session() as db:
                 players = [int(u) for team in self.teams for u in team["users"]]
                 for user in db.query(User).where(User.steam64.in_(players)).all():
                     user.notify(
@@ -312,11 +312,11 @@ class Match(SQLModel, table=True):
             logging.warning("Could not send match-ready DMs for %s: %s", self.id, error)
 
     @staticmethod
-    def pendingFor(region: str) -> "Match | None":
+    def pending_for(region: str) -> "Match | None":
         """The oldest match in this region that nobody is hosting yet."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             return (
                 db.query(Match)
                 .where(
@@ -329,16 +329,16 @@ class Match(SQLModel, table=True):
             )
 
     @staticmethod
-    def undeliveredFor(serverCode: str) -> "Match | None":
+    def undelivered_for(serverCode: str) -> "Match | None":
         """A match this server holds but was never told to host, because the answer
         that described it was lost. Handed back instead of building a second match for
         the same players."""
         if not serverCode or serverCode == "0":
             return None
 
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             held = (
                 db.query(Match)
                 .where(Match.finished.is_(False), Match.claimed == serverCode)
@@ -349,11 +349,11 @@ class Match(SQLModel, table=True):
         return next((match for match in held if not match.meta.get("hostedAt")), None)
 
     @staticmethod
-    def playersInAMatch() -> set[str]:
+    def players_in_a_match() -> set[str]:
         """Every steam64 that is on a match which has not finished."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             return {
                 str(steam64)
                 for (steam64,) in db.query(MatchPlayer.steam64)
@@ -363,11 +363,11 @@ class Match(SQLModel, table=True):
             }
 
     @staticmethod
-    def currentFor(steam64) -> int | None:
+    def current_for(steam64) -> int | None:
         """The unfinished match this player is on, or None."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             return (
                 db.query(MatchPlayer.matchId)
                 .join(Match, Match.id == MatchPlayer.matchId)
@@ -378,28 +378,28 @@ class Match(SQLModel, table=True):
             )
 
     @staticmethod
-    def releaseAbandoned(serverCode: str) -> None:
+    def release_abandoned(serverCode: str) -> None:
         """Record as abandoned every match a server that says it is free still holds.
 
         A server keeps naming a match until its result is acknowledged, so a free server
         has nothing left to report. Nobody's Elo moves. A match it was never told to host
-        gets its selection window and the host grace first, since `undeliveredFor` is
+        gets its selection window and the host grace first, since `undelivered_for` is
         about to hand it back.
         """
         if not serverCode or serverCode == "0":
             return
 
-        from src.core.db import open
+        from src.core.db import session
         from src.core.webhook import Webhook
 
         abandoned = []
-        with open() as db:
+        with session() as db:
             for match in (
                 db.query(Match)
                 .where(Match.finished.is_(False), Match.claimed == serverCode)
                 .all()
             ):
-                deadline = match.selectionEndsAt() + settings.host_grace
+                deadline = match.selection_ends_at() + settings.host_grace
                 if not match.meta.get("hostedAt") and time() < deadline:
                     continue
 
@@ -407,7 +407,7 @@ class Match(SQLModel, table=True):
                 abandoned.append(match.id)
 
         for matchId in abandoned:
-            MatchResult.recordUnscored(matchId, "abandoned")
+            MatchResult.record_unscored(matchId, "abandoned")
             Webhook(f"Match.{matchId}").error(
                 f"Server `{serverCode}` reported itself free without ever reporting "
                 "this match's results — recorded as abandoned so its players aren't "
@@ -415,55 +415,55 @@ class Match(SQLModel, table=True):
             )
 
     @staticmethod
-    def cancelStranded() -> None:
+    def cancel_stranded() -> None:
         """Cancel every custom or event match no server took within its selection
         window and the host grace. Left alone it would keep its players out of
         matchmaking forever."""
-        from src.core.db import open
+        from src.core.db import session
         from src.core.webhook import Webhook
 
         stranded = []
-        with open() as db:
+        with session() as db:
             for match in (
                 db.query(Match)
                 .where(Match.finished.is_(False), Match.claimed.is_(None))
                 .all()
             ):
-                if time() < match.selectionEndsAt() + settings.host_grace:
+                if time() < match.selection_ends_at() + settings.host_grace:
                     continue
                 match.finished = True
                 stranded.append(match.id)
 
         for matchId in stranded:
-            MatchResult.recordUnscored(matchId, "noServer")
+            MatchResult.record_unscored(matchId, "noServer")
             Webhook(f"Match.{matchId}").error(
                 "Cancelled — selection finished and no game server ever became free to "
                 "host it."
             )
 
     @staticmethod
-    def resolveExpiredPicks() -> None:
+    def resolve_expired_picks() -> None:
         """Auto-decide every map, ballistics or movement pick past its deadline, from
         the game servers' polls, so a match nobody is watching still becomes hostable.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             for match in db.query(Match).where(Match.finished.is_(False)).all():
-                resolved = match.resolvedMetaIfExpired()
+                resolved = match.resolved_meta_if_expired()
                 if resolved is not None:
                     db.query(Match).where(Match.id == match.id).update(
                         {"meta": resolved}
                     )
 
     @staticmethod
-    def recordRoundWins(matchId: int, wins: dict) -> None:
-        from src.core.db import open
+    def record_round_wins(matchId: int, wins: dict) -> None:
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             db.query(Match).where(Match.id == matchId).update({Match.roundWins: wins})
 
-    def getReturnedMeta(
+    def get_returned_meta(
         self,
         steam64: int,
         pick: bool | str | None = None,
@@ -488,17 +488,17 @@ class Match(SQLModel, table=True):
             if str(current) != steam64:
                 return m
 
-            Match._advancePick(m, self.teams)
+            Match._advance_pick(m, self.teams)
 
             not_picked = [o for o in ["ballistics", "map", "movement"] if m[o] is None]
             if not_picked:
                 m[not_picked[0]] = pick
-                m["pickDeadline"] = Match._nextPickDeadline(m)
+                m["pickDeadline"] = Match._next_pick_deadline(m)
 
         return m
 
     @staticmethod
-    def _advancePick(m: dict, teams: list) -> None:
+    def _advance_pick(m: dict, teams: list) -> None:
         """Move `currentPick` to the next team's first player, in place."""
         current = m.get("currentPick", teams[0]["users"][0])
         next_team = 0
@@ -509,14 +509,14 @@ class Match(SQLModel, table=True):
         m["currentPick"] = teams[next_team]["users"][0]
 
     @staticmethod
-    def _nextPickDeadline(m: dict) -> float | None:
+    def _next_pick_deadline(m: dict) -> float | None:
         """A fresh pickTimeout while anything is undecided, so each pick gets a full
         window of its own. None once everything is decided."""
         if any(m[o] is None for o in ["ballistics", "map", "movement"]):
             return time() + mmconfig["pickTimeout"]
         return None
 
-    def resolvedMetaIfExpired(self) -> dict | None:
+    def resolved_meta_if_expired(self) -> dict | None:
         """The current pick decided as the gamemode's first option once its deadline
         passes, or None when there is nothing to decide."""
         deadline = self.meta.get("pickDeadline")
@@ -534,11 +534,11 @@ class Match(SQLModel, table=True):
         field = not_picked[0]
         m[field] = gm[field][0]
 
-        Match._advancePick(m, self.teams)
-        m["pickDeadline"] = Match._nextPickDeadline(m)
+        Match._advance_pick(m, self.teams)
+        m["pickDeadline"] = Match._next_pick_deadline(m)
         return m
 
-    def collapsedMetaIfNobodyIsPicking(self) -> dict | None:
+    def collapsed_meta_if_nobody_is_picking(self) -> dict | None:
         """Every outstanding pick decided at once as the gamemode's first option, or
         None when there is nothing left. Used once everyone has locked in from in game,
         since nobody is at a browser to make the rest."""
@@ -555,7 +555,7 @@ class Match(SQLModel, table=True):
         m["pickDeadline"] = None
         return m
 
-    def localJson(self) -> dict:
+    def local_json(self) -> dict:
         """The match as the match page reads it.
 
         Call this outside the session the match was loaded in: it reads Steam for every
@@ -564,18 +564,18 @@ class Match(SQLModel, table=True):
         return {
             "id": self.id,
             "status": self.status,
-            "serverCode": self.connectCode(),
+            "serverCode": self.connect_code(),
             "teams": self.teams,
             "currentPick": self.meta.get("currentPick", self.teams[0]["users"][0]),
             "params": self.meta,
             "claimed": self.claimed,
-            "users": self.getSteamUserData(),
-            "startsAfter": self.selectionEndsAt(),
+            "users": self.get_steam_user_data(),
+            "startsAfter": self.selection_ends_at(),
             "config": mmconfig["gamemodes"][self.gamemode],
             "joinTimeoutSeconds": mmconfig.get("joinTimeoutSeconds", 120),
         }
 
-    def connectCode(self) -> str | None:
+    def connect_code(self) -> str | None:
         """What a player types into Unturned to join this match: the holding server's
         code from the moment it holds the match, else None."""
         if self.status not in (Match.PICKING, Match.LIVE) or self.claimed in (
@@ -585,12 +585,12 @@ class Match(SQLModel, table=True):
             return None
         return self.claimed
 
-    def getSteamUserData(self) -> dict:
+    def get_steam_user_data(self) -> dict:
         """Each player's Steam name and avatar, keyed by steam64."""
         from src.core import steam
 
         return {
-            user: steam.User(user).toDict()
+            user: steam.User(user).to_dict()
             for team in self.teams
             for user in team["users"]
         }
@@ -639,21 +639,21 @@ class MatchResult(SQLModel, table=True):
         return result
 
     @staticmethod
-    def hasResults(matchId: int) -> bool:
+    def has_results(matchId: int) -> bool:
         """Whether this match has been scored. A server retries its result until it is
         acknowledged, so this is what stops a retry moving Elo twice."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             result = db.query(MatchResult).where(MatchResult.matchId == matchId).first()
             return bool(result and result.data.get("results"))
 
     @staticmethod
-    def recordFinalResults(matchId: int, results: dict) -> None:
-        """`results` is matchmaking.matchResults()'s per-player summary, keyed by steam64."""
-        from src.core.db import open
+    def record_final_results(matchId: int, results: dict) -> None:
+        """`results` is matchmaking.match_results()'s per-player summary, keyed by steam64."""
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             result = MatchResult._row(db, matchId)
             db.query(MatchResult).where(MatchResult.id == result.id).update(
                 {
@@ -663,24 +663,24 @@ class MatchResult(SQLModel, table=True):
             )
 
     @staticmethod
-    def findFor(matchId: int) -> "MatchResult | None":
+    def find_for(matchId: int) -> "MatchResult | None":
         """This match's durable record, or None if it never got one. Read-only, unlike
         `_row`, which exists to create one."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             row = db.query(MatchResult).where(MatchResult.matchId == matchId).first()
             if row is not None:
                 db.expunge(row)
             return row
 
     @staticmethod
-    def recordUnscored(matchId: int, reason: str) -> None:
+    def record_unscored(matchId: int, reason: str) -> None:
         """Close out a match that ends without a score, so it is counted rather than
         lost. `reason` is `notPlayed`, `abandoned` or `noServer`."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             result = MatchResult._row(db, matchId)
             if result.data.get("results"):
                 return
@@ -692,7 +692,7 @@ class MatchResult(SQLModel, table=True):
             )
 
     @staticmethod
-    def scoredFor(db, steam64, limit: int, newestFirst: bool = True) -> list:
+    def scored_for(db, steam64, limit: int, newestFirst: bool = True) -> list:
         """Up to `limit` matches this player has a final line in.
 
         Their matches come off the MatchPlayers index. Rows older than the matchId
@@ -730,12 +730,12 @@ class MatchResult(SQLModel, table=True):
         return scored
 
     @staticmethod
-    def latestFor(steam64, limit: int = 10) -> list["MatchResult"]:
+    def latest_for(steam64, limit: int = 10) -> list["MatchResult"]:
         """This player's most recent scored matches, newest first."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
-            rows = MatchResult.scoredFor(db, steam64, limit)
+        with session() as db:
+            rows = MatchResult.scored_for(db, steam64, limit)
             for row in rows:
                 db.expunge(row)
             return rows
@@ -753,28 +753,28 @@ class MatchPlayer(SQLModel, table=True):
     @staticmethod
     def backfill() -> None:
         """Fill the table from every match's teams, once, when it is first created."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             if db.query(MatchPlayer).first() is not None:
                 return
             for matchId, teams in db.query(Match.id, Match.teams).all():
                 db.add_all(
                     MatchPlayer(matchId=matchId, steam64=steam64)
-                    for steam64 in MatchPlayer.onTeams(teams)
+                    for steam64 in MatchPlayer.on_teams(teams)
                 )
 
     @staticmethod
-    def onTeams(teams: list) -> set[int]:
+    def on_teams(teams: list) -> set[int]:
         return {int(u) for team in teams for u in team["users"]}
 
 
 @event.listens_for(Match, "after_insert")
-def _recordPlayers(mapper, connection, match: Match) -> None:
+def _record_players(mapper, connection, match: Match) -> None:
     """Every new match writes its players, whichever code path created it."""
     rows = [
         {"matchId": match.id, "steam64": steam64}
-        for steam64 in MatchPlayer.onTeams(match.teams)
+        for steam64 in MatchPlayer.on_teams(match.teams)
     ]
     if rows:
         connection.execute(MatchPlayer.__table__.insert(), rows)

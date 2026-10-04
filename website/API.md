@@ -4,11 +4,36 @@
 else. It is deliberately not Unturned-specific: a server for a different game implements
 the same calls and speaks the same JSON.
 
-The reference implementation is [src/routes/gameserver.py](src/routes/gameserver.py).
-Every route's parameters, schemas and responses are generated from this app into
-[the server API reference](https://peekseek.net/docs/reference/server-api/), and the
-raw schema is at [`/openapi.json`](https://peekseek.net/openapi.json). The
-interactive explorer is at `/api`.
+**This file is the reasoning. It is not the reference.** Every route's parameters and
+response shapes are generated from the app itself into
+[the server API reference](https://peekseek.net/docs/reference/server-api/), with the raw
+schema at [`/openapi.json`](https://peekseek.net/openapi.json) and an interactive explorer
+at `/api`. Those are always right; a table copied in here would not stay that way, and for
+a while did not.
+
+So what is here is the part a schema cannot state: why matchmaking runs inside the
+server's own poll, why the result report is safe to retry forever, why `relayTo` is the
+whole decision, and what each field is *for*. The types are one click away.
+
+The models are in [src/routes/contracts.py](src/routes/contracts.py) and the handlers in
+[src/routes/gameserver.py](src/routes/gameserver.py).
+
+### What may change inside `v1`
+
+`v1` is in the path because plugins are compiled against it and deployed independently of
+the site, so the site can never assume which build is calling. Inside `v1`:
+
+- **A field may be added** to any response at any time. That is why every response is a
+  JSON object — parse loosely and ignore what you do not know.
+- **A request field may become optional**, never required. A route that gains a field
+  keeps working for a caller that has never heard of it.
+- **A field will not be removed, renamed, or change type.** Neither will a path or a
+  method. Those are what a new version number would be for.
+- **A new `action`, `reason` or `status` value may appear.** Switch on the ones you know
+  and treat the rest as "do nothing" rather than as an error.
+
+There is no `v2` and no timetable for one. If there ever is, `v1` keeps answering until
+every server we know of has moved off it.
 
 ## Conventions
 
@@ -42,10 +67,11 @@ before selection closes plus `host_grace` seconds.
 
 The one call a game server makes on a loop. Everything else here is a detail.
 
-| Parameter | Meaning |
-|---|---|
-| `serverCode` | The code players connect with — the server's own Steam ID. `0` from a server that cannot report one. |
-| `matchId` | The match this server considers itself responsible for, including one it has finished playing but not yet successfully reported. `0` means free. |
+Two query parameters, and what they mean matters more than their types:
+`serverCode` is the code players connect with, the server's own Steam ID, or `0` from a
+server that cannot report one. `matchId` is the match this server considers itself
+responsible for — **including one it has finished playing but not yet successfully
+reported** — and `0` means free.
 
 Exactly one of four answers comes back, and `action` is the only field to switch on.
 
@@ -82,46 +108,24 @@ am still holding match 42", the site will not decide match 42 was dropped.
 
 ### The match payload
 
-```jsonc
-{
-  "id": 42,
-  "region": "paris",
-  "gamemode": {"id": 0, "name": "Competitive"},
-  "roundsToWin": 3,
-  "settings": {"map": "Alpha Valley", "ballistics": true, "movement": false},
-  "teams": [{"name": "team_alice", "players": ["7656…"]}],
-  "players": [
-    {"steam64": "7656…", "kit": [{"itemId": 363, "amount": 1, "state": [1, 2, 3]}]}
-  ],
-  "spectators": ["7656…"]
-}
-```
+The whole match, as the server hosting it needs to see it: its id and region, the
+gamemode, the rounds to win, the settings, the teams, the players and the spectators.
+The [reference](https://peekseek.net/docs/reference/server-api/) has the shape.
 
-`players` carries each player's resolved loadout, so a server never has to know which
-item in a list was the gun and which was an outfit piece. `state` is the attachment
-bytes to stamp onto the item.
+The one thing worth saying about it: `players` carries each player's **resolved** loadout,
+so a server never has to know which item in a list was the gun and which was an outfit
+piece, and `state` is the attachment bytes to stamp onto the item.
 
 ## Reporting a match
 
-| Route | Retry? | Why |
-|---|---|---|
-| `POST /matches/{id}/rounds` | **No** | Rounds won per team, `{"wins": {"<team>": n}}`, sent when a round is decided. Each replaces the last. |
-| `POST /matches/{id}/result` | **Yes, until acknowledged** | The only thing that scores a match. |
+Two writes, and they are not the same kind of call.
 
-The result is the one call that must land.
+`POST /matches/{id}/rounds` reports rounds won per team each time a round is decided.
+**Do not retry it.** Each report replaces the last, so a lost one is covered by the next
+one anyway.
 
-```jsonc
-POST /server/v1/matches/42/result
-{
-  "played": true,
-  "winningTeam": "team_alice",
-  "players": [
-    {"steam64": "7656…", "won": true, "kills": 5, "deaths": 2,
-     "headshotKills": 2, "hits": 30, "headshotHits": 7,
-     "damageDealt": 640, "damageTaken": 410}
-  ]
-}
-```
+`POST /matches/{id}/result` is the only thing that scores a match, and the one call that
+must land. **Retry it until it is acknowledged.**
 
 - `played: false` scores nothing and just releases the match — nobody turned up.
 - `players` must be the **whole roster**, including anyone who never joined and anyone
@@ -143,34 +147,12 @@ what happens to a match whose result was slow to arrive.
 
 ## Players
 
-| Route | What it does |
-|---|---|
-| `GET /players/{steam64}` | Name, picture, rank and whereabouts. **No side effects.** |
-| `PUT /players/{steam64}/queue?gamemodes=&region=&ip=` | Queue them, and answer the same thing. `ip` is the address they play from. |
-| `DELETE /players/{steam64}/queue` | Take them out of the queue. |
-| `GET /players/{steam64}/kits` | Every saved kit, resolved into ready-to-equip items. |
-| `POST /players/{steam64}/decide` | Lock their kit and/or powerup for the match they are on. |
-| `POST /players/{steam64}/bans` | A ban issued by anti-cheat. Empty body bans for "Cheating". |
-| `POST /reports` | An in-game `/report`, with the spy screenshot attached. |
+`GET /players/{steam64}` and `PUT /players/{steam64}/queue` answer the same shape, and the
+difference between them is the whole point: **the `GET` has no side effects and the `PUT`
+queues them.** There is also a `DELETE` on the same path to take them out, a `kits` read,
+a `decide` write for locking a pick, a `bans` write for anti-cheat, and `POST /reports`.
 
-Both reads answer the same shape:
-
-```jsonc
-{
-  "steam64": "7656…", "name": "Ferret", "avatar": "https://avatars.steamstatic.com/…_full.jpg",
-  "elo": 300, "rankIcon": "gold1", "matchId": 42, "relayTo": null,
-  "choose": {
-    "kits": ["meta", "sniper"],
-    "powerups": ["Movement", "Ammo", "Boom"],
-    "kit": null, "powerup": null
-  },
-  "ban": null
-}
-```
-
-`ban` is `null` for a player who may play, and otherwise
-`{"reason": "Cheating", "expires": 9999999999, "permanent": true}`. The ban may be
-on another account: any active ban on an account seen on the same IP, on the site or
+`ban` is `null` for a player who may play. The ban may be on another account: any active ban on an account seen on the same IP, on the site or
 through `ip`, bars every account on that IP from queues and matches. **A caller holding
 players must remove anyone it is non-null for.** `PUT .../queue` refuses to queue them,
 so a lobby that ignores it ends up full of people who can never be matched.
@@ -233,17 +215,9 @@ and is nothing a game server can act on.
 
 ## Lobby population
 
-| Route | What it does |
-|---|---|
-| `POST /lobby/population` | What this server's arena looks like right now. |
-
-```jsonc
-{
-  "players": 6,    // in the arena and not on a match
-  "queueing": 4,   // optional — how many of those want a match
-  "held": 2        // optional — how many of those you are keeping out of the queue
-}
-```
+`POST /lobby/population` says what this server's arena looks like right now: `players` in
+the arena and not on a match, and optionally `queueing` (how many of those want a match)
+and `held` (how many you are keeping out of the queue).
 
 Sent once per heartbeat for the whole server, not once per player: every number here is
 a fact about the server rather than about anybody in it. Nothing reads the reply.
@@ -302,6 +276,6 @@ lives.
 | `live` | Handed over; the server is running it. |
 | `finished` | Scored, abandoned or cancelled — over either way. |
 
-The match page reads `status` and `serverCode` from `/match/current`. They are separate fields on purpose: a match has a server from the
-moment it is made, so "a server exists" stopped being the same question as "the match has
-started".
+The match page reads `status` and `relayTo` from `/match/current`. They are separate
+fields on purpose: a match has a server from the moment it is made, so "a server exists"
+stopped being the same question as "the match has started".

@@ -1,0 +1,54 @@
+# The weekly pip-audit job reports vulnerabilities but opens nothing, so acting on one
+# was entirely manual. These open the pull request.
+#
+# Monthly rather than weekly, and grouped: one repository, eight components, and a
+# separate PR per package would bury everything else.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /website
+    schedule:
+      interval: monthly
+    groups:
+      runtime:
+        patterns: ["*"]
+        exclude-patterns: ["black", "pytest", "pip-audit"]
+      tooling:
+        patterns: ["black", "pytest", "pip-audit"]
+
+  - package-ecosystem: pip
+    directory: /bot
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: npm
+    directory: /docs
+    schedule:
+      interval: monthly
+    groups:
+      astro:
+        patterns: ["*"]
+
+  # Every plugin shares the same three packages, so one entry per solution would open
+  # the same bump five times.
+  - package-ecosystem: nuget
+    directories:
+      - /plugins/peekseek/plugin
+      - /plugins/peekseek-arena/plugin
+      - /plugins/peekseek-raid/plugin
+      - /plugins/peekseek-lobby/plugin
+      - /plugins/peekseek-armor-skin/plugin
+      - /plugins/utelemetry/plugin
+    schedule:
+      interval: monthly
+    groups:
+      rocket:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

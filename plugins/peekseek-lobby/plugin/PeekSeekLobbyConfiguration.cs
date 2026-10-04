@@ -1,7 +1,8 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Xml.Serialization;
 using PeekSeekLobby.Core.Models;
 using Rocket.API;
+using PeekSeek.Core.Models;
 
 namespace PeekSeekLobby;
 

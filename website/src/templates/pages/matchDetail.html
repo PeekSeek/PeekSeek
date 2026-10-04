@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{% from "partials/player.html" import playerCard %}
+
+{% block title %}Match #{{result.matchId}}{% endblock %}
+{% block titleEmbed %}Match #{{result.matchId}}{% endblock %}
+{% block author %}Team PeekSeek{% endblock %}
+{% block description %}Result of this match.{% endblock %}
+{% block color %}#ff0000{% endblock %}
+
+{% block content %}
+
+<div class="mainElement">
+  <div class="container profileContainer">
+    <h1 class="matchHeading">{{result.data.get("map") or "Unknown map"}}</h1>
+    <span class="matchWhen">Match #{{result.matchId}} &middot; {{result.endTime.strftime("%d/%m/%Y %H:%M")}}</span>
+
+    {% if you %}
+    <div class="rankCard yourRank" data-rank="{{you.rank.icon}}">
+      <img class="rankBadge" src="/static/ranks/{{you.rank.icon}}.svg" alt="" title="{{you.rank.name}}">
+      <div class="rankCardBody">
+        <div class="rankCardHead">
+          <b>{{you.rank.name}}</b>
+          {% if you.promoted %}<span class="rankMove up">Ranked up</span>{% elif you.demoted %}<span class="rankMove down">Ranked down</span>{% endif %}
+          <span class="rankDelta {{ 'pos' if you.delta >= 0 else 'neg' }}">{{ "+" if you.delta >= 0 else "" }}{{you.delta}}</span>
+        </div>
+        <div class="rankBar">
+          {# The two percentages are the server's; everything drawn from them is in
+             default.css. A custom property is the only thing a stylesheet cannot
+             supply for itself. #}
+          <i style="--held:{{you.bar.held}}%"></i>
+          <i class="{{you.bar.direction}}" style="--held:{{you.bar.held}}%;--changed:{{you.bar.changed}}%"></i>
+        </div>
+        <span class="rankGoal">{{you.elo}} Elo. {{you.rank.goal}}</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <h2>Result</h2>
+    {% if not players %}
+      <span>No result recorded for this match.</span>
+    {% else %}
+      <table class="statTable">
+        <tr><th>Player</th><th>Kills</th><th>Deaths</th><th>HS%</th><th>DMG</th><th>Taken</th><th>Elo</th><th></th></tr>
+        {% for p in players %}
+        <tr>
+          <td>{{ playerCard(p.user, rank=p.rank, place=p.place, ring=p.ring, sub=false) }}</td>
+          <td>{{p.get("Kills", 0)}}</td>
+          <td>{{p.get("Deaths", 0)}}</td>
+          <td>{{round(p.get("Headshots", 0) / max(p.get("Kills", 0), 1) * 100, 1)}}</td>
+          <td>{{p.get("Damage", "")}}</td>
+          <td>{{p.get("Taken", "")}}</td>
+          <td>{% if "Elo Change" in p %}{{ "+" if p.get("Elo Change", 0) >= 0 else "" }}{{p.get("Elo Change")}}{% endif %}</td>
+          <td class="{{ 'win' if p.get('Won') else 'loss' }}">{{ "WIN" if p.get("Won") else "LOSS" }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block addheader %}
+<link rel="stylesheet" href="/static/assets/css/matchDetail.css" />
+{% endblock %}

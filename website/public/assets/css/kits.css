@@ -18,12 +18,12 @@
 }
 
 .kitCategory {
-  color: #f66;
+  color: var(--brand-light);
   text-transform: uppercase;
 }
 
 .kitHint {
-  color: #888;
+  color: var(--border-strong);
   font-size: 14px;
 }
 
@@ -40,7 +40,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #8a8a8a;
+  color: var(--text-muted);
 }
 
 /* auto-fill rather than auto-fit so a two-option row (grip) keeps the same tile
@@ -71,8 +71,8 @@
   justify-content: center;
   min-height: 54px;
   padding: 6px;
-  background-color: #1a1a1a;
-  border: 1px solid #3334;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--veil);
   border-radius: 10px;
   cursor: pointer;
   user-select: none;
@@ -88,14 +88,14 @@
 }
 
 .kitOption:hover {
-  background-color: #222;
+  background-color: var(--surface-high);
 }
 
 /* The red the sidebar marks the current page with, so "this is the one you're on"
    reads the same way across the site. */
 .kitOptionSelected, .kitOptionSelected:hover {
-  background-color: #411;
-  border-color: #f66;
+  background-color: var(--brand-shade);
+  border-color: var(--brand-light);
   cursor: default;
 }
 
@@ -111,7 +111,7 @@
 /* :has(:focus-visible) rather than :focus-within, so the ring is a keyboard
    affordance and doesn't linger on whatever tile the mouse last clicked. */
 .kitOption:has(input:focus-visible) {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--text);
   outline-offset: 2px;
 }
 
@@ -120,7 +120,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #888;
+  color: var(--border-strong);
 }
 
 @media (max-width: 560px) {
