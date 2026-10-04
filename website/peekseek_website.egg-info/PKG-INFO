@@ -1,5 +1,0 @@
-Metadata-Version: 2.4
-Name: peekseek-website
-Version: 0
-Summary: The PeekSeek site, and the models, settings and moderation the bot shares with it.
-Requires-Python: >=3.12
