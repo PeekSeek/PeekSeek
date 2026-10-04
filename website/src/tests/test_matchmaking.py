@@ -130,14 +130,14 @@ def test_match_results_record_headshots_and_damage(user_factory):
         RANKED,
         {
             "steam64": winner.steam64,
-            "win": True,
+            "won": True,
             "kills": 5,
             "deaths": 2,
-            "headshots": 3,
+            "headshotKills": 3,
             "damageDealt": 620,
             "damageTaken": 140,
         },
-        {"steam64": loser.steam64, "win": False, "kills": 2, "deaths": 5},
+        {"steam64": loser.steam64, "won": False, "kills": 2, "deaths": 5},
     )
 
     with Session(core_db.engine) as s:
@@ -156,7 +156,7 @@ def test_elo_never_drops_below_floor(user_factory):
 
     for _ in range(10):
         matchmaking.matchResults(
-            RANKED, {"steam64": loser.steam64, "win": False, "kills": 0, "deaths": 10}
+            RANKED, {"steam64": loser.steam64, "won": False, "kills": 0, "deaths": 10}
         )
 
     with Session(core_db.engine) as s:

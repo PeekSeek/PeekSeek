@@ -11,7 +11,9 @@ from src.core.db import open as opendb
 from src.core import models as data
 from src.dependencies import LoggedInSteam64, RequestValues, templates
 
-router = APIRouter(prefix="/me")
+# The editors are HTMX fragments rather than JSON, so they stay out of the schema; the
+# tag is there for the one browser endpoint that is not.
+router = APIRouter(prefix="/me", tags=["kits"], include_in_schema=False)
 
 kitsConfig = settings.kits
 

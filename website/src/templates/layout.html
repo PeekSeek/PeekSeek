@@ -13,19 +13,17 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="{{request.url}}" />
 
-    {# analytics #}
-    
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-17N801FQ1E"></script>
+    {# Rendered only where an ID is configured, so a fork reports to nobody by default. #}
+    {% if config.analytics_id %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ config.analytics_id }}"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
-      gtag('config', 'G-17N801FQ1E');
+      gtag('config', {{ config.analytics_id | tojson }});
     </script>
-
-    {# analytics #}
+    {% endif %}
 
     <meta http-equiv="Content-Security-Policy" content="script-src * 'unsafe-inline' 'unsafe-eval';">
 

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
@@ -30,12 +30,10 @@
   </ItemGroup>
 
   <!-- The arena messages are sent with the game's own net writer, which RocketRedist
-       does not carry; Match keeps a copy of the DLL. -->
+       does not carry. We reference a source stub of its assembly, not the game DLL; see
+       refs/SDG.NetPak.Runtime/. -->
   <ItemGroup>
-    <Reference Include="SDG.NetPak.Runtime">
-      <HintPath>..\..\peekseek\plugin\lib\SDG.NetPak.Runtime.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <ProjectReference Include="..\..\..\refs\SDG.NetPak.Runtime\SDG.NetPak.Runtime.csproj" Private="false" />
   </ItemGroup>
 
 </Project>

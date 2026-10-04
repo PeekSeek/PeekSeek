@@ -49,10 +49,24 @@ def test_server_bootstrap_keeps_the_region_already_stored(client):
 
 def test_change_uuid_rotates_uuid(client, user_factory):
     user = user_factory()
-    r = client.get("/user/changeuuid", params={"uuid": user.uuid})
+    r = client.post("/user/changeuuid", params={"uuid": user.uuid})
     assert r.status_code == 200
     body = r.json()
     assert body["uuid"] != user.uuid
+
+
+def test_change_uuid_refuses_get(client, user_factory):
+    """A safe method may not rotate a session: a prefetch would log the account out.
+
+    What GET answers is not the point — there is no GET handler for the path, so it
+    falls through to the /user/{steam64} profile route and is refused there. The point
+    is that it rotates nothing.
+    """
+    user = user_factory()
+    r = client.get("/user/changeuuid", params={"uuid": user.uuid})
+    assert r.status_code != 200
+    with opendb() as db:
+        assert db.query(data.User).where(data.User.uuid == user.uuid).first()
 
 
 def test_match_current_404_without_match(client, user_factory):

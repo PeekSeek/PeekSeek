@@ -141,6 +141,23 @@ async def forced_json_body(request: Request):
 JsonBody = Annotated[dict, Depends(forced_json_body)]
 
 
+def body_schema(model: type) -> dict:
+    """An `openapi_extra` that documents `model` as a route's request body.
+
+    Needed because the body arrives through `forced_json_body` rather than as a typed
+    parameter — FastAPI cannot infer a schema it never sees. The route validates into the
+    same model, so the published schema and the enforced one are one definition.
+    """
+    return {
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {"schema": model.model_json_schema(ref_template="#/components/schemas/{model}")}
+            },
+        }
+    }
+
+
 def page_context(request: Request) -> dict:
     """Values available to every template render — Flask's context_processor."""
     user: Optional[data.User] = getattr(request.state, "user", None)

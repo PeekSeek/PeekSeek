@@ -6,7 +6,9 @@ from fastapi.responses import RedirectResponse
 from src.core.settings import settings
 from src.dependencies import templates
 
-router = APIRouter()
+# Server-rendered pages, every one of them. Kept out of the OpenAPI schema so /api
+# documents the JSON API rather than listing the site's own HTML as operations.
+router = APIRouter(tags=["pages"], include_in_schema=False)
 
 UNTURNED_APP_ID = 304930
 
@@ -90,9 +92,16 @@ def rulebook(request: Request):
 
 
 @router.get("/fairplay")
-@router.get("/fair-play")
 def fairplay(request: Request):
     return templates.TemplateResponse(request=request, name="pages/fairPlay.html")
+
+
+# One page, one URL. The spellings that were once served beside the canonical ones stay
+# reachable as permanent redirects, so old links and bookmarks keep working without the
+# site answering the same content at two addresses.
+@router.get("/fair-play")
+def fairplay_alias():
+    return RedirectResponse("/fairplay", status_code=308)
 
 
 @router.get("/gdpr")
@@ -100,7 +109,11 @@ def gdpr(request: Request):
     return templates.TemplateResponse(request=request, name="pages/gdpr.html")
 
 
-@router.get("/ucl")
 @router.get("/ucl/live")
 def ucl_live(request: Request):
     return templates.TemplateResponse(request=request, name="pages/uclLive.html")
+
+
+@router.get("/ucl")
+def ucl_alias():
+    return RedirectResponse("/ucl/live", status_code=308)

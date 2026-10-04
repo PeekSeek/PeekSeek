@@ -11,17 +11,19 @@ from src.core import models as data
 from src.core import matchmaking, notify
 from src.dependencies import ApiSteam64, templates
 
-router = APIRouter()
+router = APIRouter(tags=["queue"])
 
 
-@router.get("/")
+# The two pages in this router. Excluded individually, since the queue JSON beside them
+# is a documented surface.
+@router.get("/", tags=["pages"], include_in_schema=False)
 def index(request: Request):
     if request.state.user:
         return RedirectResponse("/play", status_code=302)
     return templates.TemplateResponse(request=request, name="pages/index.html")
 
 
-@router.get("/play")
+@router.get("/play", tags=["pages"], include_in_schema=False)
 def play(request: Request):
     # request.state.user, not the session UUID: a cookie can hold a UUID that no
     # longer resolves to anyone, and the two answers must never disagree.
@@ -193,11 +195,14 @@ def queue_quit(steam64: ApiSteam64):
     return PlainTextResponse("success")
 
 
-@router.get("/ping")
+@router.get("/ping", tags=["ops"], summary="Liveness check")
 def ping():
+    """Answers `Pong` as long as the app is serving. Nothing behind it is checked."""
     return PlainTextResponse("Pong")
 
 
-@router.get("/build")
+@router.get("/build", tags=["ops"], summary="Which build is deployed")
 def build():
+    """The `BUILD` label this instance was started with, so a deploy can be identified
+    without reading the container's logs."""
     return PlainTextResponse(settings.build)

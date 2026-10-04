@@ -25,8 +25,8 @@ router = APIRouter()
 mmconfig = settings.mmconfig
 
 
-@router.get("/match")
-def match(request: Request, steam64: LoggedInSteam64):
+@router.get("/match", tags=["pages"], include_in_schema=False)
+def match_page(request: Request, steam64: LoggedInSteam64):
     current_id = data.Match.currentFor(steam64)
     if not current_id:
         request.session["lastError"] = "You are not in a match."
@@ -57,10 +57,10 @@ def match(request: Request, steam64: LoggedInSteam64):
     )
 
 
-@router.get("/match/current")
-def match_current(steam64: ApiSteam64, id: int | None = None):
+@router.get("/match/current", tags=["match"])
+def match_current(steam64: ApiSteam64, matchId: int | None = None):
     """Polled by the in-match screen — returns the live match state as JSON."""
-    current_id = id or data.Match.currentFor(steam64)
+    current_id = matchId or data.Match.currentFor(steam64)
     if not current_id:
         raise HTTPException(status_code=404, detail="No match found.")
 
@@ -80,7 +80,7 @@ def match_current(steam64: ApiSteam64, id: int | None = None):
     return current.localJson()
 
 
-@router.post("/match/decide")
+@router.post("/match/decide", tags=["match"])
 def match_decide(
     steam64: ApiSteam64,
     pick: str | None = None,
@@ -105,7 +105,7 @@ def match_decide(
     return PlainTextResponse("success")
 
 
-@router.post("/match/custom")
+@router.post("/match/custom", tags=["match"])
 def custom_create(steam64: ApiSteam64, payload: JsonBody):
     """Create a custom match (premium only)."""
     with opendb() as db:
@@ -147,7 +147,10 @@ def custom_create(steam64: ApiSteam64, payload: JsonBody):
         return PlainTextResponse(str(match.id))
 
 
-@router.api_route("/user/changeuuid", methods=["GET", "POST"])
+# POST only, and that is the whole point: rotating the UUID logs out every session on
+# the account, so a prefetcher, link scanner or <img src> reaching it over GET would do
+# that without anyone asking. Safe methods may not change state (RFC 9110 9.2.1).
+@router.post("/user/changeuuid", tags=["account"])
 def change_uuid(request: Request, steam64: ApiSteam64):
     """Rotate the caller's session UUID and notify them."""
     new_uuid = str(uuid4())
@@ -161,7 +164,7 @@ def change_uuid(request: Request, steam64: ApiSteam64):
     return {"uuid": new_uuid}
 
 
-@router.get("/me/custom")
+@router.get("/me/custom", tags=["pages"], include_in_schema=False)
 def custom_match(request: Request, steam64: LoggedInSteam64):
     with opendb() as db:
         user = db.query(data.User).where(data.User.steam64 == steam64).first()
@@ -199,7 +202,7 @@ def _eloHistory(matches: list, steam64Str: str) -> list[dict]:
     return history
 
 
-@router.get("/kit/{steam64}")
+@router.get("/kit/{steam64}", tags=["player"])
 def public_kit_data(steam64: int):
     """Every saved kit for a player, fully resolved into ready-to-equip item lists
     — public, no auth, no match context needed. For anything that has to equip
@@ -207,7 +210,7 @@ def public_kit_data(steam64: int):
     return data.Kit.publicData(steam64)
 
 
-@router.get("/reputation/{steam64}")
+@router.get("/reputation/{steam64}", tags=["player"])
 def public_reputation(steam64: int):
     """A player's Elo, public and unauthenticated — what the lobby server mirrors
     into their in-game reputation so rank is visible over someone's head.
@@ -219,8 +222,7 @@ def public_reputation(steam64: int):
     return {"steam64": str(steam64), "elo": data.Stat.getElo(steam64)}
 
 
-@router.get("/user/{steam64}")
-@router.get("/u/{steam64}")
+@router.get("/u/{steam64}", tags=["pages"], include_in_schema=False)
 def profile(
     request: Request,
     steam64: int,
@@ -332,8 +334,8 @@ def _yourProgress(results: dict, steam64: int | None) -> dict | None:
     }
 
 
-@router.get("/match/{matchid}")
-def match_detail(request: Request, matchid: int, user: CurrentUser):
+@router.get("/match/{matchId}", tags=["pages"], include_in_schema=False)
+def match_detail(request: Request, matchId: int, user: CurrentUser):
     """A finished match's result and kill log — public, same as /u/{steam64}. The
     kill-by-kill map/graph view is still a concept; this is the plain data it will sit on
     top of."""
@@ -342,7 +344,7 @@ def match_detail(request: Request, matchid: int, user: CurrentUser):
         # user's own active match id, and would silently overwrite this on every render.
         result = (
             db.query(data.MatchResult)
-            .where(data.MatchResult.matchId == matchid)
+            .where(data.MatchResult.matchId == matchId)
             .first()
         )
         if not result:
@@ -375,7 +377,7 @@ def match_detail(request: Request, matchid: int, user: CurrentUser):
         )
 
 
-@router.get("/spectate")
+@router.get("/spectate", tags=["pages"], include_in_schema=False)
 def spectate(request: Request, steam64: LoggedInSteam64):
     with opendb() as db:
         matches = [
@@ -394,7 +396,18 @@ def spectate(request: Request, steam64: LoggedInSteam64):
         )
 
 
-@router.get("/settings")
-@router.get("/me/settings")
+@router.get("/settings", tags=["pages"], include_in_schema=False)
 def user_settings(request: Request, steam64: LoggedInSteam64):
     return templates.TemplateResponse(request=request, name="app/settings.html")
+
+
+# One page, one URL. The second spelling each of these grew stays reachable as a
+# permanent redirect, so old links keep working without two addresses for one resource.
+@router.get("/me/settings", tags=["pages"], include_in_schema=False)
+def settings_alias():
+    return RedirectResponse("/settings", status_code=308)
+
+
+@router.get("/user/{steam64}", tags=["pages"], include_in_schema=False)
+def profile_alias(steam64: int):
+    return RedirectResponse(f"/u/{steam64}", status_code=308)

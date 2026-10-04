@@ -428,17 +428,15 @@ def _eventTeam(db, heartbeat, event) -> dict | None:
 def normalizePlayerResult(player: dict) -> dict:
     """One game server's report of one player, in the shape matchResults works in.
 
-    Accepts both the current server API's field names and the older `/unt/results`
-    ones, so a server that has not been updated yet still scores identically. Every
-    counter defaults, so a build that predates a given stat reports what it has rather
-    than failing the whole match.
+    Every counter defaults, so a build that predates a given stat reports what it has
+    rather than failing the whole match.
     """
     return {
         "steam64": str(player["steam64"]),
-        "won": bool(player.get("won", player.get("win", False))),
+        "won": bool(player.get("won", False)),
         "kills": int(player.get("kills", 0)),
         "deaths": int(player.get("deaths", 0)),
-        "headshotKills": int(player.get("headshotKills", player.get("headshots", 0))),
+        "headshotKills": int(player.get("headshotKills", 0)),
         "hits": int(player.get("hits", 0)),
         "headshotHits": int(player.get("headshotHits", 0)),
         "damageDealt": int(player.get("damageDealt", 0)),

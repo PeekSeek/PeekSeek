@@ -13,7 +13,9 @@ from src.core.settings import settings
 from src.core.db import open as opendb
 from src.core import models as data
 
-router = APIRouter(prefix="/auth")
+# Browser redirects, not an API: nothing here answers JSON, so none of it belongs in
+# the schema.
+router = APIRouter(prefix="/auth", tags=["auth"], include_in_schema=False)
 
 STEAM_OPENID = "https://steamcommunity.com/openid/login"
 OPENID_NS = "http://specs.openid.net/auth/2.0"
@@ -129,7 +131,7 @@ def discord(request: Request):
     )
 
 
-@router.get("/callback/discord/")
+@router.get("/callback/discord")
 def discord_callback(request: Request, code: str):
     """Finish a Discord link.
 

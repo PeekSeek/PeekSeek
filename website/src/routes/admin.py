@@ -20,7 +20,9 @@ from src.dependencies import (
     templates,
 )
 
-router = APIRouter(prefix="/admin")
+# Staff-only dashboard and its controls. Out of the schema: it is not a published
+# surface, and listing it tells a reader about endpoints they cannot call.
+router = APIRouter(prefix="/admin", tags=["admin"], include_in_schema=False)
 
 mmconfig = settings.mmconfig
 
@@ -230,7 +232,7 @@ def _banSummary(ban) -> dict:
 
 
 @router.get("/player/{target}")
-def player(steam64: LoggedInSteam64, target: int):
+def admin_player(steam64: LoggedInSteam64, target: int):
     """Everything the moderation drawer shows about one player, including what a
     cheating ban would cost everyone else."""
     _requireAdmin(steam64)

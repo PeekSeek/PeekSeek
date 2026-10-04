@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A reference-only stand-in for the game's SDG.NetPak.Runtime.dll. Nothing here is
+       Smartly Dressed Games' code: it declares just enough of the assembly for the
+       compiler to accept Assembly-CSharp signatures that mention NetPakWriter, which is
+       the only reason ARENA needed the real binary. RocketRedist does not carry it, and
+       committing a game DLL we have no redistribution grant for is not an option.
+
+       The identity must match the assembly the game loads at runtime, so the version
+       stays 0.0.0.0 and the assembly is never copied beside a plugin. -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>SDG.NetPak.Runtime</AssemblyName>
+    <RootNamespace>SDG.NetPak</RootNamespace>
+    <AssemblyVersion>0.0.0.0</AssemblyVersion>
+    <FileVersion>0.0.0.0</FileVersion>
+    <Version>0.0.0</Version>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <NoWarn>CS0626</NoWarn>
+  </PropertyGroup>
+
+</Project>

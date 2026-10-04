@@ -66,8 +66,16 @@ is no scheduler, no broker, and no window where a match exists with nowhere to p
 
 ## Licence
 
-MIT, per [LICENSE](https://github.com/PeekSeek/PeekSeek/blob/main/website/LICENSE). Fork
-it, run it, sell it. Attribution is welcome and not required.
+MIT, per [LICENSE](https://github.com/PeekSeek/PeekSeek/blob/main/LICENSE). Fork it, run
+it, sell it. Attribution is welcome and not required.
+
+One exception, and it is a real one: `plugins/utelemetry/` is under
+[PolyForm Noncommercial 1.0.0](https://github.com/PeekSeek/PeekSeek/blob/main/plugins/utelemetry/LICENSE),
+which forbids commercial use. Selling a distribution that includes it breaches those
+terms. It is an optional telemetry plugin nothing else depends on, so a commercial fork
+drops the directory and the rest is MIT.
+[NOTICE](https://github.com/PeekSeek/PeekSeek/blob/main/NOTICE) lists that and the
+third-party fonts and assemblies.
 
 ---
 

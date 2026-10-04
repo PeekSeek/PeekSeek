@@ -12,7 +12,7 @@ from src.core import models as data
 from src.routes.pages import connectUrl
 from src.dependencies import ApiSteam64, CurrentUser, RequestValues, templates
 
-router = APIRouter(prefix="/esports")
+router = APIRouter(prefix="/esports", tags=["esports"], include_in_schema=False)
 
 
 def _get_events(db):
@@ -23,7 +23,7 @@ def _get_events(db):
 
 
 @router.get("/")
-def index(request: Request, user: CurrentUser, season: int | None = None):
+def esports_index(request: Request, user: CurrentUser, season: int | None = None):
     with opendb() as db:
         seasons = data.Season.all()
         viewing = data.Season.find(season) or data.Season.current()
@@ -139,7 +139,10 @@ def signup(steam64: ApiSteam64, values: RequestValues):
         return PlainTextResponse("Successfully joined the team")
 
 
-@router.get("/{event}")
+# Under /event/ rather than straight off /esports/, so an event slug can never shadow a
+# route and no route added above can ever swallow a slug. The bare /esports/<slug> links
+# already out in Discord announcements redirect here, below.
+@router.get("/event/{event}")
 def event(request: Request, event: str, user: CurrentUser, join: str | None = None):
     signup = None
     ownsTeam = False
@@ -264,3 +267,11 @@ def _as_int(value):
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+# Declared last on purpose: it matches anything, so every real path in this router must
+# be registered above it. test_esports_paths_are_not_shadowed asserts that stays true.
+@router.get("/{event}")
+def event_alias(event: str, join: str | None = None):
+    query = f"?join={join}" if join else ""
+    return RedirectResponse(f"/esports/event/{event}{query}", status_code=308)

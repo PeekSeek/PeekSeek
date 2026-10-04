@@ -13,13 +13,15 @@ The whole lifecycle runs through one call, `GET /session`.
 """
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import ValidationError
 
 from src.core.settings import settings
 from src.core.db import open as opendb
 from src.core import models as data
 from src.core import matchmaking, notify, reports
 from src.core.webhook import Webhook
-from src.dependencies import GameServer, JsonBody, authorized_server
+from src.dependencies import GameServer, JsonBody, authorized_server, body_schema
+from src.routes import contracts
 
 router = APIRouter(
     prefix="/server/v1",
@@ -75,7 +77,12 @@ def _match(match: data.Match) -> dict:
     }
 
 
-@router.get("/session")
+@router.get(
+    "/session",
+    # Described, not enforced: see contracts.SessionAnswer for why a response model
+    # would change the payload these plugins are compiled against.
+    responses={200: {"model": contracts.SessionAnswer, "description": "What to do next"}},
+)
 def session(server: GameServer, serverCode: str = "0", matchId: int = 0):
     """The one call a game server makes on a loop. Answers what it should be doing.
 
@@ -203,8 +210,8 @@ def _hostOrWait(match: data.Match) -> dict:
     return {"action": "host", "match": payload}
 
 
-@router.get("/matches/{matchId}")
-def match(matchId: int):
+@router.get("/matches/{matchId}", response_model=contracts.MatchState)
+def gameserverMatch(matchId: int):
     """A match's state. `relayTo` is the server code to send its players to, and stays
     null until there is a server to send them to."""
     with opendb() as db:
@@ -220,26 +227,40 @@ def match(matchId: int):
     }
 
 
-@router.post("/matches/{matchId}/rounds")
+@router.post(
+    "/matches/{matchId}/rounds",
+    response_model=contracts.Status,
+    openapi_extra=body_schema(contracts.RoundWinsReport),
+)
 def matchRounds(matchId: int, payload: JsonBody):
     """Rounds won per team, sent each time a round is decided.
 
     Body: `{"wins": {"<team name>": <rounds won>, ...}}`. Each report replaces the last,
     so a lost one is covered by the next.
     """
-    wins = payload.get("wins")
-    if not isinstance(wins, dict) or not all(
-        isinstance(count, int) and count >= 0 for count in wins.values()
-    ):
-        raise HTTPException(
-            status_code=400, detail="`wins` must map team names to rounds won."
-        )
-
-    data.Match.recordRoundWins(matchId, {str(name): n for name, n in wins.items()})
+    wins = _validated(contracts.RoundWinsReport, payload).checked()
+    data.Match.recordRoundWins(matchId, wins)
     return {"status": "ok"}
 
 
-@router.post("/matches/{matchId}/result")
+def _validated(model: type, payload: dict):
+    """Parse a body that arrived through `forced_json_body` into its model.
+
+    The lenient parse is kept - a plugin's Content-Type is not worth refusing a report
+    over - so validation happens here rather than in the signature. A bad body is a 400
+    naming the field, not a 500 from scoring code reaching into a dict that lacks it.
+    """
+    try:
+        return model.model_validate(payload)
+    except (ValidationError, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@router.post(
+    "/matches/{matchId}/result",
+    response_model=contracts.Status,
+    openapi_extra=body_schema(contracts.MatchResultReport),
+)
 def matchResult(matchId: int, payload: JsonBody):
     """The match's final per-player line. This is what moves Elo, and what ends a match.
 
@@ -261,8 +282,9 @@ def matchResult(matchId: int, payload: JsonBody):
     if data.MatchResult.hasResults(matchId):
         return {"status": "alreadyRecorded", "matchId": matchId}
 
+    report = _validated(contracts.MatchResultReport, payload)
     try:
-        _score(current, payload)
+        _score(current, report)
     except Exception as error:
         Webhook(f"Match.{matchId}").error(
             "Result rejected",
@@ -277,10 +299,10 @@ def matchResult(matchId: int, payload: JsonBody):
     return {"status": "recorded", "matchId": matchId}
 
 
-def _score(match: data.Match, payload: dict) -> None:
+def _score(match: data.Match, report: contracts.MatchResultReport) -> None:
     """Apply one result payload: event standings, or ranked Elo, or nothing at all for a
     match that was never played."""
-    players = payload.get("players") or []
+    players = [line.model_dump() for line in report.players]
 
     eventId = match.meta.get("eventId")
     if eventId:
@@ -290,7 +312,7 @@ def _score(match: data.Match, payload: dict) -> None:
         )
         return
 
-    if not payload.get("played") or not players:
+    if not report.played or not players:
         data.MatchResult.recordUnscored(match.id, "notPlayed")
         return
 
@@ -298,7 +320,7 @@ def _score(match: data.Match, payload: dict) -> None:
     result, avgElo = matchmaking.matchResults(
         gamemode,
         *players,
-        draw=bool(payload.get("draw")),
+        draw=report.draw,
         teams=[team["users"] for team in match.teams],
     )
     data.MatchResult.recordFinalResults(match.id, result)
@@ -407,7 +429,7 @@ def _choices(match: "data.Match", steam64: int) -> dict | None:
     }
 
 
-@router.post("/players/{steam64}/decide")
+@router.post("/players/{steam64}/decide", response_model=contracts.Decision)
 def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = None):
     """Lock this player's kit and/or powerup for the match they are on.
 
@@ -457,7 +479,7 @@ def decidePlayer(steam64: int, kit: str | None = None, powerup: str | None = Non
     return {"matchId": matchId, "choose": _choices(match, steam64)}
 
 
-@router.get("/gamemodes")
+@router.get("/gamemodes", response_model=contracts.Gamemodes)
 def gamemodes():
     """What a player can queue for, in menu order, for a server that asks in game.
     `bit` is the gamemode's position in the whole list, which is what a queue mask means.
@@ -482,7 +504,11 @@ def gamemodes():
     return {"gamemodes": modes}
 
 
-@router.post("/lobby/population")
+@router.post(
+    "/lobby/population",
+    response_model=contracts.Status,
+    openapi_extra=body_schema(contracts.LobbyPopulationReport),
+)
 def lobbyPopulation(server: GameServer, payload: JsonBody):
     """How many are in this lobby right now, once per heartbeat.
 
@@ -494,31 +520,23 @@ def lobbyPopulation(server: GameServer, payload: JsonBody):
     Optional counts are stored as absent rather than zero, so an older lobby that does
     not report them never reads as nobody wanting a match.
     """
-    players = int(payload.get("players", 0))
-    data.LobbyPopulation.report(server.address, players)
+    report = _validated(contracts.LobbyPopulationReport, payload)
+    data.LobbyPopulation.report(server.address, report.players)
     data.ArenaReading.record(
-        server.address,
-        players,
-        _optionalCount(payload, "queueing"),
-        _optionalCount(payload, "held"),
+        server.address, report.players, report.queueing, report.held
     )
     return {"status": "recorded"}
 
 
-def _optionalCount(payload: dict, field: str) -> int | None:
-    value = payload.get(field)
-    return None if value is None else int(value)
-
-
-@router.get("/players/{steam64}")
-def player(steam64: int):
+@router.get("/players/{steam64}", response_model=contracts.PlayerState)
+def gameserverPlayer(steam64: int):
     """Everything a server needs to know about one player. Asking does not queue them."""
     with opendb() as db:
         ban = data.UserBan.barring([steam64], db).get(steam64)
     return _player(steam64, data.Match.currentFor(steam64), ban)
 
 
-@router.get("/players/{steam64}/kits")
+@router.get("/players/{steam64}/kits", response_model=dict[str, contracts.SavedKit])
 def playerKits(steam64: int):
     """Every kit this player has saved, resolved into ready-to-equip items, with the
     magazine broken out so a caller can keep the spare topped up."""
@@ -531,7 +549,7 @@ def playerKits(steam64: int):
     }
 
 
-@router.put("/players/{steam64}/queue")
+@router.put("/players/{steam64}/queue", response_model=contracts.PlayerState)
 def joinQueue(
     steam64: int, gamemodes: int = 1, region: str = "paris", ip: str | None = None
 ):
@@ -555,13 +573,13 @@ def joinQueue(
     return _player(steam64, matchId, ban)
 
 
-@router.delete("/players/{steam64}/queue")
+@router.delete("/players/{steam64}/queue", response_model=contracts.Status)
 def leaveQueue(steam64: int):
     data.User.removeFromQueue(steam64)
     return {"status": "ok"}
 
 
-@router.post("/reports")
+@router.post("/reports", response_model=contracts.ReportAccepted)
 async def submitReport(
     reported: int = Form(...),
     reporter: int = Form(...),
@@ -603,10 +621,14 @@ async def submitReport(
     return {"status": "ok", "delivered": sent}
 
 
-@router.post("/players/{steam64}/bans")
+@router.post(
+    "/players/{steam64}/bans",
+    response_model=contracts.Status,
+    openapi_extra=body_schema(contracts.GuardBan),
+)
 def banPlayer(steam64: int, payload: JsonBody):
     """A ban issued by anti-cheat on a game server. An empty body bans for "Cheating"."""
-    reason = payload.get("reason") or "Cheating"
+    reason = _validated(contracts.GuardBan, payload).reason or "Cheating"
     with opendb() as db:
         db.add(
             data.UserBan(

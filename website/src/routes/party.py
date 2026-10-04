@@ -12,7 +12,7 @@ from src.core.db import open as opendb
 from src.core import models as data
 from src.dependencies import ApiSteam64
 
-router = APIRouter(prefix="/party")
+router = APIRouter(prefix="/party", tags=["party"])
 
 
 @router.get("/")

@@ -1,13 +1,21 @@
-"""Minify public/assets in place. Run at image build time, never in dev.
+"""Minify public/assets. Rewrites the files in place, which is only ever right inside
+an image build.
 
 The Dockerfile runs this after COPY public, so the repo keeps readable stylesheets
 and the deployed image serves compressed ones. It rewrites the files rather than
 emitting .min.css alongside them, so no template has to know which build it is in
 and there is no second set of paths to keep in step.
 
+In place means destructive: run bare in a checkout and every stylesheet and script in
+the working tree is replaced by its minified form, and a commit made before noticing
+loses the readable source. So the in-place pass needs --in-place, which the Dockerfile
+passes and a curious contributor will not. Without it the files are read, compressed
+and reported on, and nothing is written.
+
 Idempotent: running it twice costs a little time and changes nothing.
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -23,7 +31,15 @@ def minified(path: Path) -> str:
     return rjsmin.jsmin(path.read_text("utf-8"))
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    options = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    options.add_argument(
+        "--in-place",
+        action="store_true",
+        help="rewrite the files. Without it, report the saving and write nothing.",
+    )
+    written = options.parse_args(argv).in_place
+
     # htmx ships minified; running a second pass over a vendored library is pure risk
     # for no gain, so anything already named .min is left exactly as it was shipped.
     targets = [
@@ -38,15 +54,15 @@ def main() -> int:
 
     before = after = 0
     for path in targets:
-        original = path.stat().st_size
-        path.write_text(minified(path), encoding="utf-8")
-        before += original
-        after += path.stat().st_size
+        compressed = minified(path)
+        before += path.stat().st_size
+        after += len(compressed.encode("utf-8"))
+        if written:
+            path.write_text(compressed, encoding="utf-8")
 
     saved = before - after
-    print(
-        f"minify: {len(targets)} files, {before:,} -> {after:,} bytes ({saved:,} saved)"
-    )
+    how = "rewrote" if written else "would rewrite (--in-place to do it)"
+    print(f"minify: {how} {len(targets)} files, {before:,} -> {after:,} bytes ({saved:,} saved)")
     return 0
 
 
