@@ -19,13 +19,6 @@
   const eventId = "{{event.id}}";
 </script>
 
-{% if launch %}
-<script>
-  /* ?join= sends Steam the launch and leaves the page alone: a protocol handler is not
-     a navigation, so the event stays on screen behind Unturned's prompt. */
-  window.location.href = {{ launch | tojson }};
-</script>
-{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -56,6 +49,41 @@
     {% endfor %}
   </div>
 </div>
+
+{% if launch %}
+<!-- ?join= puts the launch behind a button the player presses, never on page load. An
+     Unturned in-game banner may not link to steam:// or to a page that joins a server
+     by itself, so the brief above has to be readable and complete on its own and this
+     panel has to be skippable. Not every event link carries a ?join= either, which is
+     why the whole panel is conditional rather than the href inside it. -->
+<div class="mainElement joinPanel">
+  <h2>Join the event server</h2>
+  <span>
+    This opens Steam and connects you to the server this event runs on. You can leave
+    whenever you like, and you do not need to join it to sign up or to follow along.
+  </span>
+
+  {% if queued %}
+    <span class="queueCount">
+      <b>{{ queued }}</b> {{ "player" if queued == 1 else "players" }} queued for this event right now
+    </span>
+  {% endif %}
+
+  <div class="joinActions">
+    <a class="settingsButton" href="{{ launch }}">
+      <img src="/static/img/spectate.png" alt="" height="20"> Launch Unturned and join
+    </a>
+    <a class="settingsButton" href="/discord" target="_blank" rel="noopener">
+      <img src="/static/img/discord.png" alt="" height="20"> Event updates on Discord
+    </a>
+  </div>
+
+  <i class="muted">
+    Server code <b>{{ serverCode }}</b>. You can also enter it in Unturned's
+    <b>Connect Directly</b> menu yourself.
+  </i>
+</div>
+{% endif %}
 
 <div class="mainElement signupPanel">
   {% if user and signup == None %}
