@@ -1,4 +1,4 @@
-﻿using Steamworks;
+using Steamworks;
 using Steamworks.Ugc;
 
 // Publishes a built mod or map to the Steam Workshop, or updates it there.

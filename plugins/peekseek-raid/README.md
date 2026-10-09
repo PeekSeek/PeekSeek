@@ -199,7 +199,7 @@ every gamemode, and `Items.Spawn_Chance` in the server config sets the loot to n
 
 ## Running it
 
-A match comes from the site: the `Raid` gamemode in `website/src/mmconfig.json`, queued
+A match comes from the site: the RAID gamemodes in `gamemodes/`, queued
 for like any other, handed to a match server by `/server/v1/session`, and run by this
 plugin because the match names it. To test one alone, queue it on dev with a second
 player and run `/ssolo` on the match server once it is held.

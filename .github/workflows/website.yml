@@ -65,7 +65,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # ubuntu-latest ships ImageMagick, so this costs nothing in the image.
+      # ubuntu-latest stopped shipping ImageMagick when it moved to 24.04, which is
+      # what broke this job. Apt gives version 6; the script handles 6 and 7.
+      - run: sudo apt-get update && sudo apt-get install -y imagemagick
       - name: Are the badge PNGs still their SVGs?
         working-directory: website
         run: python scripts/render_rank_pngs.py --check

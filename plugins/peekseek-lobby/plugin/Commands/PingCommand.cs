@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using PeekSeekLobby.Core;
 using Rocket.API;
 using Rocket.Unturned.Player;

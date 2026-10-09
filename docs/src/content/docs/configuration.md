@@ -8,9 +8,14 @@ Configuration splits by **kind**, not by environment.
 
 | Where | Holds | In the repository |
 |---|---|---|
-| `src/config.toml` | Everything non-secret | Yes |
+| `config.yaml` | Everything non-secret | Yes |
+| `gamemodes/*.yaml` | One file per gamemode | Yes |
 | Environment | Secrets, plus three per-deployment overrides | No |
-| `kits.json`, `mmconfig.json` | Machine-shaped datasets too structured for TOML | Yes |
+| `kits.json` | The kit catalogue | Yes |
+
+Both `config.yaml` and `gamemodes/` sit in the repository root. The site, the bot and
+the images all read them from there. Set `CONFIG` to point at the file when the loader
+cannot find it, which is what the bot does.
 
 Everything funnels through one `Settings` object in `src/core/settings.py`. Nothing reads
 `os.environ` directly, and nothing hardcodes a value that already lives in config. If you
@@ -54,7 +59,7 @@ build = "develop"
 ```
 
 All three are overridable from the environment so one image can serve every deployment.
-Everything else in `config.toml` is the same everywhere.
+Everything else in `config.yaml` is the same everywhere.
 
 ---
 
@@ -142,15 +147,25 @@ before allow-listing a server into it.
 
 ---
 
-## `[data_files]`
+## Gamemodes
 
-Paths, relative to `config.toml`, of the two JSON datasets.
+Every file in `gamemodes/` is a gamemode. The file name is the gamemode, in lower case,
+with a hyphen for each space.
 
-| File | Holds |
-|---|---|
-| `mmconfig.json` | Gamemode definitions: names, rounds, settings |
-| `kits.json` | The kit catalogue: items, amounts, attachment state |
+Each file carries its own `queueBit`. That number is the mode's bit in a queue mask, so
+it must be unique, and the set of bits must have no gaps. The loader refuses to start
+otherwise. Only ever give a new mode the next free bit; moving an existing one changes
+what every mask already sent means.
 
-These are JSON rather than TOML because they are machine-shaped: deep, repetitive, and
-edited by tooling more often than by hand. Both are the most game-specific files in the
-website, and the first two you replace when [forking](/docs/forking/).
+The `gamemodes` list in `config.yaml` says which modes the play page shows, and in what
+order. A mode left out of that list keeps its bit but no player can select it.
+
+A gamemode's `name` is sent to the game server, which uses it to pick the plugin that
+runs the match. The match plugin matches by prefix, so `RAID 2v2` needs a plugin named
+`RAID`. Renaming a mode therefore needs a plugin release.
+
+## `kitsFile`
+
+The path of the kit catalogue, relative to `config.yaml`. It holds items, amounts and
+attachment state. It and `gamemodes/` are the most game-specific parts of the website,
+and the first you replace when [forking](/docs/forking/).

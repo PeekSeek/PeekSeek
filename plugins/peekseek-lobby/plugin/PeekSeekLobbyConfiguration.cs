@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Xml.Serialization;
+using PeekSeek.Core.Models;
 using PeekSeekLobby.Core.Models;
 using Rocket.API;
-using PeekSeek.Core.Models;
 
 namespace PeekSeekLobby;
 
@@ -237,7 +237,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         StreakWindowSeconds = 60f;
         // Two kills buys an umbrella and a bounce, three fits a drum to the gun
         // they are already holding, five is a rampage. Every id here is one the
-        // site already hands out in mmconfig.json's powerups.
+        // site already hands out in a gamemode's powerups.
         StreakRewards = [
             new StreakReward {
                 KillsRequired = 2,

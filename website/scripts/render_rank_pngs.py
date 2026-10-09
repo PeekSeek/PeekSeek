@@ -38,13 +38,13 @@ SIZE = "256x256"
 TOLERANCE = 200
 
 
-def render(magick: str, source: str, target: str) -> str | None:
+def render(convert: list[str], source: str, target: str) -> str | None:
     """Render one SVG. Returns an error message, or None on success."""
     # -strip and -depth 8 because a badge is flat colour: 16-bit and metadata
     # tripled the file size for nothing anybody can see at thumbnail size.
     result = subprocess.run(
         [
-            magick,
+            *convert,
             "-background",
             "none",
             source,
@@ -61,10 +61,10 @@ def render(magick: str, source: str, target: str) -> str | None:
     return result.stderr.strip() or None if result.returncode != 0 else None
 
 
-def differing_pixels(magick: str, a: str, b: str) -> int | None:
+def differing_pixels(compare: list[str], a: str, b: str) -> int | None:
     """How many pixels differ between two PNGs, or None if they cannot be compared."""
     result = subprocess.run(
-        [magick, "compare", "-metric", "AE", a, b, "null:"],
+        [*compare, "-metric", "AE", a, b, "null:"],
         capture_output=True,
         text=True,
     )
@@ -87,8 +87,14 @@ def main() -> int:
     )
     checking = options.parse_args().check
 
+    # ImageMagick 7 puts everything behind one `magick` dispatcher. Version 6, which
+    # is what Debian and Ubuntu still ship, has a binary per tool instead.
     magick = os.environ.get("IMAGEMAGICK") or shutil.which("magick")
-    if not magick:
+    if magick:
+        convert, compare = [magick], [magick, "compare"]
+    elif shutil.which("convert") and shutil.which("compare"):
+        convert, compare = ["convert"], ["compare"]
+    else:
         print("ImageMagick not found. Install it, or set IMAGEMAGICK to the binary.")
         return 1
 
@@ -105,7 +111,7 @@ def main() -> int:
             committed = os.path.join(RANKS, f"{name}.png")
             target = os.path.join(scratch, f"{name}.png") if checking else committed
 
-            error = render(magick, source, target)
+            error = render(convert, source, target)
             if error:
                 print(f"  FAILED {name}: {error}")
                 return 1
@@ -117,7 +123,7 @@ def main() -> int:
             if not os.path.exists(committed):
                 stale.append((name, "no PNG committed"))
                 continue
-            moved = differing_pixels(magick, committed, target)
+            moved = differing_pixels(compare, committed, target)
             if moved is None:
                 stale.append((name, "could not be compared"))
             elif moved > TOLERANCE:

@@ -95,7 +95,7 @@ BOOTSTRAP_SERVERS=203.0.113.10=paris,203.0.113.11=utah
 
 Every `/server/v1/*` route returns `401` to an address not in `AuthorizedServers`, and
 nothing in the site adds one, so without `BOOTSTRAP_SERVERS` no game server can ever
-talk to your instance. Regions come from `[regions.names]` in `config.toml`. Addresses
+talk to your instance. Regions come from `regions` in `config.yaml`. Addresses
 already present are left alone, so changing a region here does not overwrite the stored
 one.
 
@@ -124,12 +124,12 @@ server, or the file deleted so the plugin regenerates it.
 
 ## Multiple environments
 
-One image serves all of them. Three environment variables override the `[app]` block in
-`config.toml`:
+One image serves all of them. Three environment variables override the `app` block in
+`config.yaml`:
 
 | Variable | Overrides |
 |---|---|
-| `DOMAIN` | `[app].domain`, the public hostname with no scheme |
+| `DOMAIN` | `app.domain`, the public hostname with no scheme |
 | `PROTOCOL` | `[app].protocol` |
 | `BUILD` | `[app].build`, the label the site shows |
 

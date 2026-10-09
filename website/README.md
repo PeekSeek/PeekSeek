@@ -29,9 +29,7 @@ tooling/              # the JS and CSS linters; kept out of the runtime image
 src/
 ├── app.py            # FastAPI assembly: middleware, routers, error pages
 ├── dependencies.py   # current user, auth guards, template renderer
-├── config.toml       # non-secret settings (TOML: humans tune it)
 ├── kits.json         # kit catalog (JSON: machine-shaped data)
-├── mmconfig.json     # gamemode definitions (JSON: machine-shaped data)
 ├── core/             # domain logic: settings, db, models, matchmaking, steam
 ├── routes/           # one APIRouter per area
 │   └── contracts.py  # the /server/v1 request and response models
@@ -103,12 +101,13 @@ first login rather than duplicated.
 
 `BOOTSTRAP_SERVERS` exists for the same reason on the other side of the contract: every
 `/server/v1/*` route 401s an IP that is not in `AuthorizedServers`, and nothing in the
-site adds one. Regions come from `[regions.names]` in `config.toml`. Addresses already present are
+site adds one. Regions come from `regions` in `config.yaml`. Addresses already present are
 left alone, so changing a region here does not overwrite the stored one.
 
-Non-secret config lives in [`src/config.toml`](src/config.toml). The three `[app]`
-values are env-overridable so one image can serve both dev and production; everything
-else in the file is the same everywhere.
+Non-secret config lives in [`config.yaml`](../config.yaml) in the repository root,
+with one file per gamemode in [`gamemodes/`](../gamemodes/). The three `app` values are
+env-overridable so one image can serve both dev and production; everything else in the
+file is the same everywhere.
 
 ## Docker
 

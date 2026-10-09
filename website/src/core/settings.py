@@ -51,15 +51,19 @@ class Settings:
         # level above. The bot installs the site into site-packages, where neither is
         # true, so CONFIG names the file outright. Everything else, the gamemodes and
         # the kits, is found next to whichever file wins.
+        candidates = [
+            Path(os.environ["CONFIG"]) if os.environ.get("CONFIG") else None,
+            self.root.parent.parent / "config.yaml",
+            self.root.parent / "config.yaml",
+        ]
         self.config_file = next(
-            path
-            for path in (
-                Path(os.environ["CONFIG"]) if os.environ.get("CONFIG") else None,
-                self.root.parent.parent / "config.yaml",
-                self.root.parent / "config.yaml",
-            )
-            if path and path.is_file()
+            (path for path in candidates if path and path.is_file()), None
         )
+        if self.config_file is None:
+            tried = ", ".join(str(path) for path in candidates if path)
+            raise RuntimeError(
+                f"No config.yaml found. Looked in: {tried}. Set CONFIG to its path."
+            )
         config = yaml.safe_load(self.config_file.read_text("utf-8"))
 
         # One image serves every environment, so the deploy picks the hostname.

@@ -23,12 +23,12 @@ website/
 │   ├── assets/css/        # one stylesheet per page, plus default.css for the shared parts
 │   ├── assets/js/         # one script per page
 │   └── img/ maps/ unturned/
+├── config.yaml         # non-secret settings, repository root
+├── gamemodes/          # one file per gamemode
 └── src/
     ├── app.py             # assembly: middleware, routers, error pages
     ├── dependencies.py    # current user, auth guards, template renderer
-    ├── config.toml        # non-secret settings
     ├── kits.json          # kit catalog
-    ├── mmconfig.json      # gamemode definitions
     ├── core/              # domain logic: settings, db, models, matchmaking, steam
     ├── routes/            # one APIRouter per area
     ├── templates/         # Jinja2 pages
@@ -46,8 +46,8 @@ regression.
 They have nothing in common and that is intentional.
 
 **People** log in through Steam or Discord and carry a signed session cookie.
-Permissions are bits on the user row, named in `[permissions].list` in `config.toml`, so
-the order of that list is a storage format and not a preference.
+Permissions are bits on the user row, named in `permissions` in `config.yaml`, so the
+order of that list is a storage format and not a preference.
 
 **Game servers** are recognised by source IP, from the `AuthorizedServers` table. Every
 route under `/server/v1` returns `401` to an address that is not in it, and nothing in
@@ -89,13 +89,15 @@ manual, on purpose.
 
 ## Configuration splits by kind, not by environment
 
-- **`src/config.toml`** holds everything non-secret: matchmaking timings, gamemode names,
-  permission bits, Discord channel ids, the lobby's connect code. Humans tune it and it
-  is in the repository.
+- **`config.yaml`**, in the repository root, holds everything non-secret: matchmaking
+  timings, permission bits, Discord channel ids, the lobby's connect code, and which
+  gamemodes the play page shows.
+- **`gamemodes/`**, beside it, holds one file per gamemode. Each one carries its own
+  queue bit.
 - **The environment** holds secrets, plus three overrides (`DOMAIN`, `PROTOCOL`, `BUILD`)
   so one image can serve both dev and production.
-- **`kits.json` and `mmconfig.json`** hold machine-shaped datasets that are too big and
-  too structured to read as TOML.
+- **`kits.json`** holds the kit catalogue, which is machine-shaped data rather than
+  settings.
 
 Everything funnels through one `Settings` object in `src/core/settings.py`. Nothing reads
 `os.environ` directly, and nothing hardcodes a value that already lives in config.
