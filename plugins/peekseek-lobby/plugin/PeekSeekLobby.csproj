@@ -12,7 +12,7 @@
   <ItemGroup>
     <PackageReference Include="RestoreMonarchy.RocketRedist" Version="3.*" ExcludeAssets="runtime" />
     <PackageReference Include="Lib.Harmony" Version="2.*" ExcludeAssets="runtime" />
-    <PackageReference Include="Krafs.Publicizer" Version="2.3.0" PrivateAssets="all" />
+    <PackageReference Include="Krafs.Publicizer" Version="2.3.2" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
