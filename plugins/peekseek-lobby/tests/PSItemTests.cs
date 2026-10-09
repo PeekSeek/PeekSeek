@@ -27,7 +27,7 @@ public class PSItemTests {
         Assert.Empty(result[0].State);
     }
 
-    /// An item with no state at all is still an item — the site omits the field for
+    /// An item with no state at all is still an item, the site omits the field for
     /// anything that carries no attachment bytes, and an outfit piece that fails to
     /// parse is an outfit piece the player spawns without.
     [Fact]

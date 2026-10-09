@@ -13,7 +13,7 @@ written into the results blob, so no per-match value survives to subtract.
 import logging
 from time import time
 
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core.settings import settings
 from src.core import models as data
 
@@ -56,7 +56,7 @@ PRESETS = {
 }
 
 
-def endTimeFor(preset: str | None, days: int | None) -> int:
+def end_time_for(preset: str | None, days: int | None) -> int:
     """When a ban with these terms runs out, as a Unix second.
 
     A preset's duration always wins over a passed-in one. That is the point of a
@@ -71,7 +71,7 @@ def endTimeFor(preset: str | None, days: int | None) -> int:
     return int(time()) + int(days) * DAY
 
 
-def noteWithAuthor(note: str | None, byName: str, bySteam64) -> str:
+def note_with_author(note: str | None, byName: str, bySteam64) -> str:
     """The stored moderator note, always opening with who issued the ban.
 
     Every existing note in production is hand-typed and starts with some variation of
@@ -83,9 +83,9 @@ def noteWithAuthor(note: str | None, byName: str, bySteam64) -> str:
     return f"{prefix} {note}" if note else prefix
 
 
-def taintedMatches(db, steam64) -> list:
+def tainted_matches(db, steam64) -> list:
     """Every match record this player has a final line in, oldest first."""
-    return data.MatchResult.scoredFor(db, steam64, MAX_TAINTED, newestFirst=False)
+    return data.MatchResult.scored_for(db, steam64, MAX_TAINTED, newestFirst=False)
 
 
 def _reversals(matches: list, steam64) -> dict:
@@ -112,15 +112,15 @@ def _reversals(matches: list, steam64) -> dict:
     return totals
 
 
-def previewBan(steam64) -> dict:
+def preview_ban(steam64) -> dict:
     """What a cheating ban on this player would do, without doing any of it.
 
     The dashboard drawer and the bot's confirmation both render this, so the numbers an
     admin approves are the numbers that happen rather than an estimate written next to
     the button.
     """
-    with opendb() as db:
-        matches = taintedMatches(db, steam64)
+    with session() as db:
+        matches = tainted_matches(db, steam64)
         totals = _reversals(matches, steam64)
         stats = db.query(data.Stat).where(data.Stat.steam64 == int(steam64)).first()
 
@@ -151,11 +151,11 @@ def previewBan(steam64) -> dict:
         }
 
 
-def _applyRefunds(db, totals: dict) -> None:
+def _apply_refunds(db, totals: dict) -> None:
     """Subtract each player's tainted totals from their Stats row.
 
     Clamped so nothing lands somewhere impossible. Elo has a floor of 100 because
-    `_ladderDelta` never lets it fall below that, and a counter cannot be negative. In
+    `_ladder_delta` never lets it fall below that, and a counter cannot be negative. In
     practice neither clamp fires on a consistent database; they exist so that one bad
     row cannot write a profile nobody can explain.
     """
@@ -172,10 +172,10 @@ def _applyRefunds(db, totals: dict) -> None:
         db.query(data.Stat).where(data.Stat.steam64 == steam64).update(update)
 
 
-def _voidMatches(db, matches: list) -> None:
+def _void_matches(db, matches: list) -> None:
     """Move each tainted match's results out of the key the site reads.
 
-    `MatchResult.latestFor` and the profile's Elo graph both key off `results`, so
+    `MatchResult.latest_for` and the profile's Elo graph both key off `results`, so
     renaming it to `voidedResults` makes a voided match vanish from both without a code
     change, while keeping the whole record for an admin to look at later. Leaving it in
     place would show refunded players a match list and a graph that contradict the Elo
@@ -190,7 +190,7 @@ def _voidMatches(db, matches: list) -> None:
         )
 
 
-def issueBan(
+def issue_ban(
     steam64,
     preset: str | None = None,
     days: int | None = None,
@@ -201,7 +201,7 @@ def issueBan(
 ) -> dict:
     """Ban a player, and for a cheating ban undo what they did to everyone else.
 
-    Returns the same shape `previewBan` does, so a caller can report what happened in
+    Returns the same shape `preview_ban` does, so a caller can report what happened in
     the same words it warned about. Everything happens in one session: a refund that
     landed while the ban insert failed would leave eleven people short of Elo and the
     cheat still playing.
@@ -215,14 +215,14 @@ def issueBan(
     if not reason:
         raise ValueError("A ban needs a reason.")
 
-    summary = previewBan(steam64) if voids else None
+    summary = preview_ban(steam64) if voids else None
 
     # Before the ban lands, because the answer stops being available once they are
     # no longer anybody's problem: a match already in progress has to be ended, and
     # this is the only moment we still know which one it is.
-    live = data.Match.currentFor(steam64) if voids else None
+    live = data.Match.current_for(steam64) if voids else None
 
-    with opendb() as db:
+    with session() as db:
         # Most people worth banning have never opened the site: they were reported from
         # a game server, and the site only creates an account when somebody logs in or
         # a result comes in for them. Without a row here the ban lands on an id with no
@@ -234,23 +234,23 @@ def issueBan(
         data.User.ensure(db, int(steam64))
 
         if voids:
-            matches = taintedMatches(db, steam64)
-            _applyRefunds(db, _reversals(matches, steam64))
-            _voidMatches(db, matches)
+            matches = tainted_matches(db, steam64)
+            _apply_refunds(db, _reversals(matches, steam64))
+            _void_matches(db, matches)
             db.query(data.Stat).where(data.Stat.steam64 == int(steam64)).delete()
 
         # A player already serving a ban is not banned harder by a second row, and the
         # duplicate only makes the history list harder to read. The exception is a ban
         # that would outlast the one they are already serving.
-        active = data.UserBan.activeFor(steam64, db)
-        endTime = endTimeFor(preset, days)
+        active = data.UserBan.active_for(steam64, db)
+        endTime = end_time_for(preset, days)
         if active is None or endTime > active.endTime:
             db.add(
                 data.UserBan(
                     steam64=int(steam64),
                     endTime=endTime,
                     reason=reason,
-                    moderatorNote=noteWithAuthor(note, byName, bySteam64),
+                    moderatorNote=note_with_author(note, byName, bySteam64),
                 )
             )
 
@@ -266,16 +266,16 @@ def issueBan(
             db.query(data.Match).where(data.Match.id == live).update({"finished": True})
 
     if live:
-        data.MatchResult.recordUnscored(live, "abandoned")
+        data.MatchResult.record_unscored(live, "abandoned")
 
     if voids:
         summary["cancelledMatch"] = live
-        _logRefunds(steam64, reason, byName, summary)
+        _log_refunds(steam64, reason, byName, summary)
 
     return summary or {"steam64": str(steam64), "matches": 0, "players": 0}
 
 
-def _logRefunds(steam64, reason: str, byName: str, summary: dict) -> None:
+def _log_refunds(steam64, reason: str, byName: str, summary: dict) -> None:
     """Post the full refund list to the moderation channel.
 
     Every refunded player is named, because the people whose Elo moved are the ones
@@ -306,7 +306,7 @@ def _logRefunds(steam64, reason: str, byName: str, summary: dict) -> None:
         logging.warning("Refund list for %s was not posted to Discord", steam64)
 
 
-def overturnBan(banId: int, byName: str, bySteam64) -> dict | None:
+def overturn_ban(banId: int, byName: str, bySteam64) -> dict | None:
     """Lift one ban, and record in its own note that it was lifted and by whom.
 
     The row is kept with `endTime` set to 0 rather than deleted. A ban that was wrong is
@@ -314,7 +314,7 @@ def overturnBan(banId: int, byName: str, bySteam64) -> dict | None:
     make an admin looking at a repeat offender see a clean record, and would quietly
     erase the fact that somebody overturned it.
 
-    Zero rather than "now" because `activeFor` compares against the current time, and a
+    Zero rather than "now" because `active_for` compares against the current time, and a
     value in the past is unambiguous however clocks drift. Returns None when there is no
     such ban.
     """
@@ -322,7 +322,7 @@ def overturnBan(banId: int, byName: str, bySteam64) -> dict | None:
 
     stamp = datetime.now(timezone.utc).strftime("%d %b %Y")
 
-    with opendb() as db:
+    with session() as db:
         ban = db.query(data.UserBan).where(data.UserBan.id == banId).first()
         if ban is None:
             return None
@@ -343,11 +343,11 @@ def overturnBan(banId: int, byName: str, bySteam64) -> dict | None:
             "wasPermanent": ban.permanent,
         }
 
-    _logOverturn(lifted, byName, bySteam64, note)
+    _log_overturn(lifted, byName, bySteam64, note)
     return lifted
 
 
-def _logOverturn(lifted: dict, byName: str, bySteam64, previousNote: str) -> None:
+def _log_overturn(lifted: dict, byName: str, bySteam64, previousNote: str) -> None:
     """Announce a lifted ban to staff, pinging the role.
 
     Louder than issuing one on purpose. A ban is one person's call and stands until

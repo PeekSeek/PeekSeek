@@ -3,9 +3,19 @@
 Thirteen sounds, three concepts each. Most folders hold `A_bell.mp3`, `B_tactile.mp3` and
 `C_arcade.mp3`. The letter is a family: pick one and those sounds come from the same
 instrument and fit together. The kills are different: they are impacts, not melodies,
-and have their own three concepts (`A_steel`, `B_punch`, `C_boom`). `make_sounds.py`
-renders everything (numpy + ffmpeg). `python make_sounds.py kill round_start` re-renders
-only the sounds you name, so a sound you already like never changes.
+and have their own three concepts (`A_steel`, `B_punch`, `C_boom`). `make_sounds.py` renders everything
+(`pip install -r requirements.txt`, plus ffmpeg on PATH).
+
+**The renders are not committed.** They are build output: the script seeds with
+`default_rng(7)`, so a full run reproduces every WAV byte for byte, and 11 MB of
+regenerable audio in git bought nothing. Run it once and they are all back. The sixteen
+sounds that actually ship *are* committed, under `website/public/sounds/` and the kill
+feed's bundle, and `python make_sounds.py ship` is what puts them there.
+
+`python make_sounds.py kill round_start` renders only the sounds you name, which is for
+auditioning one change quickly. It is not a faithful re-render: the random noise in the
+kills and the reverb tails come from one seeded stream shared across the whole run, so a
+subset draws different numbers than the full run does. Render everything before you ship.
 
 | Folder | When it plays | File length (tail to silence) |
 | --- | --- | --- |

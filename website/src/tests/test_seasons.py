@@ -50,14 +50,14 @@ def standing(steam64):
     ],
 )
 def test_a_season_keeps_something_but_never_the_top(finished, expected):
-    assert data.Season.carryOver(finished) == expected
+    assert data.Season.carry_over(finished) == expected
 
 
 @pytest.mark.parametrize("finished", [2000, 900, 700, 600, 500, 400, 351])
 def test_a_season_always_costs_anybody_who_was_over_the_seed(finished):
     """The drop has to bite everywhere above the floor: a reset that left somebody where
     they were, or better, is not a reset."""
-    assert data.Season.carryOver(finished) < finished
+    assert data.Season.carry_over(finished) < finished
 
 
 def test_the_first_season_adopts_every_standing_that_predates_seasons(user_factory):
@@ -106,7 +106,7 @@ def test_a_new_season_files_the_old_standings_and_empties_the_ladder(user_factor
     first = data.Season.current()
 
     data.Season.start("26Q3")
-    data.Stat.forgetTop()
+    data.Stat.forget_top()
 
     with Session(core_db.engine) as s:
         archived = (
@@ -121,7 +121,7 @@ def test_a_new_season_files_the_old_standings_and_empties_the_ladder(user_factor
     # play in it, which is true.
     assert standing(player.steam64).elo == 950
     assert standing(player.steam64).season == first.id
-    assert data.Stat.getTop10() == []
+    assert data.Stat.get_top10() == []
 
 
 def test_the_first_ranked_match_of_a_season_is_played_on_the_carried_over_elo(
@@ -135,9 +135,9 @@ def test_the_first_ranked_match_of_a_season_is_played_on_the_carried_over_elo(
     elo(loser, 2000)
     data.Season.current()
     data.Season.start("26Q3")
-    data.Stat.forgetTop()
+    data.Stat.forget_top()
 
-    results, avgElo = matchmaking.matchResults(
+    results, avgElo = matchmaking.match_results(
         RANKED,
         {"steam64": str(winner.steam64), "won": True, "kills": 5, "deaths": 2},
         {"steam64": str(loser.steam64), "won": False, "kills": 2, "deaths": 5},
@@ -163,14 +163,14 @@ def test_a_second_match_in_the_same_season_is_not_carried_over_again(user_factor
     data.Season.current()
     data.Season.start("26Q3")
 
-    matchmaking.matchResults(
+    matchmaking.match_results(
         RANKED,
         {"steam64": str(player.steam64), "won": True, "kills": 5, "deaths": 2},
         {"steam64": str(other.steam64), "won": False, "kills": 2, "deaths": 5},
     )
     afterFirst = standing(player.steam64).elo
 
-    matchmaking.matchResults(
+    matchmaking.match_results(
         RANKED,
         {"steam64": str(player.steam64), "won": True, "kills": 5, "deaths": 2},
         {"steam64": str(other.steam64), "won": False, "kills": 2, "deaths": 5},
@@ -190,7 +190,7 @@ def test_an_unranked_match_does_not_start_anybody_season(user_factory):
     data.Season.current()
     data.Season.start("26Q3")
 
-    matchmaking.matchResults(
+    matchmaking.match_results(
         unranked,
         {"steam64": str(player.steam64), "won": True, "kills": 5, "deaths": 2},
         {"steam64": str(other.steam64), "won": False, "kills": 2, "deaths": 5},
@@ -228,7 +228,7 @@ def test_the_leaderboard_can_be_read_one_season_at_a_time(client, user_factory):
     elo(player, 900)
     first = data.Season.current()
     data.Season.start("26Q3")
-    data.Stat.forgetTop()
+    data.Stat.forget_top()
 
     fresh = client.get("/esports/")
     archived = client.get(f"/esports/?season={first.id}")
@@ -268,7 +268,7 @@ def test_an_account_with_no_discord_is_never_asked_about(user_factory):
 
     player, other = user_factory(), user_factory()
 
-    results, _ = matchmaking.matchResults(
+    results, _ = matchmaking.match_results(
         RANKED,
         {"steam64": str(player.steam64), "won": True, "kills": 5, "deaths": 2},
         {"steam64": str(other.steam64), "won": False, "kills": 2, "deaths": 5},

@@ -33,12 +33,12 @@ def _entries(rows: list) -> list[_Entry]:
     """
     from .user import User
 
-    rings = User.ringsFor([row.steam64 for row in rows])
+    rings = User.rings_for([row.steam64 for row in rows])
     return [
         _Entry(
-            u=User.getSteamData(row.steam64),
+            u=User.steam_user(row.steam64),
             elo=row.elo,
-            rank=Rank.forElo(row.elo, position),
+            rank=Rank.for_elo(row.elo, position),
             ring=rings.get(str(row.steam64)),
         )
         for position, row in enumerate(rows, 1)
@@ -62,7 +62,7 @@ class Stat(SQLModel, table=True):
     # The hidden estimate matchmaking balances on, and how unsure it still is. Separate
     # from `elo` so the ladder can be a grind without the matchmaker believing it: skill
     # moves on wins and losses alone and no season touches it. Empty on a standing that
-    # predates it, which getSkill reads as its Elo.
+    # predates it, which get_skill reads as its Elo.
     skill: Optional[float] = Field(default=None, nullable=True)
     skillDeviation: Optional[float] = Field(default=None, nullable=True)
     kills: int = Field(default=0, nullable=False)
@@ -83,7 +83,7 @@ class Stat(SQLModel, table=True):
     user: User = Relationship(back_populates="stats")
 
     @property
-    def headshotPercent(self) -> float:
+    def headshot_percent(self) -> float:
         """Share of landed shots that hit the head, to one decimal.
 
         Falls back to headshot kills over kills for players whose record predates hit
@@ -98,10 +98,10 @@ class Stat(SQLModel, table=True):
 
     @staticmethod
     def append(steam64, game: str, **kwargs) -> None:
-        from src.core.db import open
+        from src.core.db import session
         from .user import User
 
-        with open() as db:
+        with session() as db:
             if not isinstance(steam64, Stat):
                 stats = db.query(Stat).where(Stat.steam64 == steam64).first()
             else:
@@ -121,7 +121,7 @@ class Stat(SQLModel, table=True):
             increments = {
                 k: (getattr(stats, k, 0) or 0) + v for k, v in kwargs.items() if v != 0
             }
-            # An UPDATE with nothing to set is not valid SQL — it raises rather than
+            # An UPDATE with nothing to set is not valid SQL, it raises rather than
             # doing nothing, which is what a result where every counter happened to be
             # zero used to do to a whole match report.
             if not increments:
@@ -129,15 +129,15 @@ class Stat(SQLModel, table=True):
             db.query(Stat).where(Stat.steam64 == steam64).update(increments)
 
     @staticmethod
-    def getTop10():
+    def get_top10():
         """The current season's top ten, ready to draw."""
-        from src.core.db import open
+        from src.core.db import session
 
         if _top10Cache[0] is not None and time() - _top10Cache[1] < 60:
             return _top10Cache[0]
 
         season = Season.current().id
-        with open() as db:
+        with session() as db:
             rows = (
                 db.query(Stat)
                 .where(Stat.season == season)
@@ -160,15 +160,15 @@ class Stat(SQLModel, table=True):
         """
         current = Season.current()
         if seasonId is None or int(seasonId) == current.id:
-            return Stat.getTop10()
+            return Stat.get_top10()
         return SeasonStat.top10(int(seasonId))
 
     @property
     def rank(self) -> Rank:
-        return Rank.forElo(self.elo, Stat.ladderPosition(self.steam64))
+        return Rank.for_elo(self.elo, Stat.ladder_position(self.steam64))
 
     @staticmethod
-    def forgetTop() -> None:
+    def forget_top() -> None:
         """Drop both cached views of the top of the ladder.
 
         There are two because a position and a rendered leaderboard row cost very
@@ -179,22 +179,22 @@ class Stat(SQLModel, table=True):
         _topIdsCache[0], _topIdsCache[1] = None, 0
 
     @staticmethod
-    def topIds() -> list[int]:
+    def top_ids() -> list[int]:
         """The steam64s of the top ten, in order. One query, and no Steam lookups.
 
         A position is a database fact; the leaderboard's need for names and avatars to
-        draw beside it is not. getTop10 has to have both, so it resolves ten Steam
+        draw beside it is not. get_top10 has to have both, so it resolves ten Steam
         profiles and costs a blocking call each -- which is why anything that only wants
         to know whether somebody is top three asks this instead. Every page draws a
         ring, and only one of them draws the leaderboard.
         """
-        from src.core.db import open
+        from src.core.db import session
 
         if _topIdsCache[0] is not None and time() - _topIdsCache[1] < 60:
             return _topIdsCache[0]
 
         season = Season.current().id
-        with open() as db:
+        with session() as db:
             rows = (
                 db.query(Stat.steam64)
                 .where(Stat.season == season)
@@ -207,7 +207,7 @@ class Stat(SQLModel, table=True):
         return _topIdsCache[0]
 
     @staticmethod
-    def ladderPosition(steam64) -> int | None:
+    def ladder_position(steam64) -> int | None:
         """This player's 1-based place on the ladder, or None if they are not near the
         top of it.
 
@@ -215,25 +215,25 @@ class Stat(SQLModel, table=True):
         whether a capped tier is held and whether a card wears a medal ring, and both
         run out after a handful of places.
         """
-        for position, held in enumerate(Stat.topIds(), 1):
+        for position, held in enumerate(Stat.top_ids(), 1):
             if held == int(steam64):
                 return position
         return None
 
     @staticmethod
-    def worldPosition(steam64) -> int | None:
+    def world_position(steam64) -> int | None:
         """This player's place on the whole ladder, counted rather than looked up.
 
-        ladderPosition only answers for the top ten, which is all a badge needs. A
+        ladder_position only answers for the top ten, which is all a badge needs. A
         player sitting under a capped tier needs the real number: their bar is full and
         the only thing between them and the tier above is the people in front of them.
         Counted on demand because it is asked for on one page, by one player, and only
         once they are high enough for it to mean anything.
         """
-        from src.core.db import open
+        from src.core.db import session
 
         season = Season.current().id
-        with open() as db:
+        with session() as db:
             row = db.query(Stat).where(Stat.steam64 == steam64).first()
             if not row:
                 return None
@@ -243,17 +243,17 @@ class Stat(SQLModel, table=True):
             )
 
     @staticmethod
-    def rankFor(steam64) -> Rank:
+    def rank_for(steam64) -> Rank:
         """The badge this player wears, from a steam64 alone.
 
         For callers holding no Stat row -- the sidebar draws the same card as the
         leaderboard and only ever has the signed-in user's id. Two cheap queries and no
         Steam: this runs on every render of every page.
         """
-        return Rank.forElo(Stat.getElo(steam64), Stat.ladderPosition(steam64))
+        return Rank.for_elo(Stat.get_elo(steam64), Stat.ladder_position(steam64))
 
     @staticmethod
-    def startSeason(steam64) -> None:
+    def start_season(steam64) -> None:
         """Carry a player into the season being played, if they are not in it yet.
 
         This is the refresher: a returning player's first ranked match of a season is
@@ -265,17 +265,17 @@ class Stat(SQLModel, table=True):
         Called before the match is scored, so the Elo it is scored against is already
         the season's.
         """
-        from src.core.db import open
+        from src.core.db import session
 
         season = Season.current().id
-        with open() as db:
+        with session() as db:
             row = db.query(Stat).where(Stat.steam64 == steam64).first()
             if not row or row.season == season:
                 return
             db.query(Stat).where(Stat.steam64 == steam64).update(
                 {
                     "season": season,
-                    "elo": Season.carryOver(row.elo),
+                    "elo": Season.carry_over(row.elo),
                     "kills": 0,
                     "deaths": 0,
                     "wins": 0,
@@ -287,16 +287,16 @@ class Stat(SQLModel, table=True):
                     "damageTaken": 0,
                 }
             )
-        Stat.forgetTop()
+        Stat.forget_top()
 
     @staticmethod
-    def forSeason(steam64, seasonId=None):
+    def for_season(steam64, seasonId=None):
         """This player's standing in one season: the live row for the season being
         played, the archived one for any season already finished."""
-        from src.core.db import open
+        from src.core.db import session
 
         current = Season.current()
-        with open() as db:
+        with session() as db:
             if seasonId is None or int(seasonId) == current.id:
                 row = db.query(Stat).where(Stat.steam64 == steam64).first()
                 return row if row and row.season == current.id else None
@@ -310,42 +310,42 @@ class Stat(SQLModel, table=True):
             )
 
     @staticmethod
-    def getElo(steam64, game: str = "unt") -> int:
-        from src.core.db import open
+    def get_elo(steam64, game: str = "unt") -> int:
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             r = db.query(Stat).where(Stat.steam64 == steam64, Stat.game == game).first()
             return r.elo if r else 300
 
     @staticmethod
-    def getSkill(steam64, game: str = "unt") -> tuple[float, float]:
+    def get_skill(steam64, game: str = "unt") -> tuple[float, float]:
         """(skill, deviation) for this player.
 
         A standing from before skill existed is seeded from its Elo -- the best guess
         there is -- with a deviation wide enough that its first few matches correct it.
         Nobody at all gets the new-account seed and the widest deviation.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             r = db.query(Stat).where(Stat.steam64 == steam64, Stat.game == game).first()
-        return Stat._skillOf(r)
+        return Stat._skill_of(r)
 
     @staticmethod
-    def skillsOf(steam64s, game: str = "unt") -> dict[int, float]:
-        """Each player's skill as `getSkill` reads it, in one query."""
-        from src.core.db import open
+    def skills_of(steam64s, game: str = "unt") -> dict[int, float]:
+        """Each player's skill as `get_skill` reads it, in one query."""
+        from src.core.db import session
 
         ids = [int(s) for s in steam64s]
-        with open() as db:
+        with session() as db:
             rows = {
                 r.steam64: r
                 for r in db.query(Stat).where(Stat.steam64.in_(ids), Stat.game == game)
             }
-        return {s: Stat._skillOf(rows.get(s))[0] for s in ids}
+        return {s: Stat._skill_of(rows.get(s))[0] for s in ids}
 
     @staticmethod
-    def _skillOf(r: "Stat | None") -> tuple[float, float]:
+    def _skill_of(r: "Stat | None") -> tuple[float, float]:
         if not r:
             return 300.0, float(settings.new_deviation)
         if r.skill is None:
@@ -353,12 +353,12 @@ class Stat(SQLModel, table=True):
         return r.skill, r.skillDeviation
 
     @staticmethod
-    def setSkill(steam64, skill: float, deviation: float) -> None:
+    def set_skill(steam64, skill: float, deviation: float) -> None:
         """Overwrite a player's skill. Set rather than added, unlike everything
         Stat.append counts, because a deviation is not something that sums."""
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             db.query(Stat).where(Stat.steam64 == steam64).update(
                 {"skill": skill, "skillDeviation": deviation}
             )
@@ -392,7 +392,7 @@ class SeasonStat(SQLModel, table=True):
     headshotHits: int = Field(default=0, nullable=False)
 
     @property
-    def headshotPercent(self) -> float:
+    def headshot_percent(self) -> float:
         """Share of landed shots that hit the head, worked out the same way the live
         standing does it."""
         if self.hits:
@@ -405,7 +405,7 @@ class SeasonStat(SQLModel, table=True):
     def rank(self) -> Rank:
         """The badge this season ended on. No ladder position, because the seats a
         capped tier hands out belong to the season being played, not a finished one."""
-        return Rank.forElo(self.elo)
+        return Rank.for_elo(self.elo)
 
     @staticmethod
     def snapshot(row: "Stat", seasonId: int) -> "SeasonStat":
@@ -426,9 +426,9 @@ class SeasonStat(SQLModel, table=True):
 
     @staticmethod
     def top10(seasonId: int) -> list:
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             rows = (
                 db.query(SeasonStat)
                 .where(SeasonStat.season == seasonId)
@@ -453,9 +453,9 @@ class Hlwn25(SQLModel, table=True):
 
     @staticmethod
     def append(steam64: int) -> None:
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             q = db.query(Hlwn25).where(Hlwn25.steam64 == steam64)
             if q.first():
                 q.update({"score": Hlwn25.score + 1})

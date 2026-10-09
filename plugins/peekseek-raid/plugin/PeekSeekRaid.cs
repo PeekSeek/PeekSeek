@@ -95,6 +95,12 @@ public class PeekSeekRaid : RocketPlugin<PeekSeekRaidConfiguration> {
         { "flag_leashed", "<color=white>Stay on your base.</color> The attackers are on their way." },
         { "flag_where", "The flag goes on one of the <color=white>starting floors</color>, not in the middle, where your team spawns, and not next to a door." },
 
+        // Said when a hit is refused outright, because a refusal is otherwise silent:
+        // the shooter sees their own hitmarker and the victim loses nothing, which
+        // reads as broken hit detection rather than as a rule. Throttled per shooter.
+        { "target_protected", "<color=white>{0}</color> still has spawn protection." },
+        { "keyhole_harmless", "The Keyhole only opens doors. It does not hurt <color=white>{0}</color>." },
+
         // The boards' headlines: which round, which base, and what the board wants.
         { "board_defend", "Round {0}  You defend {1}" },
         { "board_attack", "Round {0}  You attack {1}" },

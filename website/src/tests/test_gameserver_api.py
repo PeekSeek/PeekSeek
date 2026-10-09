@@ -10,7 +10,7 @@ from time import time
 import pytest
 
 from src.core import models as data
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core.settings import settings
 
 SERVER_CODE = "90071992547409931"
@@ -35,11 +35,11 @@ def poll(gameserver, matchId=0, serverCode=SERVER_CODE):
 
 def queue(*users, region="paris"):
     for user in users:
-        data.User.addToQueue(user.steam64, GAMEMODE_BIT, region=region)
+        data.User.add_to_queue(user.steam64, GAMEMODE_BIT, region=region)
 
 
-def makeMatch(first, second, **kwargs):
-    with opendb() as db:
+def make_match(first, second, **kwargs):
+    with session() as db:
         match = data.Match(
             gamemode=0,
             teams=[
@@ -55,10 +55,10 @@ def makeMatch(first, second, **kwargs):
     return match
 
 
-def endSelection(matchId, secondsAgo=1):
+def end_selection(matchId, secondsAgo=1):
     """Put a match where it would be once its players have finished choosing: every
     setting decided, and the kit window closed `secondsAgo` seconds ago."""
-    with opendb() as db:
+    with session() as db:
         match = db.query(data.Match).where(data.Match.id == matchId).one()
         db.query(data.Match).where(data.Match.id == matchId).update(
             {
@@ -83,7 +83,7 @@ def test_a_free_server_with_an_empty_queue_is_told_to_idle(gameserver):
 
 def test_every_answer_says_which_region_the_server_is_in(gameserver, user_factory):
     """A server only gets matches from its own region, and that region is set in the
-    database rather than by the server — so a mismatch looks exactly like nobody
+    database rather than by the server, so a mismatch looks exactly like nobody
     queueing unless the answer says so."""
     queue(user_factory(), region="utah")
 
@@ -102,13 +102,13 @@ def test_a_free_server_makes_the_match_that_the_queue_could_not(
     first, second = user_factory(), user_factory()
     queue(first, second)
 
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.Match).count() == 0, "queueing alone must not make a match"
 
     answer = poll(gameserver)
 
     assert answer["action"] == "wait"
-    with opendb() as db:
+    with session() as db:
         match = db.query(data.Match).one()
         assert match.claimed == SERVER_CODE
         assert match.status == data.Match.PICKING
@@ -134,7 +134,7 @@ def test_a_match_is_handed_over_once_selection_is_done(gameserver, user_factory)
     first, second = user_factory(), user_factory()
     queue(first, second)
     matchId = poll(gameserver)["matchId"]
-    endSelection(matchId)
+    end_selection(matchId)
 
     answer = poll(gameserver, matchId)
 
@@ -153,7 +153,7 @@ def test_a_match_is_only_ever_handed_over_once(gameserver, user_factory):
     first, second = user_factory(), user_factory()
     queue(first, second)
     matchId = poll(gameserver)["matchId"]
-    endSelection(matchId)
+    end_selection(matchId)
 
     assert poll(gameserver, matchId)["action"] == "host"
     assert poll(gameserver, matchId)["action"] == "idle"
@@ -169,14 +169,14 @@ def test_a_busy_server_is_never_given_a_second_match(gameserver, user_factory):
     queue(third, fourth)
     poll(gameserver, matchId)
 
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.Match).count() == 1
         assert db.query(data.UserHB).count() == 2, "the second pair stays queued"
 
 
 def test_a_finished_match_is_aborted(gameserver, user_factory):
-    match = makeMatch(user_factory(), user_factory(), matchSettings=DECIDED)
-    with opendb() as db:
+    match = make_match(user_factory(), user_factory(), matchSettings=DECIDED)
+    with session() as db:
         db.query(data.Match).where(data.Match.id == match.id).update({"finished": True})
 
     answer = poll(gameserver, match.id)
@@ -191,8 +191,8 @@ def test_an_unknown_match_is_aborted(gameserver):
 
 
 def test_a_match_taken_over_by_another_server_is_aborted(gameserver, user_factory):
-    match = makeMatch(user_factory(), user_factory(), matchSettings=DECIDED)
-    match.assignTo("11111111111111111")
+    match = make_match(user_factory(), user_factory(), matchSettings=DECIDED)
+    match.assign_to("11111111111111111")
 
     assert poll(gameserver, match.id)["reason"] == "hostedElsewhere"
 
@@ -208,20 +208,20 @@ def test_a_server_that_reports_itself_free_releases_the_match_it_abandoned(
     never heard about is a delivery that failed, and gets handed back instead.
     """
     first, second = user_factory(), user_factory()
-    match = makeMatch(first, second)
-    match.assignTo(SERVER_CODE)
-    endSelection(match.id)
+    match = make_match(first, second)
+    match.assign_to(SERVER_CODE)
+    end_selection(match.id)
     assert poll(gameserver, match.id)["action"] == "host"
 
     poll(gameserver)
 
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.Match).where(data.Match.id == match.id).one().finished
         result = (
             db.query(data.MatchResult).where(data.MatchResult.matchId == match.id).one()
         )
         assert result.data["unscored"] == "abandoned"
-    assert data.Match.currentFor(first.steam64) is None
+    assert data.Match.current_for(first.steam64) is None
 
 
 def test_a_match_nobody_could_host_is_cancelled_once_its_grace_runs_out(
@@ -235,17 +235,17 @@ def test_a_match_nobody_could_host_is_cancelled_once_its_grace_runs_out(
     the match rather than sweeping it.
     """
     first, second = user_factory(), user_factory()
-    match = makeMatch(first, second, matchSettings=DECIDED)
-    endSelection(match.id, secondsAgo=settings.host_grace + 1)
-    held = makeMatch(user_factory(), user_factory(), matchSettings=DECIDED)
-    held.assignTo(SERVER_CODE)
+    match = make_match(first, second, matchSettings=DECIDED)
+    end_selection(match.id, secondsAgo=settings.host_grace + 1)
+    held = make_match(user_factory(), user_factory(), matchSettings=DECIDED)
+    held.assign_to(SERVER_CODE)
 
     poll(gameserver, held.id)
 
-    with opendb() as db:
+    with session() as db:
         stored = db.query(data.Match).where(data.Match.id == match.id).one()
     assert stored.finished is True
-    assert data.Match.currentFor(first.steam64) is None
+    assert data.Match.current_for(first.steam64) is None
 
 
 def test_a_stranded_match_is_taken_by_a_server_rather_than_scrapped(
@@ -254,8 +254,8 @@ def test_a_stranded_match_is_taken_by_a_server_rather_than_scrapped(
     """Assignment beats the sweep. A match that is over its grace and a server that has
     just come free arrive in the same request, and the players get their match."""
     first, second = user_factory(), user_factory()
-    match = makeMatch(first, second, matchSettings=DECIDED)
-    endSelection(match.id, secondsAgo=settings.host_grace + 1)
+    match = make_match(first, second, matchSettings=DECIDED)
+    end_selection(match.id, secondsAgo=settings.host_grace + 1)
 
     answer = poll(gameserver)
 
@@ -264,11 +264,11 @@ def test_a_stranded_match_is_taken_by_a_server_rather_than_scrapped(
 
 
 def test_a_pending_match_is_given_to_the_next_free_server(gameserver, user_factory):
-    """A custom match has no server of its own — the next one to report free takes it,
+    """A custom match has no server of its own, the next one to report free takes it,
     ahead of making anything new out of the queue."""
     first, second = user_factory(), user_factory()
-    match = makeMatch(first, second, matchSettings=DECIDED)
-    endSelection(match.id)
+    match = make_match(first, second, matchSettings=DECIDED)
+    end_selection(match.id)
 
     answer = poll(gameserver)
 
@@ -282,7 +282,7 @@ def test_the_session_poll_resolves_a_stalled_pick(gameserver, user_factory):
     first, second = user_factory(), user_factory()
     queue(first, second)
     matchId = poll(gameserver)["matchId"]
-    with opendb() as db:
+    with session() as db:
         match = db.query(data.Match).where(data.Match.id == matchId).one()
         db.query(data.Match).where(data.Match.id == matchId).update(
             {"meta": match.meta | {"pickDeadline": time() - 1}}
@@ -290,7 +290,7 @@ def test_the_session_poll_resolves_a_stalled_pick(gameserver, user_factory):
 
     poll(gameserver, matchId)
 
-    with opendb() as db:
+    with session() as db:
         stored = db.query(data.Match).where(data.Match.id == matchId).one()
     assert stored.meta["ballistics"] is not None
 
@@ -299,7 +299,7 @@ def test_a_result_scores_the_match_and_finishes_it(gameserver, user_factory):
     first, second = user_factory(), user_factory()
     queue(first, second)
     matchId = poll(gameserver)["matchId"]
-    endSelection(matchId)
+    end_selection(matchId)
     poll(gameserver, matchId)
 
     r = gameserver.post(
@@ -315,16 +315,16 @@ def test_a_result_scores_the_match_and_finishes_it(gameserver, user_factory):
     )
 
     assert r.json() == {"status": "recorded", "matchId": matchId}
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.Match).where(data.Match.id == matchId).one().finished
-    assert data.Stat.getElo(first.steam64) > data.Stat.getElo(second.steam64)
+    assert data.Stat.get_elo(first.steam64) > data.Stat.get_elo(second.steam64)
 
 
 def test_a_repeated_result_does_not_move_elo_twice(gameserver, user_factory):
     """A server retries this report until it is acknowledged, so the retry that
     follows a lost reply must be free."""
     first, second = user_factory(), user_factory()
-    match = makeMatch(first, second, matchSettings=DECIDED)
+    match = make_match(first, second, matchSettings=DECIDED)
     body = {
         "played": True,
         "winningTeam": "one",
@@ -335,24 +335,24 @@ def test_a_repeated_result_does_not_move_elo_twice(gameserver, user_factory):
     }
 
     gameserver.post(f"/server/v1/matches/{match.id}/result", json=body)
-    elo = data.Stat.getElo(first.steam64)
+    elo = data.Stat.get_elo(first.steam64)
     again = gameserver.post(f"/server/v1/matches/{match.id}/result", json=body)
 
     assert again.json()["status"] == "alreadyRecorded"
-    assert data.Stat.getElo(first.steam64) == elo
+    assert data.Stat.get_elo(first.steam64) == elo
 
 
 def test_a_match_nobody_turned_up_for_scores_nothing(gameserver, user_factory):
     first, second = user_factory(), user_factory()
-    match = makeMatch(first, second, matchSettings=DECIDED)
+    match = make_match(first, second, matchSettings=DECIDED)
 
     r = gameserver.post(
         f"/server/v1/matches/{match.id}/result", json={"played": False, "players": []}
     )
 
     assert r.json()["status"] == "recorded"
-    assert data.Stat.getElo(first.steam64) == data.Stat.getElo(second.steam64)
-    with opendb() as db:
+    assert data.Stat.get_elo(first.steam64) == data.Stat.get_elo(second.steam64)
+    with session() as db:
         stored = (
             db.query(data.MatchResult).where(data.MatchResult.matchId == match.id).one()
         )
@@ -363,7 +363,7 @@ def test_a_player_who_left_still_takes_the_loss(gameserver, user_factory):
     """The server reports its whole roster, including anyone who walked out, so
     leaving stopped being a way to keep your Elo."""
     first, second = user_factory(), user_factory()
-    match = makeMatch(first, second, matchSettings=DECIDED)
+    match = make_match(first, second, matchSettings=DECIDED)
 
     gameserver.post(
         f"/server/v1/matches/{match.id}/result",
@@ -377,13 +377,13 @@ def test_a_player_who_left_still_takes_the_loss(gameserver, user_factory):
         },
     )
 
-    assert data.Stat.getElo(second.steam64) < 300
+    assert data.Stat.get_elo(second.steam64) < 300
 
 
 def test_a_malformed_result_is_rejected_rather_than_silently_dropped(
     gameserver, user_factory
 ):
-    match = makeMatch(user_factory(), user_factory(), matchSettings=DECIDED)
+    match = make_match(user_factory(), user_factory(), matchSettings=DECIDED)
 
     r = gameserver.post(
         f"/server/v1/matches/{match.id}/result",
@@ -391,20 +391,20 @@ def test_a_malformed_result_is_rejected_rather_than_silently_dropped(
     )
 
     assert r.status_code == 400
-    with opendb() as db:
+    with session() as db:
         assert not db.query(data.Match).where(data.Match.id == match.id).one().finished
 
 
 def test_round_wins_replace_the_last_report(gameserver, user_factory):
     first, second = user_factory(), user_factory()
-    match = makeMatch(first, second, matchSettings=DECIDED)
+    match = make_match(first, second, matchSettings=DECIDED)
     url = f"/server/v1/matches/{match.id}/rounds"
 
     gameserver.post(url, json={"wins": {"a": 1, "b": 0}})
     r = gameserver.post(url, json={"wins": {"a": 1, "b": 1}})
 
     assert r.status_code == 200
-    with opendb() as db:
+    with session() as db:
         stored = db.query(data.Match).where(data.Match.id == match.id).one()
     assert stored.roundWins == {"a": 1, "b": 1}
 
@@ -432,7 +432,7 @@ def test_queueing_a_player_never_makes_a_match(gameserver, user_factory):
     r = gameserver.put(f"/server/v1/players/{second.steam64}/queue")
 
     assert r.json()["matchId"] is None
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.Match).count() == 0
         assert db.query(data.UserHB).count() == 2
 
@@ -472,7 +472,7 @@ def test_a_player_is_relayed_as_soon_as_a_server_holds_their_match(
         SERVER_CODE
     )
 
-    endSelection(matchId)
+    end_selection(matchId)
     poll(gameserver, matchId)
 
     assert gameserver.get(f"/server/v1/players/{first.steam64}").json()["relayTo"] == (
@@ -481,7 +481,7 @@ def test_a_player_is_relayed_as_soon_as_a_server_holds_their_match(
 
 
 def test_asking_about_a_player_does_not_queue_them(gameserver, user_factory):
-    """What the lobby polls with for players who used /noqueue — asking must not
+    """What the lobby polls with for players who used /noqueue, asking must not
     quietly put them back in."""
     player = user_factory()
 
@@ -495,18 +495,18 @@ def test_asking_about_a_player_does_not_queue_them(gameserver, user_factory):
     assert body["relayTo"] is None
     assert body["choose"] is None
     assert body["ban"] is None
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.UserHB).count() == 0
 
 
 def test_leaving_the_queue_removes_the_heartbeat(gameserver, user_factory):
     player = user_factory()
-    data.User.addToQueue(player.steam64, GAMEMODE_BIT, region="paris")
+    data.User.add_to_queue(player.steam64, GAMEMODE_BIT, region="paris")
 
     r = gameserver.delete(f"/server/v1/players/{player.steam64}/queue")
 
     assert r.status_code == 200
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.UserHB).count() == 0
 
 
@@ -527,7 +527,7 @@ def test_a_ban_needs_no_body(gameserver):
     r = gameserver.post("/server/v1/players/76561197960287930/bans")
 
     assert r.status_code == 200
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.UserBan).one().reason == "Cheating"
 
 
@@ -536,7 +536,7 @@ def test_a_ban_records_the_reason_it_was_given(gameserver):
         "/server/v1/players/76561197960287930/bans", json={"reason": "Aimbot"}
     )
 
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.UserBan).one().reason == "Aimbot"
 
 
@@ -560,7 +560,7 @@ def test_match_status_reports_where_to_send_players(gameserver, user_factory):
         matchId
     )
 
-    endSelection(matchId)
+    end_selection(matchId)
     poll(gameserver, matchId)
 
     live = gameserver.get(f"/server/v1/matches/{matchId}").json()
@@ -584,7 +584,7 @@ def test_queueing_a_player_the_site_has_never_seen(gameserver):
     assert r.status_code == 200, r.text
     assert r.json()["steam64"] == str(stranger)
     assert r.json()["elo"] == 300, "an unranked stranger starts at the floor"
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.UserHB).where(data.UserHB.steam64 == stranger).count() == 1
         assert db.query(data.User).where(data.User.steam64 == stranger).count() == 1
 
@@ -593,7 +593,7 @@ def test_a_stranger_can_be_matched_and_scored_like_anyone_else(
     gameserver, user_factory
 ):
     """End to end for a player with no account: queued by the lobby, picked up by a
-    free server, and scored — the path every new player takes on their first match."""
+    free server, and scored, the path every new player takes on their first match."""
     known = user_factory()
     stranger = 76561198000000078
 
@@ -617,15 +617,15 @@ def test_a_stranger_can_be_matched_and_scored_like_anyone_else(
     )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "recorded"
-    assert data.Stat.getElo(stranger) != 300, "the stranger's Elo moved"
+    assert data.Stat.get_elo(stranger) != 300, "the stranger's Elo moved"
 
 
 def test_a_lost_answer_hands_the_same_match_back_rather_than_making_another(
     gameserver, user_factory
 ):
     """The poll that builds a match is also the one that delivers it, so an answer that
-    never arrives — a poll that timed out on a slow Steam or Discord call, a server that
-    restarted — leaves a server holding a match it has never heard of.
+    never arrives, a poll that timed out on a slow Steam or Discord call, a server that
+    restarted, leaves a server holding a match it has never heard of.
 
     Asking again as a free server has to finish that delivery. Abandoning the match and
     matchmaking a fresh one is what produced the same pairing over and over, a new
@@ -648,7 +648,7 @@ def test_a_lost_answer_hands_the_same_match_back_rather_than_making_another(
 
     assert again["action"] == "wait", again
     assert again["matchId"] == made["matchId"], "a second match was built"
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.Match).count() == 1
 
 
@@ -673,14 +673,14 @@ def test_a_second_server_polling_cannot_form_the_same_pairing_twice(gameserver):
 
     assert firstAnswer["action"] in ("wait", "host"), firstAnswer
     assert secondAnswer["action"] == "idle", secondAnswer
-    with opendb() as db:
+    with session() as db:
         assert db.query(data.Match).count() == 1
         assert db.query(data.UserHB).count() == 0
 
 
 def test_a_player_the_site_has_never_seen_gets_a_real_account(gameserver, monkeypatch):
     """Not just a row: the name and avatar too. The Steam lookup has to happen before
-    the insert, because it is persisted with an UPDATE — done after, it silently
+    the insert, because it is persisted with an UPDATE, done after, it silently
     stores nothing and the player is "Nameless" everywhere forever."""
     from src.core import steam
 
@@ -694,11 +694,11 @@ def test_a_player_the_site_has_never_seen_gets_a_real_account(gameserver, monkey
     r = gameserver.put(f"/server/v1/players/{stranger}/queue", params={"gamemodes": 1})
     assert r.status_code == 200, r.text
 
-    with opendb() as db:
+    with session() as db:
         user = db.query(data.User).where(data.User.steam64 == stranger).first()
         assert user is not None
         assert user.steam_data["name"] == "RandomJoiner"
-    assert data.User.getSteamData(stranger).name == "RandomJoiner"
+    assert data.User.steam_user(stranger).name == "RandomJoiner"
 
 
 def test_a_player_read_carries_their_steam_face(gameserver, user_factory, monkeypatch):
@@ -722,7 +722,7 @@ def test_a_player_read_carries_their_steam_face(gameserver, user_factory, monkey
 def test_an_account_is_still_made_when_steam_will_not_answer(gameserver, monkeypatch):
     """Steam being down must not stop somebody playing. The account is created with
     no profile rather than with a placeholder, so the next lookup can still fill it
-    in — a stored "Nameless" would never be asked about again."""
+    in, a stored "Nameless" would never be asked about again."""
     from src.core import steam
 
     stranger = 76561198000000204
@@ -735,7 +735,7 @@ def test_an_account_is_still_made_when_steam_will_not_answer(gameserver, monkeyp
     r = gameserver.put(f"/server/v1/players/{stranger}/queue", params={"gamemodes": 1})
     assert r.status_code == 200, r.text
 
-    with opendb() as db:
+    with session() as db:
         user = db.query(data.User).where(data.User.steam64 == stranger).first()
         assert user is not None
         assert not user.steam_data
@@ -784,8 +784,8 @@ def test_one_player_locking_in_does_not_start_the_match_for_everyone(
 def test_an_unknown_pick_is_refused_rather_than_reaching_the_match(
     gameserver, user_factory
 ):
-    """An unknown kit category reaches Kit.getItems as a missing key, and an unknown
-    powerup equips nothing — so both are refused here instead."""
+    """An unknown kit category reaches Kit.items_for as a missing key, and an unknown
+    powerup equips nothing, so both are refused here instead."""
     first, second = user_factory(), user_factory()
     queue(first, second)
     poll(gameserver)
@@ -838,10 +838,10 @@ def test_a_draw_does_not_move_the_ladder():
     that would have won or not. Kills no longer move the ladder at all."""
     from src.core import matchmaking
 
-    drawn = matchmaking._ladderDelta(1000, 1000, won=True, draw=True)
-    assert drawn == matchmaking._ladderDelta(1000, 1000, won=False, draw=True) == 0
+    drawn = matchmaking._ladder_delta(1000, 1000, won=True, draw=True)
+    assert drawn == matchmaking._ladder_delta(1000, 1000, won=False, draw=True) == 0
     assert (
-        matchmaking._ladderDelta(1000, 1000, won=True)
+        matchmaking._ladder_delta(1000, 1000, won=True)
         > drawn
-        > matchmaking._ladderDelta(1000, 1000, won=False)
+        > matchmaking._ladder_delta(1000, 1000, won=False)
     )

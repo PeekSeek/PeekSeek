@@ -10,7 +10,7 @@ namespace PeekSeekRaid.Core.Models;
 /// from.
 ///
 /// Both sites are on the same map, so BuildRadius is what stops a team wandering far
-/// enough to look at the other team's build in progress. It is deliberately tight — a
+/// enough to look at the other team's build in progress. It is deliberately tight, a
 /// site is a building, not a district.
 ///
 /// The geometry below is written in plain floats with Vector3 only at the edges. That

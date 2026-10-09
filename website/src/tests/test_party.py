@@ -8,9 +8,9 @@ from src.core import db as core_db
 from src.core import models as data
 from src.core.settings import settings
 
-DUO_BIT = 2**3  # gamemode 3, "Casual Duo" — playersPerTeam=2, the one mode two
+DUO_BIT = 2**3  # gamemode 3, "Casual Duo", playersPerTeam=2, the one mode two
 # people can actually stay together on a single team for.
-SOLO_BIT = 2**0  # gamemode 0, "Competitive" — playersPerTeam=1.
+SOLO_BIT = 2**0  # gamemode 0, "Competitive", playersPerTeam=1.
 
 
 def test_invite_creates_a_party_and_adds_the_invite(client, login, user_factory):
@@ -166,7 +166,7 @@ def test_non_owner_member_cannot_start_the_queue(client, login, user_factory):
 
 def test_party_queues_together_via_the_leaders_heartbeat(client, login, user_factory):
     """The leader's single heartbeat call queues the whole party, sharing one
-    partyId — that's what keeps them together once matchmaking.attemptCreateMatch
+    partyId, that's what keeps them together once matchmaking.attemptCreateMatch
     fills teams (covered directly in test_matchmaking.py)."""
     leader, member = user_factory(), user_factory()
     login(client, leader)
@@ -250,7 +250,7 @@ def test_looking_at_a_party_keeps_it_alive(client, login, user_factory):
 
 
 def test_a_party_too_big_for_every_picked_mode_is_refused(client, login, user_factory):
-    """Without this the pair queues happily and simply never matches — matchmaking
+    """Without this the pair queues happily and simply never matches, matchmaking
     skips a party that can't fit on one team, so nothing ever tells them why."""
     leader, member = _duo(client, login, user_factory)
 
@@ -279,8 +279,8 @@ def test_a_party_keeps_only_the_picked_modes_it_fits(client, login, user_factory
 def test_queueing_with_no_gamemode_is_refused_in_its_own_words(
     client, login, user_factory
 ):
-    """Not the party message — a solo player who picked nothing is not too big for
-    anything, and an empty bitmask used to reach addToQueue as a NULL gamemode."""
+    """Not the party message, a solo player who picked nothing is not too big for
+    anything, and an empty bitmask used to reach add_to_queue as a NULL gamemode."""
     login(client, user_factory())
     r = client.get("/queue/heartbeat", params={"region": "paris"})
 

@@ -1,0 +1,39 @@
+name: Arena 2v2
+queueBit: 8
+
+teams: 2
+playersPerTeam: 2
+usesElo: true
+optionBanningEnabled: true
+
+kitsAllowed: [meta, sniper]
+map: [Alpha Valley]
+movement: [true, false]
+ballistics: [true, false]
+
+defaultItems:
+  - { id: 395, amount: 1 }                                # Bloodbag
+  - { id: 1103, amount: 1 }                               # Black Umbrella
+
+powerups:
+  Movement:
+    - { id: 1838, amount: 3 }                             # Bounce Grenade
+    - { id: 346, amount: 1, state: "146,0,0,0,0,0,0,0,185,4,1,1,1,100,100,100,100,100" } # Crossbow
+    - { id: 1209, amount: 1 }                             # Explosive Arrow
+  Ammo:
+    - { id: 17, amount: 1 }                               # Military Drum
+    - { id: 125, amount: 1 }                              # Ranger Drum
+    - { id: 1838, amount: 1 }                             # Bounce Grenade
+  Boom:
+    - { id: 519, amount: 1, state: "146,0,151,0,8,0,0,0,8,2,1,1,1,100,100,100,100,100" } # Rocket Launcher
+    - { id: 1838, amount: 2 }                             # Bounce Grenade
+  Doctor:
+    - { id: 95, amount: 2 }                               # Bandage
+    - { id: 1838, amount: 1 }                             # Bounce Grenade
+    - { id: 488, amount: 1, state: "146,0,151,0,8,0,7,0,233,1,7,1,1,100,100,100,100,100" } # Desert Falcon
+  Trapper:
+    - { id: 1101, amount: 2 }                             # Landmine
+    - { id: 1102, amount: 1 }                             # Claymore
+    - { id: 254, amount: 1 }                              # Fragmentation Grenade
+    - { id: 1408, amount: 1 }                             # Cloth Mannequin
+    - { id: 1838, amount: 2 }                             # Bounce Grenade

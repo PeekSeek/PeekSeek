@@ -2,24 +2,32 @@ from .settings import settings
 
 mmconfig = settings.mmconfig
 
-setValues = mmconfig["defaultMagAmountFiremodePerGunId"]
+# Per gun id: the magazine item, how many rounds it holds, and the firing mode a gun
+# comes out of a kit set to.
+DEFAULT_MAGAZINES = mmconfig["defaultMagAmountFiremodePerGunId"]
 
 
-class metaObject:
-    def __init__(self, gunid, meta: list | None = None):
-        self.gun = str(gunid)
+class GunMeta:
+    """One gun's state string, as Unturned stores it on an item.
 
-        if self.gun not in setValues:
-            raise TypeError(f"Gun id {gunid} not supported.")
+    Calling the instance renders the eighteen bytes in the order the game reads them,
+    which is why `__call__` and not a method with a name: the object *is* that string.
+    """
+
+    def __init__(self, gun_id, meta: list | None = None):
+        self.gun = str(gun_id)
+
+        if self.gun not in DEFAULT_MAGAZINES:
+            raise TypeError(f"Gun id {gun_id} not supported.")
 
         self.sight = 0
         self.tactical = 0
         self.grip = 0
         self.barrel = 0
-        self.ammo = setValues[self.gun][0]
+        self.ammo = DEFAULT_MAGAZINES[self.gun][0]
 
-        self.ammoCount = setValues[self.gun][1]
-        self.firingMode = setValues[self.gun][2]
+        self.ammoCount = DEFAULT_MAGAZINES[self.gun][1]
+        self.firingMode = DEFAULT_MAGAZINES[self.gun][2]
         self.tacticalMode = 1
 
         self.sightDurability = 100
@@ -33,7 +41,7 @@ class metaObject:
             self.sight, self.tactical, self.grip, self.barrel = ids
             self.barrelDurability = meta[16]
 
-    def setAttach(
+    def set_attach(
         self, sight: int = 0, tactical: int = 0, grip: int = 0, barrel: int = 0
     ):
         self.sight = sight

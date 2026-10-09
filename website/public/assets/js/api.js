@@ -1,4 +1,4 @@
-// Same-origin API helper — pages and JSON come from the one FastAPI app,
+// Same-origin API helper, pages and JSON come from the one FastAPI app,
 // so requests carry the session cookie and need no base URL or auth header.
 function _apiRequestForMethod(method = "GET") {
     function _inner(endpoint, params = {}, data = {}) {

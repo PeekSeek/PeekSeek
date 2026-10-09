@@ -1,16 +1,27 @@
+/* The landing page is the one page that does not load default.css, so it declares the
+   handful of tokens it uses rather than inheriting the site palette. --font-main and
+   --light were referenced below without ever being defined: body fell back to the user
+   agent's font and whatever colour it inherited. */
 :root {
-    --primary: #f66;
+    --text: #fff;
+    --bg: #0a0a0a;
+    --brand-light: #f66;
+    --brand-strong: #f00;
+    --border: #333;
+    --primary: var(--brand-light);
+    --font-main: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --light: #f5f5f5;
 }
 
 * {
-    color: #fff;
+    color: var(--text);
     font-family: sans-serif;
 }
 
 body {
     margin: 0;
     font-family: var(--font-main);
-    background-color: #0a0a0a;
+    background-color: var(--bg);
     color: var(--light);
     line-height: 1.6;
 }
@@ -83,8 +94,8 @@ nav {
     justify-content: space-between;
     align-items: center;
 
-    background-color: #f00;
-    color: #fff;
+    background-color: var(--brand-strong);
+    color: var(--text);
     padding: 10px 20px;
     border-radius: 6px;
     font-weight: bold;
@@ -131,11 +142,43 @@ h2 {
     margin-bottom: -10px;
 }
 
+/* The cookie banner. Hidden here rather than in the markup, so a visitor who has
+   already answered never sees it appear and then vanish. cookies.js is what shows it. */
+.gdprBanner {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 12px 20px;
+    background-color: #227075;
+}
+
+.gdprBanner button {
+    padding: 5px 20px;
+    border: 1px solid var(--text);
+    border-radius: 5px;
+    background-color: var(--text);
+    color: #006680;
+    font-weight: bolder;
+    cursor: pointer;
+}
+
+/* Reject is quieter than Accept, and exactly as easy to click. */
+.gdprBanner button#cookiesReject {
+    background-color: transparent;
+    color: var(--text);
+    font-weight: normal;
+}
+
 footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     padding: 100px 0;
     font-size: 0.9rem;
-    color: #fff;
+    color: var(--text);
 }
 
 footer a {
@@ -159,7 +202,7 @@ footer a {
 }
 
 #how-it-works h3 {
-    color: #f66;
+    color: var(--brand-light);
     font-size: 30px;
     margin-bottom: -15px;
 }
@@ -169,18 +212,11 @@ footer a {
     text-align: center;
 }
 
-footer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
 .footerLinks {
     display: flex;
     flex-direction: row;
     align-items: flex-end;
     justify-content: center;
     gap: 10px;
-    color: #333;
+    color: var(--border);
 }

@@ -19,7 +19,7 @@ public class StreakReward {
 
 /// One item id and how many of it. A magazine is fitted straight into the gun the
 /// player is holding rather than dropped in their pack, and only if that gun can
-/// chamber it — see LobbyManager.AttachMagazine.
+/// chamber it, see LobbyManager.AttachMagazine.
 public class StreakItem {
     public ushort ItemID { get; set; }
     public byte Amount { get; set; }

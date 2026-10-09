@@ -1,0 +1,13 @@
+# Test and lint tooling, compiled into requirements-dev.lock beside the runtime lock.
+#
+# Pinned for the same reason the runtime dependencies are: a formatter release that
+# changes its mind turns every subsequent CI run red on code nobody touched, which is
+# the fastest way to teach people to ignore the build. Bump deliberately:
+#
+#     uv pip compile requirements-dev.in --universal --python-version 3.12 --generate-hashes \
+#         -o requirements-dev.lock
+-r requirements.txt
+
+black==26.5.1
+pytest==9.1.1
+pip-audit==2.10.1

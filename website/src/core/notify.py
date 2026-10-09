@@ -166,7 +166,9 @@ def refresh_player_counter() -> None:
     if not channel or not headers:
         return
 
-    name = _counter_name(data.LobbyPopulation.playingNow(), data.UserHB.countAllFresh())
+    name = _counter_name(
+        data.LobbyPopulation.playing_now(), data.UserHB.count_all_fresh()
+    )
     url = f"{DISCORD_API}/channels/{channel}"
     with exclusively(COUNTER_LOCK) as held:
         if not held:
@@ -189,7 +191,7 @@ async def keep_player_counter_current() -> None:
 
     In a thread because the rename is a blocking request and this is sharing an
     event loop with every page the site serves. Any error is swallowed and retried
-    on the next pass — a Discord outage must not take the loop down with it, since
+    on the next pass, a Discord outage must not take the loop down with it, since
     nothing would ever start it again.
     """
     while True:
@@ -220,19 +222,19 @@ def sync_rank_role(steam64) -> bool:
     """
     from src.core.models.stat import Stat
     from src.core.models.user import User
-    from src.core.db import open as opendb
+    from src.core.db import session
 
     headers = _headers()
     if not headers:
         return False
 
-    with opendb() as db:
+    with session() as db:
         user = db.query(User).where(User.steam64 == int(steam64)).first()
         discordId = user.discord if user else None
     if not discordId:
         return False
 
-    wanted = Stat.rankFor(steam64).role
+    wanted = Stat.rank_for(steam64).role
     if not wanted:
         return False
 

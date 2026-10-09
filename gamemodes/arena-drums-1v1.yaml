@@ -1,0 +1,22 @@
+name: Arena Drums 1v1
+queueBit: 1
+
+teams: 2
+playersPerTeam: 1
+usesElo: false
+optionBanningEnabled: true
+
+kitsAllowed: [meta]
+map: [Alpha Valley]
+movement: [true, false]
+ballistics: [true, false]
+
+defaultItems:
+  - { id: 395, amount: 1 }                                # Bloodbag
+  - { id: 1103, amount: 1 }                               # Black Umbrella
+
+powerups:
+  Drum Magazine:
+    - { id: 17, amount: 3 }                               # Military Drum
+    - { id: 125, amount: 3 }                              # Ranger Drum
+    - { id: 1838, amount: 5 }                             # Bounce Grenade

@@ -1,0 +1,100 @@
+name: peekseek-match
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ["plugins/peekseek-match/**", ".github/workflows/peekseek-match.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["plugins/peekseek-match/**", ".github/workflows/peekseek-match.yml"]
+  workflow_dispatch: # path filters mean a shared change may not trigger this on its own
+
+permissions:
+  contents: write
+
+# One run per branch. Successive pushes supersede each other for lint and test, where
+# the older answer is about code nobody is looking at any more. The release job is
+# guarded by its own tag-exists check, so a cancelled run cannot leave a half-cut tag.
+concurrency:
+  group: peekseek-match-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: plugins/peekseek-match
+
+jobs:
+  lint:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet format PeekSeek.sln --verify-no-changes
+
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test PeekSeek.sln --configuration Release
+
+  release:
+    # Releases are cut from main only. develop runs the same lint and tests,
+    # but a staging push must never tag or publish.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # Tags are prefixed because this repo releases more than one plugin.
+      - name: Read version from PeekSeek.csproj
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$csproj = Get-Content plugin/PeekSeek.csproj
+          $version = $csproj.Project.PropertyGroup.Version
+          "version=$version"        >> $env:GITHUB_OUTPUT
+          "tag=peekseek-v$version"  >> $env:GITHUB_OUTPUT
+
+      # A release only happens when the version was actually bumped, so pushing
+      # again without touching it is a no-op rather than a failed duplicate tag.
+      - name: Check if tag already exists
+        id: check
+        shell: bash
+        run: |
+          if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build
+        if: steps.check.outputs.exists == 'false'
+        run: dotnet build PeekSeek.sln --configuration Release
+
+      - name: Package artifact
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $out = "PeekSeek-${{ steps.version.outputs.version }}.zip"
+          Compress-Archive -Path plugin/bin/Release/net48/* -DestinationPath $out
+          "artifact=plugins/peekseek-match/$out" >> $env:GITHUB_ENV
+
+      - name: Create GitHub release
+        if: steps.check.outputs.exists == 'false'
+        # Pinned to a commit, not the v2 tag: this is the one action here with
+        # write scope, and a tag can be moved under us.
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: ${{ env.artifact }}

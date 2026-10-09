@@ -1,17 +1,19 @@
 """Kit & outfit editors. Pure HTMX: every click POSTs the selection, the server
 validates and saves it, then returns the re-rendered editor to swap in. No client
-state, no bespoke JS — the saved kit in the database is the single source of truth.
+state, no bespoke JS, the saved kit in the database is the single source of truth.
 """
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from src.core.settings import settings
-from src.core.db import open as opendb
+from src.core.db import session
 from src.core import models as data
 from src.dependencies import LoggedInSteam64, RequestValues, templates
 
-router = APIRouter(prefix="/me")
+# The editors are HTMX fragments rather than JSON, so they stay out of the schema; the
+# tag is there for the one browser endpoint that is not.
+router = APIRouter(prefix="/me", tags=["kits"], include_in_schema=False)
 
 kitsConfig = settings.kits
 
@@ -19,7 +21,7 @@ WEAPON_SLOTS = ("sight", "tactical", "grip", "barrel")
 
 
 def _saved_kit(steam64, category):
-    with opendb() as db:
+    with session() as db:
         kit = (
             db.query(data.Kit)
             .where((data.Kit.steam64 == steam64) & (data.Kit.category == category))
@@ -105,10 +107,10 @@ def save_kit(
     selection = _weapon_selection(
         steam64, category, _submitted_ints(values, ("gun", *WEAPON_SLOTS))
     )
-    data.Kit.addOrUpdateData(steam64, category, selection)
+    data.Kit.add_or_update_data(steam64, category, selection)
     return templates.TemplateResponse(
         request=request,
-        name="app/_kit_editor.html",
+        name="partials/kitEditor.html",
         context={
             "category": category,
             "guns": kitsConfig["kits"][category],
@@ -135,9 +137,9 @@ def save_outfit(request: Request, steam64: LoggedInSteam64, values: RequestValue
     selection = _outfit_selection(
         steam64, _submitted_ints(values, kitsConfig["outfits"].keys())
     )
-    data.Kit.addOrUpdateData(steam64, "outfit", selection)
+    data.Kit.add_or_update_data(steam64, "outfit", selection)
     return templates.TemplateResponse(
         request=request,
-        name="app/_outfit_editor.html",
+        name="partials/outfitEditor.html",
         context={"outfits": kitsConfig["outfits"], "selection": selection},
     )

@@ -2,7 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 from sqlmodel import Session, SQLModel
 
-import src.core.models  # noqa: F401 — registers every table on the metadata
+import src.core.models  # noqa: F401, registers every table on the metadata
 from src.core import db as core_db
 from src.core import models as data
 
@@ -26,7 +26,7 @@ def test_steam64_columns_are_bigint():
 def test_a_column_added_after_its_table_existed_is_created_on_startup():
     """`MatchResults` was created before `MatchResult.matchId` was added to the model,
     and `create_all` never touches a table it did not just create, so the column was
-    missing on every database that predated it. `MatchResult.latestFor` is the query
+    missing on every database that predated it. `MatchResult.latest_for` is the query
     behind /u/{steam64}, which meant every profile page in production 500'd on
     `column MatchResults.matchId does not exist`.
     """
@@ -45,9 +45,9 @@ def test_a_column_added_after_its_table_existed_is_created_on_startup():
         )
         db.commit()
 
-    core_db.addMissingColumns()
+    core_db.add_missing_columns()
 
-    assert data.MatchResult.latestFor(76561198344422592) == []
+    assert data.MatchResult.latest_for(76561198344422592) == []
 
 
 def test_a_column_added_with_a_default_backfills_the_rows_already_there():
@@ -75,7 +75,7 @@ def test_a_column_added_with_a_default_backfills_the_rows_already_there():
         )
         db.commit()
 
-    core_db.addMissingColumns()
+    core_db.add_missing_columns()
 
     with Session(core_db.engine) as db:
         stat = db.query(data.Stat).where(data.Stat.steam64 == steam64).first()

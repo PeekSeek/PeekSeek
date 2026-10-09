@@ -19,9 +19,9 @@ def test_skill_is_zero_sum_across_a_match(user_factory):
     a, b, c, d = (user_factory() for _ in range(4))
     for user, elo in ((a, 700), (b, 400), (c, 550), (d, 500)):
         data.Stat.append(user.steam64, "unt", elo=elo - 300)
-    before = sum(data.Stat.getSkill(u.steam64)[0] for u in (a, b, c, d))
+    before = sum(data.Stat.get_skill(u.steam64)[0] for u in (a, b, c, d))
 
-    matchmaking.matchResults(
+    matchmaking.match_results(
         RANKED,
         {"steam64": str(a.steam64), "won": True},
         {"steam64": str(b.steam64), "won": True},
@@ -29,17 +29,17 @@ def test_skill_is_zero_sum_across_a_match(user_factory):
         {"steam64": str(d.steam64), "won": False},
     )
 
-    after = sum(data.Stat.getSkill(u.steam64)[0] for u in (a, b, c, d))
+    after = sum(data.Stat.get_skill(u.steam64)[0] for u in (a, b, c, d))
     assert after == pytest.approx(before)
-    assert data.Stat.getSkill(a.steam64)[0] > 700
-    assert data.Stat.getSkill(c.steam64)[0] < 550
+    assert data.Stat.get_skill(a.steam64)[0] > 700
+    assert data.Stat.get_skill(c.steam64)[0] < 550
 
 
 def test_a_draw_between_teams_still_moves_skill_towards_the_underdog():
     skills = {"fav": (900.0, 100.0), "dog": (600.0, 100.0)}
     sides = [side(("fav", False)), side(("dog", False))]
 
-    moved = matchmaking._skillUpdates(sides, skills, draw=True)
+    moved = matchmaking._skill_updates(sides, skills, draw=True)
 
     assert moved["fav"][0] < 900
     assert moved["dog"][0] - 600 == pytest.approx(900 - moved["fav"][0])
@@ -49,10 +49,10 @@ def test_an_upset_moves_the_favourite_the_most():
     """Losing a match you were expected to win costs more than winning it earns."""
     skills = {"fav": (1000.0, 100.0), "dog": (700.0, 100.0)}
 
-    upset = matchmaking._skillUpdates(
+    upset = matchmaking._skill_updates(
         [side(("fav", False)), side(("dog", True))], skills, draw=False
     )
-    expected = matchmaking._skillUpdates(
+    expected = matchmaking._skill_updates(
         [side(("fav", True)), side(("dog", False))], skills, draw=False
     )
 
@@ -67,7 +67,7 @@ def test_an_unsure_player_moves_further_and_every_match_makes_them_surer():
         "a": (500.0, 100.0),
         "b": (500.0, 100.0),
     }
-    moved = matchmaking._skillUpdates(
+    moved = matchmaking._skill_updates(
         [side(("new", True), ("vet", True)), side(("a", False), ("b", False))],
         skills,
         draw=False,
@@ -81,12 +81,12 @@ def test_an_unsure_player_moves_further_and_every_match_makes_them_surer():
 def test_kills_do_not_move_either_rating(user_factory):
     quiet, busy, other1, other2 = (user_factory() for _ in range(4))
 
-    first, _ = matchmaking.matchResults(
+    first, _ = matchmaking.match_results(
         RANKED,
         {"steam64": str(quiet.steam64), "won": True, "kills": 0, "deaths": 9},
         {"steam64": str(other1.steam64), "won": False},
     )
-    second, _ = matchmaking.matchResults(
+    second, _ = matchmaking.match_results(
         RANKED,
         {"steam64": str(busy.steam64), "won": True, "kills": 30, "deaths": 0},
         {"steam64": str(other2.steam64), "won": False},
@@ -96,12 +96,12 @@ def test_kills_do_not_move_either_rating(user_factory):
         first[str(quiet.steam64)]["Elo Change"]
         == second[str(busy.steam64)]["Elo Change"]
     )
-    assert data.Stat.getSkill(quiet.steam64) == data.Stat.getSkill(busy.steam64)
+    assert data.Stat.get_skill(quiet.steam64) == data.Stat.get_skill(busy.steam64)
 
 
 def test_a_ladder_far_below_skill_climbs_quickly():
-    win = matchmaking._ladderDelta(300, 900, won=True)
-    loss = matchmaking._ladderDelta(300, 900, won=False)
+    win = matchmaking._ladder_delta(300, 900, won=True)
+    loss = matchmaking._ladder_delta(300, 900, won=False)
 
     assert win == round(settings.win_points * (1 + settings.max_boost))
     assert -loss == round(settings.loss_points * (1 - settings.max_relief))
@@ -111,8 +111,8 @@ def test_a_ladder_far_below_skill_climbs_quickly():
 def test_at_equilibrium_winning_half_your_games_goes_nowhere():
     for elo in (300, 700, 1200):
         for skill in (elo, elo - 50, elo - 400):
-            win = matchmaking._ladderDelta(elo, skill, won=True)
-            loss = matchmaking._ladderDelta(elo, skill, won=False)
+            win = matchmaking._ladder_delta(elo, skill, won=True)
+            loss = matchmaking._ladder_delta(elo, skill, won=False)
             assert win + loss == pytest.approx(0, abs=1)
 
 
@@ -121,28 +121,28 @@ def test_a_season_cut_is_won_back_and_no_further():
     to where they were quickly. Once the ladder is level with skill the boost is gone and
     a win is worth plain points again."""
     finished = 900
-    elo = carried = data.Season.carryOver(finished)
+    elo = carried = data.Season.carry_over(finished)
     assert elo < finished
 
     wins = 0
     while elo < finished:
-        elo += matchmaking._ladderDelta(elo, finished, won=True)
+        elo += matchmaking._ladder_delta(elo, finished, won=True)
         wins += 1
 
     flatWins = (finished - carried) / settings.win_points
     assert wins <= flatWins * 0.6
     assert elo - finished < settings.win_points * (1 + settings.max_boost)
-    assert matchmaking._ladderDelta(elo, finished, won=True) == settings.win_points
+    assert matchmaking._ladder_delta(elo, finished, won=True) == settings.win_points
 
 
 def test_there_is_no_cliff_anywhere_in_the_gap():
     """Every Elo of gap changes a result by at most a point, and always the same way."""
     skill = 1000
     wins = [
-        matchmaking._ladderDelta(elo, skill, won=True) for elo in range(2000, 100, -1)
+        matchmaking._ladder_delta(elo, skill, won=True) for elo in range(2000, 100, -1)
     ]
     losses = [
-        matchmaking._ladderDelta(elo, skill, won=False) for elo in range(2000, 100, -1)
+        matchmaking._ladder_delta(elo, skill, won=False) for elo in range(2000, 100, -1)
     ]
 
     for series in (wins, losses):
@@ -157,21 +157,21 @@ def test_a_season_leaves_skill_alone(user_factory):
     data.Season.current()
     data.Season.start("26Q3")
 
-    results, _ = matchmaking.matchResults(
+    results, _ = matchmaking.match_results(
         RANKED,
         {"steam64": str(player.steam64), "won": True},
         {"steam64": str(other.steam64), "won": False},
     )
 
-    assert results[str(player.steam64)]["Current Elo"] == data.Season.carryOver(900)
-    assert data.Stat.getSkill(player.steam64)[0] > 900
-    assert data.Stat.getSkill(other.steam64)[0] < 900
+    assert results[str(player.steam64)]["Current Elo"] == data.Season.carry_over(900)
+    assert data.Stat.get_skill(player.steam64)[0] > 900
+    assert data.Stat.get_skill(other.steam64)[0] < 900
 
 
 def test_matchmaking_balances_on_skill_not_the_ladder(user_factory):
     player = user_factory()
     data.Stat.append(player.steam64, "unt", elo=0)
-    data.Stat.setSkill(player.steam64, 1234.0, 80.0)
+    data.Stat.set_skill(player.steam64, 1234.0, 80.0)
 
-    skill = data.Stat.skillsOf([player.steam64])
-    assert matchmaking._teamSkill([player.steam64], skill) == 1234.0
+    skill = data.Stat.skills_of([player.steam64])
+    assert matchmaking._team_skill([player.steam64], skill) == 1234.0

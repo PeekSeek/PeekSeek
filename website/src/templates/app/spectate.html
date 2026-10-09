@@ -22,7 +22,7 @@
     <div class="matchGrid">
     {% for match in matches %}
 
-      <div class="matchGridElement {% if match.connectCode() %}clickable" href="steam://run/304930//+connect {{match.connectCode()}}"{% else %}"{% endif %}><div class="matchGridInner">
+      <div class="matchGridElement {% if match.connect_code() %}clickable" href="steam://run/304930//+connect {{match.connect_code()}}"{% else %}"{% endif %}><div class="matchGridInner">
 
             <span>Match.<b class="matchNumber">{{match.id}}</b></span>
             
@@ -40,12 +40,12 @@
             {% endfor %}
 
           </div><div class="matchGridInner">
-            {% if match.connectCode() %}
-            <button type="button" class="settingsButton spectateButton" onclick="window.location.href = 'steam://run/304930//+connect {{match.connectCode()}}'"><img src="/static/img/spectate.png" alt="" height="20">Click to spectate</button>
+            {% if match.connect_code() %}
+            <button type="button" class="settingsButton spectateButton" onclick="window.location.href = 'steam://run/304930//+connect {{match.connect_code()}}'"><img src="/static/img/spectate.png" alt="" height="20">Click to spectate</button>
             {% endif %}
 
             <span class="mutedSmall">
-              {{match.statusLabel}} •
+              {{match.status_label}} •
               {{fromTimestamp(match.time).strftime("%d/%m/%Y @ %H:%M:%S")}}
             </span> 
           

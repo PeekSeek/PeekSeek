@@ -55,7 +55,7 @@ class Party(SQLModel, table=True):
         return mine
 
     @staticmethod
-    def pendingInvites(db, steam64) -> list["Party"]:
+    def pending_invites(db, steam64) -> list["Party"]:
         steam64 = str(steam64)
         return [
             p for p in db.query(Party).all() if steam64 in p.data.get("invites", [])
@@ -63,7 +63,7 @@ class Party(SQLModel, table=True):
 
 
 class UserHB(SQLModel, table=True):
-    """A queue heartbeat — one row per player currently waiting for a match."""
+    """A queue heartbeat, one row per player currently waiting for a match."""
 
     __tablename__ = "UserHB"
 
@@ -82,7 +82,7 @@ class UserHB(SQLModel, table=True):
     party: Party = Relationship(back_populates="heartbeats")
 
     @staticmethod
-    def freshInQueue(db, eventId: int | None = None) -> list["UserHB"]:
+    def fresh_in_queue(db, eventId: int | None = None) -> list["UserHB"]:
         """Live heartbeats for a queue, deleting any that have gone stale or barred.
 
         Checked here as well as on joining, because a ban can land while somebody is
@@ -106,34 +106,34 @@ class UserHB(SQLModel, table=True):
         return fresh
 
     @staticmethod
-    def countFresh(region: str | None) -> int:
+    def count_fresh(region: str | None) -> int:
         """How many players are waiting for a match in one region right now.
 
         Reported back to game servers so "nothing happened" can be told apart from
         "nobody is queueing here" without reading the database.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             return UserHB._fresh(db).where(UserHB.region == region).count()
 
     @staticmethod
-    def countAllFresh() -> int:
+    def count_all_fresh() -> int:
         """How many players are waiting for a match anywhere.
 
-        Separate from countFresh because that one answers a game server asking about
+        Separate from count_fresh because that one answers a game server asking about
         its own region, and this one answers "is anything happening here at all",
         where a queue in Utah counts exactly as much as one in Paris.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             return UserHB._fresh(db).count()
 
     @staticmethod
     def _fresh(db, eventId: int | None = None):
         """Matchmaking heartbeats young enough to count: the open queue by default, or
-        one event's own queue. A read only: `freshInQueue` is what sweeps out the stale
+        one event's own queue. A read only: `fresh_in_queue` is what sweeps out the stale
         and the barred."""
         return db.query(UserHB).where(
             UserHB.eventId.is_(None) if eventId is None else UserHB.eventId == eventId,
@@ -141,17 +141,17 @@ class UserHB(SQLModel, table=True):
         )
 
     @staticmethod
-    def countFreshForEvent(eventId: int) -> int:
+    def count_fresh_for_event(eventId: int) -> int:
         """How many players are waiting for one event's match right now.
 
         Shown on the event page beside its join button, so a visitor can see whether
         there is anybody to play against before they launch the game. It goes through
-        `_fresh` rather than `freshInQueue` because that one deletes what it finds and
+        `_fresh` rather than `fresh_in_queue` because that one deletes what it finds and
         a page render has no business writing.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             return UserHB._fresh(db, eventId).count()
 
     @staticmethod
@@ -159,10 +159,10 @@ class UserHB(SQLModel, table=True):
         """Take all of these players out of the queue, or none of them, and say
         whether this call got them. Done before the match is built, so nobody else can
         find them queued while it is."""
-        from src.core.db import open
+        from src.core.db import session
 
         steam64s = [int(s) for s in steam64s]
-        with open() as session:
+        with session() as session:
             removed = (
                 session.query(UserHB)
                 .where(UserHB.steam64.in_(steam64s))

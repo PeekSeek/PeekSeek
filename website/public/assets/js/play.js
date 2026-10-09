@@ -3,12 +3,15 @@ const options = document.getElementsByClassName("qgridoption");
 
 function countOnes(n) {
     let count = 0;
-    while (n !== 0) { count += n & 1; n >>>= 1; }
+    while (n !== 0) {
+        count += n & 1;
+        n >>>= 1;
+    }
     return count;
 }
 
 /* Matchmaking will not split a party across two teams, so a mode with fewer seats
-   per team than the party has members can never take them — it would just queue
+   per team than the party has members can never take them, it would just queue
    and never match. Same rule /queue/heartbeat enforces, applied before the button
    is pressed. Event tiles carry no seat count and are never ruled out here. */
 function fitsParty(option) {
@@ -82,16 +85,23 @@ setInterval(renderPing, 3000);
 
 let errorDecay = 0;
 
-function setError(text = null, timeout = 3000, stopTheQueue=true) {
+function setError(text = null, timeout = 3000, stopTheQueue = true) {
     const element = document.getElementById("lastError");
-    if (text === null) { element.style.display = "None"; return; }
+    if (text === null) {
+        element.style.display = "None";
+        return;
+    }
 
-    if (stopTheQueue) {stopQueue();}
-    
+    if (stopTheQueue) {
+        stopQueue();
+    }
+
     errorDecay = Date.now() + timeout;
     element.style.display = "Flex";
     element.innerText = text;
-    setTimeout(() => { if (Date.now() >= errorDecay) setError(); }, timeout);
+    setTimeout(() => {
+        if (Date.now() >= errorDecay) setError();
+    }, timeout);
 }
 
 let isQueing = false;
@@ -114,8 +124,7 @@ function stopQueue() {
     game.disabled = false;
 
     api.get("/queue/quit").catch(() => {
-        setError("All attempts to stop queue have failed. You may receive a dodge penalty.",
-            3000, false);
+        setError("All attempts to stop queue have failed. You may receive a dodge penalty.", 3000, false);
     });
 }
 
@@ -128,24 +137,27 @@ function heartbeat() {
     game.disabled = true;
 
     const eventId = game.value;
-    const params = eventId !== "matchmaking"
-        ? { eventId, team: selected }
-        : { gamemode: selected, region: region.value };
+    const params =
+        eventId !== "matchmaking"
+            ? { eventId, team: selected }
+            : { gamemode: selected, region: region.value };
 
-    api.get("/queue/heartbeat", params).then(r => {
-        qFinished = true;
-        if (r.status === 200) {
-            r.json().then(d => {
-                if (!d.matchid) return;
-                isQueing = false;
-                playSound("match_found");
-                // Long enough for the sound to be heard before the page goes.
-                setTimeout(() => window.location.href = "/match/", 900);
-            });
-        } else {
-            r.text().then(msg => setError(msg));
-        }
-    }).catch(() => setError("Heartbeat failed, stopped queue."));
+    api.get("/queue/heartbeat", params)
+        .then(r => {
+            qFinished = true;
+            if (r.status === 200) {
+                r.json().then(d => {
+                    if (!d.matchid) return;
+                    isQueing = false;
+                    playSound("match_found");
+                    // Long enough for the sound to be heard before the page goes.
+                    setTimeout(() => (window.location.href = "/match/"), 900);
+                });
+            } else {
+                r.text().then(msg => setError(msg));
+            }
+        })
+        .catch(() => setError("Heartbeat failed, stopped queue."));
 
     renderPing();
 }
@@ -179,7 +191,8 @@ function hb() {
 }
 
 setInterval(() => {
-    if (isQueing) document.getElementById("q").innerHTML = new Date(Date.now() - t).toISOString().slice(14, 19);
+    if (isQueing)
+        document.getElementById("q").innerHTML = new Date(Date.now() - t).toISOString().slice(14, 19);
 }, 100);
 
 hb();
@@ -251,5 +264,8 @@ function updateGamemodes() {
     updateOptions();
 }
 
-game.addEventListener("change", () => { selected = 0; updateGamemodes(); });
+game.addEventListener("change", () => {
+    selected = 0;
+    updateGamemodes();
+});
 updateGamemodes();

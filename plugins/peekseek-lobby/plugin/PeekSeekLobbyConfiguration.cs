@@ -1,7 +1,8 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Xml.Serialization;
 using PeekSeekLobby.Core.Models;
 using Rocket.API;
+using PeekSeek.Core.Models;
 
 namespace PeekSeekLobby;
 
@@ -25,7 +26,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public float SpawnProtectionSeconds;
 
     /// How long a player waits at the standard spawn before being deployed to a
-    /// lobby spawn point. They are alive and protected for the whole wait — the
+    /// lobby spawn point. They are alive and protected for the whole wait, the
     /// pause is a breather between lives, not a death screen.
     public float RespawnDelaySeconds;
 
@@ -109,7 +110,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public string szMatchURL;
 
     /// Which kits.json weapon categories players may equip in the lobby and pick
-    /// between with /kit — a subset of what the site actually supports, so this
+    /// between with /kit, a subset of what the site actually supports, so this
     /// can grow (or shrink) without a plugin release. The first entry is the
     /// default a player equips on join.
     public List<string> AllowedKitCategories;
@@ -120,14 +121,14 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     /// entry per category in AllowedKitCategories.
     public List<FallbackKit> FallbackKits;
 
-    /// Master switch for the solo target range. Off removes /range entirely —
+    /// Master switch for the solo target range. Off removes /range entirely,
     /// the command still exists but says the range is not set up here.
     public bool RangeEnabled;
 
     /// The barricade placed as a target. Must be an item this server can place as
     /// a barricade and one bullets can actually hit: an invulnerable barricade
     /// never raises the damage event the range counts hits with. 1408 is the cloth
-    /// mannequin — humanoid, and flagged Vulnerable in the vanilla assets, unlike
+    /// mannequin, humanoid, and flagged Vulnerable in the vanilla assets, unlike
     /// the metal one at 1409.
     public ushort RangeTargetItemId;
 
@@ -142,7 +143,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
     public float RangeSpreadDegrees;
 
     /// The kill feed at the top right, from the PeekSeek Kill Feed workshop item
-    /// (`plugins/peekseek/ui`), which the server has to list in
+    /// (`plugins/peekseek-match/ui`), which the server has to list in
     /// WorkshopDownloadConfig.json. Left empty, there is no feed; the chat lines stay
     /// either way. The key is any small number no other plugin here uses.
     public string KillFeedEffectGUID;
@@ -252,7 +253,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
                 CooldownSeconds = 60f,
                 szChatMessage = "<color=white>{0}</color> earned a <color=white>drum</color>.",
                 // Both drums are listed and only the one the equipped gun can
-                // chamber is fitted — the ranger drum to a ranger gun, the military
+                // chamber is fitted, the ranger drum to a ranger gun, the military
                 // drum to a military one, and nothing at all to a sniper.
                 Items = [
                     new StreakItem { ItemID = 125, Amount = 1 },
@@ -303,7 +304,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
         RankIconURL = "https://peekseek.net/static/ranks/{0}.png";
 
         // The same first-option gun, attachments and outfit the website would
-        // resolve for a player who has never saved a kit — see kits.json and
+        // resolve for a player who has never saved a kit, see kits.json and
         // metagun.py. Kept in config rather than hardcoded so a balance change
         // doesn't need a plugin release.
         FallbackKits = [
@@ -333,7 +334,7 @@ public class PeekSeekLobbyConfiguration : IRocketPluginConfiguration {
             }
         ];
 
-        // Placeholder — real Alpha Valley spawn points get filled in once the
+        // Placeholder, real Alpha Valley spawn points get filled in once the
         // plugin is installed on the live arena map.
         Spawns = new List<LobbySpawn> {
             new LobbySpawn { Position = new SerializableVector3(0, 0, 0) }

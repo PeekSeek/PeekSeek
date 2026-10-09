@@ -1,0 +1,22 @@
+name: Casual
+queueBit: 4
+
+teams: 4
+playersPerTeam: 1
+usesElo: false
+optionBanningEnabled: false
+
+kitsAllowed: [meta, sniper]
+map: [Alpha Valley]
+movement: [true]
+ballistics: [true]
+
+defaultItems:
+  - { id: 395, amount: 1 }                                # Bloodbag
+  - { id: 1103, amount: 1 }                               # Black Umbrella
+
+powerups:
+  Penta Bounce:
+    - { id: 1838, amount: 5 }                             # Bounce Grenade
+  Triple Barricades:
+    - { id: 30, amount: 3 }                               # Maple Barricade

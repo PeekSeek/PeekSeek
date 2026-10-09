@@ -33,7 +33,7 @@
   gap: 20px;
   flex-wrap: wrap;
 } .adminRefreshed {
-  color: #8885;
+  color: var(--line);
   font-size: 13px;
 }
 
@@ -43,12 +43,12 @@
   justify-content: space-between;
   gap: 10px;
 } .adminClock {
-  color: #8885;
+  color: var(--line);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 } .adminMeta {
   font-size: 13px;
-  color: #aaa;
+  color: var(--text-dim);
 } .adminActions {
   flex-direction: row;
   flex-wrap: wrap;

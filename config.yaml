@@ -1,0 +1,136 @@
+# PeekSeek configuration. Secrets come from the environment, not from here.
+# Each gamemode has its own file in gamemodes/. All times are in seconds.
+
+app:
+  domain: 127.0.0.1
+  protocol: http
+  build: develop
+  analyticsId: ""   # empty renders no analytics tag at all
+
+# What the play page shows, in this order. Leave a mode out to hide it.
+# Every file in gamemodes/ is a gamemode; each one carries its own queue bit.
+gamemodes:
+  - raid-2v2
+  - raid-1v1
+  - arena-2v2
+  - arena-1v1
+  - arena-sniper-1v1
+  - arena-drums-1v1
+
+match:
+  selectKitsTime: 45
+  pickTimeout: 10
+  joinTimeoutSeconds: 120
+
+matchmaking:
+  queueTimeout: 60
+  hostGrace: 20
+  partyTimeout: 600
+  maxTeamEloGap: 400
+  rematchCooldown: 300
+  matchCooldown: 1
+
+ranking:
+  # Skill is hidden and matchmaking balances on it. The ladder is the Elo players
+  # see, and it is pulled towards skill: below yours, a win is worth up to
+  # (1 + maxBoost) times as much and a loss costs as little as (1 - maxRelief).
+  winPoints: 20
+  lossPoints: 20
+  convergeScale: 200
+  maxBoost: 1.5
+  maxRelief: 0.75
+  # How unsure the site is of a skill, in Elo points. Each match shrinks it.
+  newDeviation: 350
+  seedDeviation: 200
+  minDeviation: 60
+  deviationDrift: 15
+
+ranks:
+  # Keep sorted by elo: a tier runs until the next one starts. Only the last tier
+  # may set onlyTopPlayers, which is awarded by ladder position, not by elo.
+  Bronze:
+    elo: 100
+    icon: bronze
+    role: "1546224903437688922"
+  Bronze 1:
+    elo: 200
+    icon: bronze1
+    role: "1546224903437688922"
+  Silver:
+    elo: 300
+    icon: silver
+    role: "1546224908302942301"
+  Silver 1:
+    elo: 400
+    icon: silver1
+    role: "1546224908302942301"
+  Gold:
+    elo: 500
+    icon: gold
+    role: "1546224913784901733"
+  Gold 1:
+    elo: 600
+    icon: gold1
+    role: "1546224913784901733"
+  Immune:
+    elo: 700
+    icon: immune
+    role: "1400869409517473922"
+  Immune 1:
+    elo: 800
+    icon: immune1
+    role: "1400869409517473922"
+  Apollo:
+    elo: 800
+    icon: apollo
+    role: "1546224919094886451"
+    onlyTopPlayers: 5
+
+# The DeathMatch server's Steam server code, not its address. The address changes
+# every session under FakeIP; this does not.
+lobbyConnectCode: "85568392936415589"
+
+guns:
+  363:  { magazine: 6,    rounds: 30, fireMode: auto }   # Maplestrike, Military Magazine
+  1037: { magazine: 6,    rounds: 30, fireMode: auto }   # Heartbreaker, Military Magazine
+  122:  { magazine: 123,  rounds: 35, fireMode: auto }   # Zubeknakov, Ranger Magazine
+  1377: { magazine: 123,  rounds: 35, fireMode: auto }   # Nightraider, Ranger Magazine
+  1362: { magazine: 123,  rounds: 35, fireMode: auto }   # Augewehr, Ranger Magazine
+  18:   { magazine: 20,   rounds: 6,  fireMode: semi }   # Timberwolf, Timberwolf Magazine
+  1382: { magazine: 1384, rounds: 7,  fireMode: semi }   # Ekho, Ekho Magazine
+
+kitsFile: website/src/kits.json
+
+# Position is the bit in Users.permissions. Only ever add to the end.
+permissions:
+  - admin
+  - canWriteBlog
+  - premium
+  - season_manager
+
+season:
+  # A soft reset: you come back near where you were, never above carryCap, and at
+  # least carryDrop below where you finished.
+  carryCap: 600
+  carryDrop: 150
+  carryFloor: 300
+  carryKeep: 50
+
+discord:
+  guild: "1309223629271339068"
+  clientId: "1317158396629094451"
+  inviteUrl: https://discord.gg/NKgTe6RnvH
+  counterChannel: "1538266851203879032"
+  counterInterval: 360   # Discord allows two renames per ten minutes
+  wakePingAfter: 1800
+  reportChannel: "1543350716683395199"
+  staffRole: "1309223753129005117"
+  overturnChannel: "1392874678577533039"
+  stickyChannel: "1395115837551022162"
+
+# Region ID to the name shown in Discord queue pings.
+regions:
+  paris: EU-West
+  utah: US-West
+  singapore: AS-South
+  brazil: SA-East

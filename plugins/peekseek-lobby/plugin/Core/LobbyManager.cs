@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -17,6 +17,7 @@ using Steamworks;
 using UnityEngine;
 using Logger = Rocket.Core.Logging.Logger;
 using Random = UnityEngine.Random;
+using Ping = PeekSeek.Core.Ping;
 
 namespace PeekSeekLobby.Core;
 
@@ -51,7 +52,7 @@ internal abstract class LobbyManager {
         internal float DeployAt;
 
         /// Which kits.json category (from AllowedKitCategories) this player is
-        /// currently equipped with — set on join, changed with /kit.
+        /// currently equipped with, set on join, changed with /kit.
         internal string KitCategory;
 
         /// The magazine EquipRealKit last handed out for the current kit, kept
@@ -150,7 +151,7 @@ internal abstract class LobbyManager {
         ///
         /// Once per server rather than once per refresh. The site keeps answering with
         /// the same code for as long as the match is live, and a relay the client
-        /// refuses leaves the player right here — so without the last code remembered
+        /// refuses leaves the player right here, so without the last code remembered
         /// they are invited again every few seconds, and told about it in chat each
         /// time. A countdown still running wins: relaying mid-count would take away the
         /// warning the count exists to give.
@@ -159,8 +160,8 @@ internal abstract class LobbyManager {
         }
 
         /// Whether this player cannot be hurt right now. One timer covers a life's
-        /// whole grace — the wait at the standard spawn and the seconds after being
-        /// deployed into the arena — so there is one thing to set, one to clear, and
+        /// whole grace, the wait at the standard spawn and the seconds after being
+        /// deployed into the arena, so there is one thing to set, one to clear, and
         /// no state in which two of them disagree.
         ///
         /// Being AFK holds it open for as long as it lasts. Somebody parked at spawn
@@ -174,8 +175,8 @@ internal abstract class LobbyManager {
         /// False when a deploy is already pending, which is the guard that matters:
         /// OnLifeUpdated fires for as long as a player is dead and the still-dead
         /// sweep calls in behind it, so without it every pass pushed the deploy
-        /// another respawnDelay into the future — a wait that reset faster than it
-        /// ran down — and whispered the countdown again while it did.
+        /// another respawnDelay into the future, a wait that reset faster than it
+        /// ran down, and whispered the countdown again while it did.
         internal bool ScheduleDeploy(float now, float respawnDelay, float protection) {
             if (DeployAt > 0) return false;
 
@@ -244,7 +245,7 @@ internal abstract class LobbyManager {
         PlayerLife.onPlayerLifeUpdated += OnLifeUpdated;
 
         // Attribute-based Harmony patches (ArenaNeutralizePatch) are inert until
-        // something actually applies them — this is that something. Without it
+        // something actually applies them, this is that something. Without it
         // the native Arena round system, shrinking zone included, keeps running
         // completely unpatched.
         Instrument = new Harmony(HarmonyId);
@@ -289,7 +290,7 @@ internal abstract class LobbyManager {
     }
 
     /// Refusing the drop outright is cheaper and cleaner than spawning it and
-    /// deleting it a frame later, and it covers every source at once — death
+    /// deleting it a frame later, and it covers every source at once, death
     /// piles, manual drops, and inventory overflow from a re-equip.
     private static void OnItemDropRequested(Item item, ref Vector3 location, ref bool shouldAllow) {
         if (PeekSeekLobby.Config.RemoveDroppedItems) shouldAllow = false;
@@ -298,7 +299,7 @@ internal abstract class LobbyManager {
     /// Refusing the damage outright *is* the spawn protection.
     ///
     /// It used to be Rocket's Features.GodMode, which heals the player to full on
-    /// every FixedUpdate — fifty replicated health, food, water and virus updates a
+    /// every FixedUpdate, fifty replicated health, food, water and virus updates a
     /// second, for every protected player, in a lobby where a ten second respawn
     /// wait and five seconds of cover mean somebody nearly always is one. It also
     /// had to be switched back off by a call that returned false whenever the
@@ -363,7 +364,7 @@ internal abstract class LobbyManager {
         shouldAllow = false;
 
         // Without a word for it the shooter just sees their hits do nothing and
-        // assumes the server is broken. Throttled per shooter — this runs once per
+        // assumes the server is broken. Throttled per shooter, this runs once per
         // bullet, and an automatic weapon would otherwise fill their chat.
         if (attacker == CSteamID.Nil || attacker == victimID) return;
 
@@ -548,8 +549,8 @@ internal abstract class LobbyManager {
     }
 
     /// A streak is kills in a row with no death and no long gap between them. At
-    /// most one reward lands per kill — the one whose exact kill count this kill
-    /// just reached — so climbing to five collects the two, three and five rewards
+    /// most one reward lands per kill, the one whose exact kill count this kill
+    /// just reached, so climbing to five collects the two, three and five rewards
     /// on the way up rather than all of them at once.
     private static StreakReward AdvanceStreak(PlayerState state) {
         return state.Streak.Advance(
@@ -566,8 +567,8 @@ internal abstract class LobbyManager {
     }
 
     /// Magazines are fitted into the gun the player is already holding rather than
-    /// dropped in their pack — a drum is only a reward if it's the one they are
-    /// shooting — and are skipped when that gun can't chamber them. Everything else
+    /// dropped in their pack, a drum is only a reward if it's the one they are
+    /// shooting, and are skipped when that gun can't chamber them. Everything else
     /// goes into the inventory the ordinary way.
     private static void GiveStreakItems(Player player, PlayerState state, StreakReward reward) {
         if (reward.Items is not { Count: > 0 }) return;
@@ -586,7 +587,7 @@ internal abstract class LobbyManager {
 
     /// Swaps the magazine fitted to the equipped gun for this one, full. Bytes 8
     /// and 9 of a gun's state are the fitted magazine's id and byte 10 its round
-    /// count — the same layout the site writes its kit states in. Does nothing
+    /// count, the same layout the site writes its kit states in. Does nothing
     /// unless the player is holding a gun that shares a caliber with it, which is
     /// what makes one "drum" reward give the ranger drum to ranger guns, the
     /// military drum to military guns, and a sniper nothing at all.
@@ -616,8 +617,8 @@ internal abstract class LobbyManager {
         return (ushort)(gunState[8] | (gunState[9] << 8));
     }
 
-    /// A streak magazine only ever exists in the gun. The moment it leaves — the
-    /// player reloaded it away, dropped it or switched weapons — it is taken back
+    /// A streak magazine only ever exists in the gun. The moment it leaves, the
+    /// player reloaded it away, dropped it or switched weapons, it is taken back
     /// wherever it ended up, so a spent drum can't be reloaded a second time or
     /// carried out of the fight it was earned in. Nothing else a streak hands out
     /// is touched: grenades and bounces consume themselves when thrown, and the
@@ -627,8 +628,8 @@ internal abstract class LobbyManager {
         if (player == null) return;
 
         // Only a gun in their hands can say the magazine has left it. Zero means
-        // they are holding something else — the umbrella the last streak gave
-        // them, say — and the magazine is still in the gun in their pack rather
+        // they are holding something else, the umbrella the last streak gave
+        // them, say, and the magazine is still in the gun in their pack rather
         // than spent, so there is nothing to take yet.
         ushort fitted = FittedMagazine(player);
         if (fitted == 0 || fitted == state.StreakMagItemId) return;
@@ -733,7 +734,7 @@ internal abstract class LobbyManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
-        // The one part worth doing on every pass — a respawn that did not land is
+        // The one part worth doing on every pass, a respawn that did not land is
         // simply retried. Everything after it happens once a life.
         player.life.ServerRespawn(false);
 
@@ -749,7 +750,7 @@ internal abstract class LobbyManager {
 
     /// The one thing that actually puts people back on their feet, copied from the
     /// main plugin because that is the version proven to work. Unturned raises this
-    /// once a life has really changed, which is after the death has been applied —
+    /// once a life has really changed, which is after the death has been applied,
     /// the death event fires too early for a respawn to take. It also keeps firing
     /// while someone is dead, so a respawn that does not land is simply retried
     /// instead of leaving them stuck on a death screen.
@@ -804,7 +805,7 @@ internal abstract class LobbyManager {
         return match.ToLoadout();
     }
 
-    /// Re-fetched and re-applied on every spawn (join and respawn alike) — each
+    /// Re-fetched and re-applied on every spawn (join and respawn alike), each
     /// life starts with the player's real, currently-saved kit, same as a ranked
     /// match would give them, rather than whatever they picked up mid-fight.
     private static void EquipRealKit(Player player, CSteamID steamID, PlayerState state) {
@@ -812,7 +813,7 @@ internal abstract class LobbyManager {
         System.Threading.Tasks.Task.Run(async () => {
             KitLoadout loadout = await RemoteAPI.FetchKit(steamID.m_SteamID, category) ?? FallbackLoadout(category);
             if (loadout == null) {
-                Logger.LogWarning($"No kit for {steamID} ({category}) and no fallback configured — they spawn empty-handed.");
+                Logger.LogWarning($"No kit for {steamID} ({category}) and no fallback configured, they spawn empty-handed.");
                 return;
             }
 
@@ -849,7 +850,7 @@ internal abstract class LobbyManager {
     }
 
     /// The same item, but however many of it the caller wants rather than what the
-    /// kit says — the lobby caps magazines at its own count.
+    /// kit says, the lobby caps magazines at its own count.
     private static void GiveItem(Player player, PSItem item, byte amount) {
         for (byte i = 0; i < amount; i++) {
             player.inventory.forceAddItem(new Item(item.ItemID, true) { state = item.State }, true);
@@ -1061,11 +1062,11 @@ internal abstract class LobbyManager {
     /// there after login without needing a redirect parameter.
     ///
     /// Their own queue choice is deliberately left alone. Holding a match already keeps
-    /// them out of the queue — that is what WantsAMatch checks — so switching Queueing
+    /// them out of the queue, that is what WantsAMatch checks, so switching Queueing
     /// off as well changed nothing while the match lasted and threw away the one thing
     /// needed to put them back when it did not.
     ///
-    /// Having a match is what matters here, not being in this lobby's queue — a match
+    /// Having a match is what matters here, not being in this lobby's queue, a match
     /// made on the site or in a party has to pull someone out of the arena just the
     /// same, or they fight on unaware their match is waiting.
     private static void SendToMatch(ulong steam64, PlayerState state, int matchId) {
@@ -1109,7 +1110,7 @@ internal abstract class LobbyManager {
         Player player = PlayerTool.getPlayer(steamID);
         if (player == null) return;
 
-        // Being pulled out for a match ends the wait between lives — a deploy still
+        // Being pulled out for a match ends the wait between lives, a deploy still
         // pending would otherwise drop them back into the arena moments later.
         state.DeployAt = 0;
         // Out of the arena, which is what "pulled out for a match" means. This used to
@@ -1144,7 +1145,7 @@ internal abstract class LobbyManager {
     /// This is the ordinary ending, not an edge case: two in five matches finish with
     /// nobody having turned up, and the players they were built out of are usually still
     /// in this lobby when that happens. Without this they keep a match id the site
-    /// stopped believing in — parked on the spawn point PullIntoMatch left them on, never
+    /// stopped believing in, parked on the spawn point PullIntoMatch left them on, never
     /// offered another match, and left out of the arena count for the rest of the session,
     /// which is a lobby quietly emptying itself of exactly the people who wanted to play.
     private static void ReturnToArena(ulong steam64, PlayerState state) {
@@ -1164,7 +1165,7 @@ internal abstract class LobbyManager {
     }
 
     /// Switches the caller's kit category and re-equips them immediately (no
-    /// teleport, no fresh spawn protection — just what they're holding). False for
+    /// teleport, no fresh spawn protection, just what they're holding). False for
     /// an unrecognised category or a player Tick doesn't know about.
     internal static bool SwitchKit(CSteamID steamID, string category) {
         if (!Players.TryGetValue(steamID.m_SteamID, out PlayerState state)) return false;
@@ -1194,7 +1195,7 @@ internal abstract class LobbyManager {
 
     /// Everyone still queueing gets pinged on a timer, spawn protection expires on
     /// its own clock, and anyone waiting out a respawn is deployed into the arena
-    /// once their timer is up. Nobody is ever dead here — the respawn itself
+    /// once their timer is up. Nobody is ever dead here, the respawn itself
     /// happens the moment the life updates.
     internal static void Tick() {
         float now = Time.realtimeSinceStartup;
@@ -1228,7 +1229,7 @@ internal abstract class LobbyManager {
                 SpawnPlayer(steamID, state);
             }
 
-            // Only to say so — the protection itself stopped applying the moment
+            // Only to say so, the protection itself stopped applying the moment
             // the timer passed, because that is the one thing anything checks.
             if (!state.Afk && state.SpawnProtectedUntil > 0 && now >= state.SpawnProtectedUntil) {
                 EndSpawnProtection(steamID, state);
@@ -1287,8 +1288,8 @@ internal abstract class LobbyManager {
         }
     }
 
-    /// Reloading doesn't consume the spare — it swaps the spent magazine back into
-    /// the inventory — so the magazine *count* never drops and counting alone sees
+    /// Reloading doesn't consume the spare, it swaps the spent magazine back into
+    /// the inventory, so the magazine *count* never drops and counting alone sees
     /// nothing wrong while every spare sits empty. Partly-used magazines are
     /// dropped and replaced instead, which also self-heals a spare that was
     /// thrown away rather than fired.
@@ -1345,11 +1346,11 @@ internal abstract class LobbyManager {
 
     /// The arena HUD draws the level number under the server name, so it is made to
     /// carry how many people are actually here. The server name itself is left
-    /// exactly as the server set it — it is the server's name, not a scoreboard.
+    /// exactly as the server set it, it is the server's name, not a scoreboard.
     ///
     /// Sent only when the number changes. It used to go out to every client every
     /// second for the life of the server, gathering a fresh connection list each
-    /// time, to say what it had already said — for a figure that moves when somebody
+    /// time, to say what it had already said, for a figure that moves when somebody
     /// joins or leaves and at no other time.
     private static void UpdateArenaHud() {
         int here = Mathf.Min(Provider.clients.Count, byte.MaxValue);
@@ -1363,7 +1364,7 @@ internal abstract class LobbyManager {
     }
 
     /// Unturned adjusts reputation itself when players kill each other, so this keeps
-    /// putting it back — the number over someone's head is their Elo and nothing else.
+    /// putting it back, the number over someone's head is their Elo and nothing else.
     /// A player the site has not answered for yet is skipped rather than stamped with a
     /// zero; every refresh carries their Elo, so one blip no longer costs somebody their
     /// rank for a whole session the way a single lookup on connect did.
@@ -1385,7 +1386,7 @@ internal abstract class LobbyManager {
 
     /// Wipes the arena back to how it started: nothing left on the ground,
     /// nothing built, every session score back to zero and everyone respawned
-    /// with a fresh kit. Elo is deliberately untouched — it isn't a session stat.
+    /// with a fresh kit. Elo is deliberately untouched, it isn't a session stat.
     private static void ResetArena() {
         // The wipe clears every barricade on the map, which is where a running
         // range keeps its targets. Skipping the whole cycle rather than sparing
@@ -1425,7 +1426,7 @@ internal abstract class LobbyManager {
     }
 
     /// One request per player, every tick. Whether it queues them or only asks about
-    /// them is the only difference — both come back with the same answer, so there is no
+    /// them is the only difference, both come back with the same answer, so there is no
     /// second round trip between "you have a match" and "here is where it is".
     ///
     /// The population report goes out from here rather than from Tick because this is

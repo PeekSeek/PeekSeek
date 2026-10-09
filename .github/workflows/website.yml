@@ -3,13 +3,22 @@ name: website
 on:
   push:
     branches: [main, develop]
-    paths: ["website/**", ".github/workflows/website.yml"]
+    paths: ["website/**", "pyproject.toml", ".github/workflows/website.yml"]
   pull_request:
     branches: [main]
-    paths: ["website/**", ".github/workflows/website.yml"]
-  schedule:
-    - cron: "0 6 * * 1" # weekly, for the audit job
+    paths: ["website/**", "pyproject.toml", ".github/workflows/website.yml"]
   workflow_dispatch: # path filters mean a shared change may not trigger this on its own
+
+# It needs to read the checkout and nothing else. This was the one workflow without a
+# permissions block, so its jobs took the repository default token scope.
+permissions:
+  contents: read
+
+# Successive pushes to the same branch supersede each other: the older run's answer is
+# about code nobody is looking at any more.
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
 
 defaults:
   run:
@@ -17,34 +26,63 @@ defaults:
 
 jobs:
   lint:
-    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install black
-      - run: black --check .
+      # Pinned: an unpinned formatter turns a future run red on code nobody touched.
+      - run: pip install black==26.5.1
+      # From the repository root, not website/. Run from here it covered three files and
+      # missed the bot, the sound generator and the six Unity build tools; pyproject.toml
+      # holds the excludes.
+      - run: black --check ..
+        working-directory: website
 
   test:
-    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # The tests pin DB to in-memory SQLite in conftest and stub the rest, so no secrets here.
-      - run: pip install -r requirements.txt pytest
+      # The locked set, so the tests run against what production installs. They pin DB to
+      # in-memory SQLite in conftest and stub the rest, so no secrets here.
+      - run: pip install --require-hashes -r requirements-dev.lock
       - run: pytest -v
 
-  audit:
+  rank-art:
+    # The SVGs are the source and the PNGs are for Discord embeds, which will not render
+    # an SVG. Both have to be tracked: /static/ranks/<icon>.png is a documented URL that
+    # game servers fetch, so generating the PNGs only inside the image would 404 them for
+    # anyone running uvicorn directly. That leaves drift as the real risk - the badge art
+    # has been recoloured twice without the PNGs following - so this re-renders them and
+    # fails if they no longer match. Fuzzy, so an ImageMagick upgrade is not a red build.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pip-audit
-      - run: pip-audit -r requirements.txt
+      # ubuntu-latest ships ImageMagick, so this costs nothing in the image.
+      - name: Are the badge PNGs still their SVGs?
+        working-directory: website
+        run: python scripts/render_rank_pngs.py --check
+
+  web-assets:
+    # 1,200 lines of hand-written JS and 3,100 of CSS had no linter at all, which is how
+    # 294 duplicated colour literals and six duplicate selectors went unnoticed. Both
+    # linters pass on a clean tree, so this blocks rather than warns.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/tooling/package-lock.json
+      - run: npm ci
+        working-directory: website/tooling
+      - run: npm run lint
+        working-directory: website/tooling

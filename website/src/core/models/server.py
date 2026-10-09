@@ -33,9 +33,9 @@ class AuthorizedServer(SQLModel, table=True):
         401 from every /unt route. Driven by BOOTSTRAP_SERVERS so only the
         environments that set it are affected.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             known = {server.address for server in db.query(AuthorizedServer).all()}
             for address, region in servers.items():
                 if address not in known:
@@ -58,9 +58,9 @@ class LobbyPopulation(SQLModel, table=True):
 
     @staticmethod
     def report(address: str, players: int) -> None:
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             row = (
                 db.query(LobbyPopulation)
                 .where(LobbyPopulation.address == address)
@@ -75,17 +75,17 @@ class LobbyPopulation(SQLModel, table=True):
             row.at = int(time())
 
     @staticmethod
-    def countFresh(maxAgeSeconds: int = 30) -> int:
+    def count_fresh(maxAgeSeconds: int = 30) -> int:
         """Everyone in an arena right now, across every lobby that is still reporting.
 
         A server that has stopped reporting is left out rather than trusted: a lobby
         that crashed with eleven people in it would otherwise keep advertising them
         for as long as its row survives.
         """
-        from src.core.db import open
+        from src.core.db import session
 
         cutoff = int(time()) - maxAgeSeconds
-        with open() as db:
+        with session() as db:
             return sum(
                 row.players
                 for row in db.query(LobbyPopulation).all()
@@ -96,19 +96,19 @@ class LobbyPopulation(SQLModel, table=True):
     def activity(maxAgeSeconds: int = 30) -> dict:
         """Per region, what a player deciding where to queue would want to hear: how
         many are in that region's lobbies right now, and how long ago its last match
-        ended, in minutes. Only lobbies still reporting count, as in `countFresh`.
+        ended, in minutes. Only lobbies still reporting count, as in `count_fresh`.
 
         This is for the play page, which shows a number only when it invites: a lobby
         with one person in it and a region whose last match was three hours ago are
         both left unsaid, because somebody about to queue is somebody else's match,
         and a bad number scares them off before they are anybody's.
         """
-        from src.core.db import open
+        from src.core.db import session
         from .match import MatchResult
 
         cutoff = int(time()) - maxAgeSeconds
         activity: dict = {}
-        with open() as db:
+        with session() as db:
             regions = {
                 server.address: server.region
                 for server in db.query(AuthorizedServer).all()
@@ -143,13 +143,13 @@ class LobbyPopulation(SQLModel, table=True):
         return activity
 
     @staticmethod
-    def playingNow() -> int:
+    def playing_now() -> int:
         """Everyone playing anywhere: lobbies report who stands in them, and every
         roster the site handed out is on a match. A lobby counts only players not on a
         match, so nobody is counted twice."""
         from .match import Match
 
-        return LobbyPopulation.countFresh() + len(Match.playersInAMatch())
+        return LobbyPopulation.count_fresh() + len(Match.players_in_a_match())
 
 
 class ArenaReading(SQLModel, table=True):
@@ -181,9 +181,9 @@ class ArenaReading(SQLModel, table=True):
         Both jobs here because both need the previous reading, and reading it twice
         would be two chances to disagree about whether the arena was empty.
         """
-        from src.core.db import open
+        from src.core.db import session
 
-        with open() as db:
+        with session() as db:
             previous = (
                 db.query(ArenaReading)
                 .where(ArenaReading.address == address)
@@ -214,11 +214,11 @@ class ArenaReading(SQLModel, table=True):
             )
             region = server.region if server else None
 
-        if ArenaReading._isWakingUp(previous, players):
-            ArenaReading._announceWakeUp(players, region)
+        if ArenaReading._is_waking_up(previous, players):
+            ArenaReading._announce_wake_up(players, region)
 
     @staticmethod
-    def _isWakingUp(previous: "ArenaReading | None", players: int) -> bool:
+    def _is_waking_up(previous: "ArenaReading | None", players: int) -> bool:
         """Whether this reading is the first sign of life after a long quiet spell.
 
         The quiet has to have lasted, because an arena flickers: people join an empty
@@ -236,7 +236,7 @@ class ArenaReading(SQLModel, table=True):
         return time() - previous.at >= settings.wake_ping_after
 
     @staticmethod
-    def _announceWakeUp(players: int, region: str | None) -> None:
+    def _announce_wake_up(players: int, region: str | None) -> None:
         """Tell Discord a long-empty arena has a player in it, while they are still
         there to be joined."""
         from src.core import notify
@@ -246,7 +246,7 @@ class ArenaReading(SQLModel, table=True):
             settings.queue_log_channel,
             content=(
                 f"**Someone is in the arena.** {players} "
-                f"player{'' if players == 1 else 's'} in `{where}` right now — "
+                f"player{'' if players == 1 else 's'} in `{where}` right now, "
                 f"join them at [{settings.domain}](<{settings.base_url}>) "
                 "before they get bored and leave."
             ),

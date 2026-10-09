@@ -93,7 +93,7 @@ public class KillStreakTests {
         Assert.NotNull(streak.Advance(71f, Window, rewards));
     }
 
-    /// A streak on cooldown must not stall the run — the kills keep counting, so
+    /// A streak on cooldown must not stall the run, the kills keep counting, so
     /// the bigger reward further up still lands.
     [Fact]
     public void Advance_KeepsClimbingPastARewardOnCooldown() {

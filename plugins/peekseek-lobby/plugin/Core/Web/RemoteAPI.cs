@@ -17,8 +17,8 @@ namespace PeekSeekLobby.Core.Web;
 ///
 /// One call per player per tick answers everything the lobby needs to know about them:
 /// their rank, whether they have a match, and whether that match is ready to be sent
-/// to. It used to take three — queue, then poll for a match, then poll the overlay for
-/// a server code — and each of those was a separate chance to leave somebody standing
+/// to. It used to take three, queue, then poll for a match, then poll the overlay for
+/// a server code, and each of those was a separate chance to leave somebody standing
 /// in the arena while their match waited for them.
 internal static class RemoteAPI {
     private static string Base => PeekSeekLobby.Config.szAPIURL.TrimEnd('/') + "/server/v1";
@@ -146,7 +146,7 @@ internal static class RemoteAPI {
 
     /// Who already has a refresh out. The lobby asks again for every player every few
     /// seconds regardless of what happened to the last ask, so a site that has gone
-    /// slow — or a request sitting out its ten second timeout — would otherwise leave
+    /// slow, or a request sitting out its ten second timeout, would otherwise leave
     /// a growing pile of identical requests per player, each holding a socket and
     /// each landing on the same state moments after the one before it.
     ///
@@ -291,7 +291,7 @@ internal static class RemoteAPI {
     /// their kit is on both lists, and sending them here too would count them twice in
     /// one total.
     ///
-    /// Fire and forget — nothing here reads the answer, and a reading that misses a
+    /// Fire and forget, nothing here reads the answer, and a reading that misses a
     /// beat is a counter that is a few seconds stale rather than a lobby that stops.
     internal static void ReportPopulation(int players, int queueing) {
         Task.Run(async () => {
@@ -348,11 +348,11 @@ internal static class RemoteAPI {
 
         TaskDispatcher.QueueOnMainThread(() => {
             if (status == HttpStatusCode.OK) {
-                Logger.Log($"Talking to {Base} — players are being queued and ranked.");
+                Logger.Log($"Talking to {Base}, players are being queued and ranked.");
                 return;
             }
             Logger.LogWarning(
-                $"{Base} is answering {(int)status} {status} — players will not be matched, "
+                $"{Base} is answering {(int)status} {status}, players will not be matched, "
                 + "and rank will not show. Check the URL and that this server's IP is allow-listed.");
         });
     }

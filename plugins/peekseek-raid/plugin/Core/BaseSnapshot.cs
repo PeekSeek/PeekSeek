@@ -12,7 +12,7 @@ namespace PeekSeekRaid.Core;
 /// Rounds are meant to be fought against the same building six or more times, so the
 /// base cannot simply be left standing: a wall blown open in round one has to be back
 /// in round two. Snapshotting is also what lets ownership be reassigned per round,
-/// which is the whole trick behind soft walls — the pieces come back owned by nobody
+/// which is the whole trick behind soft walls, the pieces come back owned by nobody
 /// except the ones this gamemode wants a team to be able to take down.
 ///
 /// Everything is stored relative to the site anchor rather than in world space, so a

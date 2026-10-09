@@ -89,7 +89,7 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
     /// force-equipped, and nothing else. `/raid find <text>` looks an id up in game.
     public List<RaidItem> BuildTools;
 
-    /// Clothing given only to a player whose own kit did not dress them — because the
+    /// Clothing given only to a player whose own kit did not dress them, because the
     /// site was unreachable, or their loadout has no outfit in it. Anybody with a kit
     /// keeps wearing their own.
     public List<string> FallbackOutfit;
@@ -103,8 +103,8 @@ public class PeekSeekRaidConfiguration : IRocketPluginConfiguration {
 
     /// How big a builder's hands page is, in inventory cells.
     ///
-    /// Unturned does replicate a page resize — Items.resize tells the owning client the
-    /// new size — so this is a real answer to "a backpack does not hold a building"
+    /// Unturned does replicate a page resize, Items.resize tells the owning client the
+    /// new size, so this is a real answer to "a backpack does not hold a building"
     /// rather than a workaround. The hands page is the one worth growing: it is always
     /// there, where the backpack and vest pages get resized back to the worn asset every
     /// time somebody changes clothes.

@@ -10,7 +10,7 @@ namespace PeekSeekLobby.Commands;
 /// /stats with no arguments shows the caller's own kills/deaths for this lobby
 /// session; /stats <name or steam64> shows anyone else currently connected.
 /// Unlike the main PeekSeek plugin's /stats, this is session-scoped to the
-/// lobby (not match-scoped) and only covers players still online — there's no
+/// lobby (not match-scoped) and only covers players still online, there's no
 /// match to persist a disconnected player's numbers against.
 internal class StatsCommand : IRocketCommand {
     public AllowedCaller AllowedCaller => AllowedCaller.Player;

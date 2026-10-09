@@ -28,7 +28,7 @@ def admin_client(client, login, user_factory):
 
 
 def _match(first, second, **overrides) -> int:
-    with core_db.open() as db:
+    with core_db.session() as db:
         match = data.Match(
             gamemode=GAMEMODE,
             teams=[

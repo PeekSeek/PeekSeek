@@ -1,4 +1,4 @@
-# Import order matters — User must come first (all others depend on it)
+# Import order matters, User must come first (all others depend on it)
 from .user import User, UserIP, UserBan
 from .rank import Rank
 from .season import Season

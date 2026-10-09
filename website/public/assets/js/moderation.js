@@ -7,7 +7,7 @@
 /* ---------------------------------------------------------------------------
    Moderation panel.
 
-   Opened from a player row, from the search box, or from ?ban=<steam64> — which is
+   Opened from a player row, from the search box, or from ?ban=<steam64>, which is
    where the "Ban this player" button on an in-game report points, so a report sitting
    in Discord is one click from the form that acts on it. */
 
@@ -16,9 +16,17 @@
    that does not also load the match grid. */
 function esc(value) {
     if (value === null || value === undefined) return "";
-    return String(value).replace(/[&<>"']/g, c => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-    }[c]));
+    return String(value).replace(
+        /[&<>"']/g,
+        c =>
+            ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+            })[c]
+    );
 }
 
 let modState = null;
@@ -54,14 +62,13 @@ function openDrawer(steam64) {
     drawer.innerHTML = `<span style="color:#8885;">Loading…</span>`;
 
     api.get(`/admin/player/${steam64}`)
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
         .then(data => {
             modState = { player: data, preset: null };
             drawDrawer();
         })
         .catch(e => {
-            drawer.innerHTML =
-                `<span style="color:#f04444;">Could not load that player (${esc(e)}).</span>`;
+            drawer.innerHTML = `<span style="color:#f04444;">Could not load that player (${esc(e)}).</span>`;
         });
 }
 
@@ -114,9 +121,7 @@ function confirmLabel() {
 
     const p = modState.player.preview;
     if (modState.preset === "cheating") {
-        return p.players
-            ? `Ban permanently and refund ${p.players} players`
-            : "Ban permanently";
+        return p.players ? `Ban permanently and refund ${p.players} players` : "Ban permanently";
     }
     if (modState.preset === "custom") return "Ban for the days given";
     return `Ban for ${modState.player.presets[modState.preset].summary.toLowerCase()}`;
@@ -129,15 +134,21 @@ function drawDrawer() {
         custom: { label: "Custom", summary: "Set days + reason" },
     };
 
-    const tiles = Object.entries(presets).map(([key, preset]) => `
+    const tiles = Object.entries(presets)
+        .map(
+            ([key, preset]) => `
         <div class="modTile${modState.preset === key ? " sel" : ""}" tabindex="0"
              onclick="pickPreset('${esc(key)}')"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pickPreset('${esc(key)}')}">
           <div class="n">${esc(preset.label)}</div>
           <div class="d">${esc(preset.summary)}</div>
-        </div>`).join("");
+        </div>`
+        )
+        .join("");
 
-    const custom = modState.preset === "custom" ? `
+    const custom =
+        modState.preset === "custom"
+            ? `
         <div class="modField">
           <label for="modDays">Days</label>
           <input id="modDays" type="number" min="1" value="7">
@@ -145,7 +156,8 @@ function drawDrawer() {
         <div class="modField">
           <label for="modReason">Reason</label>
           <input id="modReason" type="text" placeholder="What it is for">
-        </div>` : "";
+        </div>`
+            : "";
 
     const stats = p.stats
         ? `${p.stats.elo} Elo · ${p.stats.wins}W ${p.stats.losses}L · ${p.stats.kills}K ${p.stats.deaths}D`
@@ -167,10 +179,14 @@ function drawDrawer() {
       </div>
       <div class="modId" style="margin-top:8px;">${esc(stats)}</div>
 
-      ${p.ban ? `<div class="modBanner">
+      ${
+          p.ban
+              ? `<div class="modBanner">
           <div class="t">${p.ban.permanent ? "Permanently banned" : "Banned"}</div>
           <div class="s">${esc(p.ban.reason)} · ${esc(p.ban.expiryLabel)}<br>${esc(p.ban.note || "")}</div>
-        </div>` : ""}
+        </div>`
+              : ""
+      }
 
       <div class="modSection">
         <h4>Ban history</h4>
@@ -182,7 +198,7 @@ function drawDrawer() {
         <div class="modTiles">${tiles}</div>
         ${custom}
         <div class="modField">
-          <label for="modNote">Moderator note — evidence, links, context</label>
+          <label for="modNote">Moderator note: evidence, links, context</label>
           <div class="modPrefix">by ${esc(adminName)}/${esc(adminSteam64)}</div>
           <textarea id="modNote" placeholder="Clip, match id, what you saw"></textarea>
         </div>
@@ -209,10 +225,11 @@ function submitBan() {
         return;
     }
 
-    const wording = modState.preset === "cheating" && p.preview.players
-        ? `Ban ${p.name} permanently?\n\nThis voids ${p.preview.matches} matches and refunds `
-          + `${p.preview.players} players. It cannot be undone from here.`
-        : `Ban ${p.name}?`;
+    const wording =
+        modState.preset === "cheating" && p.preview.players
+            ? `Ban ${p.name} permanently?\n\nThis voids ${p.preview.matches} matches and refunds ` +
+              `${p.preview.players} players. It cannot be undone from here.`
+            : `Ban ${p.name}?`;
     if (!confirm(wording)) return;
 
     const button = document.querySelector(".modConfirm");
@@ -221,17 +238,24 @@ function submitBan() {
 
     // A real body rather than query params: a note carries evidence links, and
     // api.post puts params in the query string, where they would be logged and capped.
-    api.post("/admin/ban", {}, {
-        body: JSON.stringify({
-            steam64: p.steam64,
-            preset: modState.preset,
-            days: days ? days.value : null,
-            reason: reason ? reason.value : null,
-            note: note
+    api.post(
+        "/admin/ban",
+        {},
+        {
+            body: JSON.stringify({
+                steam64: p.steam64,
+                preset: modState.preset,
+                days: days ? days.value : null,
+                reason: reason ? reason.value : null,
+                note: note,
+            }),
+        }
+    )
+        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then(() => {
+            closeDrawer();
+            afterModeration();
         })
-    })
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(() => { closeDrawer(); afterModeration(); })
         .catch(e => {
             alert(`That failed (${e}).`);
             button.disabled = false;
@@ -244,8 +268,11 @@ function overturn(banId) {
 
     const steam64 = modState.player.steam64;
     api.post("/admin/unban", {}, { body: JSON.stringify({ id: banId }) })
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(() => { openDrawer(steam64); afterModeration(); })
+        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then(() => {
+            openDrawer(steam64);
+            afterModeration();
+        })
         .catch(e => alert(`That failed (${e}).`));
 }
 
@@ -255,17 +282,20 @@ function loadBanState() {
     // Only the admin page has a match grid to put chips on.
     if (typeof lastPayload === "undefined" || !lastPayload) return;
 
-    const ids = [...new Set(lastPayload.matches.flatMap(
-        m => m.teams.flatMap(t => t.players.map(p => p.steam64))))];
+    const ids = [
+        ...new Set(lastPayload.matches.flatMap(m => m.teams.flatMap(t => t.players.map(p => p.steam64)))),
+    ];
     if (!ids.length) return;
 
     api.get(`/admin/bans?steam64s=${ids.join(",")}`)
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
         .then(state => {
             banState = state;
             if (lastPayload) render(lastPayload);
         })
-        .catch(() => { /* Chips are an enhancement. The page is fine without them. */ });
+        .catch(() => {
+            /* Chips are an enhancement. The page is fine without them. */
+        });
 }
 
 document.addEventListener("DOMContentLoaded", () => {

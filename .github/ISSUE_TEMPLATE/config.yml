@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discord
+    url: https://discord.gg/NKgTe6RnvH
+    about: Questions, matchmaking problems, and anything that is not a code issue.
+  - name: Email the maintainers
+    url: mailto:peekseek@kcvdh.com
+    about: Anything you cannot put in public, and privacy or data requests.
+  - name: Security vulnerability
+    url: https://github.com/PeekSeek/PeekSeek/security/advisories/new
+    about: Report it privately. Never in a public issue.

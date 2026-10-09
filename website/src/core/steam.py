@@ -24,14 +24,14 @@ PROFILE_MAX_AGE = timedelta(days=1)
 def _persist_steam_data(steam64: int, raw: dict) -> None:
     """Write the relevant Steam fields back to the Users table."""
     try:
-        from src.core.db import open
+        from src.core.db import session
         from src.core.models.user import User
 
         payload = {
             "name": raw.get("personaname"),
             "avatar": raw.get("avatarfull"),
         }
-        with open() as db:
+        with session() as db:
             db.query(User).where(User.steam64 == steam64).update(
                 {
                     "steam_data": payload,
@@ -61,10 +61,10 @@ def get_steam_user_data(steam64: int) -> dict | None:
 
 def _stored(steam64: int) -> tuple[dict | None, datetime | None]:
     """The last Steam profile written to the Users table, and when it was fetched."""
-    from src.core.db import open
+    from src.core.db import session
     from src.core.models.user import User
 
-    with open() as db:
+    with session() as db:
         row = (
             db.query(User.steam_data, User.steam_fetched_at)
             .where(User.steam64 == int(steam64))
@@ -104,5 +104,5 @@ class User:
         self.avatar = profile.get("avatar") or DEFAULT_AVATAR
         self.steam64 = steam64
 
-    def toDict(self) -> dict:
+    def to_dict(self) -> dict:
         return {"avatar": self.avatar, "name": self.name}

@@ -1,17 +1,34 @@
-# Normalise to LF everywhere. plugins/peekseek/.editorconfig sets end_of_line = lf,
-# so CRLF blobs make `dotnet format --verify-no-changes` fail on the Windows runners.
+# Load-bearing, not housekeeping. Every C# lint job runs on windows-latest and runs
+# `dotnet format --verify-no-changes`, and five .editorconfig files set end_of_line = lf.
+# Without the line below a Windows checkout materialises CRLF, the formatter demands LF,
+# and every C# job fails on a clean tree. Do not remove it.
 * text=auto eol=lf
 
-# Assets git should never touch.
+# Assets git should never touch. A diff of these is noise at best; a line-ending
+# conversion inside one corrupts it.
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.ico binary
+*.svg text
 *.mp3 binary
+*.wav binary
+*.ogg binary
 *.woff binary
 *.woff2 binary
 *.ttf binary
+*.otf binary
 *.dll binary
 *.pdb binary
 *.zip binary
+# Unturned's own data files and Unity's serialised prefabs: text-shaped, but the game and
+# the editor both read them byte for byte. .asset and .unity are deliberately left as
+# text, because a scene diff is worth reading.
+*.dat binary
+*.prefab binary
+
+# Generated, and never worth reading in a diff or a review.
+website/requirements.lock linguist-generated=true
+website/requirements-dev.lock linguist-generated=true
+docs/package-lock.json linguist-generated=true

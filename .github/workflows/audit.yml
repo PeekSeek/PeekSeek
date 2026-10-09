@@ -1,0 +1,37 @@
+name: audit
+
+# Its own workflow because it shares no steps with lint or test, and because it runs on
+# a schedule while those run on a path filter. Holding both trigger models in one file
+# meant every other job carried an `if: github.event_name != 'schedule'` guard to stay
+# out of the way, and a path-filtered workflow is not a reliable home for a cron.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday morning
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["website/requirements.lock", "website/requirements-dev.lock"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit
+  cancel-in-progress: false
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit==2.10.1
+      # The lockfiles, not requirements.txt. Auditing the unpinned list reported on
+      # whatever resolved that morning rather than on what is deployed.
+      - run: pip-audit -r requirements.lock
+      - run: pip-audit -r requirements-dev.lock

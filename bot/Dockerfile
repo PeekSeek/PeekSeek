@@ -11,19 +11,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # The website's dependencies first: the bot imports its models, settings and database
 # layer, so it needs everything they need.
-COPY website/requirements.txt ./website-requirements.txt
+# The lock rather than requirements.txt, so this image and the site's resolve the same
+# versions - two containers running the same moderation code on different SQLModel
+# builds would be a hard fault to see.
+COPY website/requirements.lock ./website-requirements.lock
 COPY bot/requirements.txt ./bot-requirements.txt
-RUN pip install --no-cache-dir -r website-requirements.txt -r bot-requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r website-requirements.lock \
+    && pip install --no-cache-dir -r bot-requirements.txt
 
-# src/config.toml, mmconfig.json and kits.json all live here and are read on import,
-# so this is the whole tree rather than just the packages the bot names.
-COPY website/src ./website/src
+# The site installed as a package, so `from src.core import moderation` resolves the
+# ordinary way. It used to be a sys.path.insert() in bot.py pointed at WEBSITE_SRC, which
+# was a path hack standing in for a dependency. kits.json is read on import and
+# travels with the package; the config is copied in below (see website/pyproject.toml).
+COPY website ./website
+RUN pip install --no-cache-dir --no-deps ./website
+
+# Installed into site-packages, the loader cannot walk up to the repository root, so
+# it is told where the config is. The gamemodes are read from beside it.
+COPY config.yaml ./config.yaml
+COPY gamemodes ./gamemodes
+ENV CONFIG=/app/config.yaml
+
 COPY bot/src ./bot/src
 
-# Where bot.py puts the website on sys.path. Set here rather than hardcoded so the
-# layout can move without editing the source.
-ENV WEBSITE_SRC=/app/website
 ENV PYTHONUNBUFFERED=1
+
+# Not root. The bot dials out to Discord and reads a database; neither needs uid 0, and
+# a container process running as root is one container escape away from being root.
+RUN useradd --create-home --uid 10001 peekseek && chown -R peekseek /app
+USER peekseek
 
 # No port and no healthcheck: this is a gateway client that dials out to Discord and
 # never listens, so there is nothing to expose or probe.

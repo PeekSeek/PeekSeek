@@ -1,0 +1,34 @@
+PeekSeek
+Copyright (c) 2025 Kieran van der Heijde
+
+This product is licensed under the MIT License; see LICENSE. That licence covers
+every component in this repository, with no exceptions. The third-party material
+listed below is included under its own terms, which are not changed by ours.
+
+Fonts, bundled in the Match plugin's Unity assets
+-------------------------------------------------
+JetBrains Mono, SIL Open Font License 1.1
+  plugins/peekseek-match/ui/Assets/PeekSeek/Fonts/JetBrainsMono-LICENSE.txt
+Selawik, SIL Open Font License 1.1
+  plugins/peekseek-match/ui/Assets/PeekSeek/Fonts/Selawik-LICENSE.txt
+
+Game and framework assemblies, resolved at build time, never redistributed here
+-------------------------------------------------------------------------------
+RestoreMonarchy.RocketRedist      Rocket.API, Rocket.Core, Rocket.Unturned
+RestoreMonarchy.UnturnedRedist    Assembly-CSharp, SDG.NetTransport, UnityEngine
+Lib.Harmony                       MIT
+Krafs.Publicizer                  MIT, build-time only
+
+No Smartly Dressed Games or Unity binary is tracked in this repository. The
+plugins compile against the NuGet packages above and load against the real
+assemblies the game server already has.
+
+refs/SDG.NetPak.Runtime/ is ours: a source-only stand-in that declares the two
+type names ARENA's Harmony patches need to name, because no redistributable
+package carries SDG.NetPak.Runtime. It is referenced at compile time and never
+shipped beside a plugin.
+
+Browser dependencies, served from website/public/assets/
+--------------------------------------------------------
+htmx                              BSD 2-Clause, vendored minified
+Chart.js                          MIT, loaded from jsDelivr at a pinned version

@@ -18,19 +18,14 @@
     <link rel="icon" href="/static/img/logo-dark.ico">
     <link rel="icon" href="/static/img/logo.ico" media="(prefers-color-scheme:dark)">
 
-    {# analytics #}
-    
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-17N801FQ1E"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      gtag('config', 'G-17N801FQ1E');
-    </script>
-
-    {# analytics #}
+    {# This page does not extend layout.html, so it needs its own handoff and its own
+       banner. It used to carry the analytics tag itself and no banner at all, which
+       meant the one page every first-time visitor lands on reported them before they
+       were asked. The ID goes over as data and cookies.js fetches the tag on accept. #}
+    {% if config.analytics_id %}
+    <script id="analyticsId" type="application/json">{{ config.analytics_id | tojson }}</script>
+    {% endif %}
+    <script src="/static/assets/js/cookies.js" defer></script>
 </head>
 <body>
     <header>
@@ -44,7 +39,7 @@
         </nav>
         <div class="hero">
             <h1>Competitive matchmaking for <a>Unturned</a></h1>
-            <p>A non-profit ELO-based queue system built to level up the Unturned competitive scene—fair, fast, and community-driven.</p>
+            <p>A non-profit ELO-based queue system built to level up the Unturned competitive scene: fair, fast, and community-driven.</p>
             <a href="/auth/steam" class="cta-button"> <img src="/static/img/steam.png" alt="" height="25px"> Join the Queue</a>
         </div>
     </header>
@@ -78,11 +73,17 @@
     <section id="mission">
         <h2>Our Mission</h2>
         <p class="missionText">
-            PeekSeek exists to strengthen the <a>Unturned competitive scene</a> by offering fair, accessible matchmaking to everyone—free from paywalls, bias, or toxicity.
+            PeekSeek exists to strengthen the <a>Unturned competitive scene</a> by offering fair, accessible matchmaking to everyone, free from paywalls, bias, or toxicity.
             We're built by players, for players. Everything we do is to improve competition, empower communities, and grow the game we love.
             PeekSeek is a non-profit, 100% of our earnings go towards tournament prize money.
         </p>
     </section>
+
+    <div class="gdprBanner" id="gdprheader">
+        <span><a href="/gdpr">See how PeekSeek uses your <b>Cookies</b> and <b>other Data</b>.</a></span>
+        <button type="button" id="cookiesAccept">Accept</button>
+        <button type="button" id="cookiesReject">Reject</button>
+    </div>
 
     <footer>
         <p>Made with ❤️ by Homeless.</p>

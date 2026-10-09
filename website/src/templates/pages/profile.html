@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "_player.html" import playerCard, rankProgress %}
+{% from "partials/player.html" import playerCard, rankProgress %}
 
 {% block title %}{{steamData.name}}'s profile{% endblock %}
 {% block titleEmbed %}{{steamData.name}}'s profile{% endblock %}
@@ -34,12 +34,12 @@
     {# Where they stand, in one group: the ladder first and the account under it, close
        enough together to read as one answer and clear of the name above. #}
     <div class="profileStanding">
-        {% if stat %}{{ rankProgress(stat.rank, worldPosition) }}
+        {% if stat %}{{ rankProgress(stat.rank, world_position) }}
       {% else %}<span class="rankStanding">No matches in {{viewing.name}}</span>{% endif %}
       <span class="profileRank">
         {%- if not userData %}No user data
-        {%- elif userData.getPermission("admin") %}Admin
-        {%- elif userData.getPermission("premium") %}Premium
+        {%- elif userData.get_permission("admin") %}Admin
+        {%- elif userData.get_permission("premium") %}Premium
         {%- elif userData.discord %}Discord Linked
         {%- else %}Regular
         {%- endif %}</span>
@@ -80,7 +80,7 @@
      missing tile leaves a hole in the middle of the page rather than closing up. #}
   <div class="tile statcard s1"><span class="label">Win %</span><span class="value">{{round(stat.wins / max(played, 1) * 100, 1) if stat else "-"}}</span></div>
   <div class="tile statcard s2"><span class="label">K / D</span><span class="value">{{round(stat.kills / max(stat.deaths, 1), 2) if stat else "-"}}</span></div>
-  <div class="tile statcard s3"><span class="label">HS %</span><span class="value">{{stat.headshotPercent if stat else "-"}}</span></div>
+  <div class="tile statcard s3"><span class="label">HS %</span><span class="value">{{stat.headshot_percent if stat else "-"}}</span></div>
   <div class="tile statcard s4"><span class="label">Dmg / match</span><span class="value">{{round(stat.damageDealt / max(played, 1)) if stat else "-"}}</span></div>
 
   <section class="tile history">
@@ -139,7 +139,7 @@
         <span class="banState">{{ "Active" if b.endTime > now else ("Lifted" if b.endTime == 0 else "Expired") }}</span>
         <span class="map">
           <span class="name">{{ b.reason }}</span>
-          <span class="when">{{ b.created_at.strftime("%d/%m/%Y") if b.created_at else "" }} &middot; {{ b.expiryLabel }}</span>
+          <span class="when">{{ b.created_at.strftime("%d/%m/%Y") if b.created_at else "" }} &middot; {{ b.expiry_label }}</span>
         </span>
         <span class="banNote">{{ b.moderatorNote or "" }}</span>
       </div>
@@ -165,41 +165,17 @@
   }
   {% endif %}
 
-  {% if eloHistory|length >= 2 %}
-  let eloHistory = {{ eloHistory | tojson | safe }};
-  {% endif %}
 </script>
 
 {% if eloHistory|length >= 2 %}
-{# Chart.js — an out-of-the-box, no-maintenance line chart. Same CDN-script pattern
-   layout.html already uses for AdSense/gtag, so this isn't a new site convention. #}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4" crossorigin="anonymous"></script>
-<script>
-  new Chart(document.getElementById("eloChart"), {
-    type: "line",
-    data: {
-      labels: eloHistory.map(p => p.date),
-      datasets: [{
-        data: eloHistory.map(p => p.elo),
-        borderColor: "#ff4444",
-        backgroundColor: "rgba(255,68,68,0.08)",
-        fill: true,
-        tension: 0.3,
-        pointRadius: 2,
-        pointBackgroundColor: "#ff4444",
-        pointBorderColor: "#ff4444",
-      }],
-    },
-    options: {
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { color: "#1a1a1a" }, ticks: { color: "#8a8a8a", font: { size: 11 } } },
-        y: { grid: { color: "#1a1a1a" }, ticks: { color: "#8a8a8a", font: { size: 11 } } },
-      },
-    },
-  });
-</script>
+{# Chart.js, an out-of-the-box, no-maintenance line chart. Pinned to an exact version
+   with an integrity hash: a floating major tag lets a changed CDN build run with full
+   privileges on a page that renders session state. Bump both together. #}
+<script id="eloHistory" type="application/json">{{ eloHistory | tojson }}</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
+        integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC"
+        crossorigin="anonymous"></script>
+<script src="/static/assets/js/profile.js" defer></script>
 {% endif %}
 
 {% if viewerIsAdmin %}

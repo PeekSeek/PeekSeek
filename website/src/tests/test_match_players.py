@@ -5,7 +5,7 @@ from src.core import models as data
 
 
 def _match(*players, finished=False) -> int:
-    with core_db.open() as db:
+    with core_db.session() as db:
         match = data.Match(
             gamemode=0,
             teams=[
@@ -23,24 +23,24 @@ def test_a_new_match_writes_its_players(user_factory):
     first, second = user_factory(), user_factory()
     matchId = _match(first, second)
 
-    assert data.Match.currentFor(first.steam64) == matchId
-    assert data.Match.playersInAMatch() == {str(first.steam64), str(second.steam64)}
+    assert data.Match.current_for(first.steam64) == matchId
+    assert data.Match.players_in_a_match() == {str(first.steam64), str(second.steam64)}
 
 
 def test_a_finished_match_is_nobody_s_current_match(user_factory):
     player = user_factory()
     _match(player, finished=True)
 
-    assert data.Match.currentFor(player.steam64) is None
-    assert data.Match.playersInAMatch() == set()
+    assert data.Match.current_for(player.steam64) is None
+    assert data.Match.players_in_a_match() == set()
 
 
 def test_backfill_fills_an_empty_table_from_the_teams(user_factory):
     player = user_factory()
     matchId = _match(player)
-    with core_db.open() as db:
+    with core_db.session() as db:
         db.query(data.MatchPlayer).delete()
 
     data.MatchPlayer.backfill()
 
-    assert data.Match.currentFor(player.steam64) == matchId
+    assert data.Match.current_for(player.steam64) == matchId

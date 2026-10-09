@@ -38,12 +38,12 @@ class Kit(SQLModel, table=True):
     user: User = Relationship(back_populates="kits")
 
     @staticmethod
-    def addOrUpdateData(steam64, category: str, data: dict) -> None:
-        from src.core.db import open
+    def add_or_update_data(steam64, category: str, data: dict) -> None:
+        from src.core.db import session
 
         if isinstance(steam64, Kit):
             steam64 = steam64.steam64
-        with open() as db:
+        with session() as db:
             q = db.query(Kit).where(
                 (Kit.steam64 == steam64) & (Kit.category == category)
             )
@@ -53,7 +53,7 @@ class Kit(SQLModel, table=True):
                 db.add(Kit(steam64=steam64, category=category, data=data))
 
     @staticmethod
-    def kitCategory(steam64, currentMatch: "Match") -> str:  # noqa: F821
+    def kit_category(steam64, currentMatch: "Match") -> str:  # noqa: F821
         """The kit a player is going into this match with: their pick, or the
         gamemode's first allowed kit while that pick is still unmade."""
         return (
@@ -62,7 +62,7 @@ class Kit(SQLModel, table=True):
         )
 
     @staticmethod
-    def resolveOutfit(saved: dict) -> dict:
+    def resolve_outfit(saved: dict) -> dict:
         """The outfit a player actually wears: their pick per slot, or that slot's
         first option wherever they have no pick or the one they saved is no longer
         offered. Retiring an item from kits.json is enough to move everyone off it,
@@ -73,24 +73,24 @@ class Kit(SQLModel, table=True):
         }
 
     @staticmethod
-    def getItems(steam64, currentMatch: "Match"):  # noqa: F821
-        from src.core.db import open
+    def items_for(steam64, currentMatch: "Match"):  # noqa: F821
+        from src.core.db import session
         from src.core import metagun
 
-        kitCategory = Kit.kitCategory(steam64, currentMatch)
+        kit_category = Kit.kit_category(steam64, currentMatch)
         powerups = mmconfig["gamemodes"][currentMatch.gamemode]["powerups"]
         defaultPowerup = powerups[0]["name"] if powerups else None
         powerupSelected = (
             currentMatch.meta["userData"][str(steam64)]["powerup"] or defaultPowerup
         )
 
-        with open() as db:
+        with session() as db:
             if isinstance(steam64, (Kit,)):
                 steam64 = steam64.steam64
 
             weaponKit = (
                 db.query(Kit)
-                .where((Kit.steam64 == steam64) & (Kit.category == kitCategory))
+                .where((Kit.steam64 == steam64) & (Kit.category == kit_category))
                 .first()
             )
             outfitKit = (
@@ -100,20 +100,20 @@ class Kit(SQLModel, table=True):
             )
 
             if not weaponKit:
-                gunId = list(kitsConfig["kits"][kitCategory])[0]
+                gunId = list(kitsConfig["kits"][kit_category])[0]
                 weaponKit = {
-                    n: v[0] for n, v in kitsConfig["kits"][kitCategory][gunId].items()
+                    n: v[0] for n, v in kitsConfig["kits"][kit_category][gunId].items()
                 }
             else:
                 weaponKit = weaponKit.data
                 gunId = weaponKit["gun"]
                 weaponKit.pop("gun")
 
-            outfitKit = Kit.resolveOutfit(outfitKit.data if outfitKit else {})
+            outfitKit = Kit.resolve_outfit(outfitKit.data if outfitKit else {})
 
             if str(gunId) in mmconfig["defaultMagAmountFiremodePerGunId"]:
                 items = [
-                    [gunId, 1, metagun.metaObject(gunId).setAttach(**weaponKit)()],
+                    [gunId, 1, metagun.GunMeta(gunId).set_attach(**weaponKit)()],
                     *[[item_id, 1, ""] for _, item_id in outfitKit.items()],
                     *mmconfig["gamemodes"][currentMatch.gamemode]["defaultItems"],
                     [
@@ -139,22 +139,22 @@ class Kit(SQLModel, table=True):
             return items
 
     @staticmethod
-    def publicData(steam64) -> dict:
-        """Every kit category, fully resolved — same gun/outfit/bonus-mag logic
-        Kit.getItems builds for a live match (minus the gamemode default items and
+    def public_data(steam64) -> dict:
+        """Every kit category, fully resolved, same gun/outfit/bonus-mag logic
+        Kit.items_for builds for a live match (minus the gamemode default items and
         powerup a match would add), just without a match to read the selection
         from. Lets a caller with no match context (the lobby plugin, equipping a
         player before they've even queued) hand them their real loadout.
 
         Each category is {"items": [[id, amount, state], ...], "magazine": [id,
-        amount, state] | null} — the magazine is broken out on its own rather than
+        amount, state] | null}, the magazine is broken out on its own rather than
         appended to items so a caller can keep restocking it (a spare mag that's
         always full) without having to guess which item in the list is the gun,
         which are outfit pieces, and which is the magazine."""
-        from src.core.db import open
+        from src.core.db import session
         from src.core import metagun
 
-        with open() as db:
+        with session() as db:
             saved = {
                 kit.category: kit.data
                 for kit in db.query(Kit).where(Kit.steam64 == steam64).all()
@@ -162,7 +162,7 @@ class Kit(SQLModel, table=True):
 
         outfitItems = [
             [item_id, 1, ""]
-            for item_id in Kit.resolveOutfit(saved.get("outfit") or {}).values()
+            for item_id in Kit.resolve_outfit(saved.get("outfit") or {}).values()
         ]
 
         result = {}
@@ -173,7 +173,7 @@ class Kit(SQLModel, table=True):
                 gunId = next(iter(guns))
 
             # Not every gun in kits.json has an attachment/ammo profile in
-            # defaultMagAmountFiremodePerGunId — Kit.getItems falls back to a bare
+            # defaultMagAmountFiremodePerGunId, Kit.items_for falls back to a bare
             # item (no attachment state, no bonus mags) for those, and this does
             # the same.
             if gunId not in mmconfig["defaultMagAmountFiremodePerGunId"]:
@@ -187,7 +187,7 @@ class Kit(SQLModel, table=True):
                 slot: selection[slot] if selection.get(slot) in options else options[0]
                 for slot, options in guns[gunId].items()
             }
-            gunState = metagun.metaObject(gunId).setAttach(**attach)()
+            gunState = metagun.GunMeta(gunId).set_attach(**attach)()
             magId = mmconfig["defaultMagAmountFiremodePerGunId"][gunId][0]
             result[category] = {
                 "items": [[int(gunId), 1, gunState], *outfitItems],

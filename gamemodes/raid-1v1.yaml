@@ -1,0 +1,16 @@
+name: RAID 1v1
+queueBit: 7
+
+teams: 2
+playersPerTeam: 1
+usesElo: true
+optionBanningEnabled: false
+
+kitsAllowed: [meta, sniper]
+map: [Alpha Valley]
+movement: [true, false]
+ballistics: [true, false]
+
+defaultItems: []
+
+powerups: {}

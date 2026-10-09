@@ -33,7 +33,11 @@
 
     <span class="muted">Everyone logged in to your steam account, including you, will be logged out when you press this button.</span>
 
-    <a href="/user/changeuuid"><button type="button" class="settingsButton"> <img src="/static/img/logo.png" alt="" width="25px"> Reset UUID</button></a>
+    {# A form, not a link: the route is POST-only so that nothing which merely follows
+       links can log the account out. #}
+    <form method="post" action="/user/changeuuid">
+        <button type="submit" class="settingsButton"> <img src="/static/img/logo.png" alt="" width="25px"> Reset UUID</button>
+    </form>
 </div>
 
 {% endblock %}

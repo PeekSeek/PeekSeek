@@ -1,0 +1,19 @@
+name: Rush
+queueBit: 5
+
+teams: 2
+playersPerTeam: 1
+usesElo: false
+optionBanningEnabled: true
+
+kitsAllowed: [melee]
+map: [Alpha Valley]
+movement: [true, false]
+ballistics: [true]
+
+defaultItems:
+  - { id: 1103, amount: 1 }                               # Black Umbrella
+
+powerups:
+  Penta Bounce:
+    - { id: 1838, amount: 5 }                             # Bounce Grenade

@@ -28,17 +28,23 @@
   </ItemGroup>
 
   <!-- The kill feed and the rest are the match plugin's, compiled into this one too: the lobby
-       server does not run PeekSeek Match, and a copy of the source would drift. -->
+       server does not run PeekSeek Match, and a copy of the source would drift.
+
+       Ping.cs and SerializableVector3.cs were exactly that copy. Both existed here
+       byte-for-byte apart from the namespace and a comment, and the comments had already
+       started to disagree about what the ping figure is for. One source now. -->
   <ItemGroup>
-    <Compile Include="..\..\peekseek\plugin\Core\ConfigDefaults.cs" Link="Core\ConfigDefaults.cs" />
-    <Compile Include="..\..\peekseek\plugin\Core\Stamina.cs" Link="Core\Stamina.cs" />
-    <Compile Include="..\..\peekseek\plugin\Core\Hud\Effects.cs" Link="Core\Hud\Effects.cs" />
-    <Compile Include="..\..\peekseek\plugin\Core\Hud\Feed.cs" Link="Core\Hud\Feed.cs" />
-    <Compile Include="..\..\peekseek\plugin\Core\Hud\KillFeed.cs" Link="Core\Hud\KillFeed.cs" />
-    <Compile Include="..\..\peekseek\plugin\Core\Hud\Banner.cs" Link="Core\Hud\Banner.cs" />
-    <Compile Include="..\..\peekseek\plugin\Core\Hud\Sounds.cs" Link="Core\Hud\Sounds.cs" />
-    <Compile Include="..\..\peekseek\plugin\Core\Hud\DeathCard.cs" Link="Core\Hud\DeathCard.cs" />
-    <Compile Include="..\..\peekseek\plugin\Core\Hud\Scoreboard.cs" Link="Core\Hud\Scoreboard.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\ConfigDefaults.cs" Link="Core\ConfigDefaults.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Ping.cs" Link="Core\Ping.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Models\SerializableVector3.cs" Link="Core\Models\SerializableVector3.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Stamina.cs" Link="Core\Stamina.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Hud\Effects.cs" Link="Core\Hud\Effects.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Hud\Feed.cs" Link="Core\Hud\Feed.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Hud\KillFeed.cs" Link="Core\Hud\KillFeed.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Hud\Banner.cs" Link="Core\Hud\Banner.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Hud\Sounds.cs" Link="Core\Hud\Sounds.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Hud\DeathCard.cs" Link="Core\Hud\DeathCard.cs" />
+    <Compile Include="..\..\peekseek-match\plugin\Core\Hud\Scoreboard.cs" Link="Core\Hud\Scoreboard.cs" />
   </ItemGroup>
 
 </Project>

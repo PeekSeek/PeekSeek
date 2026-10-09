@@ -48,7 +48,7 @@ public class RaidItem {
     }
 
     /// The attachment/ammo bytes for this item, or an empty array when the config
-    /// left State blank — which is every item that has no profile to stamp on.
+    /// left State blank, which is every item that has no profile to stamp on.
     public byte[] StateBytes() {
         if (string.IsNullOrWhiteSpace(State)) return [];
 

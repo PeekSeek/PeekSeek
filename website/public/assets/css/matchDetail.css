@@ -5,28 +5,33 @@
 }
 
 .statTable {
+  /* The player cards in this table size themselves off these two, and carry a little
+     more height than the rest of the table needs because the badge hangs below the
+     avatar it sits on. */
+  --card-avatar-size: 30px;
+  --card-on-panel: var(--bg);
   width: 100%;
-  background-color: #333;
+  background-color: var(--border);
   border-spacing: 2px;
   border-radius: 5px;
-  border: solid 2px #333;
+  border: solid 2px var(--border);
   margin: 5px 0;
 } .statTable th {
   text-align: left;
-  background-color: #0a0a0a;
+  background-color: var(--bg);
   padding: 5px 10px;
 } .statTable td {
   text-align: left;
-  background-color: #0a0a0a;
+  background-color: var(--bg);
   padding: 5px 10px;
   color: #fff9;
 }
 
 .statTable .win {
-  color: #7ee08a;
+  color: var(--good);
   font-weight: 700;
 } .statTable .loss {
-  color: #ff4444;
+  color: var(--brand);
   font-weight: 700;
 }
 
@@ -40,10 +45,7 @@
    colour rather than a panel's, which is what the crest knocks its ring and its badge
    out in, and they carry a little more height than the rest of the table needs because
    the badge hangs below the avatar it sits on. */
-.statTable {
-  --pcav: 30px;
-  --pcpanel: #0a0a0a;
-} .statTable td:has(.pc) {
+.statTable td:has(.pc) {
   padding-top: 8px;
   padding-bottom: 8px;
 }
@@ -53,7 +55,7 @@
 }
 
 .matchWhen {
-  color: #8885;
+  color: var(--line);
 }
 
 h2 {
