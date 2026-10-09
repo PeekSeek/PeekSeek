@@ -65,7 +65,11 @@ def render(convert: list[str], source: str, target: str) -> str | None:
 def differing_pixels(compare: list[str], a: str, b: str) -> int | None:
     """How many pixels differ between two PNGs, or None if they cannot be compared."""
     result = subprocess.run(
-        [*compare, "-metric", "AE", a, b, "null:"],
+        # -fuzz because AE counts a pixel that differs by a single unit. Two librsvg
+        # builds dither a gradient slightly differently, which lit up 40,000 of the
+        # 65,536 pixels in a badge nobody had touched. A recolour moves pixels far
+        # further than 1%, so this still catches the drift it exists to catch.
+        [*compare, "-metric", "AE", "-fuzz", "1%", a, b, "null:"],
         capture_output=True,
         text=True,
     )
