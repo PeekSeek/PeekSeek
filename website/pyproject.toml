@@ -31,6 +31,7 @@ dependencies = []
 include = ["src*"]
 
 [tool.setuptools.package-data]
-# config.toml and the two JSON datasets are read on import, so settings cannot be
-# constructed without them and an installed copy has to carry them.
-src = ["config.toml", "kits.json", "mmconfig.json"]
+# kits.json is read on import, so an installed copy has to carry it. The main config
+# and the gamemodes live in the repository root instead, outside this package, and
+# the CONFIG environment variable points at them.
+src = ["kits.json"]

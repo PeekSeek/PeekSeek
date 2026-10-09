@@ -1,31 +1,19 @@
-# Rush.
-#
-# `name` is sent to the game server, which picks the plugin that runs the match
-# by it. A server runs this mode when `name` is the plugin's name or starts with
-# it and a space, so "RAID 2v2" needs the RAID plugin. Renaming breaks that.
-#
-# Whether this mode is shown, and where it sits in the queue mask, is set in
-# config.yaml, not here.
-
 name: Rush
+queueBit: 5
+
 teams: 2
 playersPerTeam: 1
 usesElo: false
-kitsAllowed:
-  - melee
 optionBanningEnabled: true
-map:
-  - Alpha Valley
-movement:
-  - true
-  - false
-ballistics:
-  - true
+
+kitsAllowed: [melee]
+map: [Alpha Valley]
+movement: [true, false]
+ballistics: [true]
+
 defaultItems:
-  - id: 1103
-    amount: 1
+  - { id: 1103, amount: 1 }                               # Black Umbrella
+
 powerups:
-  - name: Penta Bounce
-    items:
-      - id: 1838
-        amount: 5
+  Penta Bounce:
+    - { id: 1838, amount: 5 }                             # Bounce Grenade

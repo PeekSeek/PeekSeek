@@ -27,7 +27,7 @@ class Rank:
         """The rank this Elo earns. `position` is the player's 1-based place on the
         ladder where the caller knows it.
 
-        A tier with `places` is a seat rather than a threshold, so it is only awarded
+        A tier with `onlyTopPlayers` is a seat rather than a threshold, so it is only awarded
         inside its cap and a caller who does not know the position does not get it.
         That is deliberate for Apollo: handing it out on Elo alone would make it the
         ninth number on a list instead of the thing five people hold.
@@ -38,8 +38,8 @@ class Rank:
         for index, tier in enumerate(tiers):
             if elo < tier["elo"]:
                 break
-            places = tier.get("places")
-            if places is not None and (position is None or position > places):
+            seats = tier.get("onlyTopPlayers")
+            if seats is not None and (position is None or position > seats):
                 break
             held = index
 
@@ -66,7 +66,7 @@ class Rank:
         would draw a promotion that earning Elo cannot deliver, so the ladder position
         is shown instead.
         """
-        return self._above is None or bool(self._above.get("places"))
+        return self._above is None or bool(self._above.get("onlyTopPlayers"))
 
     @property
     def next_icon(self) -> str | None:
@@ -139,10 +139,10 @@ class Rank:
         if not self._above:
             return "Top of the ladder. Nobody above you."
 
-        places = self._above.get("places")
-        if self.to_next == 0 and places:
+        seats = self._above.get("onlyTopPlayers")
+        if self.to_next == 0 and seats:
             return (
                 f"You have the Elo for {self._above['name']}. "
-                f"It only seats {places}, so take a spot off somebody."
+                f"It only seats {seats}, so take a spot off somebody."
             )
         return f"{self.to_next} Elo to {self._above['name']}"

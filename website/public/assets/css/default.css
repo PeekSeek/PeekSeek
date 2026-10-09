@@ -93,12 +93,19 @@ footer .inner {
   height: 40px;
 }
 
-/* Sits to the right of the wordmark and the same colour as it. The `*` reset already
-   drops the underline, and there is deliberately no hover rule: the pointer is the
-   only feedback this link gives. */
+/* Sits to the right of the wordmark and the same colour as it. The wordmark is an
+   image, so this cannot use its typeface; uppercase, bold and letter-spaced is what
+   makes the two read as one lockup instead of a logo with a word stuck beside it.
+   line-height matches the image height above, so both boxes are 30px and the row
+   centres exactly. No hover rule: the pointer is the only feedback this link gives. */
 footer .inner .footerPrivacy {
   color: var(--footer-ink);
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 30px;
 }
 
 footer .inner img {

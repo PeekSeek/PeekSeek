@@ -27,7 +27,7 @@ def test_only_the_top_tier_is_capped():
     """for_elo stops at a capped tier it cannot award rather than stepping over it, so a
     capped tier anywhere but the end would hide every tier above it from everybody."""
     for tier in settings.ranks[:-1]:
-        assert "places" not in tier
+        assert "onlyTopPlayers" not in tier
 
 
 @pytest.mark.parametrize(

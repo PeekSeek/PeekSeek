@@ -30,3 +30,4 @@ cachetools
 markdown-it-py
 httpx
 python-dotenv
+pyyaml

@@ -21,10 +21,16 @@ RUN pip install --no-cache-dir --require-hashes -r website-requirements.lock \
 
 # The site installed as a package, so `from src.core import moderation` resolves the
 # ordinary way. It used to be a sys.path.insert() in bot.py pointed at WEBSITE_SRC, which
-# was a path hack standing in for a dependency. config.toml, mmconfig.json and kits.json
-# are read on import and travel with the package (see website/pyproject.toml).
+# was a path hack standing in for a dependency. kits.json is read on import and
+# travels with the package; the config is copied in below (see website/pyproject.toml).
 COPY website ./website
 RUN pip install --no-cache-dir --no-deps ./website
+
+# Installed into site-packages, the loader cannot walk up to the repository root, so
+# it is told where the config is. The gamemodes are read from beside it.
+COPY config.yaml ./config.yaml
+COPY gamemodes ./gamemodes
+ENV CONFIG=/app/config.yaml
 
 COPY bot/src ./bot/src
 

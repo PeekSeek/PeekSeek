@@ -21,6 +21,12 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 COPY website/src ./src
 COPY website/public ./public
 
+# The main config and one file per gamemode. They are read on import, so the app
+# cannot start without them. kits.json is copied to the path config.yaml names.
+COPY config.yaml ./config.yaml
+COPY gamemodes ./gamemodes
+COPY website/src/kits.json ./website/src/kits.json
+
 # The docs render the game-server API reference from the app's own OpenAPI schema, so it
 # is generated here rather than committed. Importing the app constructs Settings, which
 # requires DB; nothing connects, so any URL will do.

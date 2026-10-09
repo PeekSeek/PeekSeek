@@ -1,37 +1,22 @@
-# Casual.
-#
-# `name` is sent to the game server, which picks the plugin that runs the match
-# by it. A server runs this mode when `name` is the plugin's name or starts with
-# it and a space, so "RAID 2v2" needs the RAID plugin. Renaming breaks that.
-#
-# Whether this mode is shown, and where it sits in the queue mask, is set in
-# config.yaml, not here.
-
 name: Casual
+queueBit: 4
+
 teams: 4
 playersPerTeam: 1
 usesElo: false
-kitsAllowed:
-  - meta
-  - sniper
 optionBanningEnabled: false
-map:
-  - Alpha Valley
-movement:
-  - true
-ballistics:
-  - true
+
+kitsAllowed: [meta, sniper]
+map: [Alpha Valley]
+movement: [true]
+ballistics: [true]
+
 defaultItems:
-  - id: 395
-    amount: 1
-  - id: 1103
-    amount: 1
+  - { id: 395, amount: 1 }                                # Bloodbag
+  - { id: 1103, amount: 1 }                               # Black Umbrella
+
 powerups:
-  - name: Penta Bounce
-    items:
-      - id: 1838
-        amount: 5
-  - name: Triple Barricades
-    items:
-      - id: 30
-        amount: 3
+  Penta Bounce:
+    - { id: 1838, amount: 5 }                             # Bounce Grenade
+  Triple Barricades:
+    - { id: 30, amount: 3 }                               # Maple Barricade
