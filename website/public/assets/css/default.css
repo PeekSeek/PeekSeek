@@ -23,6 +23,10 @@
   --text-dim: #aaa;
   --text-muted: #8a8a8a;
   --black: #000;
+  /* What the footer wordmark actually renders as: a white logo under
+     brightness(0.15). The privacy link beside it matches, so the value is a token
+     rather than a literal written twice. */
+  --footer-ink: #262626;
 
   /* Surfaces, darkest (the page) upwards */
   --bg: #0a0a0a;
@@ -85,7 +89,16 @@ footer .inner {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   height: 40px;
+}
+
+/* Sits to the right of the wordmark and the same colour as it. The `*` reset already
+   drops the underline, and there is deliberately no hover rule: the pointer is the
+   only feedback this link gives. */
+footer .inner .footerPrivacy {
+  color: var(--footer-ink);
+  cursor: pointer;
 }
 
 footer .inner img {

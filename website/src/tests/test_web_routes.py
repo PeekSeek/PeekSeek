@@ -675,3 +675,14 @@ def test_the_cookie_banner_offers_a_reject(client):
     body = client.get("/").text
     assert 'id="cookiesAccept"' in body
     assert 'id="cookiesReject"' in body
+
+
+def test_every_page_footer_links_to_the_privacy_notice(client, login, user_factory):
+    """The notice has to be reachable from anywhere, not just from the cookie banner.
+
+    The banner disappears once answered, so before this the only route to the notice on
+    a logged-in page was knowing the URL.
+    """
+    login(client, user_factory())
+    body = client.get("/play").text
+    assert 'href="/gdpr" class="footerPrivacy"' in body
