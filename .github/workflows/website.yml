@@ -55,13 +55,13 @@ jobs:
       - run: pytest -v
 
   rank-art:
-    # Reports, does not block. The committed PNGs were rendered on Windows, and a
+    # Warns, does not block. The committed PNGs were rendered on Windows, and a
     # Linux runner draws the same SVGs differently enough that all nine read as
     # drift while the art is untouched: librsvg builds disagree by far more than a
     # rounding error. Tuning the threshold until it passes would leave a check that
-    # cannot fail, so it stays strict and advisory until the rendering is pinned,
-    # which means rendering in a fixed container and regenerating the PNGs there.
-    continue-on-error: true
+    # cannot fail, so it stays strict and the result is a warning until the
+    # rendering is pinned, which means rendering in a fixed container and
+    # regenerating the PNGs there.
     # The SVGs are the source and the PNGs are for Discord embeds, which will not render
     # an SVG. Both have to be tracked: /static/ranks/<icon>.png is a documented URL that
     # game servers fetch, so generating the PNGs only inside the image would 404 them for
@@ -94,7 +94,8 @@ jobs:
           echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
       - name: Are the badge PNGs still their SVGs?
         working-directory: website
-        run: python scripts/render_rank_pngs.py --check
+        run: |
+          python scripts/render_rank_pngs.py --check             || echo "::warning::Badge PNGs differ from their SVGs here. Read the note on this job before believing it.
 
   web-assets:
     # 1,200 lines of hand-written JS and 3,100 of CSS had no linter at all, which is how
