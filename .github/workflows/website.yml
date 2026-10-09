@@ -95,7 +95,8 @@ jobs:
       - name: Are the badge PNGs still their SVGs?
         working-directory: website
         run: |
-          python scripts/render_rank_pngs.py --check             || echo "::warning::Badge PNGs differ from their SVGs here. Read the note on this job before believing it.
+          python scripts/render_rank_pngs.py --check && exit 0
+          echo "::warning::Badge PNGs differ from their SVGs on this runner."
 
   web-assets:
     # 1,200 lines of hand-written JS and 3,100 of CSS had no linter at all, which is how
