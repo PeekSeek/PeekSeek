@@ -1,5 +1,5 @@
 /// Polls party membership + pending invites for the play page, and redirects
-/// anyone in a party the instant a match is found — including a non-owner member,
+/// anyone in a party the instant a match is found, including a non-owner member,
 /// whose own client never calls /queue/heartbeat itself, so nothing else would
 /// ever send them to /match/.
 let partyRedirected = false;

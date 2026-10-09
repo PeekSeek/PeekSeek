@@ -1,6 +1,6 @@
 """Party membership: invite, accept/decline, leave. Queueing the whole party together
-happens in /queue/heartbeat (index.py), which looks the caller's party up itself —
-this router only manages who's in one.
+happens in /queue/heartbeat (index.py), which looks the caller's party up itself.
+This router only manages who's in one.
 """
 
 from time import time

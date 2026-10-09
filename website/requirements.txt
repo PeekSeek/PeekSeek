@@ -13,7 +13,7 @@
 #
 # 3.12 because that is what the image runs. --universal because the image is Linux while
 # people develop on Windows: without it the lock is resolved for whichever platform
-# compiled it, and uvicorn[standard] quietly loses uvloop when that is Windows — which
+# compiled it, and uvicorn[standard] quietly loses uvloop when that is Windows, which
 # then fails `pip install --require-hashes` inside the image, with nothing in the lock to
 # suggest why. One lock, with environment markers, that installs correctly on both.
 

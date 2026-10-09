@@ -6,7 +6,7 @@ using Rocket.Unturned.Player;
 namespace PeekSeekLobby.Commands;
 
 /// Toggles whether the caller is included in the matchmaking heartbeat this
-/// lobby sends on their behalf — running it again opts back in, since there's
+/// lobby sends on their behalf, running it again opts back in, since there's
 /// no other way back into queue short of reconnecting.
 internal class NoQueueCommand : IRocketCommand {
     public AllowedCaller AllowedCaller => AllowedCaller.Player;

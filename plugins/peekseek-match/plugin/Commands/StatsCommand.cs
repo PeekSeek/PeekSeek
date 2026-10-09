@@ -7,7 +7,7 @@ using Steamworks;
 namespace PeekSeek.Commands;
 
 /// /stats with no arguments shows the caller's own stats for the match in progress.
-/// /stats <name or steam64> shows anyone else's — StatService keeps every player who has
+/// /stats <name or steam64> shows anyone else's, StatService keeps every player who has
 /// appeared in this match, not just who is currently online, so a target can be looked up
 /// by steam64 even after they disconnect.
 internal class StatsCommand : IRocketCommand {

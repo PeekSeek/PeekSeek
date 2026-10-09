@@ -74,7 +74,7 @@ public class FallbackKitTests {
 
     /// Every fallback gun needs its full attachment/ammo state. The sniper
     /// fallback originally shipped with an empty one, which spawned the rifle in
-    /// safety mode with no sight and no ammo — visibly broken and unshootable.
+    /// safety mode with no sight and no ammo, visibly broken and unshootable.
     [Fact]
     public void LoadDefaults_EveryFallbackGunCarriesFullWeaponState() {
         var config = new PeekSeekLobbyConfiguration();

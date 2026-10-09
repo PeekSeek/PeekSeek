@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 **Do not open a public issue.** Use GitHub's private reporting on this repository
-(Security → Report a vulnerability), or email **security@peekseek.net**.
+(Security → Report a vulnerability), or email **peekseek@kcvdh.com**.
 
 Tell us what you found, how to reach it, and what it gets you. A proof of concept against
 your own account or your own instance helps; one against somebody else's does not, and is
@@ -27,7 +27,7 @@ sits in a few places, so these are worth saying out loud:
 
 - **The game-server API.** Every `/server/v1/*` route authenticates by source IP alone
   (`AuthorizedServers`). Anything that lets a caller pass that check from an address not on
-  the list is serious — see the `--forwarded-allow-ips` warning in
+  the list is serious. See the `--forwarded-allow-ips` warning in
   [self-hosting](https://peekseek.net/docs/self-hosting/), which is the shape this has
   taken before.
 - **Session identity.** A session is a UUID. Anything that leaks one, fixes one, or
@@ -51,7 +51,7 @@ sits in a few places, so these are worth saying out loud:
 
 ## Testing
 
-Use your own accounts and, where you can, your own instance — the whole site runs from
+Use your own accounts and, where you can, your own instance. The whole site runs from
 one container and a Postgres, which is what
 [self-hosting](https://peekseek.net/docs/self-hosting/) is for. Against `peekseek.net`,
 stay inside your own account, do not touch other players' data, and do not run anything

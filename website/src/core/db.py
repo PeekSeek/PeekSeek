@@ -168,7 +168,7 @@ def add_missing_indexes() -> None:
             index.create(bind=engine, checkfirst=True)
 
 
-from . import models  # noqa: F401, E402 — ensures all tables are registered
+from . import models  # noqa: F401, E402, ensures all tables are registered
 from sqlalchemy.orm import configure_mappers
 
 configure_mappers()

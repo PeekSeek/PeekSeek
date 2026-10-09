@@ -30,7 +30,7 @@ def test_two_queued_players_get_matched(user_factory):
 
 
 def test_party_members_land_on_the_same_team(user_factory, party_factory):
-    """Casual Duo is 2 teams of 2 — a partied pair queueing under the same partyId
+    """Casual Duo is 2 teams of 2, a partied pair queueing under the same partyId
     must end up on one team together, never split across both."""
     DUO_GAMEMODE = 3
     DUO_BIT = 2**DUO_GAMEMODE
@@ -54,7 +54,7 @@ def test_party_members_land_on_the_same_team(user_factory, party_factory):
 
 
 def test_oversized_party_never_matches(user_factory, party_factory):
-    """A 3-person party can't fit Casual Duo's 2-per-team cap — it must simply wait
+    """A 3-person party can't fit Casual Duo's 2-per-team cap, it must simply wait
     forever rather than ever being split across teams to make it fit."""
     DUO_BIT = 2**3
     trio = [user_factory(), user_factory(), user_factory()]
@@ -165,8 +165,8 @@ def test_elo_never_drops_below_floor(user_factory):
 
 
 def test_match_without_matchsettings_gets_a_pick_deadline(user_factory):
-    """Matchmaking never passes matchSettings, so ballistics/movement start undecided —
-    that's exactly when a deadline is needed, or a silent player could stall forever."""
+    """Matchmaking never passes matchSettings, so ballistics/movement start undecided.
+    That's exactly when a deadline is needed, or a silent player could stall forever."""
     first, second = user_factory(), user_factory()
     with core_db.session() as db:
         match = data.Match(
@@ -220,8 +220,8 @@ def test_expired_pick_is_not_resolved_before_its_deadline(user_factory):
 def test_expired_pick_auto_resolves_to_the_gamemode_default_and_advances_turn(
     user_factory,
 ):
-    """A player who never clicks Yes/No must not be able to hang the whole match —
-    once the deadline passes, the pick resolves itself to the gamemode's first
+    """A player who never clicks Yes/No must not be able to hang the whole match.
+    Once the deadline passes, the pick resolves itself to the gamemode's first
     configured option (the same fallback kits/powerups already use) and turn passes
     on, exactly as if the stalling player had picked."""
     first, second = user_factory(), user_factory()
@@ -318,7 +318,7 @@ def test_match_is_not_hostable_early_with_picks_outstanding(user_factory):
 
 def test_match_is_hostable_early_once_every_kit_and_powerup_is_locked(user_factory):
     """Waiting out the full `selectKitsTime` timer is pointless once nobody has
-    anything left to decide — the match should be claimable immediately."""
+    anything left to decide, the match should be claimable immediately."""
     first, second = user_factory(), user_factory()
     with core_db.session() as db:
         match = data.Match(
@@ -452,7 +452,7 @@ def test_a_serverless_match_is_left_alone_inside_its_grace(user_factory):
 
 def test_claimed_match_released_when_its_server_polls_idle(user_factory):
     """A server whose lobby timed out with too few players abandons the match and
-    goes back to reporting itself free — even if its result report never landed, that
+    goes back to reporting itself free, even if its result report never landed, that
     next free poll must still close the match out, or every player in it stays stuck
     unable to queue again."""
     _held_by("90071992547409931", user_factory(), user_factory(), age=STALE)
@@ -465,8 +465,9 @@ def test_claimed_match_released_when_its_server_polls_idle(user_factory):
 
 def test_a_match_a_server_was_never_told_about_is_not_released_yet(user_factory):
     """The same shape from the other side. A match created inside a poll whose answer
-    was lost is one this server holds and has never heard of, not one it dropped —
-    written off here, the very next poll builds a second match for the same players.
+    was lost is one this server holds and has never heard of, not one it dropped. If
+    it is written off here, the very next poll builds a second match for the same
+    players.
 
     It is handed back instead (see the session tests), and only once its window has run
     out with nobody having started it is it written off like any other.
@@ -502,7 +503,7 @@ def _held_by(serverCode: str, first, second, age: int = 0) -> None:
 
 
 def test_release_abandoned_ignores_the_shared_legacy_code(user_factory):
-    """code="0" is shared by every server too old to send a real one — releasing on
+    """code="0" is shared by every server too old to send a real one, releasing on
     it could close a match a completely different old server is still playing."""
     first, second = user_factory(), user_factory()
     with core_db.session() as db:
@@ -660,8 +661,8 @@ def test_two_unresolvable_players_do_not_get_the_same_team_name(user_factory):
 
 
 def test_team_names_are_made_distinct_however_they_arrive():
-    """Enforced on Match itself rather than at one call site, so no creation path —
-    matchmaking, a custom match, an event pairing — can get around it."""
+    """Enforced on Match itself rather than at one call site, so that no creation path
+    (matchmaking, a custom match, an event pairing) can get around it."""
     match = data.Match(
         gamemode=0,
         teams=[
@@ -759,7 +760,7 @@ def test_half_a_roster_left_in_the_queue_is_put_back(user_factory):
 def test_a_pending_match_can_only_be_taken_by_one_server(user_factory):
     """The other half of the same race, on the other kind of match. A custom or event
     pairing is created without a server and waits for one, so both free servers in the
-    region find it in the same poll and both used to write their own code over it — two
+    region find it in the same poll and both used to write their own code over it, two
     servers running one match, its players told to join whichever they heard about last.
 
     Sequential like its queue-side twin, and for the same reason: what closes the race

@@ -72,7 +72,7 @@ def queue_heartbeat(
     team: int | None = None,
     eventId: int | None = None,
 ):
-    """Keep the player — and their whole party, if they lead one — in queue, and
+    """Keep the player, and their whole party, if they lead one, in queue, and
     report back if they've been matched.
 
     Queueing does not make a match. A free game server in the player's region is what
@@ -94,7 +94,7 @@ def queue_heartbeat(
         )
 
     # The play page blocks this itself, so reaching it means something else called
-    # us — and an empty bitmask reached add_to_queue as a NULL gamemode and 500'd.
+    # us, and an empty bitmask reached add_to_queue as a NULL gamemode and 500'd.
     if not gamemode:
         raise HTTPException(status_code=400, detail="Pick a gamemode before queueing.")
 

@@ -58,7 +58,7 @@ function commitListHtml(picksDone, myTeamName) {
     const myRows = (myTeam ? myTeam.users : []).map(s64 => commitRow(nameOf(s64), hasPicked(s64))).join("");
 
     const oppPickedCount = opponents.filter(hasPicked).length;
-    const oppRows = opponents.map(s64 => commitRow(picksDone ? nameOf(s64) : "—", hasPicked(s64))).join("");
+    const oppRows = opponents.map(s64 => commitRow(picksDone ? nameOf(s64) : "?", hasPicked(s64))).join("");
 
     return `${myRows}
     <div class="opponents ${picksDone ? "expanded" : ""}">

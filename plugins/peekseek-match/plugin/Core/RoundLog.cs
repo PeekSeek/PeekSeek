@@ -4,7 +4,7 @@ using Steamworks;
 
 namespace PeekSeek.Core;
 
-/// Round-scoped bookkeeping cleared by PSManager.NotifyTeamWon once each round ends —
+/// Round-scoped bookkeeping cleared by PSManager.NotifyTeamWon once each round ends,
 /// separate from FightTracker, which is scoped to a single fight rather than the whole
 /// round. Backs the ace check (who got every kill this round) and the post-round
 /// per-enemy damage whisper.

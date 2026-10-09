@@ -63,7 +63,7 @@ class Party(SQLModel, table=True):
 
 
 class UserHB(SQLModel, table=True):
-    """A queue heartbeat — one row per player currently waiting for a match."""
+    """A queue heartbeat, one row per player currently waiting for a match."""
 
     __tablename__ = "UserHB"
 

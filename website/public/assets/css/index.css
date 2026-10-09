@@ -142,6 +142,34 @@ h2 {
     margin-bottom: -10px;
 }
 
+/* The cookie banner. Hidden here rather than in the markup, so a visitor who has
+   already answered never sees it appear and then vanish. cookies.js is what shows it. */
+.gdprBanner {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 12px 20px;
+    background-color: #227075;
+}
+
+.gdprBanner button {
+    padding: 5px 20px;
+    border: 1px solid var(--text);
+    border-radius: 5px;
+    background-color: var(--text);
+    color: #006680;
+    font-weight: bolder;
+    cursor: pointer;
+}
+
+/* Reject is quieter than Accept, and exactly as easy to click. */
+.gdprBanner button#cookiesReject {
+    background-color: transparent;
+    color: var(--text);
+    font-weight: normal;
+}
+
 footer {
     display: flex;
     flex-direction: column;

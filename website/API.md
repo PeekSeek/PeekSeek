@@ -24,7 +24,7 @@ The models are in [src/routes/contracts.py](src/routes/contracts.py) and the han
 the site, so the site can never assume which build is calling. Inside `v1`:
 
 - **A field may be added** to any response at any time. That is why every response is a
-  JSON object — parse loosely and ignore what you do not know.
+  JSON object: parse loosely and ignore what you do not know.
 - **A request field may become optional**, never required. A route that gains a field
   keeps working for a caller that has never heard of it.
 - **A field will not be removed, renamed, or change type.** Neither will a path or a
@@ -55,7 +55,7 @@ A match cannot exist without a game server holding it.
 
 Matchmaking does not run when a player queues. A player queueing only adds themselves to
 the queue. The moment a server in their region reports itself free, *that server's own
-poll* is what scans the queue, forms the best match it can, and takes it — all before
+poll* is what scans the queue, forms the best match it can, and takes it, all before
 answering the request. A matchmade match is therefore created already assigned to the
 server that will host it.
 
@@ -70,8 +70,8 @@ The one call a game server makes on a loop. Everything else here is a detail.
 Two query parameters, and what they mean matters more than their types:
 `serverCode` is the code players connect with, the server's own Steam ID, or `0` from a
 server that cannot report one. `matchId` is the match this server considers itself
-responsible for — **including one it has finished playing but not yet successfully
-reported** — and `0` means free.
+responsible for, **including one it has finished playing but not yet successfully
+reported**, and `0` means free.
 
 Exactly one of four answers comes back, and `action` is the only field to switch on.
 
@@ -88,8 +88,8 @@ Exactly one of four answers comes back, and `action` is the only field to switch
 {"action": "abort", "matchId": 42, "reason": "matchOver"}
 ```
 
-- **idle** — nothing to do. Ask again shortly.
-- **wait** — this match is yours, but its players are still choosing. Hold it, keep
+- **idle**: nothing to do. Ask again shortly.
+- **wait**: this match is yours, but its players are still choosing. Hold it, keep
   sending this `matchId`, and let the roster in: `match` is who is on it, without the
   settings and kits that are still being decided, and the players are already on their
   way, because a match has a connect code from the moment a server holds it. `options`
@@ -98,9 +98,9 @@ Exactly one of four answers comes back, and `action` is the only field to switch
   so far. Put a board in front of whoever is here with something unpicked and lock
   each answer with `POST /players/{steam64}/decide`; every poll carries the site's
   view of who has picked, which is what closes a board answered on the site instead.
-- **host** — start it. **Sent exactly once per match.** Ask again while hosting and the
+- **host**: start it. **Sent exactly once per match.** Ask again while hosting and the
   answer is `idle`, so a slow poll cannot restart a round already being played.
-- **abort** — drop it. `reason` is `unknownMatch`, `matchOver` or `hostedElsewhere`.
+- **abort**: drop it. `reason` is `unknownMatch`, `matchOver` or `hostedElsewhere`.
 
 A server that still names a match is never told that match was abandoned. That is what
 makes the result report safe to retry forever: for as long as the server keeps saying "I
@@ -127,7 +127,7 @@ one anyway.
 `POST /matches/{id}/result` is the only thing that scores a match, and the one call that
 must land. **Retry it until it is acknowledged.**
 
-- `played: false` scores nothing and just releases the match — nobody turned up.
+- `played: false` scores nothing and just releases the match, nobody turned up.
 - `players` must be the **whole roster**, including anyone who never joined and anyone
   who left. A player the server omits is a player whose Elo never moves, which is what
   used to make walking out of a losing match free.
@@ -223,7 +223,7 @@ Sent once per heartbeat for the whole server, not once per player: every number 
 a fact about the server rather than about anybody in it. Nothing reads the reply.
 
 `queueing` and `held` are optional, and are stored as absent rather than as zero when
-they are left out — a server that does not report them has not said nobody wanted a
+they are left out, a server that does not report them has not said nobody wanted a
 match. Send them if you hold players back for any reason. Without them a lobby with
 three people in it looks the same whether they are happily fighting or all three are
 waiting on a match you have not offered up, and those are the two cases anything trying
@@ -244,7 +244,7 @@ A server that stops reporting drops out after 30 seconds rather than being trust
 so a lobby that crashed with eleven people in it stops advertising them.
 
 Each reading is also kept as history, but only when it says something the reading before
-it did not — so keep sending on your heartbeat and do not try to send only on change.
+it did not, so keep sending on your heartbeat and do not try to send only on change.
 The site knows what you last said; you would only be guessing.
 
 ## Matchmaking rules
@@ -254,8 +254,9 @@ outcome: those players stay in the queue rather than being handed a bad match.
 
 - **Teams must be within `max_team_elo_gap` average skill of each other** (200).
 - **Two players are not put against each other again within `rematch_cooldown`** (300s).
-  One repeated pairing rejects the whole roster, so `(a+b vs c+d)` blocks `(a+b vs c+e)`
-  — swapping one team-mate still leaves a and b facing c for a second time.
+  One repeated pairing rejects the whole roster, so `(a+b vs c+d)` blocks
+  `(a+b vs c+e)`: swapping one team-mate still leaves a and b facing c for a second
+  time.
 
 Parties are never split across teams. Within those constraints the longest-waiting
 players are matched first, and teams are balanced by skill: the hidden rating described
@@ -274,7 +275,7 @@ lives.
 | `pending` | Exists, no game server holds it. |
 | `picking` | A server is holding it while its players choose. |
 | `live` | Handed over; the server is running it. |
-| `finished` | Scored, abandoned or cancelled — over either way. |
+| `finished` | Scored, abandoned or cancelled: over either way. |
 
 The match page reads `status` and `relayTo` from `/match/current`. They are separate
 fields on purpose: a match has a server from the moment it is made, so "a server exists"

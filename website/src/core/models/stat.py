@@ -121,7 +121,7 @@ class Stat(SQLModel, table=True):
             increments = {
                 k: (getattr(stats, k, 0) or 0) + v for k, v in kwargs.items() if v != 0
             }
-            # An UPDATE with nothing to set is not valid SQL — it raises rather than
+            # An UPDATE with nothing to set is not valid SQL, it raises rather than
             # doing nothing, which is what a result where every counter happened to be
             # zero used to do to a whole match report.
             if not increments:

@@ -12,7 +12,7 @@ namespace PeekSeekLobby.Core;
 /// personal best to chase.
 ///
 /// It exists for the player who lands in an empty arena. A free-for-all with
-/// nobody in it gives them nothing to do and they leave inside a minute — which is
+/// nobody in it gives them nothing to do and they leave inside a minute, which is
 /// often the same minute somebody else would have joined in. This is the something
 /// to do, and it gets out of the way the moment it is not needed: the second a real
 /// player connects the targets come down and the arena is an arena again.
@@ -43,7 +43,7 @@ internal static class TargetRange {
 
     internal static bool AnyRunning => Running.Count > 0;
 
-    /// Starts a run, or clears one already going — the command is the same either
+    /// Starts a run, or clears one already going, the command is the same either
     /// way, so somebody who wants out does not have to shoot eight mannequins to
     /// get there.
     internal static void Toggle(UnturnedPlayer player) {
@@ -99,7 +99,7 @@ internal static class TargetRange {
 
         if (active.Targets.Count == 0) {
             Logger.LogWarning(
-                $"Target range could not place any of item {config.RangeTargetItemId} — "
+                $"Target range could not place any of item {config.RangeTargetItemId}, "
                 + "check RangeTargetItemId is a barricade this map allows.");
             LobbyManager.Whisper(client, PeekSeekLobby.Instance.Translate("range_unavailable"));
             return;
@@ -114,7 +114,7 @@ internal static class TargetRange {
 
     /// Clears a player's run and everything it put in the world. Safe to call for
     /// somebody who has no run, which is what lets every one of the several things
-    /// that should end a run — a match, a second player, disconnecting — just call
+    /// that should end a run, a match, a second player, disconnecting, just call
     /// it rather than each checking first.
     internal static void Stop(ulong steam64) {
         if (!Running.TryGetValue(steam64, out ActiveRange active)) return;
@@ -153,7 +153,7 @@ internal static class TargetRange {
         if (!active.Targets.Remove(barricade)) return;
 
         // One hit, one target. This is an aim drill, not a demolition job, so the
-        // vanilla damage is cancelled and the mannequin taken out from here — its
+        // vanilla damage is cancelled and the mannequin taken out from here, its
         // 200 health never gets a say, and neither does the calibre being used.
         shouldAllow = false;
         Remove(barricade);

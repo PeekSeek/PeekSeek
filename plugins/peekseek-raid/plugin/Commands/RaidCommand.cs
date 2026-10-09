@@ -12,7 +12,7 @@ namespace PeekSeekRaid.Commands;
 ///
 /// A match comes from the site, or from `/ssolo` for testing alone.
 ///
-/// None of this survives contact with a real match — a live gamemode does not let
+/// None of this survives contact with a real match, a live gamemode does not let
 /// anybody skip a phase or change sides. It exists because a five-minute build phase
 /// followed by six three-minute rounds is nearly half an hour of waiting to find out
 /// whether round four restores the base correctly, and nobody would find that bug.
@@ -25,7 +25,7 @@ public class RaidCommand : IRocketCommand {
     public List<string> Permissions => ["peekseek.raid.start"];
 
     public void Execute(IRocketPlayer caller, string[] command) {
-        // Answering "what is that item called" needs no match running — it is the thing
+        // Answering "what is that item called" needs no match running, it is the thing
         // you reach for when a configured gear name turned out not to exist.
         if (command.Length > 0 && command[0].Equals("find", StringComparison.OrdinalIgnoreCase)) {
             Find(caller, command.Length > 1 ? string.Join(" ", command, 1, command.Length - 1) : "");

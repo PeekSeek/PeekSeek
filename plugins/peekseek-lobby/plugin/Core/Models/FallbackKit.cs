@@ -4,7 +4,7 @@ using System.Linq;
 namespace PeekSeekLobby.Core.Models;
 
 /// A configured item, in the same [id, amount, state] terms the website's kit
-/// data uses — but written out as XML fields so it can live in the plugin's own
+/// data uses, but written out as XML fields so it can live in the plugin's own
 /// configuration file.
 public class FallbackItem {
     public ushort ItemID { get; set; }
@@ -16,8 +16,8 @@ public class FallbackItem {
 }
 
 /// The loadout handed out when the website can't be reached. Without this a
-/// failed fetch left players standing in the arena with nothing at all — no
-/// gun, no clothes — which is worse than a slightly-wrong kit.
+/// failed fetch left players standing in the arena with nothing at all, no
+/// gun, no clothes, which is worse than a slightly-wrong kit.
 public class FallbackKit {
     public string Category { get; set; }
     public List<FallbackItem> Items { get; set; }

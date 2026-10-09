@@ -140,14 +140,14 @@ class Kit(SQLModel, table=True):
 
     @staticmethod
     def public_data(steam64) -> dict:
-        """Every kit category, fully resolved — same gun/outfit/bonus-mag logic
+        """Every kit category, fully resolved, same gun/outfit/bonus-mag logic
         Kit.items_for builds for a live match (minus the gamemode default items and
         powerup a match would add), just without a match to read the selection
         from. Lets a caller with no match context (the lobby plugin, equipping a
         player before they've even queued) hand them their real loadout.
 
         Each category is {"items": [[id, amount, state], ...], "magazine": [id,
-        amount, state] | null} — the magazine is broken out on its own rather than
+        amount, state] | null}, the magazine is broken out on its own rather than
         appended to items so a caller can keep restocking it (a spare mag that's
         always full) without having to guess which item in the list is the gun,
         which are outfit pieces, and which is the magazine."""
@@ -173,7 +173,7 @@ class Kit(SQLModel, table=True):
                 gunId = next(iter(guns))
 
             # Not every gun in kits.json has an attachment/ammo profile in
-            # defaultMagAmountFiremodePerGunId — Kit.items_for falls back to a bare
+            # defaultMagAmountFiremodePerGunId, Kit.items_for falls back to a bare
             # item (no attachment state, no bonus mags) for those, and this does
             # the same.
             if gunId not in mmconfig["defaultMagAmountFiremodePerGunId"]:

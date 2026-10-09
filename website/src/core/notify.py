@@ -191,7 +191,7 @@ async def keep_player_counter_current() -> None:
 
     In a thread because the rename is a blocking request and this is sharing an
     event loop with every page the site serves. Any error is swallowed and retried
-    on the next pass — a Discord outage must not take the loop down with it, since
+    on the next pass, a Discord outage must not take the loop down with it, since
     nothing would ever start it again.
     """
     while True:

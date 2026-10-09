@@ -6,7 +6,7 @@ namespace PeekSeekLobby.Core.Patches;
 
 /// The lobby runs on an Arena-type map (same as a real PeekSeek match) purely for
 /// its geometry and spawn layout, but must never let Unturned's own Arena
-/// gamemode take over — no lobby countdown, no shrinking play zone, no native
+/// gamemode take over, no lobby countdown, no shrinking play zone, no native
 /// round loop. Unlike the main PeekSeek plugin's equivalent patches (which only
 /// skip vanilla logic while Status == IN_PROGRESS, because a real match still
 /// needs it in between), these are unconditional no-ops: the lobby never wants

@@ -1,3 +1,6 @@
+from src.core.settings import settings
+
+
 def test_index_anonymous_renders(client):
     r = client.get("/")
     assert r.status_code == 200
@@ -109,7 +112,7 @@ def test_profile_page_renders_match_history(client, user_factory):
     # below the identity tile, which every other assertion here passed straight over.
     assert r.text.count('class="bento') == 1
     assert r.text.count("tile history") == 1
-    # Only one match, and it has no "Current Elo" paired with the change — not
+    # Only one match, and it has no "Current Elo" paired with the change, not
     # enough to plot a trend.
     assert "Not enough ranked matches yet" in r.text
     assert "chart.js" not in r.text
@@ -247,7 +250,7 @@ def test_match_page_never_shows_a_kit_or_powerup_as_pre_selected(
     client, login, user_factory
 ):
     """A tile carrying .selectedChoice before the player has ever clicked would claim a
-    choice was made when the saved pick is still None — the server falls back to the
+    choice was made when the saved pick is still None, the server falls back to the
     first kit/powerup at match time regardless, but the tile UI must not imply that's
     already "your" pick."""
     from src.core.db import session
@@ -275,7 +278,7 @@ def test_match_page_never_shows_a_kit_or_powerup_as_pre_selected(
 
     assert r.status_code == 200
     # These seed the client-side `currentkit`/`currentPowerup` vars that
-    # updateKitClasses()/updatePowerupClasses() use to add .selectedChoice — null
+    # updateKitClasses()/updatePowerupClasses() use to add .selectedChoice, null
     # means no tile renders as selected until the player actually clicks one.
     assert '"currentkit": null' in r.text
     assert '"currentpowerup": null' in r.text
@@ -649,3 +652,37 @@ def test_play_page_says_nothing_about_a_region_with_no_lobby(
     assert r.status_code == 200
     assert 'id="regionActivity"' in r.text
     assert "data-paris-players" not in r.text
+
+
+def test_analytics_is_not_started_before_consent(client, monkeypatch):
+    """The page may carry the measurement ID, but never the tag that reports with it.
+
+    Analytics used to load from layout.html on every view, which made the cookie banner
+    decorative and the consent unlawful. cookies.js is now the only thing that fetches
+    the tag, and only after an accept, so the ID may appear in the page and the
+    googletagmanager script may not.
+    """
+    monkeypatch.setattr(settings, "analytics_id", "G-TESTONLY")
+    body = client.get("/").text
+
+    assert "G-TESTONLY" in body
+    assert "googletagmanager.com" not in body
+    assert "gtag(" not in body
+
+
+def test_the_cookie_banner_offers_a_reject(client):
+    """An accept-only banner is not a choice, so consent taken through it is not valid."""
+    body = client.get("/").text
+    assert 'id="cookiesAccept"' in body
+    assert 'id="cookiesReject"' in body
+
+
+def test_every_page_footer_links_to_the_privacy_notice(client, login, user_factory):
+    """The notice has to be reachable from anywhere, not just from the cookie banner.
+
+    The banner disappears once answered, so before this the only route to the notice on
+    a logged-in page was knowing the URL.
+    """
+    login(client, user_factory())
+    body = client.get("/play").text
+    assert 'href="/gdpr" class="footerPrivacy"' in body

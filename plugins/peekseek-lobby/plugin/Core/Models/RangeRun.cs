@@ -1,7 +1,7 @@
 namespace PeekSeekLobby.Core.Models;
 
 /// One player's run at the target range: when it started and how many targets are
-/// still standing. Deliberately knows nothing about Unturned — putting mannequins
+/// still standing. Deliberately knows nothing about Unturned, putting mannequins
 /// in the world and knocking them down needs a live server, but the clock, the
 /// layout and what counts as a personal best are the parts worth reading and
 /// testing on their own.

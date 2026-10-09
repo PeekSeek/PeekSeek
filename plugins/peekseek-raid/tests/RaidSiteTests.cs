@@ -7,7 +7,7 @@ namespace PeekSeekRaid.Tests;
 
 /// UnityEngine.dll targets netstandard2.1 and cannot be loaded by the net48 test host,
 /// so everything here goes through RaidSite's float API rather than its Vector3 one.
-/// That is the same arithmetic — the Vector3 overloads are one-line wrappers over it.
+/// That is the same arithmetic, the Vector3 overloads are one-line wrappers over it.
 public class RaidSiteTests {
     private static RaidSite North() => new() {
         Name = "North",

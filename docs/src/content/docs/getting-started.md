@@ -40,7 +40,7 @@ uvicorn src.app:app --reload
 
 The site is on [localhost:8000](http://localhost:8000). The interactive API explorer,
 generated from the routes themselves, is at
-[localhost:8000/api](http://localhost:8000/api) — `/docs` is these pages, which the
+[localhost:8000/api](http://localhost:8000/api), `/docs` is these pages, which the
 app serves from the same port once they are built.
 
 :::note[SQLite is for convenience, not fidelity]

@@ -1,6 +1,6 @@
 """Kit & outfit editors. Pure HTMX: every click POSTs the selection, the server
 validates and saves it, then returns the re-rendered editor to swap in. No client
-state, no bespoke JS — the saved kit in the database is the single source of truth.
+state, no bespoke JS, the saved kit in the database is the single source of truth.
 """
 
 from fastapi import APIRouter, HTTPException, Request

@@ -11,7 +11,7 @@ function countOnes(n) {
 }
 
 /* Matchmaking will not split a party across two teams, so a mode with fewer seats
-   per team than the party has members can never take them — it would just queue
+   per team than the party has members can never take them, it would just queue
    and never match. Same rule /queue/heartbeat enforces, applied before the button
    is pressed. Event tiles carry no seat count and are never ruled out here. */
 function fitsParty(option) {

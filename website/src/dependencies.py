@@ -111,7 +111,7 @@ GameServer = Annotated[data.AuthorizedServer, Depends(authorized_server)]
 
 
 async def merged_request_values(request: Request) -> dict:
-    """Query and form params merged, query winning — Flask's request.values."""
+    """Query and form params merged, query winning, Flask's request.values."""
     form = await request.form()
     return dict(form) | dict(request.query_params)
 
@@ -120,11 +120,11 @@ RequestValues = Annotated[dict, Depends(merged_request_values)]
 
 
 async def forced_json_body(request: Request):
-    """The body parsed as JSON regardless of Content-Type — get_json(force=True).
+    """The body parsed as JSON regardless of Content-Type, get_json(force=True).
 
     An absent body reads as `{}` so a route whose body is entirely optional does not
     need a second signature for the empty case. A body that is present but malformed (a
-    crashed plugin build, a truncated request) must 400, not 500 — this runs as a
+    crashed plugin build, a truncated request) must 400, not 500, this runs as a
     dependency, before any route's own try/except gets a chance to run, so an uncaught
     decode error here skips every route's error handling and its Discord webhook
     logging along with it.
@@ -179,7 +179,7 @@ def body_schema(model: type) -> dict:
 
 
 def page_context(request: Request) -> dict:
-    """Values available to every template render — Flask's context_processor."""
+    """Values available to every template render, Flask's context_processor."""
     user: Optional[data.User] = getattr(request.state, "user", None)
     return {
         "config": settings,

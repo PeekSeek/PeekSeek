@@ -7,7 +7,7 @@ This is the reasoning, kept because the code cannot hold it. It was a verbatim t
 of the original brief; a transcript is a record of a conversation, not a document, and it
 carried a local filesystem path and a note about which rented server to clear for testing.
 The design it described is below, and the places the implementation knowingly departs from
-it are below that — those are the valuable half, and the part that is expensive to
+it are below that, those are the valuable half, and the part that is expensive to
 rediscover.
 
 ## The design
@@ -56,7 +56,7 @@ counts them, and placing one takes it off the pile and puts the next in hand. Th
 swapping a placed piece for another material a matter of counting.
 
 **The flag is not a claim flag.** A claim flag's 32-metre bubble stops anyone outside the
-owning group placing anything inside it, *on the client* — which is exactly the demolition
+owning group placing anything inside it, *on the client*, which is exactly the demolition
 charge an attacker needs to stick on a wall. The marker is the PeekSeek Flag instead: the
 claim flag's model with 600 health and no bubble, placed by one defender before every round
 rather than by the gamemode. The starting floors are protected by where they stand, not by
@@ -66,7 +66,7 @@ what they are.
 carried and thrown; with no claim bubble, a demolition charge can go on a wall, so it does.
 
 **The sentry is our own item.** A vanilla sentry only runs within reach of a fuelled
-generator, and the server and every client each decide that for themselves — so a server
+generator, and the server and every client each decide that for themselves, so a server
 that lies about it gets a turret that shoots but looks dead. The PeekSeek Sentry is the
 Hostile Sentry with `Requires_Power false`, shipped in the UI workshop item beside the flag.
 

@@ -39,7 +39,7 @@ def match_page(request: Request, steam64: LoggedInSteam64):
     userData = current.meta["userData"][str(steam64)]
 
     # Left as the player's real (possibly still-unmade) choice rather than
-    # defaulting to the first option — the match still falls back to
+    # defaulting to the first option, the match still falls back to
     # kitsAllowed[0]/powerups[0] server-side (Kit.items_for, Match.all_kits_locked)
     # if they never pick, but the tile UI should never claim a choice was made
     # when it wasn't.
@@ -59,7 +59,7 @@ def match_page(request: Request, steam64: LoggedInSteam64):
 
 @router.get("/match/current", tags=["match"])
 def match_current(steam64: ApiSteam64, matchId: int | None = None):
-    """Polled by the in-match screen — returns the live match state as JSON."""
+    """Polled by the in-match screen, returns the live match state as JSON."""
     current_id = matchId or data.Match.current_for(steam64)
     if not current_id:
         raise HTTPException(status_code=404, detail="No match found.")
@@ -68,7 +68,7 @@ def match_current(steam64: ApiSteam64, matchId: int | None = None):
         current = db.query(data.Match).where(data.Match.id == current_id).first()
 
         # The game server's own poll enforces the pick deadline too, so a match whose
-        # players all closed the tab still resolves — this just makes it instant for
+        # players all closed the tab still resolves, this just makes it instant for
         # whoever is actually watching rather than waiting on the next server tick.
         resolved = current.resolved_meta_if_expired()
         if resolved is not None:
@@ -186,7 +186,7 @@ def custom_match(request: Request, steam64: LoggedInSteam64):
 
 
 def _elo_history(matches: list, steam64Str: str) -> list[dict]:
-    """Elo right after each ranked match, oldest first — `matches` is already the
+    """Elo right after each ranked match, oldest first, `matches` is already the
     same latest_for() list the match list renders, newest first, so this just walks
     it backwards rather than running a second query for the graph."""
     history = []
@@ -204,15 +204,15 @@ def _elo_history(matches: list, steam64Str: str) -> list[dict]:
 
 @router.get("/kit/{steam64}", tags=["player"])
 def public_kit_data(steam64: int):
-    """Every saved kit for a player, fully resolved into ready-to-equip item lists
-    — public, no auth, no match context needed. For anything that has to equip
+    """Every saved kit for a player, fully resolved into ready-to-equip item lists:
+    public, no auth, no match context needed. For anything that has to equip
     someone without a live match (the lobby server, in particular)."""
     return data.Kit.public_data(steam64)
 
 
 @router.get("/reputation/{steam64}", tags=["player"])
 def public_reputation(steam64: int):
-    """A player's Elo, public and unauthenticated — what the lobby server mirrors
+    """A player's Elo, public and unauthenticated, what the lobby server mirrors
     into their in-game reputation so rank is visible over someone's head.
 
     Deliberately just Elo: Unturned moves reputation itself on kills and other
@@ -336,11 +336,11 @@ def _your_progress(results: dict, steam64: int | None) -> dict | None:
 
 @router.get("/match/{matchId}", tags=["pages"], include_in_schema=False)
 def match_detail(request: Request, matchId: int, user: CurrentUser):
-    """A finished match's result and kill log — public, same as /u/{steam64}. The
+    """A finished match's result and kill log, public, same as /u/{steam64}. The
     kill-by-kill map/graph view is still a concept; this is the plain data it will sit on
     top of."""
     with session() as db:
-        # Not `match` — page_context() already injects that key app-wide as the logged-in
+        # Not `match`, page_context() already injects that key app-wide as the logged-in
         # user's own active match id, and would silently overwrite this on every render.
         result = (
             db.query(data.MatchResult)

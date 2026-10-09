@@ -17,7 +17,7 @@
 
 PeekSeek is a single FastAPI app (port **8000**) that serves everything: the
 server-rendered pages, the JSON endpoints the site's own scripts call, and the
-`/server/v1/*` API the game servers run on — see [API.md](API.md) for that contract.
+`/server/v1/*` API the game servers run on, see [API.md](API.md) for that contract.
 
 ```
 public/               # served at /static
@@ -47,7 +47,7 @@ cp .env.example .env                   # fill in the values
 ```
 
 `requirements.txt` is the list a human edits. `requirements.lock` is what anything
-installs — every transitive package pinned to a version and a hash, compiled for 3.12,
+installs, every transitive package pinned to a version and a hash, compiled for 3.12,
 which is what the image runs. Change a dependency and regenerate both locks with the
 commands in the header of `requirements.txt`.
 
@@ -60,7 +60,7 @@ depends on `src.core` instead of inserting this directory into `sys.path`.
 uvicorn src.app:app --reload
 ```
 
-Interactive API explorer: http://localhost:8000/api — `/docs` is the handbook, which
+Interactive API explorer: http://localhost:8000/api, `/docs` is the handbook, which
 is why the explorer is not there.
 
 It lists the JSON API and nothing else. Server-rendered pages are declared
@@ -87,7 +87,7 @@ than a list of every URL the app happens to answer.
 
 `DB` takes any SQLAlchemy URL. Production uses Postgres; a throwaway environment can
 point at a file, `sqlite:////absolute/path/dev.db`, and get the same schema from
-`create_all`. Note that SQLite will not reproduce Postgres-specific problems — integer
+`create_all`. Note that SQLite will not reproduce Postgres-specific problems, integer
 width being the obvious one.
 
 There is no migration tool. `create_all` builds tables that do not exist yet, and
@@ -149,6 +149,6 @@ and its caches are gitignored.
 
 ## Deployment
 
-One container, one Postgres, a reverse proxy, and no CI job — see
+One container, one Postgres, a reverse proxy, and no CI job, see
 [Self-hosting](https://peekseek.net/docs/self-hosting/) for the whole runbook and the
 [root README](../README.md) for why a website deploy is never a green build.

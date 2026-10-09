@@ -65,7 +65,7 @@ public class SpawnProtectionTests {
     }
 
     /// Shooting out from behind protection gives it up immediately, but the pending
-    /// deploy survives — someone who forfeited it still has to reach the arena.
+    /// deploy survives, someone who forfeited it still has to reach the arena.
     [Fact]
     public void ForfeitingProtectionLeavesThePendingDeployAlone() {
         LobbyManager.PlayerState state = Died(100f);

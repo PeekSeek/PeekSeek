@@ -28,7 +28,7 @@ Being consistently unpleasant counts too, even when every individual message wou
 
 ## If something happens
 
-Report it to **conduct@peekseek.net**, or to any maintainer directly. Say what happened
+Report it to **peekseek@kcvdh.com**, or to any maintainer directly. Say what happened
 and where; a link is enough. Reports are handled privately and we will not name you to the
 person involved without asking you first.
 

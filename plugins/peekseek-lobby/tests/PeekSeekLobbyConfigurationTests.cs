@@ -44,7 +44,7 @@ public class PeekSeekLobbyConfigurationTests {
     }
 
     /// The streaks the arena is meant to pay out, pinned to the exact kill counts
-    /// and items they were specified with — a silently renumbered streak is the
+    /// and items they were specified with, a silently renumbered streak is the
     /// kind of thing nobody notices until someone asks where their drum went.
     [Fact]
     public void LoadDefaults_PaysOutTheSpecifiedStreaks() {

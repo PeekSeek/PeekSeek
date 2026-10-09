@@ -83,7 +83,7 @@ def test_a_free_server_with_an_empty_queue_is_told_to_idle(gameserver):
 
 def test_every_answer_says_which_region_the_server_is_in(gameserver, user_factory):
     """A server only gets matches from its own region, and that region is set in the
-    database rather than by the server — so a mismatch looks exactly like nobody
+    database rather than by the server, so a mismatch looks exactly like nobody
     queueing unless the answer says so."""
     queue(user_factory(), region="utah")
 
@@ -264,7 +264,7 @@ def test_a_stranded_match_is_taken_by_a_server_rather_than_scrapped(
 
 
 def test_a_pending_match_is_given_to_the_next_free_server(gameserver, user_factory):
-    """A custom match has no server of its own — the next one to report free takes it,
+    """A custom match has no server of its own, the next one to report free takes it,
     ahead of making anything new out of the queue."""
     first, second = user_factory(), user_factory()
     match = make_match(first, second, matchSettings=DECIDED)
@@ -481,7 +481,7 @@ def test_a_player_is_relayed_as_soon_as_a_server_holds_their_match(
 
 
 def test_asking_about_a_player_does_not_queue_them(gameserver, user_factory):
-    """What the lobby polls with for players who used /noqueue — asking must not
+    """What the lobby polls with for players who used /noqueue, asking must not
     quietly put them back in."""
     player = user_factory()
 
@@ -593,7 +593,7 @@ def test_a_stranger_can_be_matched_and_scored_like_anyone_else(
     gameserver, user_factory
 ):
     """End to end for a player with no account: queued by the lobby, picked up by a
-    free server, and scored — the path every new player takes on their first match."""
+    free server, and scored, the path every new player takes on their first match."""
     known = user_factory()
     stranger = 76561198000000078
 
@@ -624,8 +624,8 @@ def test_a_lost_answer_hands_the_same_match_back_rather_than_making_another(
     gameserver, user_factory
 ):
     """The poll that builds a match is also the one that delivers it, so an answer that
-    never arrives — a poll that timed out on a slow Steam or Discord call, a server that
-    restarted — leaves a server holding a match it has never heard of.
+    never arrives, a poll that timed out on a slow Steam or Discord call, a server that
+    restarted, leaves a server holding a match it has never heard of.
 
     Asking again as a free server has to finish that delivery. Abandoning the match and
     matchmaking a fresh one is what produced the same pairing over and over, a new
@@ -680,7 +680,7 @@ def test_a_second_server_polling_cannot_form_the_same_pairing_twice(gameserver):
 
 def test_a_player_the_site_has_never_seen_gets_a_real_account(gameserver, monkeypatch):
     """Not just a row: the name and avatar too. The Steam lookup has to happen before
-    the insert, because it is persisted with an UPDATE — done after, it silently
+    the insert, because it is persisted with an UPDATE, done after, it silently
     stores nothing and the player is "Nameless" everywhere forever."""
     from src.core import steam
 
@@ -722,7 +722,7 @@ def test_a_player_read_carries_their_steam_face(gameserver, user_factory, monkey
 def test_an_account_is_still_made_when_steam_will_not_answer(gameserver, monkeypatch):
     """Steam being down must not stop somebody playing. The account is created with
     no profile rather than with a placeholder, so the next lookup can still fill it
-    in — a stored "Nameless" would never be asked about again."""
+    in, a stored "Nameless" would never be asked about again."""
     from src.core import steam
 
     stranger = 76561198000000204
@@ -785,7 +785,7 @@ def test_an_unknown_pick_is_refused_rather_than_reaching_the_match(
     gameserver, user_factory
 ):
     """An unknown kit category reaches Kit.items_for as a missing key, and an unknown
-    powerup equips nothing — so both are refused here instead."""
+    powerup equips nothing, so both are refused here instead."""
     first, second = user_factory(), user_factory()
     queue(first, second)
     poll(gameserver)

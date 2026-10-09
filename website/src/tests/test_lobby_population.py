@@ -174,7 +174,7 @@ def test_the_hold_changing_is_worth_a_row_even_when_nobody_arrived(gameserver):
 
 
 def test_a_lobby_that_reports_no_counts_stores_none_rather_than_zero(gameserver):
-    """A build that predates these fields has not said nobody wanted a match — it has
+    """A build that predates these fields has not said nobody wanted a match, it has
     said nothing, and a zero here would be the site inventing the answer."""
     report(gameserver, 4)
 

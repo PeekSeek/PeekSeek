@@ -13,16 +13,12 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="{{request.url}}" />
 
-    {# Rendered only where an ID is configured, so a fork reports to nobody by default. #}
+    {# The measurement ID only, handed over as data. cookies.js fetches the tag once the
+       visitor has accepted, and never otherwise: analytics is not strictly necessary, so
+       it may not run before consent. Rendered only where an ID is configured, so a fork
+       reports to nobody by default. #}
     {% if config.analytics_id %}
-    <script async src="https://www.googletagmanager.com/gtag/js?id={{ config.analytics_id }}"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      gtag('config', {{ config.analytics_id | tojson }});
-    </script>
+    <script id="analyticsId" type="application/json">{{ config.analytics_id | tojson }}</script>
     {% endif %}
 
     <meta http-equiv="Content-Security-Policy" content="script-src * 'unsafe-inline' 'unsafe-eval';">
@@ -107,9 +103,13 @@
             </div>
             {% endif %}
 
+            {# Two buttons, because an "Accept" on its own is not a choice. Hidden by
+               default in default.css and shown by cookies.js only while unanswered, so
+               a returning visitor never sees it flash. #}
             <div class="mainElement gdpr" id="gdprheader">
               <span><a href="/gdpr/">See how PeekSeek uses your <b>Cookies</b> and <b>other Data</b>.</a></span>
-              <button onclick="acceptCookies()">Accept</button>
+              <button type="button" id="cookiesAccept">Accept</button>
+              <button type="button" id="cookiesReject" class="gdprSecondary">Reject</button>
             </div>
 
             {% block content %}{% endblock %}
@@ -122,6 +122,7 @@
     <footer>
       <div class="inner">
         <a href="/"><img src="/static/img/cmw.png" alt="PeekSeek"></a>
+        <a href="/gdpr" class="footerPrivacy">Privacy</a>
       </div>
     </footer>
   </body>
