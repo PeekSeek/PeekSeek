@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using HarmonyLib;
 using JetBrains.Annotations;
+using PeekSeek.Gamemodes;
 using PeekSeekRaid.Core.Models;
 using SDG.Unturned;
 using Steamworks;
@@ -40,15 +41,24 @@ internal static class Damage {
     /// buys nothing.
     private static readonly Dictionary<ulong, float> protectedUntil = [];
 
+    /// When each shooter was last told their target is protected. An automatic weapon
+    /// asks this question once a bullet, and a player does not need forty lines about
+    /// it.
+    private static readonly Dictionary<ulong, float> lastProtectedNotice = [];
+
+    private const float ProtectedNoticeIntervalSeconds = 3f;
+
     private static Raid raid;
 
     internal static void Hook(Raid running) {
         raid = running;
         cuts.Clear();
+        lastProtectedNotice.Clear();
         DamageTool.damagePlayerRequested += OnDamagePlayer;
         UseableGun.onBulletSpawned += Fired;
         UseableGun.onProjectileSpawned += Launched;
         UseableGun.OnAimingChanged_Global += Aimed;
+        UseableThrowable.onThrowableSpawned += Threw;
     }
 
     internal static void Unhook() {
@@ -56,6 +66,8 @@ internal static class Damage {
         UseableGun.onBulletSpawned -= Fired;
         UseableGun.onProjectileSpawned -= Launched;
         UseableGun.OnAimingChanged_Global -= Aimed;
+        UseableThrowable.onThrowableSpawned -= Threw;
+        lastProtectedNotice.Clear();
         raid = null;
         Current = null;
     }
@@ -86,8 +98,30 @@ internal static class Damage {
     [UsedImplicitly]
     internal class DetonatePatch {
         [UsedImplicitly]
-        private static void Prefix(InteractableCharge __instance) {
+        private static void Prefix(InteractableCharge __instance, Player instigatingPlayer) {
             nextTool = BarricadeManager.FindBarricadeByRootTransform(__instance.transform)?.asset?.id ?? 0;
+
+            // Setting a charge off is offensive, so it costs the protection too. A
+            // charge is the attackers' main tool, and an attacker who could blow one
+            // while still untouchable would get the whole opening exchange for free.
+            //
+            // The person who pressed the detonator, not the barricade's owner. Both
+            // ways in hand us the instigator: detonate(CSteamID) resolves the id and
+            // calls this, and UseableDetonator calls it directly. Charging the owner
+            // instead would take protection off whoever placed the charge while
+            // leaving it on whoever actually set it off.
+            if (instigatingPlayer != null) Unprotect(instigatingPlayer);
+        }
+    }
+
+    /// A melee swing is offensive, and UseableMelee has no event for it. This is the
+    /// method that does the swing's damage, so a prefix on it is the swing.
+    [HarmonyPatch(typeof(UseableMelee), "fire")]
+    [UsedImplicitly]
+    internal class MeleeSwingPatch {
+        [UsedImplicitly]
+        private static void Prefix(UseableMelee __instance) {
+            if (__instance.player != null) Unprotect(__instance.player);
         }
     }
 
@@ -212,6 +246,32 @@ internal static class Damage {
     private static void Fired(UseableGun gun, BulletInfo bullet) => Unprotect(gun.player);
     private static void Launched(UseableGun gun, GameObject projectile) => Unprotect(gun.player);
     private static void Aimed(UseableGun gun) => Unprotect(gun.player);
+    private static void Threw(UseableThrowable useable, GameObject thrown) => Unprotect(useable.player);
+
+    /// Say why the hit did nothing.
+    ///
+    /// A refusal here is completely silent in game: the shooter gets their client-side
+    /// hitmarker and the victim loses nothing, which is indistinguishable from the
+    /// server not registering the shot. That is the same silence that had South
+    /// American players reporting broken hit detection, and the lobby already learned
+    /// this lesson. A rule nobody is told about is a bug as far as the player is
+    /// concerned.
+    private static void ExplainRefusal(CSteamID shooter, Player victim, string key) {
+        if (shooter == CSteamID.Nil || shooter == victim.channel.owner.playerID.steamID) return;
+
+        // Resolved before the throttle is stamped, so a shooter who has already left
+        // does not spend somebody's three seconds on a line nobody can be sent.
+        Player player = PlayerTool.getPlayer(shooter);
+        if (player == null) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (lastProtectedNotice.TryGetValue(shooter.m_SteamID, out float last)
+                && now - last < ProtectedNoticeIntervalSeconds) return;
+        lastProtectedNotice[shooter.m_SteamID] = now;
+
+        Host.Whisper(player.channel.owner, PeekSeekRaid.Instance.Translate(
+            key, victim.channel.owner.playerID.characterName));
+    }
 
     /// A rocket is 90 on a direct hit and at most 60 otherwise; a Keyhole grenade
     /// never hurts anybody; the Suppressor's bullets are cut to its own number.
@@ -221,12 +281,14 @@ internal static class Damage {
         ulong hurt = parameters.player.channel.owner.playerID.steamID.m_SteamID;
         if (protectedUntil.TryGetValue(hurt, out float until) && Time.realtimeSinceStartup < until) {
             shouldAllow = false;
+            ExplainRefusal(parameters.killer, parameters.player, "target_protected");
             return;
         }
 
         if (Current != null) {
             if (Current.Tool == PeekSeekRaid.Config.KeyholeItemId) {
                 shouldAllow = false;
+                ExplainRefusal(Current.Killer, parameters.player, "keyhole_harmless");
                 return;
             }
 
@@ -235,6 +297,22 @@ internal static class Damage {
                 // middle and one at their boots both count as direct.
                 Vector3 feet = parameters.player.transform.position;
                 float gap = Mathf.Min((feet - Current.Point).magnitude, (feet + Vector3.up - Current.Point).magnitude);
+
+                // No radius check here on purpose. RaidWorld puts RocketBlastRadius on
+                // the launcher, so the game has already decided who is in reach and
+                // nobody outside it gets this far. Refusing the hit a second time here
+                // would only risk refusing one on the boundary that the game allowed,
+                // and a refusal this late is silent.
+                //
+                // What follows overwrites `damage` outright, so a rocket is the same 90 or 60
+                // whoever fired it: the match plugin's ping handicap ran a moment ago
+                // and is discarded here, along with the limb and the armour. That is
+                // deliberate for a breaching tool, whose job is to open a wall for a
+                // known number of charges rather than to reward aim, but it does mean a
+                // high-ping attacker is handicapped on their bullets and not on their
+                // rockets. If that ever needs to change, scale these two numbers by
+                // PSManager.PingPercentage here rather than relying on the handicap
+                // upstream, which cannot survive being overwritten.
                 bool onTarget = gap <= PeekSeekRaid.Config.RocketDirectRadius;
                 parameters.damage = onTarget
                     ? PeekSeekRaid.Config.RocketDirectDamage

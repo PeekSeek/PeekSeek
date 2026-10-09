@@ -26,6 +26,10 @@ internal static class RaidWorld {
     /// material but never be taken away or shot out, whatever it is made of now.
     private static readonly Dictionary<int, List<Vector3>> anchorTiles = [];
 
+    /// What the launcher's blast radius was before any match touched it. The asset is
+    /// the one the whole process shares, so it is put back when the match ends.
+    private static float? vanillaLauncherRange;
+
     internal static void Hook(Raid running) {
         raid = running;
         TuneExplosives();
@@ -57,16 +61,39 @@ internal static class RaidWorld {
         Powerups.Unhook();
         Damage.Unhook();
         anchorTiles.Clear();
+
+        if (vanillaLauncherRange.HasValue
+                && Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.LauncherItemId) is ItemGunAsset launcher) {
+            launcher.range = vanillaLauncherRange.Value;
+            vanillaLauncherRange = null;
+        }
+
         raid = null;
     }
 
-    /// The rocket's blast radius, set on the launcher. The vanilla rocket has no
-    /// projectile of its own, so UseableGun takes the rocket's damage and blast from the
-    /// gun that fired it, not the magazine; what a rocket does to the base and to
-    /// players is the hits table's and Damage's, so the radius is all that is left.
+    /// The rocket's blast radius, set on the launcher.
+    ///
+    /// For a projectile gun, ItemGunAsset.range is the explosion radius and not a
+    /// shooting range. The rocket has no projectile asset of its own, so UseableGun
+    /// .project reads the blast off the gun that fired it, and Rocket.range is written
+    /// in that one method and read in one other (Rocket.OnTriggerEnter), where it goes
+    /// straight into ExplosionParameters. Powerups does the same thing explicitly for
+    /// the Striker. Nothing about ballistics applies: UseableGun.fire sends a gun with
+    /// a projectile down the project path and spawns no bullet, and ballistics only
+    /// ever walks the bullet list, so neither the range + 4 hit cutoff nor the damage
+    /// falloff is reachable from a launcher shot. Vanilla sets it to 12; the match
+    /// wants 4.
+    ///
+    /// The asset is shared and process-wide, so the vanilla value is kept and put back
+    /// in Unhook. Without that, a RAID match left its radius on the launcher for
+    /// everything after it on the same server, ARENA's Boom rocket included.
+    ///
     /// Set every match rather than once, because the number is config.
     private static void TuneExplosives() {
         if (Assets.find(EAssetType.ITEM, PeekSeekRaid.Config.LauncherItemId) is ItemGunAsset launcher) {
+            // Captured once, so a second Hook without an Unhook between them cannot
+            // save the tuned value as if it were vanilla.
+            vanillaLauncherRange ??= launcher.range;
             launcher.range = PeekSeekRaid.Config.RocketBlastRadius;
         }
 
