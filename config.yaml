@@ -1,0 +1,199 @@
+# The main PeekSeek configuration.
+#
+# Secrets are not here. The database URL, the tokens and the keys come from the
+# environment. See website/.env.example.
+#
+# Each gamemode has its own file in gamemodes/. This file says which gamemodes the
+# site shows, and in what order.
+
+app:
+  domain: 127.0.0.1        # public hostname, no scheme
+  protocol: http
+  build: develop
+  # Google Analytics measurement ID. An empty value renders no tag. A fork must set
+  # its own, or it reports traffic into somebody else's property.
+  analyticsId: ""
+
+gamemodes:
+  # The queue mask. A player picks modes, and the site sends one number. Each
+  # position below is one bit: the first name is bit 0, the second is bit 1.
+  #
+  # Only ever add to the end. If you move a name, every queue mask that players and
+  # servers already sent starts to mean a different mode.
+  queue:
+    - arena-1v1
+    - arena-drums-1v1
+    - arena-sniper-1v1
+    - casual-duo
+    - casual
+    - rush
+    - augewehr
+    - raid-1v1
+    - arena-2v2
+    - raid-2v2
+
+  # What the play page shows, from first to last. A gamemode that is not in this
+  # list still has its queue bit, but no player can select it.
+  #
+  # You can put a name here in any order. This list does not change any bit.
+  show:
+    - raid-2v2
+    - raid-1v1
+    - arena-2v2
+    - arena-1v1
+    - arena-sniper-1v1
+    - arena-drums-1v1
+
+match:
+  selectKitsTime: 45         # seconds players get to choose a kit
+  pickTimeout: 10            # seconds for one pick before the site decides it
+  joinTimeoutSeconds: 120    # seconds a player has to join before the match gives up
+
+matchmaking:
+  queueTimeout: 60       # seconds without a heartbeat before a player leaves the queue
+  hostGrace: 20          # seconds a match with no server waits before it is cancelled
+  partyTimeout: 600      # seconds with nobody looking at a party before it closes
+  maxTeamEloGap: 400     # widest average-skill gap allowed between two teams
+  rematchCooldown: 300   # seconds before the same two players can meet again
+  matchCooldown: 1       # seconds the site waits before it makes another match
+
+ranking:
+  # Each player has two numbers. Skill is the hidden estimate that matchmaking
+  # balances on. Wins and losses move it, and a season never touches it. The ladder
+  # is the Elo that players see, and it is pulled towards skill.
+  #
+  # A win adds winPoints and a loss takes lossPoints. A draw changes nothing. A
+  # player below their skill gains up to (1 + maxBoost) times as much, and loses as
+  # little as (1 - maxRelief) of it. The gap grows this effect until it is
+  # convergeScale wide. At or above skill the points are plain.
+  winPoints: 20
+  lossPoints: 20
+  convergeScale: 200
+  maxBoost: 1.5
+  maxRelief: 0.75
+  # Skill deviation, in Elo points. It says how unsure the site is of a skill. A
+  # high value moves skill further after each match. Each match shrinks it.
+  newDeviation: 350      # an account with no standing
+  seedDeviation: 200     # a standing from before skill, seeded from its Elo
+  minDeviation: 60       # the least unsure a veteran gets, so skill can still move
+  deviationDrift: 15     # added back before each match
+
+ranks:
+  # The badge that an Elo earns. `elo` is where a tier starts. It runs until the
+  # next tier starts, so keep this list sorted by `elo`. test_ranks checks that.
+  #
+  # `icon` names a file in website/public/ranks. `role` is the Discord role.
+  # A tier-1 badge shares the role of its base tier: the ladder shows Immune 1, and
+  # Discord shows Immune.
+  #
+  # The ladder starts at 100, and a new account is seeded at 300. Silver is where
+  # everybody begins. Bronze is where you fall to.
+  tiers:
+    - { name: Bronze,   elo: 100, icon: bronze,  role: "1546224903437688922" }
+    - { name: Bronze 1, elo: 200, icon: bronze1, role: "1546224903437688922" }
+    - { name: Silver,   elo: 300, icon: silver,  role: "1546224908302942301" }
+    - { name: Silver 1, elo: 400, icon: silver1, role: "1546224908302942301" }
+    - { name: Gold,     elo: 500, icon: gold,    role: "1546224913784901733" }
+    - { name: Gold 1,   elo: 600, icon: gold1,   role: "1546224913784901733" }
+    - { name: Immune,   elo: 700, icon: immune,  role: "1400869409517473922" }
+    - { name: Immune 1, elo: 800, icon: immune1, role: "1400869409517473922" }
+    # `places` makes Apollo rare. It shares the floor of Immune 1 on purpose: 800
+    # Elo is the top of the ladder, and a seat separates these two badges, not a
+    # number. A player who sits sixth on 950 wears Immune 1, and the way up is to
+    # pass a person.
+    #
+    # Only the last tier may have `places`. Rank.forElo stops at a capped tier that
+    # it cannot award, so a capped tier in the middle hides every tier above it.
+    - { name: Apollo,   elo: 800, icon: apollo,  role: "1546224919094886451", places: 5 }
+
+lobby:
+  # The Steam server code of the DeathMatch server. /lobby hands this to Unturned.
+  #
+  # This is the steamID64 that the GSLT of the server owns, so it survives a
+  # restart. The FakeIP address beside it in the console does not: the server runs
+  # with PROTECTION set to fakeip, and the relay gives a new 169.254.x.x:port each
+  # session. That is why the code is the thing to write down, and not the address.
+  #
+  # It changes only if the login token changes. Read the new one from the server
+  # console ("Server Code: ...") after you change the GSLT.
+  connectCode: "85568392936415589"
+
+guns:
+  # Per gun ID: the magazine item, how many rounds it holds, and the fire mode.
+  defaultMagAmountFiremodePerGunId:
+    "363": [6, 30, 2]
+    "1037": [6, 30, 2]
+    "122": [123, 35, 2]
+    "1377": [123, 35, 2]
+    "1362": [123, 35, 2]
+    "18": [20, 6, 1]
+    "1382": [1384, 7, 1]
+
+dataFiles:
+  # Paths are relative to this file.
+  kits: website/src/kits.json
+
+permissions:
+  # The position of a permission is its bit in Users.permissions. Only ever add to
+  # the end. If you move a name, every account changes what it is allowed to do.
+  list: [admin, canWriteBlog, premium, season_manager]
+
+season:
+  # What a new season keeps from the last one. The site applies this once per
+  # player, on their first ranked match of the season. The carry-over then lands
+  # with a result on it, and not silently overnight.
+  #
+  # A season is a soft reset. You come back near where you were, never above the
+  # cap, and always at least carryDrop below where you finished.
+  carryCap: 600      # the floor of Gold 1. The top of the ladder is earned again.
+  carryDrop: 150     # what a season always takes off
+  carryFloor: 300    # the seed of a new account. Nobody starts below it.
+  carryKeep: 50      # a player who finished above the seed still opens above it
+
+discord:
+  # The server that hands out the rank roles.
+  guild: "1309223629271339068"
+  clientId: "1317158396629094451"
+  inviteUrl: https://discord.gg/NKgTe6RnvH
+
+  # A voice channel named after the live arena population. The sidebar then answers
+  # "is anyone playing" without anybody opening a channel or the game.
+  #
+  # A channel ID is not a secret, so it is here. Nothing renames the channel unless
+  # BOT_TOKEN is set. That keeps dev, which runs without one, from renaming the
+  # production channel.
+  counterChannel: "1538266851203879032"
+
+  # Seconds between renames. Discord allows two renames per ten minutes, and
+  # answers the third with a 429. Do not go below about 300.
+  counterInterval: 360
+
+  # How long an arena must be empty before the first player to walk in is worth an
+  # announcement. People join an empty server, find nobody, and leave in seconds. A
+  # short value posts several times an hour, and teaches everybody to ignore it.
+  wakePingAfter: 1800
+
+  # Where in-game /report lands, and the role it pings. Nothing posts unless
+  # BOT_TOKEN is set, which keeps dev out of the real staff channel.
+  #
+  # The ping goes in the message content, never in the embed. A mention inside an
+  # embed looks like a mention but notifies nobody, so a report that pinged nobody
+  # would look the same as one that worked.
+  reportChannel: "1543350716683395199"
+  staffRole: "1309223753129005117"
+
+  # A lifted ban is logged apart from the reports, because the audience differs. A
+  # report is work to pick up. An overturn is a decision that staff should see.
+  overturnChannel: "1392874678577533039"
+
+  # Where the "how to report a cheater" notice sits, at the bottom of the channel.
+  # This is aimed at players, which is a different room from the one staff work in.
+  stickyChannel: "1395115837551022162"
+
+regions:
+  # Region ID to the name shown in Discord queue pings.
+  names:
+    paris: EU-West
+    utah: US-West
+    singapore: AS-South
+    brazil: SA-East
