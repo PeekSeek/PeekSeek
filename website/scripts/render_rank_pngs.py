@@ -9,9 +9,10 @@ Both are tracked on purpose. `/static/ranks/<icon>.png` is a documented URL that
 servers fetch to draw a badge over a player's head, so generating the PNGs only inside
 the Docker image would serve a 404 to anyone running the app with plain uvicorn.
 
-Needs ImageMagick on PATH (or IMAGEMAGICK set to the binary). Its internal renderer
-handles these files' clip paths and Apollo's mask correctly; that is worth re-checking
-by eye if the art ever gains anything more exotic.
+Needs ImageMagick 7 on PATH (or IMAGEMAGICK set to the binary) *and* librsvg, which
+is what actually rasterises the SVG: ImageMagick delegates to rsvg-convert. Without
+librsvg it falls back to its own renderer, which drops Apollo's mask and most of the
+badge, and every file then reads as drift.
 
     python scripts/render_rank_pngs.py           # render, in place
     python scripts/render_rank_pngs.py --check   # is anything stale? Writes nothing.

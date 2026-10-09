@@ -69,6 +69,11 @@ jobs:
       # what broke this job. It has to be version 7: the committed PNGs come from its
       # internal renderer, and version 6, which is all apt has, draws the clip paths
       # and Apollo's mask differently. Every badge then reads as drift.
+      # librsvg does the actual SVG rasterising: ImageMagick delegates to
+      # rsvg-convert. Without it ImageMagick silently falls back to its own
+      # renderer, which drops Apollo's mask entirely and reports every badge as
+      # drift. This is the package that was really missing.
+      - run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
       - name: ImageMagick 7
         env:
           RELEASE: 7.1.2-32
