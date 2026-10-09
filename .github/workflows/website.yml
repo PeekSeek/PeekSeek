@@ -33,7 +33,9 @@ jobs:
         with:
           python-version: "3.12"
       # Pinned: an unpinned formatter turns a future run red on code nobody touched.
-      - run: pip install black==26.5.1
+      # The version comes from requirements-dev.in, which dependabot updates. Pinning
+      # it here as well meant CI formatted with 26.5.1 while developers used 26.10.0.
+      - run: pip install "$(grep '^black==' requirements-dev.in)"
       # From the repository root, not website/. Run from here it covered three files and
       # missed the bot, the sound generator and the six Unity build tools; pyproject.toml
       # holds the excludes.

@@ -33,7 +33,7 @@ jobs:
 
       - name: Install
         run: |
-          pip install black==26.5.1
+          pip install "$(grep '^black==' website/requirements-dev.in)"
           pip install --require-hashes -r website/requirements.lock
           pip install --no-deps ./website
           pip install -r bot/requirements.txt
