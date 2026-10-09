@@ -28,8 +28,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       # Pinned: an unpinned formatter turns a future run red on code nobody touched.
@@ -43,8 +43,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       # The locked set, so the tests run against what production installs. They pin DB to
@@ -61,8 +61,8 @@ jobs:
     # fails if they no longer match. Fuzzy, so an ImageMagick upgrade is not a red build.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       # ubuntu-latest stopped shipping ImageMagick when it moved to 24.04, which is
@@ -88,8 +88,8 @@ jobs:
     # linters pass on a clean tree, so this blocks rather than warns.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
