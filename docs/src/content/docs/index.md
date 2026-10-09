@@ -39,7 +39,7 @@ change to both belongs in one commit.
 
 **The [repository README](https://github.com/PeekSeek/PeekSeek#readme) lists every
 component, what it is, and whether it is maintained.** That table lives there and only
-there — this page used to carry a copy of it, which said "four deployables", listed five,
+there, this page used to carry a copy of it, which said "four deployables", listed five,
 and had never heard of two of the gamemodes.
 
 What is worth knowing from here is the shape rather than the inventory:

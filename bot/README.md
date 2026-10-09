@@ -11,7 +11,7 @@ cannot mean different things, because there is only one of them.
 The site is an installable package, so this is an ordinary dependency: `pip install
 -e ../website` and `from src.core import moderation`. It used to be a `sys.path.insert()`
 driven by a `WEBSITE_SRC` environment variable, with four `# noqa: E402` imports underneath
-it — the right decision reached by the wrong mechanism.
+it, the right decision reached by the wrong mechanism.
 
 That is also why [Dockerfile](Dockerfile) is built from the **repository root** rather
 than from `bot/`: the image has to contain both trees to install one from the other.
@@ -80,7 +80,7 @@ DB=... BOT_TOKEN=... python bot/src/bot.py
 ```
 
 CI lints this directory and imports the module against the website package on every push
-that touches either `bot/**` or `website/src/core/**` — the second one because that is the
+that touches either `bot/**` or `website/src/core/**`, the second one because that is the
 real dependency, and a rename in the site's moderation code used to be able to break the
 bot with every website job green.
 

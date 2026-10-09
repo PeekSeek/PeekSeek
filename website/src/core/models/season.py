@@ -63,7 +63,7 @@ class Season(SQLModel, table=True):
 
     @staticmethod
     def all() -> list["Season"]:
-        """Every season, newest first — the order a dropdown wants them in."""
+        """Every season, newest first, the order a dropdown wants them in."""
         from src.core.db import session
 
         Season.current()
@@ -120,7 +120,7 @@ class Season(SQLModel, table=True):
             return season
 
     def window(self) -> tuple:
-        """(start, end) — the stretch of time this season covers, either end open.
+        """(start, end), the stretch of time this season covers, either end open.
 
         A match carries no season of its own, so the only honest way to show a season's
         match history is the matches played while it was the season being played. The

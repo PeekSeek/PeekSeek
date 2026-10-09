@@ -33,7 +33,7 @@ public class ConfigurationManager {
         Provider.modeConfigData.Items.Clothing_Has_Durability = false;
     }
 
-    /// Unturned heals players passively once every Health_Regen_Ticks ticks — there is
+    /// Unturned heals players passively once every Health_Regen_Ticks ticks, there is
     /// no "off" switch, so this pushes the interval out past anything a match could ever
     /// last. Healing should only ever come from a med kit pick, never from standing still.
     public static void DisablePassiveHealthRegen() {

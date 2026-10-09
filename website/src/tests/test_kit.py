@@ -1,4 +1,4 @@
-"""Kit.public_data — the fully-resolved, no-match-context loadout export."""
+"""Kit.public_data, the fully-resolved, no-match-context loadout export."""
 
 from src.core import models as data
 from src.core.settings import settings

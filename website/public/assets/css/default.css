@@ -742,6 +742,15 @@ content .main {
   cursor: pointer;
 } .gdpr button:hover {
   background-color: #ddd;
+/* "Reject" is a real choice, so it is a real button, not a link. It is quieter than
+   "Accept" and no harder to hit: same size, same row. */
+} .gdpr button.gdprSecondary {
+  background-color: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+  font-weight: normal;
+} .gdpr button.gdprSecondary:hover {
+  background-color: #fff2;
 }
 
 .warning {

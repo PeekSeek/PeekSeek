@@ -20,7 +20,7 @@ internal class PSSettings {
     internal string Map = null!;
 }
 
-/// One item in a kit, already resolved by the site — id, how many, and the attachment
+/// One item in a kit, already resolved by the site, id, how many, and the attachment
 /// state bytes to stamp onto it.
 [UsedImplicitly]
 internal class PSItem {
@@ -94,7 +94,7 @@ internal class PSMatch {
     internal List<ulong> Spectators = [];
 
     /// The kit the site resolved for this player, or an empty list for someone not on
-    /// the roster — a spectator, or a player the site did not send one for.
+    /// the roster, a spectator, or a player the site did not send one for.
     internal List<PSItem> KitFor(ulong steam64) {
         return Players?.FirstOrDefault(p => p.Steam64 == steam64)?.Kit ?? [];
     }
@@ -145,6 +145,17 @@ internal class PSSessionAnswer {
 
     [JsonProperty("action")]
     internal string Action = Idle;
+
+    /// The region the site has this server registered in, and how many players are
+    /// waiting in it. The site stamps both onto every answer, idle ones included,
+    /// precisely so that a server sitting idle while somebody is certain they are
+    /// queued reads as the region mismatch it usually is. Newtonsoft drops properties
+    /// it has no field for without a word, so leaving these out threw the answer away.
+    [JsonProperty("region")]
+    internal string Region;
+
+    [JsonProperty("queuedInRegion")]
+    internal int QueuedInRegion;
 
     [JsonProperty("matchId")]
     internal int MatchId;

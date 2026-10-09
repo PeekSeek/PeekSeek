@@ -37,7 +37,7 @@ internal abstract class PSManager {
     internal static PSMatch Data;
 
     /// The match this server has told the site it is responsible for. Set the moment a
-    /// match is assigned — before its data arrives — and only cleared once the site has
+    /// match is assigned, before its data arrives, and only cleared once the site has
     /// acknowledged the result, so a match is never treated as abandoned while this
     /// server still has something to say about it.
     internal static int HeldMatchId { get; private set; }
@@ -409,7 +409,7 @@ internal abstract class PSManager {
             return;
         }
         // The site only ever hands a match over once, so reaching here twice would mean
-        // a duplicate answer — restarting the round would kick everyone already playing.
+        // a duplicate answer, restarting the round would kick everyone already playing.
         if (Status == EPSStatus.IN_PROGRESS && Data?.Id == match.Id) return;
 
         IGamemode mode = Gamemodes.Gamemodes.For(match.Gamemode?.Name);
@@ -1090,7 +1090,7 @@ internal abstract class PSManager {
         player.movement.sendPluginJumpMultiplier(frozen ? 0f : 1f);
     }
 
-    /// The score, in team order, as "2-1" — or with names when there are more than two
+    /// The score, in team order, as "2-1", or with names when there are more than two
     /// teams and a bare pair of numbers would not say whose is whose.
     internal static string ScoreLine() {
         if (Data?.Teams == null || Data.Teams.Count == 0) return string.Empty;
@@ -1250,7 +1250,7 @@ internal abstract class PSManager {
         });
     }
 
-    /// Notes that this server would like to go down. Nothing happens immediately —
+    /// Notes that this server would like to go down. Nothing happens immediately,
     /// TickRestart decides when it is actually safe.
     private static void WantRestart(string why) {
         if (WantsRestart) return;
@@ -1262,7 +1262,7 @@ internal abstract class PSManager {
     /// Takes the server down for updates, but only ever while it is holding nothing.
     ///
     /// Two conditions have to hold and keep holding. The status must be READY with no
-    /// HeldMatchId — a held match, including a finished one whose result the site has
+    /// HeldMatchId, a held match, including a finished one whose result the site has
     /// not accepted yet, means somebody is still waiting on this server. And it must
     /// have spent DrainSeconds not asking for work, because a poll already in flight
     /// when the decision was made can still come back holding a match; if one does,
@@ -1281,7 +1281,7 @@ internal abstract class PSManager {
             if (DrainingSince != 0) {
                 DrainingSince = 0;
                 RemoteAPI.ResumeAskingForWork();
-                Logger.Log("Restart put off — this server was handed a match while draining.");
+                Logger.Log("Restart put off, this server was handed a match while draining.");
             }
             return;
         }
@@ -1460,7 +1460,7 @@ internal abstract class PSManager {
         CSteamID steamID = player.channel.owner.playerID.steamID;
         if (!StatService.IsAliveThisRound(steamID)) return;
 
-        Logger.LogWarning($"[alive-check] {player.channel.owner.playerID.characterName} ({steamID}) was dead without OnPlayerDead firing — marking dead now so the overlay does not show them as alive.");
+        Logger.LogWarning($"[alive-check] {player.channel.owner.playerID.characterName} ({steamID}) was dead without OnPlayerDead firing, marking dead now so the overlay does not show them as alive.");
         StatService.MarkDeadThisRound(steamID);
         RefreshHud();
     }
@@ -1470,7 +1470,7 @@ internal abstract class PSManager {
     /// Pushes a snapshot on a timer as well as on events, so health, held weapon and
     /// remaining powerup items move on the overlay between kills rather than freezing
     /// until somebody dies. Also drives the visibility scan reaction time reads from, on
-    /// its own shorter interval — waiting a full second to notice someone came into view
+    /// its own shorter interval, waiting a full second to notice someone came into view
     /// would make the numbers meaningless.
     internal static void Tick() {
         float now = Time.realtimeSinceStartup;

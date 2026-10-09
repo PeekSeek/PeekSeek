@@ -112,9 +112,9 @@ internal static class RemoteAPI {
 
     // ---- the session --------------------------------------------------------------
 
-    /// The code players paste into Unturned's connect box — the game server's Steam ID,
+    /// The code players paste into Unturned's connect box, the game server's Steam ID,
     /// the same value the in-game "Copy Server Code" button copies. Provider.server is
-    /// the wrong field for this (reads back as 0 on a dedicated server — it's meant for
+    /// the wrong field for this (reads back as 0 on a dedicated server, it's meant for
     /// a client's view of the server it's connected to, not the server's own identity);
     /// SteamGameServer.GetSteamID() is what Unturned's own "Copy Server Code" command
     /// actually calls.
@@ -191,8 +191,8 @@ internal static class RemoteAPI {
             await ReportOutstandingResult(token);
 
             // Draining still reports a result it owes, but stops asking for work.
-            // Asking is the only way a match is ever handed over — matchmaking runs
-            // from this poll — so not asking is the whole of the claim being given
+            // Asking is the only way a match is ever handed over, matchmaking runs
+            // from this poll, so not asking is the whole of the claim being given
             // up, and there is no window in which the site can assign to a server
             // that has already decided to go.
             PSSessionAnswer answer = Draining ? null : await Poll(token);
@@ -218,7 +218,7 @@ internal static class RemoteAPI {
     }
 
     /// The match this server is responsible for as far as the site is concerned: the one
-    /// it is running, or — if it has finished one and not managed to report it — that
+    /// it is running, or, if it has finished one and not managed to report it, that
     /// one, so the site keeps the match open until the report lands.
     private static int HeldMatchId => Outstanding?.MatchId ?? PSManager.HeldMatchId;
 
@@ -239,7 +239,10 @@ internal static class RemoteAPI {
             }
 
             LogOnce("Session polls are being answered.");
-            return JsonConvert.DeserializeObject<PSSessionAnswer>(body);
+
+            PSSessionAnswer answer = JsonConvert.DeserializeObject<PSSessionAnswer>(body);
+            ReportRegion(answer);
+            return answer;
         } catch (OperationCanceledException) {
             return null;
         } catch (Exception ex) {
@@ -249,8 +252,7 @@ internal static class RemoteAPI {
     }
 
     /// Queues a match's final result. Retried by the session loop until the site
-    /// acknowledges it, because this call is the only thing that scores a match —
-    /// unlike the snapshot and kill posts, there is no next call to paper over a lost
+    /// acknowledges it, because this call is the only thing that scores a match, /// unlike the snapshot and kill posts, there is no next call to paper over a lost
     /// one.
     internal static void QueueResult(int matchId, string json) {
         Outstanding = new PendingResult { MatchId = matchId, Json = json };
@@ -318,7 +320,7 @@ internal static class RemoteAPI {
         return new StringContent(json, Encoding.UTF8, "application/json");
     }
 
-    /// Testing mode stands in for the site entirely — polling a real one alongside it
+    /// Testing mode stands in for the site entirely, polling a real one alongside it
     /// would let a live answer wipe the fixture's match state seconds after it is
     /// seeded.
     private static void LoadTestingMatch() {
@@ -332,6 +334,45 @@ internal static class RemoteAPI {
         } catch (Exception ex) {
             Logger.LogError($"Failed to load TestingJSON.json! {ex.Message}");
         }
+    }
+
+    private static string RegionLogged;
+    private static bool QueueSeen;
+
+    /// Which region the site has this server in, and whether it can see anybody waiting
+    /// there.
+    ///
+    /// A server that polls happily and is answered `idle` forever looks identical to a
+    /// server nobody is queueing for, and the usual cause is neither: it is registered
+    /// in a different region from the one the players are in. The site stamps `region`
+    /// and `queuedInRegion` onto every answer so that this is readable instead of
+    /// guesswork, and it is only worth anything if somebody says it out loud.
+    ///
+    /// Not LogOnce: that holds a single last-message slot, so a line whose text changes
+    /// would take turns with the poll status line and print both every three seconds.
+    private static void ReportRegion(PSSessionAnswer answer) {
+        if (answer?.Region == null) return;
+
+        if (answer.Region != RegionLogged) {
+            RegionLogged = answer.Region;
+            Say($"The site has this server registered in region {answer.Region}. "
+                + "A match only ever reaches a server in the region it was queued in.");
+        }
+
+        // Only the empty-or-not edge. The count itself moves every few seconds while
+        // people queue and would be a line each time; whether the site can see anybody
+        // at all in this server's region is the part that settles where to look next.
+        bool queued = answer.QueuedInRegion > 0;
+        if (queued == QueueSeen) return;
+        QueueSeen = queued;
+
+        Say(queued
+            ? $"{answer.QueuedInRegion} player(s) queued in {answer.Region}."
+            : $"Nobody is queued in {answer.Region} any more.");
+    }
+
+    private static void Say(string message) {
+        TaskDispatcher.QueueOnMainThread(() => Logger.Log(message));
     }
 
     private static string LastStatusLogged = string.Empty;

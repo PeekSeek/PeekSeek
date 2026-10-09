@@ -2,7 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 from sqlmodel import Session, SQLModel
 
-import src.core.models  # noqa: F401 — registers every table on the metadata
+import src.core.models  # noqa: F401, registers every table on the metadata
 from src.core import db as core_db
 from src.core import models as data
 

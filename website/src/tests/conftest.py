@@ -1,4 +1,4 @@
-"""Test bootstrap — runs *before* any src import."""
+"""Test bootstrap, runs *before* any src import."""
 
 import base64
 import json
@@ -114,7 +114,7 @@ def party_factory():
     """A real Parties row, returning its id.
 
     Queue heartbeats carry partyId as a foreign key, so a made-up number is a row
-    the database will not accept — and since these ids only ever come from a party
+    the database will not accept, and since these ids only ever come from a party
     the site actually created, a test using one it invented is testing a state that
     cannot happen.
     """

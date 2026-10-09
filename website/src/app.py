@@ -1,4 +1,4 @@
-"""The PeekSeek FastAPI app — session middleware, routers, and error pages.
+"""The PeekSeek FastAPI app, session middleware, routers, and error pages.
 
 One app serves everything: server-rendered pages, the browser JSON endpoints the
 site's own scripts call, and the `/server/v1/*` API the game servers run on.

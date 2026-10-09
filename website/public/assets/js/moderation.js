@@ -7,7 +7,7 @@
 /* ---------------------------------------------------------------------------
    Moderation panel.
 
-   Opened from a player row, from the search box, or from ?ban=<steam64> — which is
+   Opened from a player row, from the search box, or from ?ban=<steam64>, which is
    where the "Ban this player" button on an in-game report points, so a report sitting
    in Discord is one click from the form that acts on it. */
 
@@ -198,7 +198,7 @@ function drawDrawer() {
         <div class="modTiles">${tiles}</div>
         ${custom}
         <div class="modField">
-          <label for="modNote">Moderator note — evidence, links, context</label>
+          <label for="modNote">Moderator note: evidence, links, context</label>
           <div class="modPrefix">by ${esc(adminName)}/${esc(adminSteam64)}</div>
           <textarea id="modNote" placeholder="Clip, match id, what you saw"></textarea>
         </div>

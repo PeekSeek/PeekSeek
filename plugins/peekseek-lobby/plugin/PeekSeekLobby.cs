@@ -11,7 +11,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
     public static PeekSeekLobbyConfiguration Config { get => Instance.Configuration.Instance; }
 
     /// Rocket loads every DLL under Plugins/, subfolders included, so a stale copy
-    /// left next to the current one comes up as a second plugin — and since both
+    /// left next to the current one comes up as a second plugin, and since both
     /// carry the same assembly name, that second instance shares LobbyManager's
     /// statics. Letting it run would subscribe every event twice and tick twice a
     /// frame: two heartbeats per player, two welcome messages, two of every kill
@@ -19,7 +19,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
     protected override void Load() {
         if (Instance != null) {
             Logger.LogWarning(
-                "PeekSeekLobby is already loaded — ignoring this copy. Look for a "
+                "PeekSeekLobby is already loaded, ignoring this copy. Look for a "
                 + "leftover PeekSeekLobby.dll elsewhere under Rocket/Plugins.");
             return;
         }
@@ -33,7 +33,7 @@ public class PeekSeekLobby : RocketPlugin<PeekSeekLobbyConfiguration> {
     }
 
     /// Rocket plugins are MonoBehaviours, same heartbeat the main PeekSeek plugin
-    /// drives its match loop from — LobbyManager decides how often that's worth
+    /// drives its match loop from, LobbyManager decides how often that's worth
     /// acting on.
     private void FixedUpdate() {
         if (Instance != this) return;

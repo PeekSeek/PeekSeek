@@ -410,7 +410,7 @@ class Match(SQLModel, table=True):
             MatchResult.record_unscored(matchId, "abandoned")
             Webhook(f"Match.{matchId}").error(
                 f"Server `{serverCode}` reported itself free without ever reporting "
-                "this match's results — recorded as abandoned so its players aren't "
+                "this match's results, recorded as abandoned so its players aren't "
                 "stuck in it. No Elo was applied, because no winner was ever reported."
             )
 
@@ -437,7 +437,7 @@ class Match(SQLModel, table=True):
         for matchId in stranded:
             MatchResult.record_unscored(matchId, "noServer")
             Webhook(f"Match.{matchId}").error(
-                "Cancelled — selection finished and no game server ever became free to "
+                "Cancelled, selection finished and no game server ever became free to "
                 "host it."
             )
 

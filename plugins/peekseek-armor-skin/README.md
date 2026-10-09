@@ -5,11 +5,11 @@
 Makes every player on a server the same kind of target. Three parts, each of
 which can be switched off on its own:
 
-- **Skin** — a player whose skin colour is outside the band the four tones span
+- **Skin**, a player whose skin colour is outside the band the four tones span
   is moved to one of them, picked from their Steam64.
-- **Armor** — everyone takes damage as though wearing a full military set,
+- **Armor**, everyone takes damage as though wearing a full military set,
   whatever they actually have on.
-- **Cosmetics** — shirt, pants, vest and backpack cosmetics stop rendering. Hats,
+- **Cosmetics**, shirt, pants, vest and backpack cosmetics stop rendering. Hats,
   masks and glasses keep theirs.
 
 Running on the warm-up lobby first.
@@ -27,7 +27,7 @@ The colours are Unturned's own character presets, taken straight out of
 | 7 | `#4B3D31` | darkest of the four |
 
 A player is only moved if their own colour falls outside the band those four
-span — every preset from the lightest of them down to the darkest is a face they
+span, every preset from the lightest of them down to the darkest is a face they
 keep, which is all ten of Unturned's minus the two near-black ones. The four are
 a floor and a ceiling on how visible a player can make themselves, not a uniform.
 
@@ -70,8 +70,8 @@ landmine was the last thing that could still tell a naked player from a dressed
 one.
 
 Lower is tougher: these multiply incoming damage rather than absorbing a
-percentage of it. Only shirt, pants, vest and hat ever mattered — vanilla never
-reads a mask, backpack or glasses for damage — so nothing is being taken away
+percentage of it. Only shirt, pants, vest and hat ever mattered, vanilla never
+reads a mask, backpack or glasses for damage, so nothing is being taken away
 that used to count.
 
 Clothing durability is left alone as a side effect. Vanilla docks a point off
@@ -101,7 +101,7 @@ All three are Harmony prefixes, and none keeps state that outlives a connect:
 - `Provider.accept(SteamPending)` for the colour and the cosmetics. Unturned
   copies both out of `SteamPending` once, when the `SteamPlayer` is built, and
   writes that same copy into the packet every other client is told about the new
-  player with. This is the last moment both still read from `SteamPending` — set
+  player with. This is the last moment both still read from `SteamPending`, set
   it any later and the server would be the only machine that agrees.
 - `DamageTool.getPlayerArmor` for bullets and melee, and
   `DamageTool.getPlayerExplosionArmor` for blasts. Both replaced outright rather

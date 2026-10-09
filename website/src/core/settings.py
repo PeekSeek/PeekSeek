@@ -102,7 +102,7 @@ class Settings:
             int(bootstrap_admin) if bootstrap_admin else None
         )
 
-        # "address=region,address=region" — game servers to allow-list on startup.
+        # "address=region,address=region", game servers to allow-list on startup.
         self.bootstrap_servers: dict[str, str] = dict(
             pair.split("=", 1)
             for pair in os.environ.get("BOOTSTRAP_SERVERS", "").split(",")

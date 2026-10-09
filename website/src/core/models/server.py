@@ -246,7 +246,7 @@ class ArenaReading(SQLModel, table=True):
             settings.queue_log_channel,
             content=(
                 f"**Someone is in the arena.** {players} "
-                f"player{'' if players == 1 else 's'} in `{where}` right now — "
+                f"player{'' if players == 1 else 's'} in `{where}` right now, "
                 f"join them at [{settings.domain}](<{settings.base_url}>) "
                 "before they get bored and leave."
             ),

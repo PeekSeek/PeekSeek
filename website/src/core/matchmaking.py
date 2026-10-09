@@ -1,7 +1,7 @@
 """Turning queued players into matches, and match results into stats.
 
 The queue itself lives on UserHB (fresh_in_queue/claim) and a match's lifecycle on
-Match — this module only orchestrates.
+Match, this module only orchestrates.
 
 Matchmaking runs when a game server asks for work, never when a player asks for a
 match. A player queueing only ever adds themselves to the queue; the moment a server
@@ -86,7 +86,7 @@ def modes_fitting_party(gamemode: int, partySize: int) -> int:
     """The selected modes a party this size can actually be matched in.
 
     _players_for_match refuses to split a party across two teams, so a party larger
-    than one team of a mode can never fill it — leaving that mode selected only
+    than one team of a mode can never fill it, leaving that mode selected only
     buys them a queue they never come out of. Dropping it here is what turns that
     silent wait into either a queue that can match or an outright refusal.
     """
@@ -98,7 +98,7 @@ def modes_fitting_party(gamemode: int, partySize: int) -> int:
 
 
 def _party_groups(heartbeats: list) -> list[list[int]]:
-    """Queued players grouped by party — a solo player is a group of one — ordered by
+    """Queued players grouped by party, a solo player is a group of one, ordered by
     the earliest heartbeat in the group, so queueing together doesn't jump a party
     ahead of players who'd already been waiting.
 
@@ -126,7 +126,7 @@ def _players_for_match(queueList: list, mode: dict, skill: dict) -> list[int] | 
     "Best" is the first roster, taken longest-waiting-players first, that clears both
     of the fairness rules: teams within `max_team_elo_gap` of each other, and nobody
     facing an opponent they have already played in the last `rematch_cooldown`. Failing
-    both is a real outcome — those players stay queued rather than being handed a
+    both is a real outcome, those players stay queued rather than being handed a
     one-sided match or the same fixture over and over.
 
     Parties are never split: a group either goes onto one team whole or waits.
@@ -173,7 +173,7 @@ def _balanced_teams(
 ) -> list[list[int]] | None:
     """Split these party groups across the mode's teams as evenly by Elo as they go.
 
-    Biggest groups first onto whichever team is currently weakest and still has room —
+    Biggest groups first onto whichever team is currently weakest and still has room:
     the standard greedy partition, which is more than enough at these sizes and keeps
     every party whole. None when the groups simply do not fit the shape of the mode.
     """
@@ -209,7 +209,7 @@ def _skill_gap(teams: list[list[int]], skill: dict) -> float:
 def _recent_opponent_pairs() -> set[frozenset]:
     """Every pair of players who have been put on opposing teams recently.
 
-    Read off the matches themselves rather than kept in a table of its own — a match
+    Read off the matches themselves rather than kept in a table of its own, a match
     already records who played whom and when, and a second copy of that is a second
     thing to keep in step. Counts matches that are still being played, not just
     finished ones, so back-to-back rematches are caught while the first one is live.
@@ -462,7 +462,7 @@ def match_results(
     are read off who won, which is exact for a result and blind to who drew with whom.
 
     Every player the server lists is scored, including ones who never fired a shot or
-    who disconnected — the server reports its whole roster, so leaving a match is a
+    who disconnected, the server reports its whole roster, so leaving a match is a
     loss like any other rather than a way to keep your Elo.
     """
     players = [normalize_player_result(u) for u in users]

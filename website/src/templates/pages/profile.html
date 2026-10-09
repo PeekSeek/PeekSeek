@@ -168,7 +168,7 @@
 </script>
 
 {% if eloHistory|length >= 2 %}
-{# Chart.js — an out-of-the-box, no-maintenance line chart. Pinned to an exact version
+{# Chart.js, an out-of-the-box, no-maintenance line chart. Pinned to an exact version
    with an integrity hash: a floating major tag lets a changed CDN build run with full
    privileges on a page that renders session state. Bump both together. #}
 <script id="eloHistory" type="application/json">{{ eloHistory | tojson }}</script>

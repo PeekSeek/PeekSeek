@@ -5,7 +5,7 @@ using Xunit;
 namespace PeekSeekLobby.Tests;
 
 /// The deployed config is XML, and XmlSerializer silently drops anything it
-/// can't map — AllowedKitCategories once serialised out empty on the live
+/// can't map, AllowedKitCategories once serialised out empty on the live
 /// server, which would have made /kit reject every category. These pin the
 /// round-trip so a config-shaped mistake fails here instead of in production.
 public class ConfigurationRoundTripTests {
@@ -43,7 +43,7 @@ public class ConfigurationRoundTripTests {
         Assert.Equal(config.RespawnDelaySeconds, loaded.RespawnDelaySeconds);
     }
 
-    /// Matchmaking is on, and stays switchable — the lobby is live, but a server
+    /// Matchmaking is on, and stays switchable, the lobby is live, but a server
     /// that wants to be a pure warm-up box has to be able to turn it back off.
     [Fact]
     public void Defaults_EnableMatchmaking() {
@@ -57,7 +57,7 @@ public class ConfigurationRoundTripTests {
     }
 
     /// Every field of a streak reward has to survive the XML, the item list most
-    /// of all — a streak that deserialises with no items pays out nothing and
+    /// of all, a streak that deserialises with no items pays out nothing and
     /// says nothing about why.
     [Fact]
     public void StreakRewards_SurviveAnXmlRoundTripIntact() {
@@ -100,7 +100,7 @@ public class ConfigurationRoundTripTests {
         Assert.Equal(original.Magazine.Amount, restored.Magazine.Amount);
     }
 
-    /// The gun's attachment/ammo bytes are the whole point of the fallback —
+    /// The gun's attachment/ammo bytes are the whole point of the fallback,
     /// a mangled state string spawns a gun that can't shoot.
     [Fact]
     public void FallbackGunState_ParsesToTheEighteenBytesUnturnedExpects() {

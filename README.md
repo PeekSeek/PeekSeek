@@ -81,7 +81,7 @@ plugin releases are prefixed (`peekseek-raid-v0.4.3`) because one repo ships sev
 
 Two workflows are not per-component: `audit.yml` runs `pip-audit` against the lockfiles
 on a schedule, and `docs.yml` builds the documentation site with its link checker. No
-workflow deploys the website — see below.
+workflow deploys the website. See below.
 
 ## Deployment
 

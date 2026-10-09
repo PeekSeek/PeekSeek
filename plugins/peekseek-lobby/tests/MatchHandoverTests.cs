@@ -104,7 +104,7 @@ public class MatchHandoverTests {
     }
 
     /// A player put back into the arena and matched again has to be relayable to the
-    /// same server as last time — the free server that takes their next match is very
+    /// same server as last time, the free server that takes their next match is very
     /// often the one that just gave up on their last one.
     [Fact]
     public void AFreshMatchCanGoBackToTheServerThatLostTheLastOne() {

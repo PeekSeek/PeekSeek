@@ -86,8 +86,8 @@ def steam_callback(request: Request):
     steam64 = int(query.get("openid.claimed_id").split("/")[-1])
     uuid = str(uuid4())
 
-    # A fresh UUID on every login, never the stored one. The UUID is a bearer token —
-    # `?uuid=` authenticates on its own — so proving ownership of the Steam account has
+    # A fresh UUID on every login, never the stored one. The UUID is a bearer token,
+    # `?uuid=` authenticates on its own, so proving ownership of the Steam account has
     # to be what mints it. Handing back the existing one would mean a leaked or shared
     # token stays valid no matter how many times its owner signs in, with /me/settings
     # the only way to ever revoke it. Signing in now revokes every older session by
