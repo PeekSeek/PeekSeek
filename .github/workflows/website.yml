@@ -69,9 +69,15 @@ jobs:
       # what broke this job. It has to be version 7: the committed PNGs come from its
       # internal renderer, and version 6, which is all apt has, draws the clip paths
       # and Apollo's mask differently. Every badge then reads as drift.
-      - uses: mfinelli/setup-imagemagick@v6
-        with:
-          cache: true
+      - name: ImageMagick 7
+        env:
+          RELEASE: 7.1.2-32
+        run: |
+          curl -fsSL -o /tmp/magick             "https://github.com/ImageMagick/ImageMagick/releases/download/$RELEASE/ImageMagick-$RELEASE-gcc-x86_64.AppImage"
+          chmod +x /tmp/magick
+          echo "IMAGEMAGICK=/tmp/magick" >> "$GITHUB_ENV"
+          # The runners have no FUSE, so the AppImage unpacks itself instead.
+          echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
       - name: Are the badge PNGs still their SVGs?
         working-directory: website
         run: python scripts/render_rank_pngs.py --check

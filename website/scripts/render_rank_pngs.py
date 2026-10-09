@@ -87,16 +87,13 @@ def main() -> int:
     )
     checking = options.parse_args().check
 
-    # ImageMagick 7 puts everything behind one `magick` dispatcher. Version 6, which
-    # is what Debian and Ubuntu still ship, has a binary per tool instead.
+    # Version 7 only. Version 6 draws these clip paths and Apollo's mask differently,
+    # so it reports every badge as drift when the art has not moved.
     magick = os.environ.get("IMAGEMAGICK") or shutil.which("magick")
-    if magick:
-        convert, compare = [magick], [magick, "compare"]
-    elif shutil.which("convert") and shutil.which("compare"):
-        convert, compare = ["convert"], ["compare"]
-    else:
-        print("ImageMagick not found. Install it, or set IMAGEMAGICK to the binary.")
+    if not magick:
+        print("ImageMagick 7 not found. Install it, or set IMAGEMAGICK to the binary.")
         return 1
+    convert, compare = [magick], [magick, "compare"]
 
     svgs = sorted(f for f in os.listdir(RANKS) if f.endswith(".svg"))
     if not svgs:

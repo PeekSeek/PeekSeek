@@ -18,20 +18,20 @@ the system, and most of what follows is a consequence of it.
 ## Layout
 
 ```
+config.yaml                     # non-secret settings
+gamemodes/                      # one file per gamemode
 website/
-├── public/                # served at /static
-│   ├── assets/css/        # one stylesheet per page, plus default.css for the shared parts
-│   ├── assets/js/         # one script per page
+├── public/                     # served at /static
+│   ├── assets/css/             # one stylesheet per page, plus default.css for the shared parts
+│   ├── assets/js/              # one script per page
 │   └── img/ maps/ unturned/
-├── config.yaml         # non-secret settings, repository root
-├── gamemodes/          # one file per gamemode
 └── src/
-    ├── app.py             # assembly: middleware, routers, error pages
-    ├── dependencies.py    # current user, auth guards, template renderer
-    ├── kits.json          # kit catalog
-    ├── core/              # domain logic: settings, db, models, matchmaking, steam
-    ├── routes/            # one APIRouter per area
-    ├── templates/         # Jinja2 pages
+    ├── app.py                  # assembly: middleware, routers, error pages
+    ├── dependencies.py         # current user, auth guards, template renderer
+    ├── kits.json               # kit catalog
+    ├── core/                   # domain logic: settings, db, models, matchmaking, steam
+    ├── routes/                 # one APIRouter per area
+    ├── templates/              # Jinja2 pages
     └── tests/
 ```
 
