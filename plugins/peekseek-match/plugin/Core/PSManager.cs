@@ -145,6 +145,18 @@ internal abstract class PSManager {
         PlayerInput.onPluginKeyTick += OnPluginKey;
 
         ConfigurationManager.DisablePassiveHealthRegen();
+        ConfigurationManager.DisableClothingWear();
+
+        // A band at or below zero is not a handicap, it is a player who cannot hurt
+        // anybody for the whole match, which in game is indistinguishable from the
+        // server not registering their shots. One reached a tournament unnoticed,
+        // because nothing anywhere said so out loud.
+        foreach (var band in PeekSeek.Config.PingConfig.Where(band => band.Precentage <= 0)) {
+            Logger.LogWarning($"PingConfig cuts a shooter on {band.PingOrHigher} ms or more to "
+                + $"{band.Precentage}% damage. They cannot take anybody down at all, and it reads as broken "
+                + "hit detection rather than as a rule. Give the band a number above zero, or keep players "
+                + "that far away out of the match instead of letting them in unable to fight.");
+        }
     }
 
     internal static void Shutdown() {
@@ -175,25 +187,92 @@ internal abstract class PSManager {
         RemoteAPI.Shutdown();
     }
 
+    /// The shooter's ping handicap, and nothing else.
+    ///
+    /// Counting the hit does not belong here: this event is a veto and a later
+    /// subscriber can still refuse the hit. The stats are taken in DamageStatsPatch,
+    /// once the hit has actually landed.
+    ///
+    /// A gamemode may still overwrite `damage` after this runs, which RAID does for
+    /// rockets, and the handicap is then gone. That is RAID's call to make, but it does
+    /// mean the handicap is not a guarantee: it corrects against the hit as it stands
+    /// now.
     private static void OnDamageRequested(ref DamagePlayerParameters parameters, ref bool shouldAllow) {
         Player attacker = PlayerTool.getPlayer(parameters.killer);
 
-        if (attacker != null && parameters.damage > 5) {
-            int ping = Ping.Milliseconds(attacker.channel.owner);
+        if (attacker == null || parameters.damage <= 5) return;
 
-            parameters.damage *= PingPercentage(ping) / 100f;
-        }
+        int percentage = PingPercentage(Ping.Milliseconds(attacker.channel.owner));
 
-        // After the ping scaling, so the stats hold what the victim actually took.
-        CSteamID victimID = parameters.player.channel.owner.playerID.steamID;
-        StatService.AddDamageTaken(victimID, parameters.damage);
+        // Nothing to take off, so nothing to work out. TotalMultiplier has to ask the
+        // game for the victim's armour, and that is a question worth not asking on
+        // every hit in the match when the answer cannot change the damage. Handicapped
+        // returns the damage untouched at 100 anyway; this is about the call below it.
+        if (percentage >= 100) return;
 
-        if (attacker != null) {
-            StatService.AddDamageDealt(parameters.killer, parameters.damage);
-            StatService.RecordHit(parameters.killer, parameters.limb == ELimb.SKULL);
-        }
+        parameters.damage = Handicapped(parameters.damage, TotalMultiplier(parameters), percentage);
+    }
 
-        RoundLog.RecordDamage(parameters.killer, victimID, parameters.damage);
+    /// The multiplier DamageTool.damagePlayer is about to put the damage through, read
+    /// the way it reads it: the limb and the falloff `times` already carries, then the
+    /// armour it has yet to be multiplied by.
+    ///
+    /// getPlayerArmor is not the plain read it looks like. Vanilla takes a point of
+    /// quality off the piece it just read and sends every client an update, and before
+    /// this it had exactly one caller in the whole game: damagePlayer, a few
+    /// instructions below. Asking it here is a second caller, so the question itself
+    /// would cost the victim armour and double how fast a kit wears out. Init turns
+    /// clothing durability off (ConfigurationManager.DisableClothingWear), which is
+    /// what a match wants anyway and leaves this a read with nothing behind it. Do not
+    /// call it from anywhere else without checking that is still true.
+    ///
+    /// Once is enough: on a dedicated server Provider.modeConfigData is assigned in
+    /// Provider.awake and never again, and Rocket loads plugins after that, so nothing
+    /// a match does puts clothing durability back.
+    private static float TotalMultiplier(in DamagePlayerParameters parameters) {
+        return parameters.times
+            * (parameters.respectArmor ? DamageTool.getPlayerArmor(parameters.limb, parameters.player) : 1f)
+            * (parameters.applyGlobalArmorMultiplier ? Provider.modeConfigData.Players.Armor_Multiplier : 1f);
+    }
+
+    /// A hit after its shooter's ping handicap, never cut below the smallest hit
+    /// Unturned will still register.
+    ///
+    /// DamageTool.damagePlayer takes Mathf.FloorToInt(damage * times) and throws the
+    /// whole hit away when that is zero: no health lost, no bleeding, no kill, no entry
+    /// anywhere. So a handicap that takes a glancing hit under one point does not soften
+    /// it, it deletes it, and the shooter sees a hitmarker and nothing happen. South
+    /// American players reported exactly that: damage that "simply doesn't register" in
+    /// certain spots, which is limb and range together landing the product under one,
+    /// and that starts registering under rapid fire, which is the ping sample crossing a
+    /// band edge between bullets.
+    ///
+    /// The floor is 1.0001/times rather than 1/times because these are single-precision
+    /// floats and (1/t)*t is not reliably 1. With a plain 1f the skull's own 0.85
+    /// armour gives 0.99999994, which floors to zero and deletes the head shot: the
+    /// exact bug this method exists to prevent, left in place for the hits that matter
+    /// most. The epsilon is far below one point of damage, so it buys the guarantee
+    /// without being felt. HandicapTests pins the cases.
+    ///
+    /// Pure arithmetic on purpose: the parameters are read in TotalMultiplier, so this
+    /// is testable without a running server. Math.Max rather than Mathf.Max for the
+    /// same reason, and they are the same function here: touching UnityEngine drags in
+    /// netstandard 2.1, which the net48 test host cannot load, and that is the only
+    /// thing standing between this arithmetic and HandicapTests.
+    internal static float Handicapped(float damage, float times, int percentage) {
+        // A band that takes nothing off is not a handicap, so it gets no floor and no
+        // arithmetic: at a hair over 1/times the floor is fractionally above the damage
+        // itself, and nobody's shot should come back from here larger than it went in
+        // when nothing was being taken off it. Returning `damage` rather than computing
+        // `damage * 100 / 100f` also keeps the untouched case exactly untouched.
+        if (percentage >= 100) return damage;
+
+        float cut = damage * percentage / 100f;
+
+        // A hit that was never going to register is not the handicap's doing.
+        if (times <= 0f || damage * times < 1f) return cut;
+
+        return Math.Max(cut, 1.0001f / times);
     }
 
     /// What a shooter's damage is scaled to at this ping, as a percentage: 100 for
@@ -678,13 +757,33 @@ internal abstract class PSManager {
             0, 0, []
         );
 
-        foreach (PSItem item in kit) {
+        // Clothing first, always. Inventory space in Unturned comes from what you are
+        // wearing, so handing somebody a kit before their vest puts most of it on the
+        // floor. The roster lists a kit in no particular order, so the ordering is
+        // imposed here rather than assumed. This is the same rule, and the same state
+        // guard, as RaidWorld.Give; RAID had both and this path had neither.
+        foreach (PSItem item in kit.OrderBy(item => IsClothing(item.ItemID) ? 0 : 1)) {
             for (byte i = 0; i < item.Amount; i++) {
-                player.inventory.forceAddItem(new Item(item.ItemID, true) { state = item.State }, true);
+                Item created = new(item.ItemID, true);
+
+                // Only when there is state to set. An empty or missing array here would
+                // overwrite the state the game just built for the item, which for a gun
+                // is its magazine and attachments: a kit entry that names no state wants
+                // the default, not a blank one.
+                if (item.State is { Length: > 0 }) created.state = item.State;
+
+                // Auto-equip rather than just adding: a kit's clothing has to end up
+                // worn for the player to have any inventory space at all, and a gun in
+                // the bag is not a gun in your hands.
+                player.inventory.forceAddItemAuto(created, true, true, true);
             }
         }
 
         player.life.serverModifyHealth(100);
+    }
+
+    private static bool IsClothing(ushort itemId) {
+        return Assets.find(EAssetType.ITEM, itemId) is ItemClothingAsset;
     }
 
     /// Put a player on the roster back in their team's group if they are not in it.

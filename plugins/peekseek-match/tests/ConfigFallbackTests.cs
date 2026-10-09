@@ -26,6 +26,33 @@ public class ConfigFallbackTests {
         Assert.Equal(fresh.TagEffectGUID, live.TagEffectGUID);
     }
 
+    /// The ping bands are not a screen, but they fail harder than one. PSManager reads
+    /// them on load and again on every hit, so a file written before the field existed
+    /// took the plugin down with a NullReferenceException instead of handicapping
+    /// nobody.
+    [Fact]
+    public void AFileWithoutPingBandsGetsTheDefaultOnes() {
+        var live = new PeekSeekConfiguration();
+
+        var filled = live.FillInWhatOlderFilesLack();
+
+        Assert.Contains(nameof(live.PingConfig), filled);
+        Assert.NotEmpty(live.PingConfig);
+    }
+
+    /// An empty list is an answer, not a gap. A file that writes the element and puts
+    /// no bands in it has turned the handicap off on purpose, and filling it back in
+    /// would overrule the operator.
+    [Fact]
+    public void AFileThatWritesNoPingBandsKeepsNone() {
+        var live = new PeekSeekConfiguration { PingConfig = [] };
+
+        var filled = live.FillInWhatOlderFilesLack();
+
+        Assert.DoesNotContain(nameof(live.PingConfig), filled);
+        Assert.Empty(live.PingConfig);
+    }
+
     /// The written file is still the truth for anything it says.
     [Fact]
     public void AFileThatSetsAFieldKeepsIt() {

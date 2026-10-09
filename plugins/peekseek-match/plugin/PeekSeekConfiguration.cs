@@ -97,6 +97,11 @@ public class PeekSeekConfiguration : IRocketPluginConfiguration {
         ScoreboardEffectGUID = defaults.Or(ScoreboardEffectGUID, fresh.ScoreboardEffectGUID, nameof(ScoreboardEffectGUID));
         ScoreboardKey = defaults.Or(ScoreboardKey, fresh.ScoreboardKey, nameof(ScoreboardKey));
 
+        // Not a screen, but the same trap: PSManager reads the bands on load and on
+        // every hit, and a file with no PingConfig element at all would take both down
+        // with a NullReferenceException rather than simply handicapping nobody.
+        PingConfig = defaults.Or(PingConfig, fresh.PingConfig, nameof(PingConfig));
+
         return defaults.Filled;
     }
 

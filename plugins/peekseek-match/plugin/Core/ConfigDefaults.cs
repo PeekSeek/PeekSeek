@@ -53,6 +53,18 @@ public class ConfigDefaults {
         return fallback;
     }
 
+    /// A list is absent only when it is null. XmlSerializer leaves a field it finds no
+    /// element for alone, so an absent list reads as null, while a file that writes an
+    /// empty element gets an empty list: those are different answers and only the first
+    /// one is a gap. An operator who writes no bands at all has turned the handicap
+    /// off, which is a choice, not a file that predates the field.
+    public List<T> Or<T>(List<T> value, List<T> fallback, string field) {
+        if (value != null) return value;
+
+        filled.Add(field);
+        return fallback;
+    }
+
     /// What to say about a file that was missing fields, or null for one that was
     /// not. The caller logs it: the log is Unturned's, and this has to stay loadable
     /// by a test host.
