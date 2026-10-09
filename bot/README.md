@@ -67,7 +67,9 @@ check, and an unlinked or non-admin caller gets one ephemeral line saying so.
 | `DB` | yes | The same Postgres the website uses. |
 | `DOMAIN`, `PROTOCOL` | no | Override the links the bot puts in embeds. |
 
-Everything else comes from `src/config.toml`, which travels with the installed package.
+Everything else comes from `config.yaml` in the repository root. The bot is installed
+into site-packages, so it cannot find that by walking up from `src/`. Set `CONFIG` to
+the file's path; the bot's image and its CI job both do.
 
 `WEBSITE_SRC` is gone. It existed to tell `bot.py` where to find the website tree, which
 is not a question an installed dependency has to ask.

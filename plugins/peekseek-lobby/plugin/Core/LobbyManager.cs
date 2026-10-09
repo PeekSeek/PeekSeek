@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -16,8 +16,8 @@ using SDG.Unturned;
 using Steamworks;
 using UnityEngine;
 using Logger = Rocket.Core.Logging.Logger;
-using Random = UnityEngine.Random;
 using Ping = PeekSeek.Core.Ping;
+using Random = UnityEngine.Random;
 
 namespace PeekSeekLobby.Core;
 
@@ -57,7 +57,7 @@ internal abstract class LobbyManager {
 
         /// The magazine EquipRealKit last handed out for the current kit, kept
         /// topped up by Tick's magazine check. Zero means the equipped gun has no
-        /// mag profile in mmconfig.json, so there's nothing to keep full.
+        /// mag profile in the site's config, so there's nothing to keep full.
         internal ushort SpareMagItemId;
         internal byte SpareMagFullStock;
 

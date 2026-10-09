@@ -6,7 +6,7 @@ repository is item art for items nothing can ask for. Deleting them is safe, but
 after one check that cannot be done from the repository alone.
 
 Five templates render `/static/unturned/<id>.png`, and every id they can be handed comes
-out of `kits.json` or `mmconfig.json`, or out of a kit or outfit a player has saved. The
+out of `kits.json` or a gamemode file, or out of a kit or outfit a player has saved. The
 saved ones live in the database as item ids: the editors only ever offer ids from
 `kits.json`, but that has not always been enforced for every slot, so a stored kit may
 name an id the configuration no longer does. Delete on the configuration alone and that
@@ -29,6 +29,8 @@ not the keep set.
 
 import argparse
 import json
+
+import yaml
 import sys
 from pathlib import Path
 
@@ -60,10 +62,10 @@ def integers(value) -> set[int]:
 
 
 def from_config() -> set[int]:
-    data_files = ("kits.json", "mmconfig.json")
-    ids: set[int] = set()
-    for name in data_files:
-        ids |= integers(json.loads((ROOT / "src" / name).read_text("utf-8")))
+    """Item ids named by the kit catalogue and by every gamemode."""
+    ids = integers(json.loads((ROOT / "src" / "kits.json").read_text("utf-8")))
+    for gamemode in sorted((ROOT.parent / "gamemodes").glob("*.yaml")):
+        ids |= integers(yaml.safe_load(gamemode.read_text("utf-8")))
     return ids
 
 
@@ -100,7 +102,7 @@ def main() -> int:
         )
 
     keep = from_config()
-    print(f"{len(keep):5} ids reachable from kits.json and mmconfig.json")
+    print(f"{len(keep):5} ids reachable from kits.json and the gamemodes")
     if args.with_database:
         stored = from_database()
         print(f"{len(stored):5} ids in saved kits and outfits")

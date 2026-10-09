@@ -138,7 +138,7 @@ the match, and never reset by a season. **Elo** is the ladder players see, rank 
 Discord roles included: a flat `win_points`/`loss_points` per result, with bigger wins and
 smaller losses while it sits below the player's skill. A draw moves no ladder, and kills
 move neither. `Elo Change` in the summary is the ladder's move. Tunables are under
-`[ranking]` in [src/config.toml](src/config.toml).
+`ranking` in [config.yaml](../config.yaml).
 
 Answers `{"status": "recorded"}` or `{"status": "alreadyRecorded"}`. Repeats change
 nothing, so a reply lost on the way back costs a duplicate request rather than a doubled
@@ -263,7 +263,7 @@ players are matched first, and teams are balanced by skill: the hidden rating de
 under the result, not the ladder Elo players see.
 
 All three numbers, plus `host_grace`, live in
-[src/config.toml](src/config.toml) under `[matchmaking]`.
+[config.yaml](../config.yaml) under `matchmaking`.
 
 ## Match states
 

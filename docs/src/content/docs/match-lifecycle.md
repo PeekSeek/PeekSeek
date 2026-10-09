@@ -105,7 +105,7 @@ A ranked result moves two numbers for every player on the roster.
   stays put. A draw is worth nothing, and nobody goes below 100.
 
 `Elo Change` in the result summary is the ladder's move. The tunables are under
-`[ranking]` in [`config.toml`](/docs/configuration/).
+`ranking` in [`config.yaml`](/docs/configuration/).
 
 ---
 
@@ -139,7 +139,7 @@ Swapping one team-mate still leaves `a` and `b` facing `c` a second time.
 
 Parties are never split across teams. Within those constraints, the longest-waiting
 players are matched first and teams are balanced on skill. Every number here is in
-`[matchmaking]` in [`config.toml`](/docs/configuration/).
+`matchmaking` in [`config.yaml`](/docs/configuration/).
 
 ---
 

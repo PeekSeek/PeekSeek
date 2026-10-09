@@ -68,7 +68,7 @@ The app id `304930` is currently hardcoded in four places:
 | `public/assets/js/match.js` | `connect_url()` |
 
 If your game joins differently, this is where you change it. Lifting it into
-`config.toml` first is a good first commit for a fork, and a welcome pull request back.
+`config.yaml` first is a good first commit for a fork, and a welcome pull request back.
 
 ---
 
@@ -79,7 +79,7 @@ Three things describe Unturned specifically. All are data, not code.
 | What | Where | Holds |
 |---|---|---|
 | Kits | `src/kits.json` | Item ids, amounts, attachment state bytes |
-| Gamemodes | `src/mmconfig.json` | Modes, rounds to win, maps, per-mode settings |
+| Gamemodes | `gamemodes/*.yaml` | One file per mode: maps, kits, items, powerups |
 | Item metadata | `UnturnedItem` in `src/core/models/stat.py`, table `unturned_items` | Item names for display |
 | Assets | `public/unturned/`, `public/maps/` | Icons and map images |
 

@@ -46,5 +46,8 @@ jobs:
         env:
           DB: sqlite://
           BOT_TOKEN: ""
+          # Installed into site-packages, so the loader cannot find the config by
+          # walking up from src/. The bot's image sets this for the same reason.
+          CONFIG: ${{ github.workspace }}/config.yaml
         working-directory: bot
         run: python -c "import sys; sys.path.insert(0, 'src'); import bot; print('imported', bot.__name__)"

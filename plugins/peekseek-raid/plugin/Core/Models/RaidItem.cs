@@ -5,7 +5,7 @@ namespace PeekSeekRaid.Core.Models;
 
 /// One item to hand a player, by id and count. `State` is the comma-separated byte
 /// string the site's kit config already uses for attachments and ammo, so an item
-/// copied out of mmconfig.json can be pasted straight into this plugin's config.
+/// copied out of a gamemode file can be pasted straight into this plugin's config.
 public class RaidItem {
     [XmlAttribute]
     public ushort ItemId;

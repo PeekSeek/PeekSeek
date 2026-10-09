@@ -12,7 +12,7 @@ public class RaidItemTests {
         Assert.Empty(new RaidItem { ItemId = 366, State = null }.StateBytes());
     }
 
-    /// The state string is copied straight out of the site's mmconfig.json, so it has
+    /// The state string is copied straight out of the site's gamemode files, so it has
     /// to parse exactly as written there, spaces and all.
     [Fact]
     public void StateParsesTheSiteFormat() {
