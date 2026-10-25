@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     JSON,
     String,
+    and_,
     asc,
     cast,
     desc,
@@ -93,6 +94,7 @@ class Match(SQLModel, table=True):
         region: str = "paris",
         eventId: int | None = None,
         createdBy: int | None = None,
+        startsAt: int | None = None,
         **kwargs,
     ):
         from src.core.db import session
@@ -102,7 +104,7 @@ class Match(SQLModel, table=True):
         teams = teams or []
         spectators = spectators or []
 
-        self.time = int(time())
+        self.time = int(startsAt or time())
         self.gamemode = gamemode
         self.meta = {"userData": {}}
         self.teams = Match._with_distinct_names(teams)
@@ -114,6 +116,8 @@ class Match(SQLModel, table=True):
             self.meta["createdBy"] = str(createdBy)
         if eventId:
             self.meta["eventId"] = eventId
+        if startsAt:
+            self.meta["scheduled"] = True
 
         all_users = list(dict.fromkeys(str(u) for team in teams for u in team["users"]))
 
@@ -141,8 +145,10 @@ class Match(SQLModel, table=True):
             self.meta = self.meta | matchSettings
 
         # A picker who never clicks would stall the match, so an open pick has a clock.
+        # A scheduled match's clock starts at its start time, or it would auto-pick
+        # hours before anyone is there to choose.
         if any(self.meta[o] is None for o in ["ballistics", "map", "movement"]):
-            self.meta["pickDeadline"] = time() + mmconfig["pickTimeout"]
+            self.meta["pickDeadline"] = self.time + mmconfig["pickTimeout"]
 
         creator = "matchmaking"
         if createdBy:
@@ -151,10 +157,11 @@ class Match(SQLModel, table=True):
                 f"({settings.profile_url(createdBy)}) `{createdBy}`"
             )
 
+        when = f"for <t:{self.time}:F>" if startsAt else "now"
         Webhook("Match info").info(
-            "Match started",
+            "Match scheduled" if startsAt else "Match started",
             description=(
-                f"Match started in `{region}` by {creator} with:\n"
+                f"Match in `{region}` {when} by {creator} with:\n"
                 + "\n".join(
                     f"- [{User.steam_user(u).name}]({settings.profile_url(u)}) `{u}`"
                     for u in all_users
@@ -162,13 +169,16 @@ class Match(SQLModel, table=True):
             ),
         )
 
-        with session() as db:
-            for user in db.query(User).where(User.steam64.in_(all_users)).all():
-                user.notify(
-                    "Go to match",
-                    "A match started with you in it.",
-                    url=f"{settings.base_url}/match",
-                )
+        # A scheduled match tells its players later, from `announce_scheduled`, when
+        # there is something to do.
+        if not startsAt:
+            with session() as db:
+                for user in db.query(User).where(User.steam64.in_(all_users)).all():
+                    user.notify(
+                        "Go to match",
+                        "A match started with you in it.",
+                        url=f"{settings.base_url}/match",
+                    )
 
         for u in all_users:
             self.meta["userData"][str(u)] = {"kit": None, "powerup": None}
@@ -204,8 +214,27 @@ class Match(SQLModel, table=True):
         """`status` in words, for the spectate and admin lists."""
         return Match.STATUS_LABELS[self.status]
 
+    # How long before its start a scheduled match appears on its players' match page,
+    # and starts keeping them out of the queue. Earlier, it would block them all day.
+    SHOWN_BEFORE: ClassVar[int] = 600
+
+    @property
+    def scheduled(self) -> bool:
+        return bool(self.meta.get("scheduled"))
+
+    @staticmethod
+    def under_way():
+        """The filter for a match its players are on now: unfinished, and not a
+        scheduled match still more than `SHOWN_BEFORE` away."""
+        return and_(
+            Match.finished.is_(False), Match.time <= int(time()) + Match.SHOWN_BEFORE
+        )
+
     def selection_ends_at(self) -> float:
-        return self.time + mmconfig["selectKitsTime"]
+        # Everyone on a scheduled match comes from somewhere else at a set time, not
+        # from a queue they are standing in, so they get longer to arrive.
+        leniency = mmconfig["scheduledLeniency"] if self.scheduled else 0
+        return self.time + mmconfig["selectKitsTime"] + leniency
 
     def ready_to_host(self) -> bool:
         """Whether every map, ballistics and movement pick is made, and every player
@@ -323,6 +352,7 @@ class Match(SQLModel, table=True):
                     Match.claimed.is_(None),
                     Match.finished.is_(False),
                     Match.region == region,
+                    Match.time <= int(time()),
                 )
                 .order_by(Match.time)
                 .first()
@@ -350,7 +380,7 @@ class Match(SQLModel, table=True):
 
     @staticmethod
     def players_in_a_match() -> set[str]:
-        """Every steam64 that is on a match which has not finished."""
+        """Every steam64 that is on a match under way."""
         from src.core.db import session
 
         with session() as db:
@@ -358,20 +388,20 @@ class Match(SQLModel, table=True):
                 str(steam64)
                 for (steam64,) in db.query(MatchPlayer.steam64)
                 .join(Match, Match.id == MatchPlayer.matchId)
-                .where(Match.finished.is_(False))
+                .where(Match.under_way())
                 .all()
             }
 
     @staticmethod
     def current_for(steam64) -> int | None:
-        """The unfinished match this player is on, or None."""
+        """The match under way that this player is on, or None."""
         from src.core.db import session
 
         with session() as db:
             return (
                 db.query(MatchPlayer.matchId)
                 .join(Match, Match.id == MatchPlayer.matchId)
-                .where(MatchPlayer.steam64 == int(steam64), Match.finished.is_(False))
+                .where(MatchPlayer.steam64 == int(steam64), Match.under_way())
                 .order_by(Match.id)
                 .limit(1)
                 .scalar()
@@ -413,6 +443,38 @@ class Match(SQLModel, table=True):
                 "this match's results, recorded as abandoned so its players aren't "
                 "stuck in it. No Elo was applied, because no winner was ever reported."
             )
+
+    @staticmethod
+    def announce_scheduled() -> None:
+        """DM everyone on a scheduled match once it is `SHOWN_BEFORE` away, the moment
+        it appears on their match page. Runs on every game server poll, so the row lock
+        keeps two servers polling together from sending it twice."""
+        from src.core.db import session
+        from .user import User
+
+        due = []
+        with session() as db:
+            for match in (
+                db.query(Match)
+                .where(Match.under_way(), Match.claimed.is_(None))
+                .with_for_update(skip_locked=True)
+                .all()
+            ):
+                if not match.scheduled or match.meta.get("announced"):
+                    continue
+                match.meta = match.meta | {"announced": True}
+                due.append((match.time, MatchPlayer.on_teams(match.teams)))
+
+        for startsAt, players in due:
+            with session() as db:
+                for user in db.query(User).where(User.steam64.in_(players)).all():
+                    user.notify(
+                        "Your match starts soon",
+                        f"Your match starts <t:{startsAt}:R>, at <t:{startsAt}:t>. "
+                        "Open the match page now and pick your kit. At the start "
+                        "time you get a button to join the server.",
+                        url=f"{settings.base_url}/match",
+                    )
 
     @staticmethod
     def cancel_stranded() -> None:
@@ -571,6 +633,8 @@ class Match(SQLModel, table=True):
             "claimed": self.claimed,
             "users": self.get_steam_user_data(),
             "startsAfter": self.selection_ends_at(),
+            "startsAt": self.time,
+            "scheduled": self.scheduled,
             "config": mmconfig["gamemodes"][self.gamemode],
             "joinTimeoutSeconds": mmconfig.get("joinTimeoutSeconds", 120),
         }

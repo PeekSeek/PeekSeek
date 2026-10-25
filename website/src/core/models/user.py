@@ -216,7 +216,7 @@ class User(SQLModel, table=True):
             onAMatch = (
                 db.query(MatchPlayer.matchId)
                 .join(Match, Match.id == MatchPlayer.matchId)
-                .where(MatchPlayer.steam64 == int(steam64), Match.finished.is_(False))
+                .where(MatchPlayer.steam64 == int(steam64), Match.under_way())
                 .first()
             )
             if onAMatch is not None:

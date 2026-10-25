@@ -21,6 +21,8 @@ match:
   selectKitsTime: 45
   pickTimeout: 10
   joinTimeoutSeconds: 120
+  # Extra seconds to pick and join on a scheduled match, on top of selectKitsTime.
+  scheduledLeniency: 300
 
 matchmaking:
   queueTimeout: 60

@@ -109,6 +109,7 @@ def server_session(server: GameServer, serverCode: str = "0", matchId: int = 0):
 
     data.Match.release_abandoned(serverCode)
     data.Match.resolve_expired_picks()
+    data.Match.announce_scheduled()
 
     # A match this server holds but was never told about is handed back before a new
     # one is built, so a lost answer cannot turn into a second match for the same

@@ -123,6 +123,11 @@ function update() {
     const live = data.status === "live";
     const serverCode = data.serverCode;
     const joinTimeout = data.joinTimeoutSeconds || 120;
+    const beforeStart = data.scheduled && !serverCode && secondsUntil(data.startsAt) > 0;
+    const startTime = new Date(data.startsAt * 1000).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 
     // ---- the rail
     const banText = banning
@@ -138,8 +143,14 @@ function update() {
     );
     rail(
         "railServer",
-        serverCode ? "up, join now" : allPicked ? "loading" : "waiting on picks",
-        serverCode ? "done" : allPicked ? "now" : ""
+        beforeStart
+            ? `opens at ${startTime}`
+            : serverCode
+              ? "up, join now"
+              : allPicked
+                ? "loading"
+                : "waiting on picks",
+        serverCode ? "done" : allPicked && !beforeStart ? "now" : ""
     );
     let readyText = "after the server";
     if (live) readyText = `join within ${clock(secondsUntil((params.hostedAt || 0) + joinTimeout))}`;
@@ -168,6 +179,9 @@ function update() {
             title.textContent = `${nameOf(data.currentPick)} is choosing`;
             line.textContent = label;
         }
+    } else if (beforeStart) {
+        title.textContent = `Your match starts at ${startTime}`;
+        line.textContent = `The server opens in ${clock(secondsUntil(data.startsAt))}. Then a join button appears here and in your Discord DMs. ${iPicked ? "Your kit is picked." : "Pick your kit now."}`;
     } else if (!iPicked) {
         title.textContent = "Your pick";
         line.textContent = `The match starts the moment everyone has. Auto-picks in ${secondsUntil(data.startsAfter)}s.`;
