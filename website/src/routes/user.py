@@ -120,6 +120,16 @@ def custom_create(steam64: ApiSteam64, payload: JsonBody):
     if not teams:
         raise HTTPException(status_code=400, detail="Team data cannot be empty")
 
+    # Optional. A week out is plenty for a tie-breaker, and further than that is more
+    # likely a typo in the date than a plan.
+    startsAt = payload.get("startsAt")
+    if startsAt is not None:
+        startsAt = int(startsAt)
+        if not time() < startsAt < time() + 7 * 24 * 3600:
+            raise HTTPException(
+                status_code=400, detail="The start time must be in the next 7 days."
+            )
+
     players = [int(u) for team in teams for u in team["users"]]
     with session() as db:
         barred = data.UserBan.barring(players, db)
@@ -136,6 +146,7 @@ def custom_create(steam64: ApiSteam64, payload: JsonBody):
             teams=teams,
             region=payload["region"],
             createdBy=steam64,
+            startsAt=startsAt,
             matchSettings={
                 "ballistics": payload["ballistics"],
                 "map": payload["map"],

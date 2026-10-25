@@ -49,8 +49,13 @@ document.getElementById("customStart").addEventListener("click", () => {
         gamemode: document.getElementById("gamemode").value,
     };
 
-    api.post("/match/custom", {}, { body: JSON.stringify(matchData) }).then(r => {
-        alert(r.status === 200 ? "Successfully created match." : "Failed to create match.");
+    // datetime-local is read in the creator's own time zone, which is what they typed.
+    const startsAt = document.getElementById("startsAt").value;
+    if (startsAt) matchData.startsAt = Math.floor(new Date(startsAt).getTime() / 1000);
+
+    api.post("/match/custom", {}, { body: JSON.stringify(matchData) }).then(async r => {
+        if (r.status === 200) alert(startsAt ? "Match scheduled." : "Successfully created match.");
+        else alert("Failed to create match. " + ((await r.json().catch(() => ({}))).detail || ""));
     });
 });
 
