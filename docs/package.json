@@ -12,11 +12,11 @@
   },
   "type": "module",
   "dependencies": {
-    "@astrojs/starlight": "^0.42.5",
-    "astro": "^7.3.5",
+    "@astrojs/starlight": "^0.42.7",
+    "astro": "^7.4.4",
     "sharp": "^0.35.5",
-    "starlight-links-validator": "^0.26.0",
-    "starlight-openapi": "^0.26.3"
+    "starlight-links-validator": "^0.27.0",
+    "starlight-openapi": "^0.27.0"
   },
   "private": true
 }
