@@ -5,6 +5,8 @@
     <meta charset="utf-8">
     <title>{% block title %}PeekSeek{% endblock %}</title>
 
+    <meta name="description" content="{{ self.description() }}">
+    <link rel="canonical" href="{{config.base_url}}{{request.url.path}}">
     <meta name="author" content="{% block author %}Team PeekSeek{% endblock %}">
     <meta property="og:title" content="{% block titleEmbed %}PeekSeek.net{% endblock %}" />
     <meta property="og:description" content="{% block description %}The only online queue platform for Unturned. Officially partnered with Unturned's developer.{% endblock %}" />
@@ -122,6 +124,9 @@
     <footer>
       <div class="inner">
         <a href="/"><img src="/static/img/cmw.png" alt="PeekSeek"></a>
+        <a href="/about" class="footerPrivacy">About</a>
+        <a href="https://github.com/PeekSeek/PeekSeek" class="footerPrivacy" rel="me">Source code on GitHub</a>
+        <a href="https://kcvdh.com/" class="footerPrivacy" rel="me">Made by Kieran van der Heijde</a>
         <a href="/gdpr" class="footerPrivacy">Privacy</a>
       </div>
     </footer>

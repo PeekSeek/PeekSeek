@@ -1,8 +1,18 @@
 """Static-ish pages: rulebooks, GDPR, the Discord redirect, and join links."""
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 
+from html import escape
+from urllib.parse import quote
+
+from src.core import models as data
+from src.core.db import session
 from src.core.settings import settings
 from src.dependencies import templates
 
@@ -11,6 +21,67 @@ from src.dependencies import templates
 router = APIRouter(tags=["pages"], include_in_schema=False)
 
 UNTURNED_APP_ID = 304930
+
+
+# Crawlers and AI assistants only look for these at the root, never under /static.
+@router.get("/llms.txt")
+def llms_text():
+    return FileResponse(settings.public / "llms.txt", media_type="text/plain")
+
+
+# Only the pages a visitor can read without signing in. Everything else is behind
+# Steam, so listing it would only send crawlers to the sign-in redirect.
+PUBLIC_PAGES = [
+    "/",
+    "/about",
+    "/fairplay",
+    "/ucl/rulebook",
+    "/ucl/live",
+    "/esports/",
+    "/gdpr",
+    "/docs/",
+]
+
+# Enough profiles for the ladder people search for, without handing crawlers every
+# account that ever played one match.
+SITEMAP_PROFILES = 500
+
+
+@router.get("/robots.txt")
+def robots_text():
+    return PlainTextResponse(
+        f"User-agent: *\nAllow: /\nSitemap: {settings.base_url}/sitemap.xml\n"
+    )
+
+
+@router.get("/sitemap.xml")
+def sitemap():
+    with session() as db:
+        events = db.query(data.Event.name).where(data.Event.name.is_not(None)).all()
+        players = (
+            db.query(data.Stat.steam64)
+            .order_by(data.Stat.elo.desc())
+            .limit(SITEMAP_PROFILES)
+            .all()
+        )
+    pages = (
+        PUBLIC_PAGES
+        + [f"/esports/event/{quote(name)}" for (name,) in events]
+        + [f"/u/{steam64}" for (steam64,) in players]
+    )
+    urls = "".join(
+        f"<url><loc>{escape(settings.base_url + page)}</loc></url>" for page in pages
+    )
+    return Response(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>',
+        media_type="application/xml",
+    )
+
+
+@router.get("/about")
+def about(request: Request):
+    return templates.TemplateResponse(request=request, name="pages/about.html")
 
 
 @router.get("/discord")
