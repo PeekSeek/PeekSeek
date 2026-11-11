@@ -18,6 +18,8 @@
   <a href="https://discord.gg/NKgTe6RnvH"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
+PeekSeek is an open-source ELO matchmaking and esports platform for Unturned, created by [Kieran van der Heijde](https://kcvdh.com/) ([kvandeh](https://github.com/kvandeh), [resume](https://kcvdh.com/resume.pdf)) and live at [peekseek.net](https://peekseek.net). The queue, the rating system and the website are game-agnostic; only the RocketMod plugins know Unturned. See the [architecture](https://peekseek.net/docs/architecture/) for how the parts fit together.
+
 ---
 
 Seven deployables live here. The website is the backend the plugins talk to, which is
