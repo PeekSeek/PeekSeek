@@ -1,0 +1,93 @@
+{% extends "layout.html" %}
+
+{% block title %}About PeekSeek - Ranked Unturned Matchmaking{% endblock %}
+{% block author %}Kieran van der Heijde{% endblock %}
+{% block titleEmbed %}About PeekSeek{% endblock %}
+{% block description %}PeekSeek is a free, open-source ELO matchmaking and esports platform for Unturned. Queue for ranked Arena and RAID matches on dedicated servers and climb the ladder.{% endblock %}
+
+{# Structured data for search engines. It is data, not code: no script runs it. #}
+{% block head %}
+<script type="application/ld+json">{{ {
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "PeekSeek",
+  "description": "Open-source ELO matchmaking and esports platform for Unturned.",
+  "url": config.base_url,
+  "codeRepository": "https://github.com/PeekSeek/PeekSeek",
+  "license": "https://opensource.org/licenses/MIT",
+  "programmingLanguage": ["Python", "C#", "JavaScript"],
+  "applicationCategory": "GameApplication",
+  "author": {
+    "@type": "Person",
+    "name": "Kieran van der Heijde",
+    "alternateName": "kvandeh",
+    "url": "https://kcvdh.com/",
+    "sameAs": [
+      "https://github.com/kvandeh",
+      "https://www.linkedin.com/in/kcvdh",
+      "https://kcvdh.com/resume.pdf"
+    ]
+  }
+} | tojson }}</script>
+{% endblock %}
+
+{% block content %}
+
+<div class="mainElement spaced">
+    <h1>About PeekSeek</h1>
+    <span>
+        PeekSeek is a free, open-source ELO matchmaking and esports platform for
+        Unturned, created by Kieran van der Heijde (kvandeh). Sign in with Steam, join the
+        queue alone or with a party, and the site puts you in a ranked match on a
+        dedicated server against players of your level.
+    </span>
+
+    <h2>How ranked play works</h2>
+    <span>
+        Every player has an ELO rating. A win against a stronger player gains you more
+        than a win against a weaker one. Your rating sets your rank on the ladder, from
+        the first rank up to the highest. Each gamemode has its own queue.
+    </span>
+
+    <h2>Gamemodes</h2>
+    <span>
+        <b>Arena</b>: 1v1 and 2v2, with Sniper and Drums variants.<br>
+        <b>RAID</b>: 1v1 and 2v2.<br>
+        Before a match, players pick their kit, and in some modes they ban options.
+    </span>
+
+    <h2>Esports</h2>
+    <span>
+        PeekSeek runs cups and qualifiers for Unturned teams. Matches are played on the
+        same servers as ranked play, and the results go on the site. Read the
+        <a href="/ucl/rulebook">competition rulebook</a> and the
+        <a href="/fairplay">fair play rules</a>, or follow the
+        <a href="/ucl/live">live competition</a>.
+    </span>
+
+    <h2>Open source</h2>
+    <span>
+        The website, the Discord bot and the game server plugins are open source under
+        the MIT licence. The queue and the rating system do not depend on Unturned, so
+        the platform can run another game.
+        <a href="https://github.com/PeekSeek/PeekSeek" rel="me">PeekSeek source code on GitHub</a>
+        and the <a href="/docs/">documentation</a> show how it works.
+    </span>
+
+    <h2>Who made it</h2>
+    <span>
+        Kieran van der Heijde (kvandeh) designed and built PeekSeek: the website, the
+        matchmaking, and the game server plugins.<br>
+        <a href="https://kcvdh.com/" rel="me">Portfolio</a> ·
+        <a href="https://kcvdh.com/resume.pdf" rel="me">Resume</a> ·
+        <a href="https://github.com/kvandeh" rel="me">GitHub</a> ·
+        <a href="https://www.linkedin.com/in/kcvdh" rel="me">LinkedIn</a>
+    </span>
+
+    <h2>Contact</h2>
+    <span>
+        Ask in <a href="/discord">our Discord</a>, or write to <b>peekseek@kcvdh.com</b>.
+    </span>
+</div>
+
+{% endblock %}

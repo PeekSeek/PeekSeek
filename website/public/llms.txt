@@ -1,0 +1,31 @@
+# PeekSeek
+
+> PeekSeek is an open-source ELO matchmaking and esports platform for the game Unturned, created by Kieran van der Heijde (kvandeh). The website, the queue and the rating system do not know what Unturned is: only the game server plugins do, so the platform can be ported to another game.
+
+- Live site: https://peekseek.net
+- Source code (MIT): https://github.com/PeekSeek/PeekSeek
+- Discord: https://peekseek.net/discord
+- About: https://peekseek.net/about
+
+## Creator
+
+Kieran van der Heijde (kvandeh)
+
+- Portfolio: https://kcvdh.com/
+- Resume: https://kcvdh.com/resume.pdf
+- GitHub: https://github.com/kvandeh
+- LinkedIn: https://www.linkedin.com/in/kcvdh
+
+## Stack
+
+- Website and API: Python, FastAPI, Jinja2, Steam OpenID sign-in
+- Discord bot: Python
+- Game server plugins: C#, RocketMod for Unturned
+
+## Documentation
+
+- [Architecture](https://peekseek.net/docs/architecture/): how the queue, the site and the game servers fit together
+- [Match lifecycle](https://peekseek.net/docs/match-lifecycle/): a match from queue to result
+- [Forking](https://peekseek.net/docs/forking/): port the platform to another game
+- [Self-hosting](https://peekseek.net/docs/self-hosting/)
+- [API reference](https://peekseek.net/api): the contract between the site and a game server
